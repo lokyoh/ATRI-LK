@@ -3,7 +3,7 @@ from nonebot.adapters.onebot.v11 import MessageSegment, Message
 from ATRI import __version__
 from ATRI.log import log
 from ATRI.utils.img_editor import get_image_bytes
-from ATRI.plugins.lkbot.util import lk_util
+from ATRI.plugins.lkbot.util import lk_util, PLUGIN_VERSION
 from ATRI.plugins.lkbot.system.data.user import users
 from ATRI.plugins.lkbot.system.sign_in_pic import get_pic
 
@@ -21,21 +21,20 @@ class LKBot:
     - 物品-商店系统第一阶段
     - 健康模式
     - 尝新模式
-    - Atri语音
-$需要更多功能请找开发人员l_o_o_k$'''
+    - Atri语音'''
     broad_message = f'''*本群已开启尝新模式，这是新功能的人工推送*
-#lk插件v0.3.0:
+#lk插件v{PLUGIN_VERSION}:
     - 全新的签到界面
     - 物品-商店系统第一阶段
     - 新增健康模式
     - 完善尝新功能
-    !请输入"/帮助 lk插件"查看具体指令!
+    !输入"/帮助 lk插件"查看具体指令!
+    !输入"/lk.新内容"查看更新内容!
 #lk宠物v0.1.3:
     - 进行修复与预设词优化
-    !请输入"/帮助 lk宠物"查看具体指令!
-#组队插件v1.0.0-fix1-正式版：
-    !请输入"/帮助 组队插件"查看具体指令!
-$需要更多功能请找开发人员l_o_o_k$'''
+    !输入"/帮助 lk宠物"查看具体指令!
+#组队插件1.0.0-fix1-正式版：
+    !输入"/帮助 组队插件"查看具体指令!'''
 
     @staticmethod
     async def sign_in(user_id, r18_mode):

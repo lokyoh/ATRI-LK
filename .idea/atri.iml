@@ -8,7 +8,7 @@
       <excludePattern pattern="config.yml" />
       <excludePattern pattern="nonebot_plugins.json" />
     </content>
-    <orderEntry type="jdk" jdkName="Python 3.10 (atri)" jdkType="Python SDK" />
+    <orderEntry type="jdk" jdkName="Poetry (ATRI-LK)" jdkType="Python SDK" />
     <orderEntry type="sourceFolder" forTests="false" />
   </component>
   <component name="PackageRequirementsSettings">

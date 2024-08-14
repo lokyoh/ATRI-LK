@@ -18,6 +18,7 @@ mc = plugin.on_command(cmd="/mc", docs="查看MINECRAFT服务器状态")
 
 s_names = {"mc.lokyoh.com": "世界幻想服务器"}
 
+
 @mc.handle([Cooldown(30, prompt=choice(_lmt_notice))])
 async def _(matcher: Matcher, args: Message = CommandArg()):
     if args.extract_plain_text():

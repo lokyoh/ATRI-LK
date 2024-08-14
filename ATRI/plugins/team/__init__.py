@@ -8,12 +8,12 @@ from nonebot.matcher import Matcher
 from nonebot.params import CommandArg, ArgPlainText
 
 from ATRI.service import Service
-from ATRI.permission import MASTER
+from ATRI.permission import ADMIN
 from ATRI.plugins.lkbot.util import lk_util
 
 from .team_data import team_manager, check_manager, time_type
 
-plugin = Service("组队插件").document("l_o_o_k的组队插件v1.0.0-fix1").type(Service.ServiceType.FUNCTION).main_cmd(
+plugin = Service("组队插件").document("l_o_o_k的组队插件").type(Service.ServiceType.FUNCTION).main_cmd(
     "/team")
 
 _lmt_notice = ["慢...慢一..点❤", "冷静1下", "歇会歇会~~", "呜呜...别急", "太快了...受不了", "不要这么快呀"]
@@ -128,7 +128,7 @@ async def _(event: GroupMessageEvent):
     await notice_team.finish(team_manager[group_id].notice(user_id))
 
 
-force_del_team = plugin.cmd_as_group(cmd='强制结束', docs='强制结束一个队伍', permission=MASTER)
+force_del_team = plugin.cmd_as_group(cmd='强制结束', docs='强制结束一个队伍', permission=ADMIN)
 
 
 @force_del_team.handle()

@@ -1,18 +1,19 @@
 import json
 import os
 from random import choice
+
 import requests
-
-from nonebot import get_driver, get_bot
+from nonebot import get_bots
+from nonebot.adapters.onebot.v11 import MessageSegment, Message
 from nonebot.adapters.onebot.v11.bot import Bot
-from nonebot.adapters.onebot.v11.helpers import Cooldown
-from nonebot.adapters.onebot.v11 import MessageSegment
 from nonebot.adapters.onebot.v11.event import GroupMessageEvent
+from nonebot.adapters.onebot.v11.helpers import Cooldown
 
-from ATRI.service import Service
-from ATRI.utils.apscheduler import scheduler
+from ATRI import driver
 from ATRI.permission import ADMIN
 from ATRI.plugins.lkbot.util import PLUGIN_DIR
+from ATRI.service import Service
+from ATRI.utils.apscheduler import scheduler
 
 plugin = Service("每日新闻").document("订阅每日新闻服务").type(Service.ServiceType.FUNCTION)
 
@@ -59,13 +60,17 @@ async def _(event: GroupMessageEvent):
 
 
 async def daily_job():
-    bot = get_bot()
     message = get_news()
-    for group_id in news_config["groups"]:
-        await bot.send_group_msg(group_id=group_id, message=message)
+    for bot in get_bots().values():
+        if type(bot) is Bot:
+            group_list = await Bot.get_group_list(bot)
+            for group in group_list:
+                group_id = group["group_id"]
+                if group_id in news_config["groups"]:
+                    await bot.send_group_msg(group_id=group_id, message=Message().append(message))
 
 
-scheduler.add_job(daily_job, 'cron', hour=7, minute=0)
+driver().on_startup(lambda: scheduler.add_job(daily_job, 'cron', hour=7, minute=0))
 
 
 def get_news() -> MessageSegment:

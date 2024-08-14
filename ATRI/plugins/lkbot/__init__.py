@@ -19,7 +19,8 @@ from .system.data.item import items
 from .system.data.shop import shops
 from .system.data.user import users
 
-plugin = Service("lk插件").document(f"l_o_o_k的综合性插件v{PLUGIN_VERSION}").type(Service.ServiceType.LKPLUGIN).main_cmd("/lk")
+plugin = Service("lk插件").document(f"l_o_o_k的综合性插件v{PLUGIN_VERSION}").type(
+    Service.ServiceType.LKPLUGIN).main_cmd("/lk")
 
 _lmt_notice = ["慢...慢一..点❤", "冷静1下", "歇会歇会~~", "呜呜...别急", "太快了...受不了", "不要这么快呀"]
 
@@ -112,7 +113,7 @@ async def _(event: Event, item_name=ArgPlainText("use_item_name")):
         await use_item.finish(f"使用失败:\n{msg}")
 
 
-recycle_item = plugin.on_command(cmd="/回收", docs="将指定数量物品换成ATRI币,'全部物品'使用全部,'物品*n'使用n个物品")
+recycle_item = plugin.on_command(cmd="/回收", docs="将指定数量物品换成ATRI币,'全部物品'回收全部,'物品*n'回收n个物品")
 
 
 @recycle_item.handle()

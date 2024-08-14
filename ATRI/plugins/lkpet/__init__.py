@@ -97,7 +97,7 @@ async def _(event: Event):
     await check_pet_love.finish(f"宠物的好感度为{love}")
 
 
-change_pet_name_cmd = plugin.cmd_as_group("改名", "将自己的赛博宠物改名")
+change_pet_name_cmd = plugin.cmd_as_group("改名", "为自己的赛博宠物改名")
 
 
 @change_pet_name_cmd.handle([Cooldown(300, prompt=choice(_lmt_notice))])

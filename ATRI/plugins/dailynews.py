@@ -63,9 +63,9 @@ async def daily_job():
     message = get_news()
     for bot in get_bots().values():
         if type(bot) is Bot:
-            group_list = await Bot.get_group_list(bot)
+            group_list = await bot.get_group_list()
             for group in group_list:
-                group_id = group["group_id"]
+                group_id = str(group["group_id"])
                 if group_id in news_config["groups"]:
                     await bot.send_group_msg(group_id=group_id, message=Message().append(message))
 

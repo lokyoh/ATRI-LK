@@ -48,11 +48,11 @@ class LKBot:
             return message.append(MessageSegment.image(get_image_bytes(img_path)))
         except Exception as e:
             log.warning(f'{e}:\n{e.args}')
-            return message.append(f'签到成功,你已签到{users.userdata[user_id].signdays}天')
+            return message.append(f'签到成功,你已签到{users.get_user_data(user_id).signdays}天')
 
     @staticmethod
     def get_info(user_id):
-        user = users.userdata[user_id]
+        user = users.get_user_data(user_id)
         info = f'''用户 {user.name}:
 等级:{user.lvl} 升级还需要{user.get_lvl_exp() - user.left_exp}经验
 ATRI币:{user.money}
@@ -68,9 +68,8 @@ ATRI币:{user.money}
         else:
             if len(name) > 10 or name == '':
                 return "那个...名称字数超出限制10或为空"
-            if name in users.name:
-                return "那个...此名称已经被使用了，换个名字吧"
             if not lk_util.is_valid_name(name):
                 return "那个...这个名字不太合适吧"
-            users.add(user_id, name)
-            return f"好欸！{user_id} 绑定名称 {name} 成功，咱又多了个新的朋友"
+            if users.add_user(user_id, name):
+                return f"好欸！{user_id} 绑定名称 {name} 成功，咱又多了个新的朋友"
+            return "那个...此名称已经被使用了，换个名字吧"

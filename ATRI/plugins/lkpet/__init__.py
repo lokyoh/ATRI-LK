@@ -78,8 +78,7 @@ async def _(event: Event, name: str = ArgPlainText("pet_name"), instruction: str
     if len(name) > 10:
         await adopt.reject("名称大于10字符")
     user_id = event.get_user_id()
-    data = [user_id, name, instruction]
-    pet_manager.new_pet(data)
+    pet_manager.new_pet(user_id, name, instruction)
     pet: PetData = pet_manager.datas[user_id]
     user_name = lk_util.get_name(user_id)
     await adopt.finish(f"{user_name} 的小可爱 {pet.name} 领养成功啦，快来与它玩耍吧")

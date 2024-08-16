@@ -50,8 +50,8 @@ my_backpack = plugin.on_command(cmd="我的背包", docs="查看背包中的内�
 async def _(event: Event):
     await is_lk_user(my_backpack, event)
     user_id = event.get_user_id()
-    backpack: dict = users.userdata[user_id].backpack
-    resp = f'{users.userdata[user_id].name} 的背包:\n名称-类型-数量\n'
+    backpack: dict = users.get_backpack(user_id).bp_to_dict()
+    resp = f'{lk_util.get_name(user_id)} 的背包:\n名称-类型-数量\n'
     num = len(backpack)
     i = 0
     j = 1
@@ -235,8 +235,7 @@ async def _(event: Event, matcher: Matcher, args: Message = CommandArg()):
 
 @change_name.got("user_new_name", "新名字呢？速速")
 async def _(event: Event, name: str = ArgPlainText("user_new_name")):
-    backpack = users.userdata[event.get_user_id()].backpack
-    if "改名卡" in backpack:
+    if users.get_backpack(event.get_user_id()).bp_has_item("改名卡"):
         result, msg = lk_util.user_change_name(event.get_user_id(), name)
         if result:
             lk_util.item_change(event.get_user_id(), "改名卡", -1)
@@ -291,7 +290,7 @@ async def _(bot: Bot, event: Event):
         for i in range(20 + j * 20):
             if i == num:
                 break
-            resp += f'{i + 1}.{users.userdata[members[i]].name}:{members[i]}\n'
+            resp += f'{i + 1}.{lk_util.get_name(members[i])}:{members[i]}\n'
         await  user_list.send(resp + f'用户总数:{i}/{num}')
         j += 1
         resp = ''
@@ -376,13 +375,14 @@ async def _():
     resp = '所有用户列表:\n'
     i = 0
     j = 0
-    num = len(users.userdata)
-    for user_id in users.userdata.keys():
+    id_list = users.get_id_list()
+    num = len(id_list)
+    for user_id in id_list:
         if i > 20 * (j + 1):
             await all_user_list.send(resp + f'用户总数:{i}/{num}')
             j += 1
             resp = ''
-        resp += f'{i + 1}.{users.userdata[user_id].name}:{user_id}\n'
+        resp += f'{i + 1}.{lk_util.get_name(user_id)}:{user_id}\n'
         i += 1
     await all_user_list.send(resp + f'用户总数:{i}/{num}')
 

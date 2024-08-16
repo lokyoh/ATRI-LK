@@ -26,7 +26,7 @@ async def get_pic(user_id, r18_mode: bool = False, src: str = 'lolicon'):
             return save_path
         else:
             log.info(f"{modification_date}->{today_date}")
-    user_data = users.userdata[user_id]
+    user_data = users.get_user_data(user_id)
     if r18_mode:
         my_random = IntToBoolRandom(80, 200)
         if my_random.get_result(int(user_data.love / 100) + user_data.lvl):

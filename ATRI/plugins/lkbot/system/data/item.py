@@ -1,16 +1,31 @@
+import copy
 from enum import Enum
-from pydantic import BaseModel
+from typing import Dict, Any
 
 from ATRI.log import log
 
 
 class ItemType(Enum):
-    OTHER = '其他'
+    """物品种类"""
+    TOOL = '工具'
     PROP = '道具'
+    SEED = '种子'
+    CROP = '作物'
     COIN = '货币'
+    OTHER = '其他'
+
+
+def get_type(type_value: str) -> ItemType | None:
+    """将字符串转换成物品种类"""
+    for _type in ItemType:
+        if _type.value == type_value:
+            return _type
+    return None
 
 
 class Item:
+    """定义物品及其基本数据"""
+
     def __init__(self, item_name, item_type: ItemType = ItemType.OTHER, item_info='', item_price=0, using_func=None):
         """
         name 物品名称，要求不为空
@@ -50,6 +65,9 @@ class Item:
     def get_item_type(self) -> str:
         return self._type.value
 
+    def get_item_type_name(self) -> ItemType:
+        return self._type
+
 
 class ItemRegister:
     def __init__(self):
@@ -60,6 +78,7 @@ class ItemRegister:
             self._item_type_dic[_type.value] = []
 
     def register(self, item: Item):
+        """将定义的物品注册进物品表中"""
         item_name = item.get_item_name()
         if item_name is None or item_name == '':
             log.error(f"物品注册失败:{item_name} 不是有效物品名称")
@@ -86,10 +105,10 @@ class ItemRegister:
             return self._item_list.index(item_name)
         return None
 
-    def get_item_list_by_type(self, item_type: ItemType) -> list:
+    def get_item_list_by_type(self, item_type: ItemType) -> list[str]:
         return self._item_type_dic[item_type.value]
 
-    def get_item_list(self):
+    def get_item_list(self) -> list[str]:
         return self._item_list
 
     def has_item(self, item_name):
@@ -108,6 +127,104 @@ class ItemRegister:
 items = ItemRegister()
 
 
+class ItemMeta:
+    """物品数据"""
+
+    def __init__(self, item_meta: dict[str: Any]):
+        item_meta: dict
+        self.num: int = item_meta.pop("num", 0)
+        self.extra = copy.deepcopy(item_meta)
+
+    def meta_to_dict(self) -> dict[str: int]:
+        meta = copy.deepcopy(self.extra)
+        meta["num"] = self.num
+        return meta
+
+
 class ItemStack:
-    def __init__(self):
-        pass
+    """物品堆：物品的个性化，带有特殊信息。不要轻易构造该类，除非确保item_type符合item"""
+
+    def __init__(self, item_name: str, item_type: ItemType, item_meta: ItemMeta):
+        self._name = item_name
+        self._type = item_type
+        self.meta = item_meta
+
+    def get_name(self):
+        return self._name
+
+    def get_type(self):
+        return self._type
+
+
+class BackPack:
+    """背包：里面是通过ItemType分类的物品名称与ItemMeta的字典。以ItemStack形式获取信息。
+    bp_dict结构:
+        {
+            "item_name": {"key": value}
+        }"""
+
+    def __init__(self, bp_dict: dict):
+        global items
+        self._backpack: Dict[ItemType: Dict[str: ItemMeta]] = dict()
+        for _type in ItemType:
+            self._backpack[_type] = dict()
+        for _name in bp_dict.keys():
+            _item = items.get_item_by_name(_name)
+            if not _item:
+                continue
+            _type = _item.get_item_type_name()
+            _meta = bp_dict[_name]
+            self._backpack[_type][_name] = ItemMeta(_meta)
+
+    def bp_has_item(self, item_name: str) -> bool:
+        for _type in ItemType:
+            if item_name in self._backpack[_type]:
+                return True
+        return False
+
+    def get_item_stack(self, item_name: str) -> ItemStack:
+        for _type in ItemType:
+            if item_name in self._backpack[_type]:
+                return ItemStack(item_name, _type, self._backpack[_type][item_name])
+        return ItemStack(item_name, items.get_item_by_name(item_name).get_item_type_name(), ItemMeta({}))
+
+    def set_item_with_stack(self, item_stack: ItemStack):
+        _name = item_stack.get_name()
+        _type = item_stack.get_type()
+        self._backpack[_type][_name] = item_stack.meta
+
+    def set_item_with_meta(self, item_name: str, item_meta: dict[str: Any]):
+        _type = items.get_item_by_name(item_name).get_item_type_name()
+        self._backpack[_type][item_name] = ItemMeta(item_meta)
+
+    def set_item(self, item_name: str, num: int):
+        self.set_item_with_meta(item_name, {"num": num})
+
+    def remove_item(self, item_name: str) -> bool:
+        for _type in ItemType:
+            if item_name in self._backpack[_type].keys():
+                del self._backpack[_type][item_name]
+                return True
+        return False
+
+    def bp_to_dict(self) -> dict[str: str]:
+        bp_dict = {}
+        for _type in ItemType:
+            for _name in self._backpack[_type].keys():
+                bp_dict[_name] = self._backpack[_type][_name].meta_to_dict()
+        return bp_dict
+
+    def get_item_list(self) -> list[ItemStack]:
+        item_list = []
+        for _type in ItemType:
+            for _name in self._backpack[_type].keys():
+                item_list.append(ItemStack(_name, _type, self._backpack[_type][_name]))
+        return item_list
+
+    def get_item_list_by_type(self, item_type: ItemType) -> list[ItemStack] | None:
+        if item_type in self._backpack.keys():
+            item_list = []
+            for _name in self._backpack[item_type].keys():
+                item_list.append(ItemStack(_name, item_type, self._backpack[item_type][_name]))
+            return item_list
+        return None

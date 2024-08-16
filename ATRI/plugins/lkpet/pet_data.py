@@ -1,8 +1,19 @@
-from ATRI.database.sqlite import MySQLite
-from ATRI.plugins.lkbot.util import lk_util, DB_NAME
-from ATRI.plugins.lkbot.system.data.user import Users, users
+from threading import Lock
+
+from ATRI.utils.sqlite import DBTable
+from ATRI.plugins.lkbot.system.data.user import Users, users, lk_db, database_update_event
 
 from .pet_chat import PetModel
+
+
+def db_update(connection, version):
+    cursor = connection.cursor()
+    if version < 1:
+        pass
+    cursor.close()
+
+
+database_update_event.subscribe(db_update)
 
 
 class PetData:
@@ -23,37 +34,46 @@ class PetManager:
     def __init__(self):
         self.convos = dict()
         self.datas = dict()
-        self.sql = MySQLite(DB_NAME, "PETDATA")
-        self.sql.create_table('''
+        self.lock = dict()
+        table_content = '''
 ID          INTEGER PRIMARY KEY,
 NAME        TEXT NOT NULL,
 INSTRUCTION TEXT NOT NULL,
 LOVE        INT DEFAULT 0
 '''
-                              )
-        content = self.sql.read_all()
+        self.sql = DBTable(lk_db, "PETDATA", table_content)
+        content = self.sql.select_all("ID, NAME, INSTRUCTION, LOVE")
         for row in content:
-            self.datas[str(row[0])] = PetData(row, 0)
-            self.convos[str(row[0])] = PetModel(lk_util.get_name(str(row[0])), row[1], row[2])
-            users.userdata[str(row[0])].petname = row[1]
-        Users.user_name_changed_event.subscribe(self.change_user_name)
+            user_id = str(row[0])
+            self.datas[user_id] = PetData(row, 0)
+            self.convos[user_id] = PetModel(users.get_user_name(user_id), row[1], row[2])
+            self.lock[user_id] = Lock()
+            users.petname_set(user_id, row[1])
+        Users.user_name_changed_event.subscribe(self.user_name_change_listener)
 
-    def new_pet(self, data: list):
-        self.datas[data[0]] = PetData(data, 1)
-        self.convos[data[0]] = PetModel(lk_util.get_name(data[0]), data[1], data[2])
-        users.userdata[data[0]].petname = data[1]
-        self.sql.insert('ID, NAME, INSTRUCTION', f"{data[0]}, '{data[1]}', '{data[2]}'")
+    def new_pet(self, user_id, name, instruction):
+        self.lock[user_id] = Lock()
+        self.lock[user_id].acquire()
+        self.datas[user_id] = PetData([user_id, name, instruction], 1)
+        self.convos[user_id] = PetModel(users.get_user_name(user_id), name, instruction)
+        users.petname_set(user_id, name)
+        self.sql.insert('ID, NAME, INSTRUCTION', f"{user_id}, '{name}', '{instruction}'")
+        self.lock[user_id].release()
 
     def change_pet_name(self, user_id, pet_name):
+        self.lock[user_id].acquire()
         self.datas[user_id].name = pet_name
         self.convos[user_id].change_pet_name(pet_name)
-        users.userdata[user_id].petname = pet_name
+        users.petname_set(user_id, pet_name)
         self.sql.update(f"NAME = '{pet_name}'", f"ID={user_id}")
+        self.lock[user_id].release()
 
     def change_pet_inst(self, user_id, inst):
+        self.lock[user_id].acquire()
         self.datas[user_id].instruction = inst
         self.convos[user_id].change_instruction(inst)
         self.sql.update(f"INSTRUCTION = '{inst}'", f"ID={user_id}")
+        self.lock[user_id].release()
 
-    def change_user_name(self, user_id, new_name):
+    def user_name_change_listener(self, user_id, new_name):
         self.convos[user_id].change_user_name(new_name)

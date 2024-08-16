@@ -1,4 +1,3 @@
-import json
 import re
 from pathlib import Path
 
@@ -14,7 +13,6 @@ from .system.data.user import users
 
 PLUGIN_VERSION = "0.4.1"
 PLUGIN_DIR = Path(".") / "data" / "plugins" / "lkbot"
-DB_NAME = "lkbot.db"
 
 
 class BaseFunc:
@@ -61,7 +59,7 @@ class BaseFunc:
         """检查用户是否为注册的有效用户"""
         if type(user_id) is int:
             user_id = str(user_id)
-        if user_id in users.userdata:
+        if users.has_user(user_id):
             return True
         return False
 
@@ -71,7 +69,7 @@ class BaseFunc:
         if type(user_id) is int:
             user_id = str(user_id)
         try:
-            return users.userdata[user_id].name
+            return users.get_user_name(user_id)
         except Exception:
             return None
 
@@ -85,16 +83,16 @@ class BaseFunc:
             money = price * num
             if users.money_change(user_id, -money):
                 self.item_change(user_id, item_name, num)
-                return f"购买 {item_name}*{num} 成功，共花费{money}ATRI币，你还有{users.userdata[user_id].money}ATRI币"
-            return f"ATRI币不足，需要{money}ATRI币，而你只有{users.userdata[user_id].money}ATRI币"
+                return f"购买 {item_name}*{num} 成功，共花费{money}ATRI币，你还有{users.get_money(user_id)}ATRI币"
+            return f"ATRI币不足，需要{money}ATRI币，而你只有{users.get_money(user_id)}ATRI币"
         else:
             return "暂不支持物品购买"
 
     def sell_item(self, user_id, item_name, num) -> str:
         """用户回收(出售)物品"""
         item = items.get_item_by_name(item_name)
-        backpack = users.userdata[user_id].backpack
-        if item_name in backpack:
+        backpack = users.get_backpack(user_id)
+        if backpack.bp_has_item(item_name):
             item_num = backpack[item_name]["num"]
             if num == -1:
                 num = item_num
@@ -110,7 +108,7 @@ class BaseFunc:
         item = items.get_item_by_name(item_name)
         if not item.item_can_use():
             return False, f"物品 {item_name} 不能使用"
-        backpack = users.userdata[user_id].backpack
+        backpack = users.get_backpack(user_id)
         if item_name in backpack:
             item_num = backpack[item_name]["num"]
             if num == -1:
@@ -134,17 +132,7 @@ class BaseFunc:
     @staticmethod
     def item_change(user_id, item_name: str, num: int):
         """对物品数量进行修改，自动添加或删除物品条目，注意:请确保修改后的数量不为负数"""
-        if item_name in users.userdata[user_id].backpack:
-            now_num = users.userdata[user_id].backpack[item_name]["num"] + num
-        else:
-            now_num = 0 + num
-            users.userdata[user_id].backpack[item_name] = {"num": 0}
-        if now_num == 0:
-            del users.userdata[user_id].backpack[item_name]
-        else:
-            users.userdata[user_id].backpack[item_name]["num"] = now_num
-        users.sql.update(f"BACKPACK = '{json.dumps(users.userdata[user_id].backpack, ensure_ascii=False)}'",
-                         f"ID = {user_id}")
+        users.item_num_change(user_id, item_name, num)
 
     @staticmethod
     def clean_str(original_string: str) -> str:
@@ -201,12 +189,11 @@ class BaseFunc:
             return False, '可惜捏，没找到那个人'
         if len(new_name) > limit or new_name == '':
             return False, f"那个...名称字数超出限制{limit}或为空"
-        if new_name in users.name:
-            return False, "那个...此名称已经被使用了，换个名字吧"
         if not self.is_valid_name(new_name):
             return False, "那个...这个名字不太合适吧"
-        users.change_name(user_id, self.get_name(user_id), new_name)
-        return True, f"咦？{user_id}的名字换成 {new_name} 了？"
+        if users.change_name(user_id, self.get_name(user_id), new_name):
+            return True, f"咦？{user_id}的名字换成 {new_name} 了？"
+        return False, "那个...此名称已经被使用了，换个名字吧"
 
 
 def load_item_data():

@@ -1,94 +1,21 @@
+import copy
 from datetime import datetime
 import json
 
+from threading import Lock
+
 from ATRI.utils.event import Event
 from ATRI.utils.curve import LvlManager
-from ATRI.database.sqlite import MySQLite
+from ATRI.utils.sqlite import DataBase, DBTable
 
-DB_NAME = "lkbot.db"
+from .item import BackPack
 
 user_level_manager = LvlManager(10, 1.5)
 
 
-class Users:
-    user_name_changed_event = Event()
-
-    def __init__(self):
-        self.userdata = dict()
-        self.name = list()
-        self.sql = MySQLite(DB_NAME, "USERINFO")
-        self.sql.create_table('''
-ID          INTEGER PRIMARY KEY,
-NAME        TEXT NOT NULL,
-EXP         INTEGER DEFAULT 0,
-MONEY       INTEGER DEFAULT 0,
-LASTSIGN    TEXT DEFAULT '2000-01-01',
-SIGNDAYS    INTEGER DEFAULT 0,
-BACKPACK    TEXT DEFAULT '{}',
-PETNAME     TEXT DEFAULT '',
-LOVE        INTEGER DEFAULT 0,
-DATA        TEXT DEFAULT '{}'
-'''
-                              )
-        content = self.sql.read_all()
-        for row in content:
-            self.name.append(row[1])
-            self.userdata[str(row[0])] = UserData(row, 0)
-
-    def add(self, user_id, name):
-        self.name.append(name)
-        user_data = UserData([user_id, name], 1)
-        self.userdata[user_id] = user_data
-        self.sql.insert('ID, NAME', f"{user_id}, '{name}'")
-
-    def change_name(self, user_id, name, new_name):
-        self.name.remove(name)
-        self.name.append(new_name)
-        self.userdata[user_id].name = new_name
-        self.sql.update(f"NAME = '{new_name}'", f"ID = {user_id}")
-        self.user_name_changed_event.notify(user_id, new_name)
-
-    def sign(self, user_id):
-        today = datetime.now().strftime("%Y-%m-%d")
-        if self.userdata[user_id].lastsign == today:
-            return False
-        else:
-            self.userdata[user_id].lastsign = today
-            self.userdata[user_id].signdays += 1
-            self.sql.update(f"LASTSIGN = '{today}', SIGNDAYS = {self.userdata[user_id].signdays}", f"ID={user_id}")
-            self.exp_change(user_id, 3)
-            self.money_change(user_id, 10)
-            self.love_change(user_id, 1)
-            return True
-
-    def exp_change(self, user_id, num: int):
-        if num > 0:
-            self.userdata[user_id].add_exp(num)
-            self.sql.update(f"EXP = '{self.userdata[user_id].exp}'", f"ID = {user_id}")
-            return True
-        return False
-
-    def money_change(self, user_id, num: int) -> bool:
-        if num != 0:
-            money = self.userdata[user_id].money
-            money += num
-            if money >= 0:
-                self.userdata[user_id].money = money
-                self.sql.update(f"MONEY = '{money}'", f"ID = {user_id}")
-                return True
-        return False
-
-    def love_change(self, user_id, num):
-        if num > 0:
-            love = self.userdata[user_id].love
-            love += num
-            self.userdata[user_id].love = love
-            self.sql.update(f"LOVE = '{love}'", f"ID = {user_id}")
-            return True
-        return False
-
-
 class UserData:
+    """内部类不要使用"""
+
     def __init__(self, data, data_type):
         if data_type == 0:
             self.id = data[0]
@@ -97,12 +24,11 @@ class UserData:
             self.money = data[3]
             self.lastsign = data[4]
             self.signdays = data[5]
-            self.backpack = json.loads(data[6])
-            self.petname = data[7]
-            self.love = data[8]
-            self.data = json.loads(data[9])
+            self.backpack = BackPack(json.loads(data[6]))
+            self.love = data[7]
             self.lvl = user_level_manager.to_lvl(self.exp)
             self.left_exp = user_level_manager.get_left_exp(self.exp, self.lvl)
+            self.petname = ''
             self.extra = {}
         else:
             self.id = data[0]
@@ -111,18 +37,18 @@ class UserData:
             self.money = 0
             self.lastsign = '2000-01-01'
             self.signdays = 0
-            self.backpack = {}
-            self.petname = ''
+            self.backpack = BackPack({})
             self.love = 0
-            self.data = {}
             self.lvl = 0
             self.left_exp = user_level_manager.get_left_exp(self.exp, self.lvl)
+            self.petname = ''
             self.extra = {}
 
     def get_lvl_exp(self):
         return user_level_manager.get_lvl_exp(self.lvl)
 
     def add_exp(self, exp: int):
+        """请勿直接使用，用Users中的exp_change()代替"""
         self.exp += exp
         self.left_exp += exp
         lvl_exp = self.get_lvl_exp()
@@ -131,4 +57,175 @@ class UserData:
             self.lvl += 1
 
 
+class Users:
+    user_name_changed_event = Event()
+
+    def __init__(self):
+        self._userdata = dict()
+        self._lock = dict()
+        self._name = list()
+        self._name_lock = Lock()
+        table_content = '''
+ID          INTEGER PRIMARY KEY,
+NAME        TEXT NOT NULL,
+EXP         INTEGER DEFAULT 0,
+MONEY       INTEGER DEFAULT 0,
+LASTSIGN    TEXT DEFAULT '2000-01-01',
+SIGNDAYS    INTEGER DEFAULT 0,
+BACKPACK    TEXT DEFAULT '{}',
+LOVE        INTEGER DEFAULT 0
+'''
+        self.sql = DBTable(lk_db, "USERINFO", table_content)
+        content = self.sql.select_all("ID, NAME, EXP, MONEY, LASTSIGN, SIGNDAYS, BACKPACK, LOVE")
+        for row in content:
+            self._name.append(row[1])
+            self._userdata[str(row[0])] = UserData(row, 0)
+            self._lock[str(row[0])] = Lock()
+
+    def get_name_list(self) -> list:
+        return copy.deepcopy(self._name)
+
+    def get_id_list(self) -> list:
+        return list(self._userdata.keys())
+
+    def get_user_data(self, user_id: str) -> UserData:
+        """返回一个深度拷贝，不要用于修改数据"""
+        return copy.deepcopy(self._userdata[user_id])
+
+    def add_user(self, user_id: str, name: str) -> bool:
+        self._name_lock.acquire()
+        if name in self._name:
+            self._name_lock.release()
+            return False
+        self._name.append(name)
+        self._name_lock.release()
+        self._lock[user_id] = Lock()
+        self._lock[user_id].acquire()
+        self._userdata[user_id] = UserData([user_id, name], 1)
+        self.sql.insert('ID, NAME', f"{user_id}, '{name}'")
+        self._lock[user_id].release()
+        return True
+
+    def change_name(self, user_id: str, name: str, new_name: str) -> bool:
+        self._name_lock.acquire()
+        if new_name in self._name:
+            self._name_lock.release()
+            return False
+        self._name.remove(name)
+        self._name.append(new_name)
+        self._name_lock.release()
+        self._lock[user_id].acquire()
+        self._userdata[user_id].name = new_name
+        self.sql.update(f"NAME = '{new_name}'", f"ID = {user_id}")
+        self._lock[user_id].release()
+        self.user_name_changed_event.notify(user_id, new_name)
+        return True
+
+    def sign(self, user_id: str) -> bool:
+        today = datetime.now().strftime("%Y-%m-%d")
+        if self._userdata[user_id].lastsign == today:
+            return False
+        else:
+            self._lock[user_id].acquire()
+            self._userdata[user_id].lastsign = today
+            self._userdata[user_id].signdays += 1
+            self.sql.update(f"LASTSIGN = '{today}', SIGNDAYS = {self._userdata[user_id].signdays}", f"ID={user_id}")
+            self._lock[user_id].release()
+            self.exp_change(user_id, 3)
+            self.money_change(user_id, 10)
+            self.love_change(user_id, 1)
+            return True
+
+    def exp_change(self, user_id: str, num: int) -> bool:
+        if num > 0:
+            self._lock[user_id].acquire()
+            self._userdata[user_id].add_exp(num)
+            self.sql.update(f"EXP = '{self._userdata[user_id].exp}'", f"ID = {user_id}")
+            self._lock[user_id].release()
+            return True
+        return False
+
+    def money_change(self, user_id: str, num: int) -> bool:
+        if num != 0:
+            self._lock[user_id].acquire()
+            money = self._userdata[user_id].money
+            money += num
+            if money >= 0:
+                self._userdata[user_id].money = money
+                self.sql.update(f"MONEY = '{money}'", f"ID = {user_id}")
+                self._lock[user_id].release()
+                return True
+            self._lock[user_id].release()
+        return False
+
+    def love_change(self, user_id: str, num: int) -> bool:
+        if num > 0:
+            self._lock[user_id].acquire()
+            love = self._userdata[user_id].love
+            love += num
+            self._userdata[user_id].love = love
+            self.sql.update(f"LOVE = '{love}'", f"ID = {user_id}")
+            self._lock[user_id].release()
+            return True
+        return False
+
+    def petname_set(self, user_id: str, name: str):
+        self._lock[user_id].acquire()
+        self._userdata[user_id].petname = name
+        self._lock[user_id].release()
+
+    def get_user_name(self, user_id: str) -> str:
+        return self._userdata[user_id].name
+
+    def has_user(self, user_id) -> bool:
+        if user_id in self._userdata:
+            return True
+        return False
+
+    def get_money(self, user_id) -> int:
+        return self._userdata[user_id].money
+
+    def get_love(self, user_id) -> int:
+        return self._userdata[user_id].love
+
+    def get_exp(self, user_id) -> int:
+        return self._userdata[user_id].exp
+
+    def get_lvl(self, user_id) -> int:
+        return self._userdata[user_id].lvl
+
+    def get_left_exp(self, user_id) -> int:
+        return self._userdata[user_id].left_exp
+
+    def get_lvl_exp(self, user_id) -> int:
+        return self._userdata[user_id].get_lvl_exp()
+
+    def get_backpack(self, user_id) -> BackPack:
+        """返回一个深度拷贝，不要用于修改数据"""
+        return copy.deepcopy(self._userdata[user_id].backpack)
+
+    def item_num_change(self, user_id: str, item_name: str, num: int):
+        self._lock[user_id].acquire()
+        item_stack = self._userdata[user_id].backpack.get_item_stack(item_name)
+        item_stack.meta.num += num
+        self._userdata[user_id].backpack.set_item_with_stack(item_stack)
+        self.sql.update(f"BACKPACK = '{json.dumps(self._userdata[user_id].backpack.bp_to_dict(), ensure_ascii=False)}'",
+                        f"ID = {user_id}")
+        self._lock[user_id].release()
+
+
+database_update_event = Event()
+
+
+def db_update(connection, version):
+    cursor = connection.cursor()
+    if version < 1:
+        cursor.execute("ALTER TABLE `TEST` DROP COLUMN `PETNAME`")
+        cursor.execute("ALTER TABLE `TEST` DROP COLUMN `DATA`")
+        connection.commit()
+    cursor.close()
+
+
+database_update_event.subscribe(db_update)
+lk_db = DataBase("lkbot.db", 0, database_update_event.notify)
 users = Users()

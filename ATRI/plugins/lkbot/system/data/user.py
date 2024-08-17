@@ -8,7 +8,7 @@ from sqlite3 import Connection
 
 from ATRI.utils.event import Event
 from ATRI.utils.curve import LvlManager
-from ATRI.utils.sqlite import DataBase, DBTable
+from ATRI.utils.sqlite import DataBase
 
 from .item import BackPack
 
@@ -82,7 +82,16 @@ SIGNDAYS    INTEGER DEFAULT 0,
 BACKPACK    TEXT DEFAULT '{}',
 LOVE        INTEGER DEFAULT 0
 '''
-        self.sql = DBTable(lk_db, "USERINFO", table_content)
+
+        def update_db(connection, version):
+            cursor = connection.cursor()
+            if version < 1:
+                cursor.execute("ALTER TABLE `TEST` DROP COLUMN `PETNAME`")
+                cursor.execute("ALTER TABLE `TEST` DROP COLUMN `DATA`")
+                connection.commit()
+            cursor.close()
+
+        self.sql = lk_db.get_table("USERINFO", table_content, 0, update_db)
         content = self.sql.select_all("ID, NAME, EXP, MONEY, LASTSIGN, SIGNDAYS, BACKPACK, LOVE")
         for row in content:
             self._name.append(row[1])
@@ -226,18 +235,5 @@ class DataBaseUpdateEvent(Event):
         super().notify(connection, version)
 
 
-database_update_event = DataBaseUpdateEvent()
-
-
-@database_update_event.handle()
-def _(connection, version):
-    cursor = connection.cursor()
-    if version < 1:
-        cursor.execute("ALTER TABLE `TEST` DROP COLUMN `PETNAME`")
-        cursor.execute("ALTER TABLE `TEST` DROP COLUMN `DATA`")
-        connection.commit()
-    cursor.close()
-
-
-lk_db = DataBase("lkbot.db", 0, database_update_event.notify)
+lk_db = DataBase("lkbot.db")
 users = Users()

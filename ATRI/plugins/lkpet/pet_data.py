@@ -1,17 +1,8 @@
 from threading import Lock
 
-from ATRI.utils.sqlite import DBTable
-from ATRI.plugins.lkbot.system.data.user import Users, users, lk_db, database_update_event
+from ATRI.plugins.lkbot.system.data.user import Users, users, lk_db
 
 from .pet_chat import PetModel
-
-
-@database_update_event.handle()
-def _(connection, version):
-    cursor = connection.cursor()
-    if version < 1:
-        pass
-    cursor.close()
 
 
 class PetData:
@@ -39,7 +30,14 @@ NAME        TEXT NOT NULL,
 INSTRUCTION TEXT NOT NULL,
 LOVE        INT DEFAULT 0
 '''
-        self.sql = DBTable(lk_db, "PETDATA", table_content)
+
+        def update_db(connection, version):
+            cursor = connection.cursor()
+            if version < 1:
+                pass
+            cursor.close()
+
+        self.sql = lk_db.get_table("PETDATA", table_content, 0, update_db)
         content = self.sql.select_all("ID, NAME, INSTRUCTION, LOVE")
         for row in content:
             user_id = str(row[0])

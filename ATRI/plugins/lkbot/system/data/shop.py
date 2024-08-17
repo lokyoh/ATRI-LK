@@ -66,6 +66,12 @@ class Shop:
             return True
         return False
 
+    def clear_goods(self):
+        self._goods_list = []
+        self._goods_price = []
+        self._goods_coin_type = []
+        self._goods_limit = []
+
 
 class ShopRegister:
     def __init__(self):

@@ -1,61 +1,79 @@
-import sqlite3
+from sqlite3 import Connection, connect, OperationalError
 
 from ATRI.database.db import DB_DIR
 
 
-class DataBase:
-    def __init__(self, database_name: str, db_version: int, update_dp):
-        self.connection = sqlite3.connect(f"{DB_DIR}/{database_name}")
-        cursor = self.connection.cursor()
-        cursor.execute(f"CREATE TABLE IF NOT EXISTS VERSION ( VERSION INTEGER DEFAULT {db_version} );")
-        self.connection.commit()
-        cursor.execute(f"SELECT VERSION FROM VERSION")
-        content = []
-        for row in cursor:
-            content.append(row)
-        if len(content) == 0:
-            cursor.execute(f"INSERT INTO VERSION (VERSION) VALUES ({db_version})")
-            self.connection.commit()
-        else:
-            now_version = content[0][0]
-            if now_version != db_version:
-                if update_dp is not None:
-                    update_dp(self.connection, now_version)
-                cursor.execute(f"UPDATE VERSION SET VERSION = {db_version} WHERE VERSION = {now_version}")
-                self.connection.commit()
-        cursor.close()
-
-
 class DBTable:
-    def __init__(self, db: DataBase, table_name, table_content):
-        self._conn = db.connection
-        self._c = self._conn.cursor()
+    def __init__(self, connection: Connection, table_name):
+        self._conn = connection
         self.table_name = table_name
-        self._c.execute(f'''CREATE TABLE IF NOT EXISTS {self.table_name} ( {table_content} );''')
-        self._conn.commit()
 
     def select_all(self, content='*'):
-        cursor = self._c.execute(f'''SELECT {content} FROM {self.table_name}''')
+        cursor = self._conn.cursor()
+        result = cursor.execute(f'''SELECT {content} FROM {self.table_name}''')
         content = []
-        for row in cursor:
+        for row in result:
             content.append(row)
+        cursor.close()
         return content
 
     def select(self, content, req):
-        cursor = self._c.execute(f"SELECT {content} FROM {self.table_name} WHERE {req}")
+        cursor = self._conn.cursor()
+        result = cursor.execute(f"SELECT {content} FROM {self.table_name} WHERE {req}")
         content = []
-        for row in cursor:
+        for row in result:
             content.append(row)
+        cursor.close()
         return content
 
     def insert(self, content, value):
-        self._c.execute(f"INSERT INTO {self.table_name} ({content}) VALUES ({value})")
+        cursor = self._conn.cursor()
+        cursor.execute(f"INSERT INTO {self.table_name} ({content}) VALUES ({value})")
         self._conn.commit()
+        cursor.close()
 
     def update(self, content, req):
-        self._c.execute(f"UPDATE {self.table_name} SET {content} WHERE {req}")
+        cursor = self._conn.cursor()
+        cursor.execute(f"UPDATE {self.table_name} SET {content} WHERE {req}")
         self._conn.commit()
+        cursor.close()
 
     def delete(self, req):
-        self._c.execute(f"DELETE FROM {self.table_name} WHERE {req}")
+        cursor = self._conn.cursor()
+        cursor.execute(f"DELETE FROM {self.table_name} WHERE {req}")
         self._conn.commit()
+        cursor.close()
+
+
+class DataBase:
+    def __init__(self, database_name: str):
+        self._connection = connect(f"{DB_DIR}/{database_name}")
+        self._table_list = []
+        cursor = self._connection.cursor()
+        cursor.execute(f"CREATE TABLE IF NOT EXISTS TABLEVERSION ( TABLENAME TEXT, VERSION INTEGER );")
+        self._connection.commit()
+        cursor.close()
+
+    def get_table(self, table_name: str, table_content: str, table_version: int, update_dp) -> DBTable:
+        if table_name in self._table_list:
+            raise ValueError(f"表 {table_name} 已经存在")
+        self._table_list.append(table_name)
+        cursor = self._connection.cursor()
+        cursor.execute(f'''CREATE TABLE IF NOT EXISTS {table_name} ( {table_content} );''')
+        self._connection.commit()
+        cursor.execute(f"SELECT VERSION FROM TABLEVERSION WHERE TABLENAME = '{table_name}'")
+        result = []
+        for row in cursor:
+            result.append(row)
+        if len(result) > 0:
+            now_version = result[0][0]
+            if now_version != table_version:
+                if update_dp is not None:
+                    update_dp(self._connection, now_version)
+                cursor.execute(f"UPDATE TABLEVERSION SET VERSION = {table_version} WHERE TABLENAME = '{table_name}'")
+                self._connection.commit()
+        else:
+            cursor.execute(f"INSERT INTO TABLEVERSION (TABLENAME, VERSION) VALUES ('{table_name}', {table_version})")
+            self._connection.commit()
+        cursor.close()
+        return DBTable(self._connection, table_name)

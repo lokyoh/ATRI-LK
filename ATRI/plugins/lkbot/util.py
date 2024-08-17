@@ -5,6 +5,7 @@ from nonebot.adapters.onebot.v11 import Message
 
 from ATRI import conf, driver
 from ATRI.log import log
+from ATRI.utils.event import Event
 
 from .config import config
 from .system.data.item import Item, ItemType, items
@@ -196,6 +197,9 @@ class BaseFunc:
         return False, "那个...此名称已经被使用了，换个名字吧"
 
 
+item_loading_event = Event()
+
+
 def load_item_data():
     """加载物品与商店数据"""
     # items.items_clear()
@@ -208,6 +212,8 @@ def load_item_data():
     base_shop = Shop("基础商店")
     base_shop.add_goods(rename_card, 100)
     shops.register(base_shop)
+
+    item_loading_event.notify()
 
     log.success(f'物品商店注册完成:共注册{len(items.get_item_list())}个物品，{len(shops.get_shop_names())}个商店')
 

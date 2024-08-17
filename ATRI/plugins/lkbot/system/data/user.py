@@ -4,6 +4,8 @@ import json
 
 from threading import Lock
 
+from sqlite3 import Connection
+
 from ATRI.utils.event import Event
 from ATRI.utils.curve import LvlManager
 from ATRI.utils.sqlite import DataBase, DBTable
@@ -57,8 +59,13 @@ class UserData:
             self.lvl += 1
 
 
+class UserNameChangedEvent(Event):
+    def notify(self, user_id: str, user_name: str):
+        super().notify(user_id, user_name)
+
+
 class Users:
-    user_name_changed_event = Event()
+    user_name_changed_event = UserNameChangedEvent()
 
     def __init__(self):
         self._userdata = dict()
@@ -214,10 +221,16 @@ LOVE        INTEGER DEFAULT 0
         self._lock[user_id].release()
 
 
-database_update_event = Event()
+class DataBaseUpdateEvent(Event):
+    def notify(self, connection: Connection, version: int):
+        super().notify(connection, version)
 
 
-def db_update(connection, version):
+database_update_event = DataBaseUpdateEvent()
+
+
+@database_update_event.handle()
+def _(connection, version):
     cursor = connection.cursor()
     if version < 1:
         cursor.execute("ALTER TABLE `TEST` DROP COLUMN `PETNAME`")
@@ -226,6 +239,5 @@ def db_update(connection, version):
     cursor.close()
 
 
-database_update_event.subscribe(db_update)
 lk_db = DataBase("lkbot.db", 0, database_update_event.notify)
 users = Users()

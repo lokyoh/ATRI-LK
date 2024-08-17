@@ -4,14 +4,16 @@ from .item import Item, items
 
 
 class Shop:
-    def __init__(self, shop_name):
+    """创建一个商店"""
+
+    def __init__(self, shop_name: str):
         self._name = shop_name
         self._goods_list = []
         self._goods_price = []
         self._goods_coin_type = []
         self._goods_limit = []
 
-    def add_goods(self, item_name: str | Item, price, coin_type: str = "ATRI币", limit: int = 0):
+    def add_goods(self, item_name: str | Item, price: int, coin_type: str = "ATRI币", limit: int = 0):
         if type(item_name) is Item:
             item_name = item_name.get_item_name()
         else:
@@ -31,6 +33,7 @@ class Shop:
         self._goods_price.append(price)
         self._goods_coin_type.append(coin_type)
         self._goods_limit.append(limit)
+        return self
 
     def get_shop_name(self) -> str:
         return self._name

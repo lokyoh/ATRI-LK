@@ -15,14 +15,6 @@ class ItemType(Enum):
     OTHER = '其他'
 
 
-def get_type(type_value: str) -> ItemType | None:
-    """将字符串转换成物品种类"""
-    for _type in ItemType:
-        if _type.value == type_value:
-            return _type
-    return None
-
-
 class Item:
     """定义物品及其基本数据"""
 
@@ -89,6 +81,7 @@ class ItemRegister:
         self._item_list.append(item_name)
         self._item_dic[item_name] = item
         self._item_type_dic[item.get_item_type()].append(item_name)
+        return self
 
     def get_item_by_index(self, index) -> Item | None:
         if 0 <= index < len(self._item_list):

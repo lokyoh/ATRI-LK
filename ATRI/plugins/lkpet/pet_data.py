@@ -6,14 +6,12 @@ from ATRI.plugins.lkbot.system.data.user import Users, users, lk_db, database_up
 from .pet_chat import PetModel
 
 
-def db_update(connection, version):
+@database_update_event.handle()
+def _(connection, version):
     cursor = connection.cursor()
     if version < 1:
         pass
     cursor.close()
-
-
-database_update_event.subscribe(db_update)
 
 
 class PetData:
@@ -49,7 +47,6 @@ LOVE        INT DEFAULT 0
             self.convos[user_id] = PetModel(users.get_user_name(user_id), row[1], row[2])
             self.lock[user_id] = Lock()
             users.petname_set(user_id, row[1])
-        Users.user_name_changed_event.subscribe(self.user_name_change_listener)
 
     def new_pet(self, user_id, name, instruction):
         self.lock[user_id] = Lock()
@@ -75,5 +72,10 @@ LOVE        INT DEFAULT 0
         self.sql.update(f"INSTRUCTION = '{inst}'", f"ID={user_id}")
         self.lock[user_id].release()
 
-    def user_name_change_listener(self, user_id, new_name):
-        self.convos[user_id].change_user_name(new_name)
+
+pet_manager = PetManager()
+
+
+@Users.user_name_changed_event.handle()
+def _(user_id, new_name):
+    pet_manager.convos[user_id].change_user_name(new_name)

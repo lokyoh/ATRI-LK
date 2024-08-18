@@ -235,10 +235,10 @@ async def _(event: Event, matcher: Matcher, args: Message = CommandArg()):
 
 @change_name.got("user_new_name", "新名字呢？速速")
 async def _(event: Event, name: str = ArgPlainText("user_new_name")):
-    if users.get_backpack(event.get_user_id()).bp_has_item("改名卡"):
+    if lk_util.item_change(event.get_user_id(), "改名卡", -1):
         result, msg = lk_util.user_change_name(event.get_user_id(), name)
-        if result:
-            lk_util.item_change(event.get_user_id(), "改名卡", -1)
+        if not result:
+            lk_util.item_change(event.get_user_id(), "改名卡", 1)
         await change_name.finish(msg)
     else:
         await change_name.finish("没有改名卡，请先购买")

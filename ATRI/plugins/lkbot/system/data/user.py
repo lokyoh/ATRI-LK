@@ -1,4 +1,5 @@
 import copy
+from copy import deepcopy
 from datetime import datetime
 import json
 
@@ -9,6 +10,7 @@ from sqlite3 import Connection
 from ATRI.utils.event import Event
 from ATRI.utils.curve import LvlManager
 from ATRI.utils.sqlite import DataBase
+from ATRI.utils.limiter import LimitedQueue
 
 from .item import BackPack
 
@@ -26,8 +28,7 @@ class UserData:
             self.money = data[3]
             self.lastsign = data[4]
             self.signdays = data[5]
-            self.backpack = BackPack(json.loads(data[6]))
-            self.love = data[7]
+            self.love = data[6]
             self.lvl = user_level_manager.to_lvl(self.exp)
             self.left_exp = user_level_manager.get_left_exp(self.exp, self.lvl)
             self.petname = ''
@@ -39,7 +40,6 @@ class UserData:
             self.money = 0
             self.lastsign = '2000-01-01'
             self.signdays = 0
-            self.backpack = BackPack({})
             self.love = 0
             self.lvl = 0
             self.left_exp = user_level_manager.get_left_exp(self.exp, self.lvl)
@@ -72,6 +72,9 @@ class Users:
         self._lock = dict()
         self._name = list()
         self._name_lock = Lock()
+        self._cache_lock = Lock()
+        self._backpack_list = LimitedQueue(8)
+        self._backpack_cache = {}
         table_content = '''
 ID          INTEGER PRIMARY KEY,
 NAME        TEXT NOT NULL,
@@ -92,7 +95,7 @@ LOVE        INTEGER DEFAULT 0
             cursor.close()
 
         self.sql = lk_db.get_table("USERINFO", table_content, 0, update_db)
-        content = self.sql.select_all("ID, NAME, EXP, MONEY, LASTSIGN, SIGNDAYS, BACKPACK, LOVE")
+        content = self.sql.select_all("ID, NAME, EXP, MONEY, LASTSIGN, SIGNDAYS, LOVE")
         for row in content:
             self._name.append(row[1])
             self._userdata[str(row[0])] = UserData(row, 0)
@@ -216,18 +219,35 @@ LOVE        INTEGER DEFAULT 0
     def get_lvl_exp(self, user_id) -> int:
         return self._userdata[user_id].get_lvl_exp()
 
-    def get_backpack(self, user_id) -> BackPack:
-        """返回一个深度拷贝，不要用于修改数据"""
-        return copy.deepcopy(self._userdata[user_id].backpack)
+    def _init_backpack(self, user_id):
+        if not user_id in self._backpack_cache:
+            old_user = self._backpack_list.add(user_id)
+            if old_user:
+                del self._backpack_cache[old_user]
+            bp = self.sql.select("BACKPACK", f"ID = {user_id}")
+            self._backpack_cache[user_id] = BackPack(json.loads(bp[0][0]))
 
-    def item_num_change(self, user_id: str, item_name: str, num: int):
-        self._lock[user_id].acquire()
-        item_stack = self._userdata[user_id].backpack.get_item_stack(item_name)
-        item_stack.meta.num += num
-        self._userdata[user_id].backpack.set_item_with_stack(item_stack)
-        self.sql.update(f"BACKPACK = '{json.dumps(self._userdata[user_id].backpack.bp_to_dict(), ensure_ascii=False)}'",
+    def get_backpack(self, user_id) -> BackPack:
+        """获取用户背包的深度拷贝"""
+        self._cache_lock.acquire()
+        self._init_backpack(user_id)
+        self._cache_lock.release()
+        return deepcopy(self._backpack_cache[user_id])
+
+    def item_num_change(self, user_id: str, item_name: str, num: int) -> bool:
+        self._cache_lock.acquire()
+        self._init_backpack(user_id)
+        item_stack = self._backpack_cache[user_id].get_item_stack(item_name)
+        num += item_stack.meta.num
+        if num < 0:
+            self._cache_lock.release()
+            return False
+        item_stack.meta.num = num
+        self._backpack_cache[user_id].set_item_with_stack(item_stack)
+        self.sql.update(f"BACKPACK = '{json.dumps(self._backpack_cache[user_id].bp_to_dict(), ensure_ascii=False)}'",
                         f"ID = {user_id}")
-        self._lock[user_id].release()
+        self._cache_lock.release()
+        return True
 
 
 class DataBaseUpdateEvent(Event):

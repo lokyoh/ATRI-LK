@@ -94,17 +94,15 @@ class BaseFunc:
         item = items.get_item_by_name(item_name)
         backpack = users.get_backpack(user_id)
         if backpack.bp_has_item(item_name):
-            item_num = backpack[item_name]["num"]
-            if num == -1:
-                num = item_num
-            if item_num < num:
+            if not self.item_change(user_id, item_name, -num):
+                item_num = backpack[item_name]["num"]
                 return f"物品 {item_name} 数量不足{num}个, 你只有{item_num}个"
-            self.item_change(user_id, item_name, -num)
             users.money_change(user_id, item.get_item_price() * num)
             return f"回收 {item_name}*{num} 成功"
         return f"你没有 {item_name}"
 
-    def use_item(self, user_id: str, item_name: str, num: int) -> tuple[bool, str]:
+    @staticmethod
+    def use_item(user_id: str, item_name: str, num: int) -> tuple[bool, str]:
         """用户使用物品"""
         item = items.get_item_by_name(item_name)
         if not item.item_can_use():
@@ -117,15 +115,9 @@ class BaseFunc:
             if item_num < num:
                 return False, f"物品 {item_name} 数量不足{num}个, 你只有{item_num}个"
             msg = ''
-            used_num = 0
             for i in range(num):
-                has_used, resp = item.use_item(user_id)
-                if has_used:
-                    used_num += 1
+                resp = item.use_item(user_id)
                 msg += f'{i + 1}. {resp}\n'
-            if used_num == 0:
-                return True, msg
-            self.item_change(user_id, item_name, -used_num)
             return True, msg
         else:
             return False, f"你没有物品 {item_name}"
@@ -133,7 +125,7 @@ class BaseFunc:
     @staticmethod
     def item_change(user_id, item_name: str, num: int):
         """对物品数量进行修改，自动添加或删除物品条目，注意:请确保修改后的数量不为负数"""
-        users.item_num_change(user_id, item_name, num)
+        return users.item_num_change(user_id, item_name, num)
 
     @staticmethod
     def clean_str(original_string: str) -> str:

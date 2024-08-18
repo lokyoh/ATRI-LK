@@ -16,7 +16,7 @@ class ItemType(Enum):
 
 
 class Item:
-    """定义物品及其基本数据"""
+    """定义物品及其基本数据，注意默认方法无物品消耗，请自行添加"""
 
     def __init__(self, item_name, item_type: ItemType = ItemType.OTHER, item_info='', item_price=0, using_func=None):
         """
@@ -159,11 +159,13 @@ class BackPack:
     def __init__(self, bp_dict: dict):
         global items
         self._backpack: Dict[ItemType: Dict[str: ItemMeta]] = dict()
+        self._wrong_item = {}
         for _type in ItemType:
             self._backpack[_type] = dict()
         for _name in bp_dict.keys():
             _item = items.get_item_by_name(_name)
             if not _item:
+                self._wrong_item[_name] = bp_dict[_name]
                 continue
             _type = _item.get_item_type_name()
             _meta = bp_dict[_name]
@@ -205,6 +207,8 @@ class BackPack:
         for _type in ItemType:
             for _name in self._backpack[_type].keys():
                 bp_dict[_name] = self._backpack[_type][_name].meta_to_dict()
+        for wrong_item in self._wrong_item:
+            bp_dict[wrong_item] = self._wrong_item[wrong_item]
         return bp_dict
 
     def get_item_list(self) -> list[ItemStack]:

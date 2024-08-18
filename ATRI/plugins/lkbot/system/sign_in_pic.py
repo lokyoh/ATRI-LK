@@ -36,8 +36,7 @@ async def get_pic(user_id, r18_mode: bool = False, src: str = 'lolicon'):
             image = Image.open(BytesIO(image_content))
         except Exception as e:
             log.warning(f'{e}:\n{e.args}')
-            src = 'local'
-            image = await get_pic_from(src)
+            return await get_pic(user_id)
     else:
         src = 'local'
         image = await get_pic_from(src)

@@ -77,3 +77,9 @@ class DataBase:
             self._connection.commit()
         cursor.close()
         return DBTable(self._connection, table_name)
+
+    def get_exist_table(self, table_name: str):
+        return DBTable(self._connection, table_name)
+
+    def disconnect(self):
+        self._connection.close()

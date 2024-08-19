@@ -186,10 +186,14 @@ class BackPack:
     def set_item_with_stack(self, item_stack: ItemStack):
         _name = item_stack.get_name()
         _type = item_stack.get_type()
+        if item_stack.meta.num == 0:
+            self.remove_item(_name)
         self._backpack[_type][_name] = item_stack.meta
 
     def set_item_with_meta(self, item_name: str, item_meta: dict[str: Any]):
         _type = items.get_item_by_name(item_name).get_item_type_name()
+        if item_meta.get("num", 0) == 0:
+            self.remove_item(item_name)
         self._backpack[_type][item_name] = ItemMeta(item_meta)
 
     def set_item(self, item_name: str, num: int):

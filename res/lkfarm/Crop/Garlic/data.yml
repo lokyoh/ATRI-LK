@@ -1,0 +1,13 @@
+name: "大蒜"
+intro: "给菜肴增加一些风味。质量好的大蒜可能会特别辣。"
+season: "春季"
+type: "蔬菜"
+exp: 12
+price:
+    crop: 60
+    seed: 40
+    seed_sell: 20
+growth:
+    stage: [1, 1, 1, 1]
+    lasting: 0
+harvest_list: [["大蒜"],[100]]

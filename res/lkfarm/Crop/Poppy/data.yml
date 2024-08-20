@@ -1,0 +1,13 @@
+name: "虞美人"
+intro: "虞美人花颜色鲜艳，有药用价值。"
+season: "夏季"
+type: "花"
+exp: 20
+price:
+    crop: 140
+    seed: 100
+    seed_sell: 50
+growth:
+    stage: [1, 2, 2, 2]
+    lasting: 0
+harvest_list: [["虞美人"],[100]]

@@ -1,0 +1,13 @@
+name: "萝卜"
+intro: "新鲜清爽的块茎蔬菜，生吃的时候加一点胡椒。"
+season: "夏季"
+type: "蔬菜"
+exp: 15
+price:
+    crop: 90
+    seed: 40
+    seed_sell: 20
+growth:
+    stage: [2, 1, 2, 1]
+    lasting: 0
+harvest_list: [["萝卜"],[100]]

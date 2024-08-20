@@ -12,7 +12,7 @@ from .system.data.item import Item, ItemType, items
 from .system.data.shop import Shop, shops
 from .system.data.user import users
 
-PLUGIN_VERSION = "0.4.1"
+PLUGIN_VERSION = "0.4.5"
 PLUGIN_DIR = Path(".") / "data" / "plugins" / "lkbot"
 
 
@@ -130,7 +130,7 @@ class BaseFunc:
     @staticmethod
     def clean_str(original_string: str) -> str:
         """去除字符串中的非法字符"""
-        pattern = r"[\\'\"<> :：\(\)（）“”’‘【】\[\]]"
+        pattern = r"[\\'\"<> :：\(\)（）“”’‘【】\[\]`~]"
         cleaned_string = re.sub(pattern, '', original_string)
         return cleaned_string
 
@@ -188,8 +188,20 @@ class BaseFunc:
             return True, f"咦？{user_id}的名字换成 {new_name} 了？"
         return False, "那个...此名称已经被使用了，换个名字吧"
 
+class SignInEvent(Event):
+    def __init__(self):
+        super().__init__()
+
+    def notify(self, user_id):
+        msg = ""
+        for listener in self.listeners:
+            r = listener(user_id)
+            if msg:
+                msg += r
+        return msg
 
 item_loading_event = Event()
+sign_in_event = SignInEvent()
 
 
 def load_item_data():
@@ -201,7 +213,7 @@ def load_item_data():
     items.register(rename_card)
 
     """定义商店与添加物品"""
-    base_shop = Shop("基础商店")
+    base_shop = Shop("基础商店", "亚托莉开的小店,专门售卖一些实用基础物品给客户使用。")
     base_shop.add_goods(rename_card, 100)
     shops.register(base_shop)
 

@@ -31,7 +31,7 @@ sign_in = plugin.on_command(cmd='签到', docs="全新界面的签到系统")
 async def _(event: Event):
     await is_lk_user(sign_in, event)
     r18_mode = not lk_util.is_safe_mode_group(event.group_id) if type(event) is GroupMessageEvent else True
-    await sign_in.finish(await LKBot.sign_in(event.get_user_id(), r18_mode))
+    await sign_in.finish(await LKBot.sign_in(event, r18_mode))
 
 
 my_info = plugin.on_command(cmd="我的信息", docs="查询自己的信息")
@@ -173,7 +173,7 @@ async def _(shop_name=ArgPlainText("shop_name")):
         shop = shops.get_shop_by_name(shop_name)
         item_list = shop.get_goods_list()
         num = len(item_list)
-        resp = "商店列表:\n商品名称-货币:价格-限制\n"
+        resp = f"{shop.get_shop_name()}-商品列表:\n{shop.get_shop_info()}\n{'-'*10}\n商品名称-货币:价格-限制\n"
         i = 0
         j = 1
         for item_name in item_list:
@@ -204,7 +204,7 @@ async def _(event: Event, matcher: Matcher, args: Message = CommandArg()):
         if args[0] == '':
             index = 1
         matcher.set_arg("buy_shop_name", Message().append(args[index]))
-        if len(args) > index:
+        if len(args) > index + 1:
             matcher.set_arg("buy_item_name", Message().append(args[index + 1]))
 
 

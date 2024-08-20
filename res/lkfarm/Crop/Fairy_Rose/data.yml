@@ -1,0 +1,13 @@
+name: "玫瑰仙子"
+intro: "传言这种花朵的香味会吸引小仙女而来。"
+season: "秋季"
+type: "花"
+exp: 29
+price:
+    crop: 290
+    seed: 200
+    seed_sell: 100
+growth:
+    stage: [1, 4, 4, 3]
+    lasting: 0
+harvest_list: [["玫瑰仙子"],[100]]

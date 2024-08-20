@@ -1,0 +1,13 @@
+name: "玉米"
+intro: "最常见的庄稼之一。甜甜的新鲜玉米棒是夏天最好的小吃。"
+season: "夏秋两季"
+type: "蔬菜"
+exp: 10
+price:
+    crop: 50
+    seed: 150
+    seed_sell: 75
+growth:
+    stage: [2, 3, 3, 3, 3]
+    lasting: 0
+harvest_list: [["玉米"],[100]]

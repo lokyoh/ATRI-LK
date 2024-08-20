@@ -1,0 +1,13 @@
+name: "辣椒"
+intro: "超级辣，稍甜。"
+season: "夏季"
+type: "蔬菜"
+exp: 9
+price:
+    crop: 40
+    seed: 40
+    seed_sell: 20
+growth:
+    stage: [1, 1, 1, 1, 1]
+    lasting: 3
+harvest_list: [["辣椒"],[100]]

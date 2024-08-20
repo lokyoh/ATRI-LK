@@ -1,0 +1,13 @@
+name: "甜菜"
+intro: "香甜的根茎植物。它的叶子非常适合做沙拉。"
+season: "秋季"
+type: "蔬菜"
+exp: 16
+price:
+    crop: 100
+    seed: 20
+    seed_sell: 10
+growth:
+    stage: [1, 1, 2, 2]
+    lasting: 0
+harvest_list: [["甜菜"],[100]]

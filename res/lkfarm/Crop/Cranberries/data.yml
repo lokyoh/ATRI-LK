@@ -1,0 +1,13 @@
+name: "蔓越莓"
+intro: "这些红色的酸梅是传统的冬天食品。"
+season: "秋季"
+type: "水果"
+exp: 14
+price:
+    crop: 75
+    seed: 240
+    seed_sell: 60
+growth:
+    stage: [1, 2, 1, 1, 2]
+    lasting: 5
+harvest_list: [["蔓越莓", "蔓越莓", "蔓越莓+"],[100, 100, 10]]

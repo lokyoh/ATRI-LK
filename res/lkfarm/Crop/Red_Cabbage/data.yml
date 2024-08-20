@@ -1,0 +1,13 @@
+name: "红叶卷心菜"
+intro: "常用来做沙拉或者凉拌卷心菜。由于土地条件不同，颜色可能是紫色或者蓝色或者黄绿色。"
+season: "夏季"
+type: "蔬菜"
+exp: 28
+price:
+    crop: 260
+    seed: 100
+    seed_sell: 50
+growth:
+    stage: [2, 1, 2, 2, 2]
+    lasting: 0
+harvest_list: [["红叶卷心菜"],[100]]

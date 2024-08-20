@@ -1,0 +1,13 @@
+name: "茄子"
+intro: "味道浓郁，营养丰富，是西红柿的近亲。炒着吃或者炖着吃味道都很不错。"
+season: "秋季"
+type: "蔬菜"
+exp: 12
+price:
+    crop: 60
+    seed: 20
+    seed_sell: 10
+growth:
+    stage: [1, 1, 1, 1, 1]
+    lasting: 5
+harvest_list: [["茄子", "茄子+"],[100, 1]]

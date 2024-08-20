@@ -1,0 +1,13 @@
+name: "郁金香"
+intro: "最受欢迎的春天花朵。淡淡的芳香味。"
+season: "春季"
+type: "花"
+exp: 7
+price:
+    crop: 30
+    seed: 20
+    seed_sell: 10
+growth:
+    stage: [1, 1, 2, 2]
+    lasting: 0
+harvest_list: [["郁金香"],[100]]

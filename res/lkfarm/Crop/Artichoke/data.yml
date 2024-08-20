@@ -1,0 +1,13 @@
+name: "洋蓟"
+intro: "一种蓟科植物的芽。带有尖刺的外围叶子下，隐藏着一颗多肉而结实的内芯。"
+season: "秋季"
+type: "蔬菜"
+exp: 22
+price:
+    crop: 160
+    seed: 30
+    seed_sell: 15
+growth:
+    stage: [2, 2, 1, 2, 1]
+    lasting: 0
+harvest_list: [["洋蓟"],[100]]

@@ -1,0 +1,13 @@
+name: "稻米"
+intro: "大米以未加工的形式。通过磨机运行以增加价值。"
+season: "春季"
+type: "蔬菜"
+exp: 7
+price:
+    crop: 30
+    seed: 40
+    seed_sell: 20
+growth:
+    stage: [1, 1, 1, 3]
+    lasting: 0
+harvest_list: [["稻米", "稻米+"],[100, 10]]

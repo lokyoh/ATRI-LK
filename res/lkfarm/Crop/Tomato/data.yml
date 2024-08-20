@@ -1,0 +1,13 @@
+name: "西红柿"
+intro: "口感丰富，味道略有些强烈。西红柿有非常广泛的烹饪用途。"
+season: "夏季"
+type: "蔬菜"
+exp: 12
+price:
+    crop: 60
+    seed: 50
+    seed_sell: 25
+growth:
+    stage: [2, 2, 2, 2, 3]
+    lasting: 4
+harvest_list: [["西红柿", "西红柿+"],[100, 5]]

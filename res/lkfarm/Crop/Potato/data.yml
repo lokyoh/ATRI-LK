@@ -1,0 +1,13 @@
+name: "土豆"
+intro: "一种栽种范围很广的块茎植物。"
+season: "春季"
+type: "蔬菜"
+exp: 14
+price:
+    crop: 80
+    seed: 50
+    seed_sell: 25
+growth:
+    stage: [1, 1, 1, 2, 1]
+    lasting: 0
+harvest_list: [["土豆", "土豆+"],[100, 20]]

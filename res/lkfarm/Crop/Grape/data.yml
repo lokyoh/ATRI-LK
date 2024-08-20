@@ -1,0 +1,13 @@
+name: "葡萄"
+intro: "一串的香甜水果。"
+season: "秋季"
+type: "水果"
+exp: 14
+price:
+    crop: 80
+    seed: 60
+    seed_sell: 30
+growth:
+    stage: [1, 1, 2, 3, 3]
+    lasting: 3
+harvest_list: [["葡萄"],[100]]

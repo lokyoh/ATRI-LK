@@ -1,0 +1,13 @@
+name: "甘蓝菜"
+intro: "拿这些柔软的叶子蔬菜什锦盖饭或者做汤，味道好极了！"
+season: "春季"
+type: "蔬菜"
+exp: 17
+price:
+    crop: 110
+    seed: 70
+    seed_sell: 35
+growth:
+    stage: [1, 2, 2, 1]
+    lasting: 0
+harvest_list: [["甘蓝菜"],[100]]

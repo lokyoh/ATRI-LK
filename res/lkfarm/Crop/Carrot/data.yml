@@ -1,0 +1,13 @@
+name: "胡萝卜"
+intro: "生长迅速、色彩鲜艳的块茎植物，可以当零食吃。"
+season: "春季"
+type: "蔬菜"
+exp: 8
+price:
+    crop: 35
+    seed: 0
+    seed_sell: 15
+growth:
+    stage: [1, 1, 1]
+    lasting: 0
+harvest_list: [["胡萝卜"],[100]]

@@ -1,0 +1,13 @@
+name: "夏季亮片"
+intro: "一种热带花朵，生长于潮湿的夏日季节。拥有芬香刺鼻的味道。"
+season: "夏季"
+type: "花"
+exp: 15
+price:
+    crop: 90
+    seed: 50
+    seed_sell: 25
+growth:
+    stage: [1, 2, 3, 2]
+    lasting: 0
+harvest_list: [["夏季亮片"],[100]]

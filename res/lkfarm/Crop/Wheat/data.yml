@@ -1,0 +1,13 @@
+name: "小麦"
+intro: "被广泛种植的谷物之一。能做成制作蛋糕和面包的上好面粉。"
+season: "夏秋两季"
+type: "蔬菜"
+exp: 6
+price:
+    crop: 25
+    seed: 10
+    seed_sell: 5
+growth:
+    stage: [1, 1, 1, 1]
+    lasting: 0
+harvest_list: [["小麦"],[100]]

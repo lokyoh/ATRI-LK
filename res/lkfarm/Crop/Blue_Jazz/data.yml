@@ -1,0 +1,13 @@
+name: "蓝爵"
+intro: "这种花朵为圆球状，以便吸引更多的蝴蝶而来。"
+season: "春季"
+type: "花"
+exp: 10
+price:
+    crop: 50
+    seed: 30
+    seed_sell: 15
+growth:
+    stage: [1, 2, 2, 2]
+    lasting: 0
+harvest_list: [["蓝爵"],[100]]

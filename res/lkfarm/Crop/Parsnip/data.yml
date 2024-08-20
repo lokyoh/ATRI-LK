@@ -1,0 +1,13 @@
+name: "防风草"
+intro: "一种和胡萝卜很相似的春季块茎植物。它营养丰富且带有泥土的气息。"
+season: "春季"
+type: "蔬菜"
+exp: 8
+price:
+    crop: 35
+    seed: 20
+    seed_sell: 10
+growth:
+    stage: [1, 1, 1, 1]
+    lasting: 0
+harvest_list: [["防风草"],[100]]

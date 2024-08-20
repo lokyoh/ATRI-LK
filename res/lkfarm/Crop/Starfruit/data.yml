@@ -1,0 +1,13 @@
+name: "杨桃"
+intro: "美味多汁的热带水果。稍甜，夹着酸味。"
+season: "夏季"
+type: "水果"
+exp: 44
+price:
+    crop: 750
+    seed: 400
+    seed_sell: 200
+growth:
+    stage: [2, 3, 2, 3, 3]
+    lasting: 0
+harvest_list: [["杨桃"],[100]]

@@ -1,0 +1,13 @@
+name: "霜瓜"
+intro: "因表面结一层白霜而得名，瓜肉鲜脆清甜。"
+season: "冬季"
+type: "水果"
+exp: 12
+price:
+    crop: 60
+    seed: 0
+    seed_sell: 20
+growth:
+    stage: [1, 2, 1, 2, 1]
+    lasting: 0
+harvest_list: [["霜瓜"],[100]]

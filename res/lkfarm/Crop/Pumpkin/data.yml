@@ -1,0 +1,13 @@
+name: "南瓜"
+intro: "秋天的农作物，因为它香脆的种子以及甜美的果肉而深受喜爱。而且，南瓜壳还能用做节日饰品。"
+season: "秋季"
+type: "蔬菜"
+exp: 31
+price:
+    crop: 320
+    seed: 100
+    seed_sell: 50
+growth:
+    stage: [1, 2, 3, 4, 3]
+    lasting: 0
+harvest_list: [["南瓜"],[100]]

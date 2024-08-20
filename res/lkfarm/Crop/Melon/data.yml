@@ -1,0 +1,13 @@
+name: "甜瓜"
+intro: "凉爽香甜的夏日食品。"
+season: "夏季"
+type: "水果"
+exp: 27
+price:
+    crop: 250
+    seed: 80
+    seed_sell: 40
+growth:
+    stage: [1, 2, 3, 3, 3]
+    lasting: 0
+harvest_list: [["甜瓜"],[100]]

@@ -10,7 +10,9 @@ class ItemType(Enum):
     TOOL = '工具'
     PROP = '道具'
     SEED = '种子'
-    CROP = '作物'
+    VEGETABLE = '蔬菜'
+    FRUIT = '水果'
+    FLOWER = '花'
     COIN = '货币'
     OTHER = '其他'
 

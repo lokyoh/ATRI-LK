@@ -1,0 +1,13 @@
+name: "啤酒花"
+intro: "带苦味刺鼻的花朵，用于酿酒。"
+season: "夏季"
+type: "蔬菜"
+exp: 6
+price:
+    crop: 25
+    seed: 60
+    seed_sell: 30
+growth:
+    stage: [1, 1, 2, 3, 4]
+    lasting: 1
+harvest_list: [["啤酒花"],[100]]

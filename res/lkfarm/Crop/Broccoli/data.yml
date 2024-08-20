@@ -1,0 +1,13 @@
+name: "西蓝花"
+intro: "西蓝花的花球，微小的花蕾口感独特。"
+season: "秋季"
+type: "蔬菜"
+exp: 13
+price:
+    crop: 70
+    seed: 0
+    seed_sell: 40
+growth:
+    stage: [2, 2, 2, 2]
+    lasting: 0
+harvest_list: [["西蓝花"],[100]]

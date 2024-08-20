@@ -1,9 +1,9 @@
-from nonebot.adapters.onebot.v11 import MessageSegment, Message
+from nonebot.adapters.onebot.v11 import MessageSegment, Message, Event
 
 from ATRI import __version__
 from ATRI.log import log
 from ATRI.utils.img_editor import get_image_bytes
-from ATRI.plugins.lkbot.util import lk_util, PLUGIN_VERSION
+from ATRI.plugins.lkbot.util import lk_util, PLUGIN_VERSION, sign_in_event
 from ATRI.plugins.lkbot.system.data.user import users
 from ATRI.plugins.lkbot.system.sign_in_pic import get_pic
 
@@ -30,25 +30,31 @@ class LKBot:
     - 完善尝新功能
     !输入"/帮助 lk插件"查看具体指令!
     !输入"/lk.新内容"查看更新内容!
-#lk宠物v0.1.3:
+#lk宠物v0.1.3-fix1:
     - 进行修复与预设词优化
     !输入"/帮助 lk宠物"查看具体指令!
 #组队插件1.0.0-fix2-正式版：
     !输入"/帮助 组队插件"查看具体指令!'''
 
     @staticmethod
-    async def sign_in(user_id, r18_mode):
-        message = Message()
+    async def sign_in(event: Event, r18_mode):
+        user_id = str(event.get_user_id())
+        message = Message().append(MessageSegment.at(user_id))
         sign_result = users.sign(user_id)
         if not sign_result:
             message.append("今日已签到\n")
         try:
             img_path = await get_pic(user_id, r18_mode=r18_mode)
             log.info(f'{user_id}签到 r18:{r18_mode}')
-            return message.append(MessageSegment.image(get_image_bytes(img_path)))
+            message.append(MessageSegment.image(get_image_bytes(img_path)))
         except Exception as e:
             log.warning(f'{e}:\n{e.args}')
-            return message.append(f'签到成功,你已签到{users.get_user_data(user_id).signdays}天')
+            message.append(f'签到成功,你已签到{users.get_user_data(user_id).signdays}天')
+        if sign_result:
+            msg = sign_in_event.notify(user_id)
+            if msg != "":
+                message.append(msg)
+        return  message
 
     @staticmethod
     def get_info(user_id):

@@ -1,0 +1,13 @@
+name: "山药"
+intro: "淀粉块茎植物，有很多食用方式。"
+season: "秋季"
+type: "蔬菜"
+exp: 22
+price:
+    crop: 160
+    seed: 60
+    seed_sell: 30
+growth:
+    stage: [1, 3, 3, 3]
+    lasting: 0
+harvest_list: [["山药"],[100]]

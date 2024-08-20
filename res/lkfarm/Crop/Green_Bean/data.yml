@@ -1,0 +1,13 @@
+name: "青豆"
+intro: "爽脆口感的多汁小豆子。"
+season: "春季"
+type: "蔬菜"
+exp: 9
+price:
+    crop: 40
+    seed: 60
+    seed_sell: 30
+growth:
+    stage: [1, 1, 1, 3, 4]
+    lasting: 3
+harvest_list: [["青豆"],[100]]

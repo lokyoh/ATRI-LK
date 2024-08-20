@@ -1,0 +1,13 @@
+name: "花椰菜"
+intro: "值钱，但是生长很慢。虽然它的颜色很浅，但是依然富含营养。"
+season: "春季"
+type: "蔬菜"
+exp: 23
+price:
+    crop: 175
+    seed: 80
+    seed_sell: 40
+growth:
+    stage: [1, 2, 4, 4, 1]
+    lasting: 0
+harvest_list: [["花椰菜"],[100]]

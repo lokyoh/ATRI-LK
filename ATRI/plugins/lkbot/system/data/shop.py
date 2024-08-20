@@ -6,8 +6,9 @@ from .item import Item, items
 class Shop:
     """创建一个商店"""
 
-    def __init__(self, shop_name: str):
+    def __init__(self, shop_name: str, shop_info: str = ""):
         self._name = shop_name
+        self._info = shop_info
         self._goods_list = []
         self._goods_price = []
         self._goods_coin_type = []
@@ -71,6 +72,12 @@ class Shop:
         self._goods_price = []
         self._goods_coin_type = []
         self._goods_limit = []
+
+    def get_shop_info(self) -> str:
+        return self._info
+
+    def set_shop_info(self, shop_info: str):
+        self._info = shop_info
 
 
 class ShopRegister:

@@ -1,0 +1,13 @@
+name: "金皮西葫芦"
+intro: "未成熟时收获的金皮西葫芦嫩瓜。"
+season: "夏季"
+type: "蔬菜"
+exp: 9
+price:
+    crop: 45
+    seed: 0
+    seed_sell: 20
+growth:
+    stage: [1, 1, 1, 2, 1]
+    lasting: 0
+harvest_list: [["金皮西葫芦"],[100]]

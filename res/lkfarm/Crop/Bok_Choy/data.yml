@@ -1,0 +1,13 @@
+name: "小白菜"
+intro: "绿绿的菜叶丰满的根茎，健康又美味。"
+season: "秋季"
+type: "蔬菜"
+exp: 14
+price:
+    crop: 80
+    seed: 50
+    seed_sell: 25
+growth:
+    stage: [1, 1, 1, 1]
+    lasting: 0
+harvest_list: [["小白菜"],[100]]

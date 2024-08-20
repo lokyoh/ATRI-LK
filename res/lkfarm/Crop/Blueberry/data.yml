@@ -1,0 +1,13 @@
+name: "蓝莓"
+intro: "一种据说拥有多种益处的浆果。蓝莓拥有最高浓度的营养。"
+season: "夏季"
+type: "水果"
+exp: 10
+price:
+    crop: 50
+    seed: 80
+    seed_sell: 40
+growth:
+    stage: [1, 3, 3, 4, 2]
+    lasting: 4
+harvest_list: [["蓝莓", "蓝莓", "蓝莓", "蓝莓+"],[100, 100, 100, 2]]

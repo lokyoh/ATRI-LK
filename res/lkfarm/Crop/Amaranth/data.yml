@@ -1,0 +1,13 @@
+name: "苋菜"
+intro: "远古文明广泛耕种的一种紫色谷物。"
+season: "秋季"
+type: "蔬菜"
+exp: 21
+price:
+    crop: 150
+    seed: 70
+    seed_sell: 35
+growth:
+    stage: [1, 2, 2, 2]
+    lasting: 0
+harvest_list: [["苋菜"],[100]]

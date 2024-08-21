@@ -1,4 +1,4 @@
-from nonebot.adapters.onebot.v11 import MessageSegment, Message, Event
+from nonebot.adapters.onebot.v11 import MessageSegment, Message
 
 from ATRI import __version__
 from ATRI.log import log
@@ -37,12 +37,14 @@ class LKBot:
     !输入"/帮助 组队插件"查看具体指令!'''
 
     @staticmethod
-    async def sign_in(event: Event, r18_mode):
-        user_id = str(event.get_user_id())
+    async def sign_in(user_id, r18_mode):
         message = Message().append(MessageSegment.at(user_id))
         sign_result = users.sign(user_id)
-        if not sign_result:
-            message.append("今日已签到\n")
+        if sign_result:
+            msg = sign_in_event.notify(user_id)
+            message.append(msg)
+        else:
+            message.append("\n今日已签到")
         try:
             img_path = await get_pic(user_id, r18_mode=r18_mode)
             log.info(f'{user_id}签到 r18:{r18_mode}')
@@ -50,11 +52,7 @@ class LKBot:
         except Exception as e:
             log.warning(f'{e}:\n{e.args}')
             message.append(f'签到成功,你已签到{users.get_user_data(user_id).signdays}天')
-        if sign_result:
-            msg = sign_in_event.notify(user_id)
-            if msg != "":
-                message.append(msg)
-        return  message
+        return message
 
     @staticmethod
     def get_info(user_id):

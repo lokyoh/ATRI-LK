@@ -188,17 +188,19 @@ class BaseFunc:
             return True, f"咦？{user_id}的名字换成 {new_name} 了？"
         return False, "那个...此名称已经被使用了，换个名字吧"
 
+
 class SignInEvent(Event):
     def __init__(self):
         super().__init__()
 
     def notify(self, user_id):
-        msg = ""
+        msg = "\n"
         for listener in self.listeners:
             r = listener(user_id)
-            if msg:
+            if r:
                 msg += r
         return msg
+
 
 item_loading_event = Event()
 sign_in_event = SignInEvent()

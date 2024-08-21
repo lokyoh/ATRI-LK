@@ -31,7 +31,7 @@ sign_in = plugin.on_command(cmd='签到', docs="全新界面的签到系统")
 async def _(event: Event):
     await is_lk_user(sign_in, event)
     r18_mode = not lk_util.is_safe_mode_group(event.group_id) if type(event) is GroupMessageEvent else True
-    await sign_in.finish(await LKBot.sign_in(event, r18_mode))
+    await sign_in.finish(await LKBot.sign_in(event.get_user_id(), r18_mode))
 
 
 my_info = plugin.on_command(cmd="我的信息", docs="查询自己的信息")
@@ -51,18 +51,18 @@ async def _(event: Event):
     await is_lk_user(my_backpack, event)
     user_id = event.get_user_id()
     backpack: dict = users.get_backpack(user_id).bp_to_dict()
-    resp = f'{lk_util.get_name(user_id)} 的背包:\n名称-类型-数量\n'
+    resp = f"{lk_util.get_name(user_id)} 的背包:\n{'-' * 20}\n名称-类型-数量\n"
     num = len(backpack)
     i = 0
     j = 1
     for item in backpack.keys():
         if i == j * 20:
-            await my_backpack.send(resp + f'页数:{j} 物品总数:{i}/{num}')
+            await my_backpack.send(resp + f"{'-' * 20}\n页数:{j} 物品总数:{i}/{num}")
             resp = ''
             j += 1
         i += 1
         resp += f'{i}.{item}-{items.get_item_by_name(item).get_item_type()}-{backpack[item]["num"]}\n'
-    await my_backpack.send(resp + f'页数:{j} 物品总数:{i}/{num}')
+    await my_backpack.send(resp + f"{'-' * 20}\n页数:{j} 物品总数:{i}/{num}")
 
 
 item_inquiry = plugin.on_command(cmd="物品查询", docs="查询指定物品信息")
@@ -144,17 +144,17 @@ shop_list = plugin.on_command(cmd="商店列表", docs="列出所有商店")
 async def _():
     shop_l = shops.get_shop_names()
     num = len(shop_l)
-    resp = "商店列表:\n"
+    resp = f"商店列表:\n{'-' * 20}\n"
     i = 0
     j = 1
     for shop in shop_l:
         if i == j * 20:
-            await my_backpack.send(resp + f'页数:{j} 商店总数:{i}/{num}')
+            await my_backpack.send(resp + f"{'-' * 20}\n页数:{j} 商店总数:{i}/{num}")
             resp = ''
             j += 1
         i += 1
-        resp += f'{i}.{shop}\n'
-    await my_backpack.send(resp + f'页数:{j} 商店总数:{i}/{num}')
+        resp += f'{i}.{shop}:{shop.get_shop_info()}\n'
+    await my_backpack.send(resp + f"{'-' * 20}\n页数:{j} 商店总数:{i}/{num}")
 
 
 goods_list = plugin.on_command(cmd="商品列表", docs="列出指定商店的商品列表")
@@ -173,12 +173,12 @@ async def _(shop_name=ArgPlainText("shop_name")):
         shop = shops.get_shop_by_name(shop_name)
         item_list = shop.get_goods_list()
         num = len(item_list)
-        resp = f"{shop.get_shop_name()}-商品列表:\n{shop.get_shop_info()}\n{'-'*10}\n商品名称-货币:价格-限制\n"
+        resp = f"{shop.get_shop_name()}-商品列表:\n{shop.get_shop_info()}\n{'-' * 20}\n商品名称-货币:价格-限制\n"
         i = 0
         j = 1
         for item_name in item_list:
             if i == j * 20:
-                await my_backpack.send(resp + f'页数:{j} 商品总数:{i}/{num}')
+                await my_backpack.send(resp + f"{'-' * 20}\n页数:{j} 商品总数:{i}/{num}")
                 resp = ''
                 j += 1
             i += 1
@@ -187,7 +187,7 @@ async def _(shop_name=ArgPlainText("shop_name")):
             if limit == '0':
                 limit = "无限制"
             resp += f'{i}.{item_name} {shop.get_goods_coin_type_by_index(index)}:{shop.get_goods_price_by_index(index)} {limit}\n'
-        await my_backpack.send(resp + f'页数:{j} 商品总数:{i}/{num}')
+        await my_backpack.send(resp + f"{'-' * 20}\n页数:{j} 商品总数:{i}/{num}")
     else:
         await goods_list.finish(f"找不到商店名 {shop_name}")
 

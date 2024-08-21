@@ -153,7 +153,7 @@ async def _():
             resp = ''
             j += 1
         i += 1
-        resp += f'{i}.{shop}:{shop.get_shop_info()}\n'
+        resp += f'{i}.{shop}\n'
     await my_backpack.send(resp + f"{'-' * 20}\n页数:{j} 商店总数:{i}/{num}")
 
 

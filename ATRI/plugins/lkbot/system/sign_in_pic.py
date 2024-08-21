@@ -13,6 +13,7 @@ from ..util import PLUGIN_DIR
 
 
 async def get_pic(user_id, r18_mode: bool = False, src: str = 'lolicon'):
+    """获取签到卡片"""
     if r18_mode:
         save_dir = os.path.join(PLUGIN_DIR, 'sign_in', 'r18')
     else:

@@ -16,6 +16,13 @@ class Config(BaseModel):
 
 
 class ConfigurationManager:
+    """
+    LK插件设置:
+    test_groups: list[str] 测试模式群聊
+    r18_groups: list[str] 非健康模式群聊
+    chat_switch: bool 聊天开关
+    api_key: str 谷歌AI的api_key
+    """
     version = 0
 
     def __init__(self):
@@ -42,6 +49,7 @@ class ConfigurationManager:
             self.save_config()
 
     def save_config(self):
+        """保存设置"""
         os.makedirs(os.path.dirname(DATA_PATH), exist_ok=True)
         with open(DATA_PATH, 'w', encoding='utf-8') as file:
             json.dump(self.config.model_dump(), file, indent=4, ensure_ascii=False)

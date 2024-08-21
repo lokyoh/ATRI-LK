@@ -7,6 +7,7 @@ from ATRI.utils.request import get
 
 
 async def lolicon():
+    """获取一张来自lolicon的图片"""
     resp = await get(
         "https://api.lolicon.app/setu/v2",
         params={
@@ -34,6 +35,7 @@ async def lolicon():
 
 
 async def lolicon_r18():
+    """获取一张来自lolicon的r18图片"""
     resp = await get(
         "https://api.lolicon.app/setu/v2",
         params={
@@ -61,18 +63,21 @@ async def lolicon_r18():
 
 
 async def loli():
+    """获取一张来自loli的图片"""
     resp = await get("https://www.loliapi.com/acg/pe/")
     resp.raise_for_status()
     return resp.content
 
 
 def local_image():
+    """获取一张来自本地res/img/sbg的图片"""
     file = random.choice(os.listdir(IMG_DIR / "sbg"))
     img_url = IMG_DIR / "sbg" / file
     return Image.open(img_url).convert("RGB")
 
 
 async def get_pic_from(src):
+    """获取一张来自指定图源的图片，默认本地"""
     if src == 'lolicon':
         return await lolicon()
     elif src == 'loli':

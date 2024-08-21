@@ -12,7 +12,7 @@ from .system.data.item import Item, ItemType, items
 from .system.data.shop import Shop, shops
 from .system.data.user import users
 
-PLUGIN_VERSION = "0.4.5"
+PLUGIN_VERSION = "0.4.6"
 PLUGIN_DIR = Path(".") / "data" / "plugins" / "lkbot"
 
 
@@ -207,7 +207,7 @@ sign_in_event = SignInEvent()
 
 
 def load_item_data():
-    """加载物品与商店数据"""
+    """加载物品与商店数据，可调用以实现随时加载数据"""
     # items.items_clear()
     # shops.shops_clear()
     """定义物品"""

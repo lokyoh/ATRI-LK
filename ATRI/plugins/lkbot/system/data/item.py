@@ -16,6 +16,7 @@ class ItemType(Enum):
     FLOWER = '花'
     COIN = '货币'
     OTHER = '其他'
+    ERROR = "未知物品"
 
 
 class Item:
@@ -63,11 +64,7 @@ class Item:
             return False
         return True
 
-    def get_item_type(self) -> str:
-        """获取物品类型名"""
-        return self._type.value
-
-    def get_item_type_name(self) -> ItemType:
+    def get_item_type(self) -> ItemType:
         """获取物品的类型的ItemType对象"""
         return self._type
 
@@ -93,7 +90,7 @@ class ItemRegister:
             return
         self._item_list.append(item_name)
         self._item_dic[item_name] = item
-        self._item_type_dic[item.get_item_type()].append(item_name)
+        self._item_type_dic[item.get_item_type().value].append(item_name)
         return self
 
     def get_item_by_index(self, index) -> Item | None:
@@ -135,6 +132,13 @@ class ItemRegister:
         self._item_type_dic = {}
         for _type in ItemType:
             self._item_type_dic[_type.value] = []
+
+    def get_reg_item_type(self, item_name: str):
+        """获取物品种类，没有物品时返回未知物品"""
+        for _type in ItemType:
+            if item_name in self._item_type_dic[_type.value]:
+                return _type
+        return ItemType.ERROR
 
 
 items = ItemRegister()
@@ -186,11 +190,7 @@ class BackPack:
         for _type in ItemType:
             self._backpack[_type] = dict()
         for _name in bp_dict.keys():
-            _item = items.get_item_by_name(_name)
-            if not _item:
-                self._wrong_item[_name] = bp_dict[_name]
-                continue
-            _type = _item.get_item_type_name()
+            _type = items.get_reg_item_type(_name)
             _meta = bp_dict[_name]
             self._backpack[_type][_name] = ItemMeta(_meta)
 
@@ -206,7 +206,7 @@ class BackPack:
         for _type in ItemType:
             if item_name in self._backpack[_type]:
                 return ItemStack(item_name, _type, self._backpack[_type][item_name])
-        return ItemStack(item_name, items.get_item_by_name(item_name).get_item_type_name(), ItemMeta({}))
+        return ItemStack(item_name, items.get_reg_item_type(item_name), ItemMeta({}))
 
     def set_item_with_stack(self, item_stack: ItemStack):
         """通过物品堆设置物品"""
@@ -218,7 +218,7 @@ class BackPack:
 
     def set_item_with_meta(self, item_name: str, item_meta: dict[str: Any]):
         """通过物品数据设置物品"""
-        _type = items.get_item_by_name(item_name).get_item_type_name()
+        _type = items.get_reg_item_type(item_name)
         if item_meta.get("num", 0) == 0:
             self.remove_item(item_name)
         self._backpack[_type][item_name] = ItemMeta(item_meta)

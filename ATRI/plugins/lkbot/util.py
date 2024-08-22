@@ -12,7 +12,7 @@ from .system.data.item import Item, ItemType, items
 from .system.data.shop import Shop, shops
 from .system.data.user import users
 
-PLUGIN_VERSION = "0.4.6"
+PLUGIN_VERSION = "0.4.6-fix1"
 PLUGIN_DIR = Path(".") / "data" / "plugins" / "lkbot"
 
 

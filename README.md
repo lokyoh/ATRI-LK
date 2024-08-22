@@ -87,7 +87,13 @@ LK版新加的功能
 - [ ] 宠物
   - [x] 新宠物
   - [x] AI聊天
-- [ ] 农场(计划中)
+- [ ] 农场
+  - [x] 新农场
+  - [x] 锄地、浇水、种植、收获
+  - [ ] 肥料
+  - [ ] 天气
+  - [ ] 幸运值
+  - [ ] 耕种等级
 - [ ] ~~钓鱼~~
 - [ ] ~~探险~~
 
@@ -103,7 +109,7 @@ LK版新加的功能
 
 </details>
 
-更多资源问件请下载`release`附带的`.zip`文件
+更多资源文件请下载`release`中`YNH-LK0-004`版本附带的`res.zip`文件
 
 ## 🚀 开始部署 | Getting Started
 
@@ -133,8 +139,6 @@ LK版新加的功能
 
 [JetBrains](https://www.jetbrains.com/?from=ATRI): 为本项目提供 [PyCharm](https://www.jetbrains.com/pycharm/?from=ATRI)
 等 IDE 的授权<br>
-[<img src="https://resources.jetbrains.com/storage/products/company/brand/logos/jb_beam.png" width="150"/>](https://www.jetbrains.com/?from=ATRI)
-[<img src="https://resources.jetbrains.com/storage/products/company/brand/logos/PyCharm_icon.png" width="130"/>](https://www.jetbrains.com/pycharm/?from=ATRI)
 
 ## 📄 许可 | License
 

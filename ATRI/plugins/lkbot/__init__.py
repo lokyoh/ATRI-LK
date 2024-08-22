@@ -15,7 +15,7 @@ from .checker import is_lk_user
 from .config import config
 from .data_source import LKBot
 from .util import lk_util, PLUGIN_VERSION
-from .system.data.item import items
+from .system.data.item import items, ItemStack
 from .system.data.shop import shops
 from .system.data.user import users
 
@@ -50,18 +50,19 @@ my_backpack = plugin.on_command(cmd="我的背包", docs="查看背包中的内�
 async def _(event: Event):
     await is_lk_user(my_backpack, event)
     user_id = event.get_user_id()
-    backpack: dict = users.get_backpack(user_id).bp_to_dict()
+    backpack = users.get_backpack(user_id).get_item_list()
     resp = f"{lk_util.get_name(user_id)} 的背包:\n{'-' * 20}\n名称-类型-数量\n"
     num = len(backpack)
     i = 0
     j = 1
-    for item in backpack.keys():
+    for item in backpack:
+        item: ItemStack
         if i == j * 20:
             await my_backpack.send(resp + f"{'-' * 20}\n页数:{j} 物品总数:{i}/{num}")
             resp = ''
             j += 1
         i += 1
-        resp += f'{i}.{item}-{items.get_item_by_name(item).get_item_type()}-{backpack[item]["num"]}\n'
+        resp += f'{i}.{item.get_name()}-{item.get_type().value}-{item.meta.num}\n'
     await my_backpack.send(resp + f"{'-' * 20}\n页数:{j} 物品总数:{i}/{num}")
 
 
@@ -81,7 +82,7 @@ async def _(item_name=ArgPlainText("item_inquiry_name")):
         item = items.get_item_by_name(item_name)
         item_info = f'''{item_name}:
 {item.get_item_info()}
-类型:{item.get_item_type()}
+类型:{item.get_item_type().value}
 价值:{item.get_item_price_dis()}
 可使用:{item.item_can_use()}'''
         await item_inquiry.finish(item_info)

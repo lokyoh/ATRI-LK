@@ -227,6 +227,7 @@ LOVE        INTEGER DEFAULT 0
 
     def petname_set(self, user_id: str, name: str):
         """设置用户的宠物名，使用对lk宠物插件无效，只改变显示名称"""
+
         def _petname_set():
             self._userdata[user_id].petname = name
 

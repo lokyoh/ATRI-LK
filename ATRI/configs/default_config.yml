@@ -3,9 +3,9 @@ ConfigVersion: "1.0.0"
 
 BotConfig:
   host: "{host}"
-  port: { port }
+  port: {port}
   debug: false
-  superusers: { superusers }
+  superusers: {superusers}
   nickname: [ "亚托莉", "ATRI", "Atri", "atri", "アトリ" ]
   command_start: [ "", "/" ]
   command_sep: [ "." ]

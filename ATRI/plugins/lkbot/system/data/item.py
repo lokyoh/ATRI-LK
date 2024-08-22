@@ -74,6 +74,7 @@ class Item:
 
 class ItemRegister:
     """物品注册器"""
+
     def __init__(self):
         self._item_list = []
         self._item_dic = {}

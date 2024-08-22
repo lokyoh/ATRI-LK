@@ -99,6 +99,7 @@ class Shop:
 
 class ShopRegister:
     """商店注册器"""
+
     def __init__(self):
         self._shop_names = []
         self._shop_list = []

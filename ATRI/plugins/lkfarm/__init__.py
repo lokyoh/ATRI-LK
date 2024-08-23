@@ -9,7 +9,7 @@ from ATRI.plugins.lkbot.util import lk_util
 
 from .data_source import farm_system
 
-plugin = Service("lk农场").document("l_o_o_k的农场插件v0.0.3").type(Service.ServiceType.LKPLUGIN).main_cmd("/farm")
+plugin = Service("lk农场").document("l_o_o_k的农场插件v0.0.3-fix1").type(Service.ServiceType.LKPLUGIN).main_cmd("/farm")
 
 my_farm = plugin.on_command("我的农场", "查看自己的农场")
 
@@ -88,7 +88,7 @@ harvesting = plugin.cmd_as_group("收获", "收获作物")
 
 @harvesting.handle()
 async def _(event: GroupMessageEvent, arg: Message = CommandArg()):
-    await farm_system.harvesting(my_farm, event)
+    await farm_system.check_user(harvesting, event)
     location = arg.extract_plain_text().upper()
     p_list = farm_system.get_positions(location)
     if len(p_list) > 0:

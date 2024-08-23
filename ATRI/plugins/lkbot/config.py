@@ -26,6 +26,7 @@ class ConfigurationManager:
     version = 0
 
     def __init__(self):
+        self.config = Config()
         self.load()
 
     def load(self):

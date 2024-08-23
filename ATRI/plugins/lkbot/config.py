@@ -26,12 +26,11 @@ class ConfigurationManager:
     version = 0
 
     def __init__(self):
-        self.config: Config = Config()
         self.load()
 
     def load(self):
         if os.path.exists(DATA_PATH):
-            self.config.read_from_file(DATA_PATH)
+            self.config = Config.read_from_file(DATA_PATH)
         else:
             self.config = Config(
                 version=self.version,

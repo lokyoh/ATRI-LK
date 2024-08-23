@@ -6,6 +6,7 @@ from pydantic import BaseModel as PBaseModel
 class BaseModel(PBaseModel):
     @classmethod
     def read_from_file(cls, path):
+        """类方法，返回一个从指定文件读取类对象"""
         if not os.path.exists(path):
             raise IOError(
                 "找不到指定文件"

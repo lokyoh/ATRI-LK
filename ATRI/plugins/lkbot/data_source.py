@@ -45,13 +45,9 @@ class LKBot:
             message.append(msg)
         else:
             message.append("\n今日已签到")
-        try:
-            img_path = await get_pic(user_id, r18_mode=r18_mode)
-            log.info(f'{user_id}签到 r18:{r18_mode}')
-            message.append(MessageSegment.image(get_image_bytes(img_path)))
-        except Exception as e:
-            log.warning(f'{e}:\n{e.args}')
-            message.append(f'签到成功,你已签到{users.get_user_data(user_id).signdays}天')
+        img_path = await get_pic(user_id, r18_mode=r18_mode)
+        log.info(f'{user_id}签到 r18:{r18_mode}')
+        message.append(MessageSegment.image(get_image_bytes(img_path)))
         return message
 
     @staticmethod

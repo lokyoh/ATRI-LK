@@ -3,12 +3,12 @@ import random
 from PIL import Image
 
 from ATRI import IMG_DIR
-from ATRI.utils.request import get
+from ATRI.utils import request
 
 
 async def lolicon():
     """获取一张来自lolicon的图片"""
-    resp = await get(
+    resp = await request.get(
         "https://api.lolicon.app/setu/v2",
         params={
             "r18": 0,
@@ -18,7 +18,7 @@ async def lolicon():
     )
     resp.raise_for_status()
     url = resp.json()["data"][0]["urls"]["original"]
-    resp = await get(
+    resp = await request.get(
         url,
         headers={
             "User-Agent": (
@@ -36,7 +36,7 @@ async def lolicon():
 
 async def lolicon_r18():
     """获取一张来自lolicon的r18图片"""
-    resp = await get(
+    resp = await request.get(
         "https://api.lolicon.app/setu/v2",
         params={
             "r18": 1,
@@ -46,7 +46,7 @@ async def lolicon_r18():
     )
     resp.raise_for_status()
     url = resp.json()["data"][0]["urls"]["original"]
-    resp = await get(
+    resp = await request.get(
         url,
         headers={
             "User-Agent": (
@@ -64,7 +64,7 @@ async def lolicon_r18():
 
 async def loli():
     """获取一张来自loli的图片"""
-    resp = await get("https://www.loliapi.com/acg/pe/")
+    resp = await request.get("https://www.loliapi.com/acg/pe/")
     resp.raise_for_status()
     return resp.content
 

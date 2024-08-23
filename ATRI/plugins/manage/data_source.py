@@ -111,13 +111,13 @@ class BotManager:
     def toggle_global_service(self, service: str) -> bool:
         serv = ServiceTools(service)
         try:
-            data = serv.load_service()
+            data = serv.load_service_config()
         except Exception as e:
             error_msg = str(e)
             raise Exception(error_msg)
 
         data.enabled = not data.enabled
-        serv.save_service(data)
+        serv.save_service_config(data)
         return data.enabled
 
     def toggle_group_service(self, service: str, event) -> bool:
@@ -125,7 +125,7 @@ class BotManager:
             group_id = str(event.group_id)
             serv = ServiceTools(service)
             try:
-                data = serv.load_service()
+                data = serv.load_service_config()
             except Exception as e:
                 error_msg = str(e)
                 raise Exception(error_msg)
@@ -136,14 +136,14 @@ class BotManager:
             else:
                 data.disable_group.append(group_id)
                 result = False
-            serv.save_service(data)
+            serv.save_service_config(data)
             return result
         raise Exception("该功能只能在群聊中使用")
 
     def toggle_user_service(self, service: str, user_id: str) -> bool:
         serv = ServiceTools(service)
         try:
-            data = serv.load_service()
+            data = serv.load_service_config()
         except Exception as e:
             error_msg = str(e)
             raise Exception(error_msg)
@@ -154,7 +154,7 @@ class BotManager:
         else:
             data.disable_user.append(user_id)
             result = False
-        serv.save_service(data)
+        serv.save_service_config(data)
         return result
 
     async def track_error(self, trace_id: str) -> str:

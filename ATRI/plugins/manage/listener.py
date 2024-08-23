@@ -25,7 +25,7 @@ async def _(matcher: Matcher, event: MessageEvent):
     if not "gocqhttp" in plugin_name:
         serv = ServiceTools(plugin_name)
         try:
-            serv.load_service()
+            serv.load_service_config()
         except Exception:
             raise IgnoredException(f"{plugin_name} limited")
 

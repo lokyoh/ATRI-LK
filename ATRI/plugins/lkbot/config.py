@@ -1,7 +1,7 @@
 from pathlib import Path
-from pydantic import BaseModel
 import os
-import json
+
+from ATRI.utils.model import BaseModel
 
 DATA_PATH = Path(".") / "data" / "plugins" / "lkbot" / "config.json"
 
@@ -31,9 +31,7 @@ class ConfigurationManager:
 
     def load(self):
         if os.path.exists(DATA_PATH):
-            with open(DATA_PATH, 'r', encoding='utf-8') as file:
-                data = json.load(file)
-                self.config = Config(**data)
+            self.config.read_from_file(DATA_PATH)
         else:
             self.config = Config(
                 version=self.version,
@@ -51,8 +49,7 @@ class ConfigurationManager:
     def save_config(self):
         """保存设置"""
         os.makedirs(os.path.dirname(DATA_PATH), exist_ok=True)
-        with open(DATA_PATH, 'w', encoding='utf-8') as file:
-            json.dump(self.config.model_dump(), file, indent=4, ensure_ascii=False)
+        self.config.write_into_file(DATA_PATH)
 
 
 config = ConfigurationManager()

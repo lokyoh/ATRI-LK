@@ -3,7 +3,6 @@ import json
 from pathlib import Path
 from typing import Optional
 from traceback import format_exc
-from pydantic.main import BaseModel
 
 from nonebot.matcher import Matcher
 from nonebot.adapters.onebot.v11 import ActionFailed
@@ -13,6 +12,7 @@ from nonebot.message import run_postprocessor
 from .log import log
 from .message import MessageBuilder
 from .utils import Limiter, gen_random_str
+from .utils.model import BaseModel
 
 ERROR_DIR = Path(".") / "data" / "errors"
 ERROR_DIR.mkdir(parents=True, exist_ok=True)
@@ -34,14 +34,13 @@ def _save_error(prompt: str, content: str) -> str:
         content=content,
     )
     path = ERROR_DIR / f"{track_id}.json"
-    with open(path, "w", encoding="utf-8") as r:
-        r.write(json.dumps(data.dict(), indent=4))
+    data.write_into_file(path)
     return track_id
 
 
 def load_error(track_id: str) -> ErrorInfo:
     path = ERROR_DIR / f"{track_id}.json"
-    return ErrorInfo.parse_file(path)
+    return ErrorInfo.read_from_file(path)
 
 
 class BaseBotException(Exception):

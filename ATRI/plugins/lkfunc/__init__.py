@@ -15,7 +15,7 @@ from nonebot.params import CommandArg, ArgPlainText, Arg
 
 from ATRI import TEMP_DIR, RECORD_DIR, IMG_DIR, TEXT_DIR
 from ATRI.service import Service
-from ATRI.utils.request import get
+from ATRI.utils import request
 from ATRI.utils.img_editor import get_image_bytes
 from ATRI.rule import to_bot
 from ATRI.plugins.lkbot.config import config
@@ -56,7 +56,7 @@ async def _(event: MessageEvent, text: str = ArgPlainText("chat_text")):
         file_name = ''.join(choice(string.ascii_letters + string.digits) for _ in range(5)) + ".jpg"
         file_path = f'{TEMP_DIR}/{file_name}'
         try:
-            resp = await get(url.replace("https://", "http://"))
+            resp = await request.get(url.replace("https://", "http://"))
             resp.raise_for_status()
             os.makedirs(os.path.dirname(file_path), exist_ok=True)
             with open(file_path, 'wb') as f:

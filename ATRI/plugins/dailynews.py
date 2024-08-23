@@ -2,7 +2,6 @@ import json
 import os
 from random import choice
 
-import requests
 from nonebot import get_bots
 from nonebot.adapters.onebot.v11 import MessageSegment, Message
 from nonebot.adapters.onebot.v11.bot import Bot
@@ -14,6 +13,8 @@ from ATRI.permission import ADMIN
 from ATRI.plugins.lkbot.util import PLUGIN_DIR
 from ATRI.service import Service
 from ATRI.utils.apscheduler import scheduler
+from ATRI.log import log
+from ATRI.utils import request
 
 plugin = Service("每日新闻").document("订阅每日新闻服务").type(Service.ServiceType.FUNCTION)
 
@@ -40,7 +41,7 @@ today_news = plugin.on_command(cmd='今日新闻', docs="查看今日新闻")
 
 @today_news.handle([Cooldown(60 * 60, prompt=choice(_lmt_notice))])
 async def _():
-    await today_news.finish(get_news())
+    await today_news.finish(await get_news())
 
 
 news_sub = plugin.on_command(cmd="每日新闻订阅", docs="管理本群的新闻订阅", permission=ADMIN)
@@ -60,7 +61,7 @@ async def _(event: GroupMessageEvent):
 
 
 async def daily_job():
-    message = get_news()
+    message = await get_news()
     for bot in get_bots().values():
         if type(bot) is Bot:
             group_list = await bot.get_group_list()
@@ -73,10 +74,13 @@ async def daily_job():
 driver().on_startup(lambda: scheduler.add_job(daily_job, 'cron', hour=7, minute=0))
 
 
-def get_news() -> MessageSegment:
-    response = requests.get(url)
-    if response.status_code == 200:
-        url_json = response.json()
+async def get_news() -> MessageSegment:
+    try:
+        resp = await request.get(url)
+        resp.raise_for_status()
+        url_json = resp.json()
         image_url = str(url_json["imageUrl"])
         return MessageSegment.image(file=image_url)
-    return MessageSegment.text(text="很遗憾，获取今日新闻失败了捏")
+    except Exception as e:
+        log.error(f"{e}:{e.args}")
+        return MessageSegment.text(text="很遗憾，获取今日新闻失败了捏")

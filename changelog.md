@@ -2,22 +2,23 @@
 
 ## Coming soon...
 
-- Next: `YHN-LK0-006`
+- Next: `YHN-LK0-005`
 
 ---
 
-## Sep 1,2024
+## Aug 23,2024
 
-> 添加`lk农场`插件，`ATRI`新增`lock`模块，并对lk系列插件代码进行大量修改
-> 
-- 更新版本至: `YHN-LK0-005`
+> 添加`lk农场`插件，`ATRI`新增`lock`、`model`模块，并对lk系列插件代码进行大量修改，修改ATRI代码
+
+- 更新版本至: `YHN-LK0-005-PRE2`
 - 新增:
   - 插件`lk农场`
-  - `ATRI.utils`新增`lock`模块
+  - `ATRI.utils`新增`lock`、`model`模块
   - lk插件背包类、每日更新事件
 - 更新:
   - sqlite3工具、事件工具
   - lk系列插件的代码
+  - ATRI主体代码
 ---
 
 ## Aug 14, 2024

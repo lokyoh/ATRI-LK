@@ -3,7 +3,6 @@ import json
 from enum import Enum
 from pathlib import Path
 from types import ModuleType
-from pydantic import BaseModel
 from typing import List, Set, Tuple, Type, Union, Optional
 
 from nonebot import get_bot
@@ -21,9 +20,12 @@ from nonebot.adapters.onebot.v11 import Message, PrivateMessageEvent, GroupMessa
 
 from ATRI.permission import MASTER, Permission, MASTER_LIST
 from ATRI.exceptions import ReadFileError, WriteFileError
+from ATRI.utils.model import BaseModel
 
 SERVICES_DIR = Path(".") / "data" / "services"
 SERVICES_DIR.mkdir(parents=True, exist_ok=True)
+CONFIG_DIR = Path(".") / "data" / "config"
+CONFIG_DIR.mkdir(parents=True, exist_ok=True)
 
 
 class ServiceInfo(BaseModel):
@@ -32,8 +34,10 @@ class ServiceInfo(BaseModel):
     type: str
     permission: list
     cmd_list: dict
-    enabled: bool
     only_admin: bool
+
+class ServiceConfig(BaseModel):
+    enabled: bool
     disable_user: list
     disable_group: list
 
@@ -57,13 +61,13 @@ class Service:
             "/cmd0": {
                 "type": "Command type",
                 "docs": "Command help",
-                "aliases": ["More trigger ways."]
+                "aliases": ["More trigger ways."],
             }
         },
         "enabled": True,
         "only_admin": False,
         "disable_user": [],
-        "disable_group": []
+        "disable_group": [],
     }
     """
 
@@ -92,12 +96,13 @@ class Service:
         self._permission = None
         self._handlers = None
         self._temp = False
-        self._priority = 1
+        self._priority = 10
         self._state = None
         self._main_cmd = (str(),)
+        self.docs = "无介绍"
         self._type = Service.ServiceType.OTHER
         self._path = Path(".") / "data" / "plugins" / self.service
-        # self._path.mkdir(parents=True, exist_ok=True)
+        self.__generate_service_conf()
 
     def document(self, context: str) -> "Service":
         """为服务添加说明"""
@@ -170,12 +175,26 @@ class Service:
     def is_nonebot_plugin(self) -> "Service":
         cmd_list = self.__load_cmds()
         name = "请参考对应插件文档"
-        cmd_list[name] = CommandInfo(type="ignore", docs=str(), aliases=list()).dict()
+        cmd_list[name] = CommandInfo(type="ignore", docs=str(), aliases=list()).model_dump()
         self.__save_cmds(cmd_list)
         return self
 
     def get_path(self) -> Path:
         return self._path
+
+    def __generate_service_conf(self):
+        path = CONFIG_DIR / f"{self.service}.json"
+        if path.is_file():
+            return
+        data = ServiceConfig(
+            enabled = True,
+            disable_user = list(),
+            disable_group = list(),
+        )
+        try:
+            data.write_into_file(path)
+        except Exception:
+            raise WriteFileError("Write service config failed")
 
     def __generate_service_config(self, service: str, docs: str = str(),
                                   _type: ServiceType = ServiceType.OTHER) -> None:
@@ -186,14 +205,10 @@ class Service:
             type=_type.value,
             permission=list(),
             cmd_list=dict(),
-            enabled=True,
             only_admin=self._only_master,
-            disable_user=list(),
-            disable_group=list(),
         )
         try:
-            with open(path, "w", encoding="utf-8") as w:
-                w.write(json.dumps(data.dict(), indent=4, ensure_ascii=False))
+            data.write_into_file(path)
         except Exception:
             raise WriteFileError("Write service info failed!")
 
@@ -244,7 +259,7 @@ class Service:
             permission: Optional[Union[Permission, T_PermissionChecker]] = None,
             handlers: Optional[List[Union[T_Handler, Dependent]]] = None,
             block: bool = True,
-            priority: int = 1,
+            priority: int = 10,
             state: Optional[T_State] = None,
     ) -> Type[Matcher]:
         if not rule:
@@ -263,7 +278,7 @@ class Service:
 
             cmd_list[name] = CommandInfo(
                 type="message", docs=docs, aliases=list()
-            ).dict()
+            ).model_dump()
             self.__save_cmds(cmd_list)
 
         matcher = Matcher.new(
@@ -284,7 +299,7 @@ class Service:
 
         name = name + "-onntc"
 
-        cmd_list[name] = CommandInfo(type="notice", docs=docs, aliases=list()).dict()
+        cmd_list[name] = CommandInfo(type="notice", docs=docs, aliases=list()).model_dump()
         self.__save_cmds(cmd_list)
 
         matcher = Matcher.new(
@@ -305,7 +320,7 @@ class Service:
 
         name = name + "-onreq"
 
-        cmd_list[name] = CommandInfo(type="request", docs=docs, aliases=list()).dict()
+        cmd_list[name] = CommandInfo(type="request", docs=docs, aliases=list()).model_dump()
         self.__save_cmds(cmd_list)
 
         matcher = Matcher.new(
@@ -341,9 +356,9 @@ class Service:
 
         cmd_list[cmd] = CommandInfo(
             type="command", docs=docs, aliases=list(aliases)
-        ).dict()
+        ).model_dump()
         self.__save_cmds(cmd_list)
-        commands = set([cmd]) | (aliases or set())
+        commands = {cmd} | (aliases or set())
         return self.on_message(rule=command(*commands) & rule, block=block, **kwargs)
 
     def on_keyword(
@@ -360,7 +375,7 @@ class Service:
 
         cmd_list = self.__load_cmds()
 
-        cmd_list[name] = CommandInfo(type="keyword", docs=docs, aliases=list(keywords)).dict()
+        cmd_list[name] = CommandInfo(type="keyword", docs=docs, aliases=list(keywords)).model_dump()
         self.__save_cmds(cmd_list)
 
         return self.on_message(rule=keyword(*keywords) & rule, **kwargs)
@@ -377,7 +392,7 @@ class Service:
             rule = self._rule
 
         cmd_list = self.__load_cmds()
-        cmd_list[pattern] = CommandInfo(type="regex", docs=docs, aliases=list()).dict()
+        cmd_list[pattern] = CommandInfo(type="regex", docs=docs, aliases=list()).model_dump()
         self.__save_cmds(cmd_list)
 
         return self.on_message(rule=regex(pattern, flags) & rule, **kwargs)
@@ -400,7 +415,6 @@ class Service:
 
 class ServiceTools:
     """针对服务的工具类"""
-
     def __init__(self, service: str):
         self.service = service
 
@@ -413,8 +427,7 @@ class ServiceTools:
                 "接着重新启动"
             )
 
-        with open(path, "w", encoding="utf-8") as w:
-            w.write(json.dumps(service_data.dict(), indent=4, ensure_ascii=False))
+        service_data.write_into_file(path)
 
     def load_service(self) -> ServiceInfo:
         path = SERVICES_DIR / f"{self.service}.json"
@@ -425,14 +438,38 @@ class ServiceTools:
                 "接着重新启动"
             )
 
-        return ServiceInfo.parse_file(path)
+        return ServiceInfo.read_from_file(path)
+
+    def save_service_config(self, service_config: ServiceConfig):
+        path = CONFIG_DIR / f"{self.service}.json"
+        if not path.is_file():
+            raise ReadFileError(
+                f"无法找到服务 {self.service} 对应的信息文件\n"
+                "请删除此目录下的文件: data/service/services\n"
+                "接着重新启动"
+            )
+
+        service_config.write_into_file(path)
+
+    def load_service_config(self) -> ServiceConfig:
+        path = CONFIG_DIR / f"{self.service}.json"
+        if not path.is_file():
+            raise ReadFileError(
+                f"无法找到服务 {self.service} 对应的信息文件\n"
+                "请删除此目录下的文件: data/service/services\n"
+                "接着重新启动"
+            )
+
+        return ServiceConfig.read_from_file(path)
 
     def del_service(self):
         path = SERVICES_DIR / f"{self.service}.json"
         path.unlink()
+        c_path = CONFIG_DIR / f"{self.service}.json"
+        c_path.unlink()
 
     def auth_service(self, user_id: str = str(), group_id: str = str()) -> bool:
-        data = self.load_service()
+        data = self.load_service_config()
 
         auth_global = data.enabled
         auth_user = data.disable_user
@@ -448,9 +485,9 @@ class ServiceTools:
         return auth_global
 
     def service_controller(self, is_enabled: bool):
-        data = self.load_service()
+        data = self.load_service_config()
         data.enabled = is_enabled
-        self.save_service(data)
+        self.save_service_config(data)
 
 
 def is_in_service(service: str) -> Rule:

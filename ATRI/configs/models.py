@@ -1,4 +1,4 @@
-from pydantic import BaseModel
+from ..utils.model import BaseModel
 
 
 class BotConfig(BaseModel):

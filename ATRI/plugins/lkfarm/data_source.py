@@ -89,20 +89,22 @@ class FarmSystem:
         user_data = user_farm_data.get_farm_data(user_id)
         for field in user_data.field:
             if field.state == 0:
-                fields.append("未锄地")
+                fields.append("`未锄地`")
                 continue
             content = ""
             if field.crop != "":
                 url = f"{os.getcwd()}\\res\\lkfarm\\Crop"
                 if field.crop in crop_data_list:
+                    if crop_data_list[field.crop].can_harvest(field.days, field.harvest):
+                        content += "***可收获***<br/>"
                     name = crop_data_list[field.crop].get_crop_name()
                     stage = crop_data_list[field.crop].get_stage(field.days, field.harvest)
                     url = f"{url}\\{name}\\{name}_Stage_{stage}.png"
                 content += f'<img width="48px" src="{url}"/><br/>'
             if field.water == 0:
-                content += "未浇水"
+                content += "`未浇水`"
             else:
-                content += "已浇水"
+                content += "~~已浇水~~"
             fields.append(content)
         return await md_to_pic(
             self._FARM_MODEL.format(

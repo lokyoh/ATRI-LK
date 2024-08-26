@@ -12,7 +12,6 @@ from nonebot.adapters.onebot.v11 import (
 from ATRI.service import ServiceTools
 
 from .data_source import MANAGE_DIR
-from .plugin import *
 
 
 @run_preprocessor
@@ -22,28 +21,27 @@ async def _(matcher: Matcher, event: MessageEvent):
     if not "nonebot_" in plugin_name:
         return
 
-    if not "gocqhttp" in plugin_name:
-        serv = ServiceTools(plugin_name)
-        try:
-            serv.load_service_config()
-        except Exception:
-            raise IgnoredException(f"{plugin_name} limited")
+    serv = ServiceTools(plugin_name)
+    try:
+        serv.load_service_config()
+    except Exception:
+        raise IgnoredException(f"{plugin_name} limited")
 
-        if not serv.auth_service():
-            raise IgnoredException(f"{plugin_name} limited")
+    if not serv.auth_service():
+        raise IgnoredException(f"{plugin_name} limited")
 
-        if isinstance(event, PrivateMessageEvent):
-            user_id = event.get_user_id()
-            result = serv.auth_service(user_id)
-        elif isinstance(event, GroupMessageEvent):
-            user_id = event.get_user_id()
-            group_id = str(event.group_id)
-            result = serv.auth_service(user_id, group_id)
-        else:
-            result = True
+    if isinstance(event, PrivateMessageEvent):
+        user_id = event.get_user_id()
+        result = serv.auth_service(user_id)
+    elif isinstance(event, GroupMessageEvent):
+        user_id = event.get_user_id()
+        group_id = str(event.group_id)
+        result = serv.auth_service(user_id, group_id)
+    else:
+        result = True
 
-        if not result:
-            raise IgnoredException(f"{plugin_name} limited")
+    if not result:
+        raise IgnoredException(f"{plugin_name} limited")
 
 
 @run_preprocessor

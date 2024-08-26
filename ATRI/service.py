@@ -1,3 +1,4 @@
+import os
 import re
 import json
 from enum import Enum
@@ -21,6 +22,7 @@ from nonebot.adapters.onebot.v11 import Message, PrivateMessageEvent, GroupMessa
 from ATRI.permission import MASTER, Permission, MASTER_LIST
 from ATRI.exceptions import ReadFileError, WriteFileError
 from ATRI.utils.model import BaseModel
+from ATRI.log import log
 
 SERVICES_DIR = Path(".") / "data" / "services"
 SERVICES_DIR.mkdir(parents=True, exist_ok=True)
@@ -108,6 +110,12 @@ class Service:
         """为服务添加说明"""
 
         self.docs = context
+        path = SERVICES_DIR / f"{self.service}.json"
+        if path.is_file():
+            data = json.loads(path.read_bytes())
+            if self.docs != data.get("docs", "无介绍"):
+                os.remove(path)
+                log.info(f"{self.service}信息已更新")
         return self
 
     def type(self, _type: ServiceType) -> "Service":

@@ -234,7 +234,7 @@ LOVE        INTEGER DEFAULT 0
         self._user_lock.run(_petname_set, user_id)()
 
     def get_user_name(self, user_id: str) -> str:
-        """推荐使用lk_util.get_name，获取用户名"""
+        """获取用户名，用户id错误会报错，lk_util.get_name为包装后的方法"""
         return self._userdata[user_id].name
 
     def has_user(self, user_id) -> bool:

@@ -85,18 +85,29 @@ async def _(event: GroupMessageEvent, matcher: Matcher):
         pattern_dict = {
             r".*萝卜子.*": "萝卜子是对机器人的蔑称！",
             r".*(?:看看你|我看看).*": "不可以看的哦",
-            r".*摸*.*[胸屁奶奈熊].*": choice(["不要乱摸", "这是性骚扰！根据机器人保护法要处以罚款。这下欠款又增加了"]),
-            r"不[要行好]?!?$": choice(["为什么呢", "为什么啊！？"]),
+            r".*摸*.*[胸屁奶奈熊].*": choice([
+                "不要乱摸",
+                "这是性骚扰！根据机器人保护法要处以罚款。这下欠款又增加了"
+            ]),
+            r"不[要行好]?!?$": choice([
+                "为什么呢",
+                "为什么啊！？"
+            ]),
             r"安慰我!?$|我怕怕!?$": "乖......已经没事了",
-            r"(?:一起|陪)?睡觉?吧?[!?？]?$": choice(["今天一定要一起睡哦！", "可以哦"
-                                                       , "嗯哼哼！睡吧，就像平时一样安眠吧~"
-                                                       , "我懂我懂，想抱着我睡觉对吧。真拿你没办法啊~"
-                                                       , "我无论何时都是Yes", "来吧，来吧，来吧！"
-                                                       , "真是个小撒娇鬼呢"]),
+            r"(?:一起|陪)?睡觉?吧?[!?？]?$": choice([
+                "今天一定要一起睡哦！", "可以哦",
+                "嗯哼哼！睡吧，就像平时一样安眠吧~",
+                "我懂我懂，想抱着我睡觉对吧。真拿你没办法啊~",
+                "我无论何时都是Yes", "来吧，来吧，来吧！",
+                "真是个小撒娇鬼呢"
+            ]),
             r"(?:真是)?太好了!?$": "就是嘛，太好了",
             r"为什么[?？]?$": "我才不管。哼",
             r"你是谁?[\?？]?$": "我是亚托莉（鞠躬）",
-            r"早(?:上好|安)?!?$": choice(["早上好", "早上好.......脸好近呢"]),
+            r"早(?:上好|安)?!?$": choice([
+                "早上好",
+                "早上好.......脸好近呢"
+            ]),
             r"来?一?发?火箭拳!?$": "火箭拳————————！！！！",
             r"(?:我要?)?膝枕!?$": "膝枕…...只是膝枕的话，也不是不能给你做......",
         }
@@ -141,7 +152,7 @@ async def _(event: GroupMessageEvent):
     await clear_chat_history.finish(f"全新的{lk_util.bot_name}出现了")
 
 
-plugin = Service("lk功能").document("l_o_o_k的各种功能插件的集合").type(Service.ServiceType.LKPLUGIN)
+plugin = Service("lk功能").document("一些额外功能").type(Service.ServiceType.LKPLUGIN)
 
 
 async def get_random_atri(handle):
@@ -173,7 +184,10 @@ async def _(event: Event, matcher: Matcher):
         await my_wife.send(MessageSegment.image(get_image_bytes(f'{IMG_DIR}/laopo.jpg')))
 
 
-dg_voice = plugin.on_keyword({"骂"}, docs="爽！再来一句！(需@bot)", rule=to_bot(), priority=5, block=True)
+ding_gong = Service("钉宫语录").document("@bot 骂我 便发送一条钉宫语录").type(Service.ServiceType.ENTERTAINMENT)
+
+
+dg_voice = ding_gong.on_keyword({"骂"}, docs="爽！再来一句！(需@bot)", rule=to_bot(), priority=5, block=True)
 
 
 @dg_voice.handle()
@@ -187,7 +201,10 @@ async def _():
     await dg_voice.send(voice.split("_")[1])
 
 
-get_tiangou = plugin.on_command(cmd='舔狗日记', docs='发送一条舔狗日记')
+tian_gou = Service("舔狗日记").document("爱你无需多言(doge)").type(Service.ServiceType.ENTERTAINMENT)
+
+
+get_tiangou = tian_gou.on_command(cmd='舔狗日记', docs='爱你无需多言(doge)')
 
 
 @get_tiangou.handle()
@@ -195,7 +212,10 @@ async def _():
     await get_tiangou.finish(tiangou.get_tiangou())
 
 
-fa_dian = plugin.on_command("每日发癫", docs="不每天对Ta发癫很难受呀！")
+daily_fa_dian = Service("每日发癫").document("不每天对Ta发癫很难受呀！").type(Service.ServiceType.ENTERTAINMENT)
+
+
+fa_dian = daily_fa_dian.on_command("每日发癫", docs="不每天对Ta发癫很难受呀！")
 
 
 @fa_dian.handle()

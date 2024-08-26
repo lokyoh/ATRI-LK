@@ -6,13 +6,15 @@ from nonebot.adapters.onebot.v11 import Message
 from ATRI import conf, driver
 from ATRI.log import log
 from ATRI.utils.event import Event
+from ATRI.utils.apscheduler import scheduler
 
 from .config import config
 from .system.data.item import Item, ItemType, items
 from .system.data.shop import Shop, shops
 from .system.data.user import users
+from .system.tools.daily_update import daily_update
 
-PLUGIN_VERSION = "0.4.6-fix2"
+PLUGIN_VERSION = "0.4.6-fix3"
 PLUGIN_DIR = Path(".") / "data" / "plugins" / "lkbot"
 
 
@@ -64,15 +66,13 @@ class BaseFunc:
             return True
         return False
 
-    @staticmethod
-    def get_name(user_id: str | int) -> str | None:
+    def get_name(self, user_id: str | int) -> str | None:
         """获取用户的名字"""
         if type(user_id) is int:
             user_id = str(user_id)
-        try:
+        if self.is_valid_user(user_id):
             return users.get_user_name(user_id)
-        except Exception:
-            return None
+        return None
 
     def buy_item(self, user_id, shop_name, item_name: str, num: int) -> str:
         """用户从商店购买物品"""
@@ -208,8 +208,8 @@ sign_in_event = SignInEvent()
 
 def load_item_data():
     """加载物品与商店数据，可调用以实现随时加载数据"""
-    # items.items_clear()
-    # shops.shops_clear()
+    items.items_clear()
+    shops.shops_clear()
     """定义物品"""
     rename_card = Item("改名卡", ItemType.PROP, item_info='用于修改自己的名字，改名时自动使用哦')
     items.register(rename_card)
@@ -224,6 +224,11 @@ def load_item_data():
     log.success(f'物品商店注册完成:共注册{len(items.get_item_list())}个物品，{len(shops.get_shop_names())}个商店')
 
 
-driver().on_startup(load_item_data)
+def on_startup():
+    load_item_data()
+    scheduler.add_job(daily_update, 'cron', hour=0, minute=0)
+
+
+driver().on_startup(on_startup)
 
 lk_util = BaseFunc()

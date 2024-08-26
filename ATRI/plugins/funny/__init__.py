@@ -20,18 +20,6 @@ async def _get_laugh(bot: Bot, event: MessageEvent):
     await get_laugh.finish(await Funny().idk_laugh(user_name))
 
 
-# me_re_you = plugin.on_regex(r"我", "我也不懂咋解释", block=False)
-
-
-# @me_re_you.handle()
-# async def _me_re_you(bot: Bot, event: MessageEvent):
-#     if randint(0, 15) == 5:
-#         msg = str(event.get_message())
-#         content, is_ok = Funny().me_re_you(msg)
-#         if is_ok:
-#             await me_re_you.finish(content)
-
-
 _fake_flmt_notice = choice(["慢...慢一..点❤", "冷静1下", "歇会歇会~~"])
 
 fake_msg = plugin.on_command(

@@ -30,6 +30,7 @@ class ConfigurationManager:
         self.load()
 
     def load(self):
+        """加载配置"""
         if os.path.exists(DATA_PATH):
             self.config = Config.read_from_file(DATA_PATH)
         else:

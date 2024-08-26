@@ -1,6 +1,7 @@
 import json
 from copy import deepcopy
-from datetime import date, datetime
+from datetime import date, datetime, timedelta
+from random import randint
 
 from ATRI.log import log
 from ATRI.plugins.lkbot.system.data.user import lk_db, users
@@ -10,6 +11,7 @@ from ATRI.utils.lock import SingleLock
 from ATRI.utils.sqlite import DataBase
 
 from .crop import crop_data_list, CropData, Month
+from .weather import get_weather
 
 
 class FarmField:
@@ -46,17 +48,21 @@ class FarmField:
                     return True, json.dumps(self.to_field_dic(), ensure_ascii=False)
         return False, None
 
-    def water_change(self):
-        if self.water == 1:
+    def water_change(self, rainy: bool):
+        if rainy:
+            if self.state != 0:
+                self.water = 1
+                if self.crop != "":
+                    self.days += 1
+        elif self.water == 1:
             self.water = 0
             if self.crop != "":
                 self.days += 1
-            return json.dumps(self.to_field_dic(), ensure_ascii=False)
         else:
             if self.crop == "":
-                self.state = 0
-                return json.dumps(self.to_field_dic(), ensure_ascii=False)
-        return None
+                if randint(0, 100) < 50 and self.state == 1:
+                    self.state = 0
+        return json.dumps(self.to_field_dic(), ensure_ascii=False)
 
 
 class UserFarmData:
@@ -144,9 +150,10 @@ class UserFarmDataManager:
 
         @self._cache_lock.run
         def update_farm():
-            # TODO ADD WEATHER
+            _today_weather = self.weather
             self.weather = self.next_weather
-            self.next_weather = 0
+            _next_day = date.today() + timedelta(days=1)
+            self.next_weather = get_weather(_next_day.month, _next_day.day, _today_weather)
             self._db.update(f"DATE = '{date.today()}', WEATHER = {self.weather}, NEXT_WEATHER = {self.next_weather}",
                             "'rowid' = 1")
             self._cache_list = LimitedQueue(8)
@@ -154,18 +161,22 @@ class UserFarmDataManager:
 
         content = self._db.select_all()
         if len(content) <= 0:
-            # TODO ADD WEATHER
             self.weather = 0
-            self.next_weather = 0
+            next_day = date.today() + timedelta(days=1)
+            self.next_weather = get_weather(next_day.month, next_day.day, 0)
             self._db.insert("DATE, WEATHER, NEXT_WEATHER", f"'{date.today()}', {self.weather}, {self.next_weather}")
         else:
             day = datetime.strptime(content[0][0], '%Y-%m-%d').date()
-            if day != date.today():
-                if (day - date.today()).days == 1:
-                    self.next_weather = content[0][2]
+            today = date.today()
+            if day != today:
+                if (day - today).days == 1:
+                    yesterday_weather = self.weather
+                    self.weather = self.next_weather
+                    self.next_weather = get_weather(today.month, today.day, yesterday_weather)
                 else:
-                    # TODO ADD WEATHER
-                    self.next_weather = 0
+                    last_day = today - timedelta(days=1)
+                    self.weather = get_weather(last_day.month, last_day.day, 0)
+                    self.next_weather = get_weather(today.month, today.day, self.weather)
                 update_farm()
             else:
                 self.weather = content[0][1]
@@ -178,9 +189,10 @@ class UserFarmDataManager:
 
             @self._cache_lock.run
             def daily_up_date():
-                # TODO ADD WEATHER
+                _today_weather = self.weather
                 self.weather = self.next_weather
-                self.next_weather = 0
+                _next_day = date.today() + timedelta(days=1)
+                self.next_weather = get_weather(_next_day.month, _next_day.day, _today_weather)
                 db.get_exist_table("LKFARM").update(
                     f"DATE = '{date.today()}', WEATHER = {self.weather}, NEXT_WEATHER = {self.next_weather}",
                     "'rowid' = 1")
@@ -230,7 +242,10 @@ class UserFarmDataManager:
                     if out_season:
                         self._field_change(user_id, chr(int(i / 8) + ord('A')), i % 8 + 1, sqlstr)
                     else:
-                        sqlstr = farm_date.field[i].water_change()
+                        rainy = False
+                        if self.weather == 1 or self.weather == 2:
+                            rainy = True
+                        sqlstr = farm_date.field[i].water_change(rainy)
                         if sqlstr:
                             self._field_change(user_id, chr(int(i / 8) + ord('A')), i % 8 + 1, sqlstr)
             self._farm_cache[user_id] = farm_date

@@ -10,13 +10,6 @@ from ATRI.message import MessageBuilder
 
 _repo_flmt_notice = choice(["慢...慢一..点❤", "冷静1下", "歇会歇会~~"])
 
-_REPO_FORMAT = (
-    MessageBuilder("来自用户{user}反馈:")
-    .text("{msg}")
-    .text("- 如有类似 CQ 一类关键词出现")
-    .text("- 无需担心, 关注其它内容即可")
-    .done()
-)
 _REPO_FORMAT = MessageBuilder("来自用户{user}反馈:").text("{msg}").done()
 
 plugin = Service("反馈").document("向维护者发送消息").type(Service.ServiceType.SYSTEM)

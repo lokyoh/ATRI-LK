@@ -11,27 +11,12 @@ from ATRI.plugins.lkbot.system.sign_in_pic import get_pic
 class LKBot:
     new_things = f'''ATRI-LK版
 {__version__} 新内容:
-    - 新的状态
-    - 新的服务列表
-    - coser
-    - 钉宫语音(@bot 骂&)
-    - AI聊天更新
-    - /lk.我的信息
-    - 全新的签到界面
-    - 物品-商店系统第一阶段
-    - 健康模式
-    - 尝新模式
-    - Atri语音'''
+    - lk农场part.1'''
     broad_message = f'''*本群已开启尝新模式，这是新功能的人工推送*
 #lk插件v{PLUGIN_VERSION}:
-    - 全新的签到界面
-    - 物品-商店系统第一阶段
-    - 新增健康模式
-    - 完善尝新功能
     !输入"/帮助 lk插件"查看具体指令!
     !输入"/lk.新内容"查看更新内容!
 #lk宠物v0.1.3-fix1:
-    - 进行修复与预设词优化
     !输入"/帮助 lk宠物"查看具体指令!
 #组队插件1.0.0-fix2-正式版：
     !输入"/帮助 组队插件"查看具体指令!'''

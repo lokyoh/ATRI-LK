@@ -25,13 +25,13 @@
 
 ## 📱 功能概览 | Services Overview
 
-ATRI原有的功能:
+ATRI原有的功能(划线表示可能无法使用):
 
 <details markdown='1'><summary>涩涩</summary>
 
 - 文爱
 - 涩图
-- 涩图嗅探
+- ~~涩图嗅探~~
 - 涩批翻译机
 
 </details>
@@ -39,7 +39,7 @@ ATRI原有的功能:
 <details markdown='1'><summary>实用</summary>
 
 - 以图搜图
-- 以图搜番
+- ~~以图搜番~~
 - ATRI语（加密、解密，改自[`rcnb`](https://github.com/rcnbapp/RCNB.js)）
 - 简单骰子
 - ~~b站动态订阅~~
@@ -53,13 +53,12 @@ ATRI原有的功能:
 
 - 看不懂的笑话
 - 今天吃什么
-- 老婆！
 
 </details>
 
 <details markdown='1'><summary>其它</summary>
 
-- B站小程序解析
+- ~~B站小程序解析~~
 - 状态查看
 - RSS订阅
 
@@ -90,8 +89,9 @@ LK版新加的功能
 - [ ] 农场
   - [x] 新农场
   - [x] 锄地、浇水、种植、收获
+  - [ ] 品质
   - [ ] 肥料
-  - [ ] 天气
+  - [x] 天气
   - [ ] 幸运值
   - [ ] 耕种等级
 - [ ] ~~钓鱼~~

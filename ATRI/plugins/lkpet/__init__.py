@@ -2,8 +2,9 @@ from random import choice
 
 from nonebot.internal.matcher import Matcher
 from nonebot.params import CommandArg, ArgPlainText
-from nonebot.adapters.onebot.v11 import Event, Message, Bot, GroupMessageEvent
+from nonebot.adapters.onebot.v11 import Event, Message, Bot, GroupMessageEvent, MessageSegment
 from nonebot.adapters.onebot.v11.helpers import Cooldown
+from nonebot_plugin_htmlrender import md_to_pic
 
 from ATRI.service import Service
 from ATRI.plugins.lkbot import lk_util
@@ -14,7 +15,7 @@ from ATRI.plugins.lkbot.checker import is_lk_user, not_safe_mode, is_test_mode, 
 from .pet_chat import PetModel
 from .pet_data import PetData, pet_manager
 
-plugin = Service("lk宠物").document("l_o_o_k的赛博宠物插件v0.1.3").type(Service.ServiceType.LKPLUGIN).main_cmd("/pet")
+plugin = Service("lk宠物").document("l_o_o_k的赛博宠物插件v0.1.3-fix1").type(Service.ServiceType.LKPLUGIN).main_cmd("/pet")
 
 _lmt_notice = ["慢...慢一..点❤", "冷静1下", "歇会歇会~~", "呜呜...别急", "太快了...受不了", "不要这么快呀"]
 
@@ -29,7 +30,7 @@ async def _(event: GroupMessageEvent, args: Message = CommandArg()):
     await is_lk_user(talk_with_pet, event)
     user_id = event.get_user_id()
     if user_id not in pet_manager.datas:
-        await adopt.finish("你还没领养过宠物哟，赶快领养一个吧")
+        await talk_with_pet.finish("你还没领养过宠物哟，赶快领养一个吧")
     else:
         text = lk_util.get_trans_text(args)
         nickname = lk_util.get_name(user_id)
@@ -41,11 +42,13 @@ async def _(event: GroupMessageEvent, args: Message = CommandArg()):
             response = convo.chat_with(nickname + ":" + text)
         except Exception as e:
             log.warning(e)
-            return "很可惜，宠物不理你了"
+            await talk_with_pet.finish("很可惜，宠物不理你了")
+            return
         log.info(response)
+        response = f"{pet_manager.datas[user_id].name}:\n{response}"
         if len(response) > 100:
-            response = response[:1000] + "\n长度过长，已截短"
-        await adopt.finish(f"{pet_manager.datas[user_id].name}:\n{response}")
+            await talk_with_pet.finish(MessageSegment.image(await md_to_pic(response)))
+        await talk_with_pet.finish(response)
 
 
 adopt = plugin.cmd_as_group("领养", "领养一只专属自己赛博宠物吧")
@@ -105,19 +108,19 @@ async def _(event: Event, matcher: Matcher, args: Message = CommandArg()):
     name = args.extract_plain_text()
     if name:
         if name in lk_util.bot_names:
-            await adopt.finish("讨厌，不能使用咱的名字哦")
+            await change_pet_name_cmd.finish("讨厌，不能使用咱的名字哦")
         matcher.set_arg("new_pet_name", args)
 
 
 @change_pet_name_cmd.got("new_pet_name", "宠物新的名字呢？速速")
 async def _(event: Event, pet_name: str = ArgPlainText("new_pet_name")):
     if pet_name in lk_util.bot_names:
-        await adopt.finish("讨厌，不能使用咱的名字哦")
+        await change_pet_name_cmd.finish("讨厌，不能使用咱的名字哦")
     pet_name = lk_util.clean_str(pet_name)
     if pet_name == '':
         await adopt.reject("名字为空哦")
     if len(pet_name) > 10:
-        await adopt.finish("名称大于10字符")
+        await change_pet_name_cmd.finish("名称大于10字符")
     user_id = event.get_user_id()
     pet_manager.change_pet_name(user_id, pet_name)
     await change_pet_name_cmd.finish("修改成功啦")

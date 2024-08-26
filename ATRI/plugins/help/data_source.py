@@ -9,6 +9,7 @@ from ATRI import __version__, conf, IMG_DIR
 from ATRI.message import MessageBuilder
 from ATRI.service import SERVICES_DIR, ServiceTools, Service
 from ATRI.utils.img_editor import IMGEditor
+from ATRI.exceptions import ReadFileError
 
 _SERVICE_INFO_FORMAT = (
     MessageBuilder("服务名：{service}")
@@ -126,7 +127,7 @@ class Helper:
     def service_info(service: str) -> str:
         try:
             data = ServiceTools(service).load_service()
-        except Exception:
+        except ReadFileError:
             return "请检查是否输入错误呢.../帮助 (服务)"
 
         service_name = data.service
@@ -148,7 +149,7 @@ class Helper:
     def cmd_info(service: str, cmd: str) -> str:
         try:
             data = ServiceTools(service).load_service()
-        except Exception:
+        except ReadFileError:
             return "请检查是否输入错误..."
 
         cmd_list: dict = data.cmd_list

@@ -14,7 +14,7 @@ from .system.data.shop import Shop, shops
 from .system.data.user import users
 from .system.tools.daily_update import daily_update
 
-PLUGIN_VERSION = "0.4.6-fix3"
+PLUGIN_VERSION = "0.4.6-fix4"
 PLUGIN_DIR = Path(".") / "data" / "plugins" / "lkbot"
 
 

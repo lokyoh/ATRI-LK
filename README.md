@@ -43,26 +43,14 @@ ATRI原有的功能(划线表示可能无法使用):
 - ATRI语（加密、解密，改自[`rcnb`](https://github.com/rcnbapp/RCNB.js)）
 - 简单骰子
 - ~~b站动态订阅~~
-- ~~Twitter 动态订阅~~
 - 谁是卷王 (基于 wakatime)
 - 自定义词库（多种方式匹配）
 
 </details>
 
-<details markdown='1'><summary>娱乐</summary>
-
 - 看不懂的笑话
-- 今天吃什么
-
-</details>
-
-<details markdown='1'><summary>其它</summary>
-
-- ~~B站小程序解析~~
 - 状态查看
 - RSS订阅
-
-</details>
 
 LK版新加的功能
 

@@ -14,17 +14,6 @@ class BilibiliSubscription(Model):
         app = "bilibili"
 
 
-class TwitterSubscription(Model):
-    tid = fields.IntField()
-    group_id = fields.IntField()
-    name = fields.TextField(null=True)
-    screen_name = fields.TextField(null=True)
-    last_update = fields.DatetimeField(default=datetime.fromordinal(1))
-
-    class Meta:
-        app = "twitter"
-
-
 class ThesaurusStoragor(Model):
     _id = fields.TextField()
     matcher = fields.TextField(null=True)

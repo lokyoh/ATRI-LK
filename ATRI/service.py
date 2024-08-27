@@ -38,6 +38,7 @@ class ServiceInfo(BaseModel):
     cmd_list: dict
     only_admin: bool
 
+
 class ServiceConfig(BaseModel):
     enabled: bool
     disable_user: list
@@ -195,9 +196,9 @@ class Service:
         if path.is_file():
             return
         data = ServiceConfig(
-            enabled = True,
-            disable_user = list(),
-            disable_group = list(),
+            enabled=True,
+            disable_user=list(),
+            disable_group=list(),
         )
         try:
             data.write_into_file(path)
@@ -423,6 +424,7 @@ class Service:
 
 class ServiceTools:
     """针对服务的工具类"""
+
     def __init__(self, service: str):
         self.service = service
 

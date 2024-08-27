@@ -214,14 +214,16 @@ class BackPack:
         _type = item_stack.get_type()
         if item_stack.meta.num == 0:
             self.remove_item(_name)
-        self._backpack[_type][_name] = item_stack.meta
+        else:
+            self._backpack[_type][_name] = item_stack.meta
 
     def set_item_with_meta(self, item_name: str, item_meta: dict[str: Any]):
         """通过物品数据设置物品"""
         _type = items.get_reg_item_type(item_name)
         if item_meta.get("num", 0) == 0:
             self.remove_item(item_name)
-        self._backpack[_type][item_name] = ItemMeta(item_meta)
+        else:
+            self._backpack[_type][item_name] = ItemMeta(item_meta)
 
     def set_item(self, item_name: str, num: int):
         """设置指定数量的无其余数据的物品"""

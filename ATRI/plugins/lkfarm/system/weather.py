@@ -1,7 +1,9 @@
 from random import randint
 
+
 def get_w_r(num: int):
     return randint(0, 100) < num
+
 
 def get_weather(month: int, day: int, weather: int):
     """0:晴 1:雨 2:雷雨 3:雪"""

@@ -150,7 +150,9 @@ class CropData:
                     return i + 1
             return len(self._growth_stage) + 1
         else:
-            return len(self._growth_stage) + 2
+            if days < self._lasting:
+                return len(self._growth_stage) + 2
+            return len(self._growth_stage) + 1
 
     def get_harvest_exp(self) -> int:
         return self._exp

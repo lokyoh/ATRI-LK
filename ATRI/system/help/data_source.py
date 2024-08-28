@@ -7,7 +7,7 @@ from nonebot.adapters.onebot.v11 import MessageSegment
 
 from ATRI import __version__, conf, IMG_DIR
 from ATRI.message import MessageBuilder
-from ATRI.service import SERVICES_DIR, ServiceTools, Service
+from ATRI.service import SERVICES_DIR, ServiceTools, Service, CONFIG_DIR
 from ATRI.utils.img_editor import IMGEditor
 from ATRI.exceptions import ReadFileError
 
@@ -66,7 +66,7 @@ class Helper:
             f = os.path.join(SERVICES_DIR, f)
             with open(f, "r", encoding="utf-8") as r:
                 service = json.load(r)
-                if not service["enabled"]:
+                if not ServiceTools(prefix).load_service_config().enabled:
                     services[Service.ServiceType.CLOSED].append(prefix)
                     continue
                 if service["only_admin"]:
@@ -127,12 +127,13 @@ class Helper:
     def service_info(service: str) -> str:
         try:
             data = ServiceTools(service).load_service()
+            s_conf = ServiceTools(service).load_service_config()
         except ReadFileError:
             return "请检查是否输入错误呢.../帮助 (服务)"
 
         service_name = data.service
         service_docs = data.docs
-        service_enabled = data.enabled
+        service_enabled = s_conf.enabled
 
         _service_cmd_list = list(data.cmd_list)
         service_cmd_list = "\n".join(map(str, _service_cmd_list))

@@ -102,7 +102,7 @@ class Service:
         self._priority = 10
         self._state = None
         self._main_cmd = (str(),)
-        self.docs = "无介绍"
+        self._docs = "无介绍"
         self._type = Service.ServiceType.OTHER
         self._path = Path(".") / "data" / "plugins" / self.service
         self.__generate_service_conf()
@@ -110,11 +110,11 @@ class Service:
     def document(self, context: str) -> "Service":
         """为服务添加说明"""
 
-        self.docs = context
+        self._docs = context
         path = SERVICES_DIR / f"{self.service}.json"
         if path.is_file():
             data = json.loads(path.read_bytes())
-            if self.docs != data.get("docs", "无介绍"):
+            if self._docs != data.get("docs", "无介绍"):
                 os.remove(path)
                 log.info(f"{self.service}信息已更新")
         return self
@@ -227,7 +227,7 @@ class Service:
 
         path = SERVICES_DIR / f"{service}.json"
         if not path.is_file():
-            self.__generate_service_config(service, self.docs, self._type)
+            self.__generate_service_config(service, self._docs, self._type)
 
         with open(path, "w", encoding="utf-8") as w:
             w.write(json.dumps(service_data, indent=4, ensure_ascii=False))
@@ -235,14 +235,14 @@ class Service:
     def load_service(self, service: str) -> dict:
         path = SERVICES_DIR / f"{service}.json"
         if not path.is_file():
-            self.__generate_service_config(service, self.docs, self._type)
+            self.__generate_service_config(service, self._docs, self._type)
 
         try:
             data = json.loads(path.read_bytes())
         except Exception:
             with open(path, "w", encoding="utf-8") as w:
                 w.write(json.dumps({}))
-            self.__generate_service_config(service, self.docs, self._type)
+            self.__generate_service_config(service, self._docs, self._type)
             data = json.loads(path.read_bytes())
         return data
 
@@ -255,7 +255,7 @@ class Service:
     def __load_cmds(self) -> dict:
         path = SERVICES_DIR / f"{self.service}.json"
         if not path.is_file():
-            self.__generate_service_config(self.service, self.docs, self._type)
+            self.__generate_service_config(self.service, self._docs, self._type)
 
         data = json.loads(path.read_bytes())
         return data["cmd_list"]

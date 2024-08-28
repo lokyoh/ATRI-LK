@@ -1773,32 +1773,6 @@ url = "https://pypi.tuna.tsinghua.edu.cn/simple"
 reference = "tsinghua-mirror"
 
 [[package]]
-name = "nonebot-plugin-htmlrender"
-version = "0.3.5"
-description = "通过浏览器渲染图片"
-optional = false
-python-versions = "<4.0,>=3.9"
-files = [
-    {file = "nonebot_plugin_htmlrender-0.3.5-py3-none-any.whl", hash = "sha256:a46c6a1b57ae79e26ed996ca1eca2c729f8f4a53aed993b7664f956d7eeca29e"},
-    {file = "nonebot_plugin_htmlrender-0.3.5.tar.gz", hash = "sha256:22b3e801bde06e66528582aa085317b27c42e82e8d7e72aa04218635e03c1303"},
-]
-
-[package.dependencies]
-aiofiles = ">=0.8.0"
-jinja2 = ">=3.0.3"
-markdown = ">=3.3.6"
-nonebot2 = ">=2.2.0"
-playwright = ">=1.17.2"
-Pygments = ">=2.10.0"
-pymdown-extensions = ">=9.1"
-python-markdown-math = ">=0.8"
-
-[package.source]
-type = "legacy"
-url = "https://pypi.tuna.tsinghua.edu.cn/simple"
-reference = "tsinghua-mirror"
-
-[[package]]
 name = "nonebot2"
 version = "2.3.3"
 description = "An asynchronous python bot framework."
@@ -2396,29 +2370,6 @@ url = "https://pypi.tuna.tsinghua.edu.cn/simple"
 reference = "tsinghua-mirror"
 
 [[package]]
-name = "pymdown-extensions"
-version = "10.9"
-description = "Extension pack for Python Markdown."
-optional = false
-python-versions = ">=3.8"
-files = [
-    {file = "pymdown_extensions-10.9-py3-none-any.whl", hash = "sha256:d323f7e90d83c86113ee78f3fe62fc9dee5f56b54d912660703ea1816fed5626"},
-    {file = "pymdown_extensions-10.9.tar.gz", hash = "sha256:6ff740bcd99ec4172a938970d42b96128bdc9d4b9bcad72494f29921dc69b753"},
-]
-
-[package.dependencies]
-markdown = ">=3.6"
-pyyaml = "*"
-
-[package.extras]
-extra = ["pygments (>=2.12)"]
-
-[package.source]
-type = "legacy"
-url = "https://pypi.tuna.tsinghua.edu.cn/simple"
-reference = "tsinghua-mirror"
-
-[[package]]
 name = "pyparsing"
 version = "3.1.4"
 description = "pyparsing module - Classes and methods to define and execute parsing grammars"
@@ -2482,25 +2433,6 @@ files = [
 
 [package.extras]
 cli = ["click (>=5.0)"]
-
-[package.source]
-type = "legacy"
-url = "https://pypi.tuna.tsinghua.edu.cn/simple"
-reference = "tsinghua-mirror"
-
-[[package]]
-name = "python-markdown-math"
-version = "0.8"
-description = "Math extension for Python-Markdown"
-optional = false
-python-versions = ">=3.6"
-files = [
-    {file = "python-markdown-math-0.8.tar.gz", hash = "sha256:8564212af679fc18d53f38681f16080fcd3d186073f23825c7ce86fadd3e3635"},
-    {file = "python_markdown_math-0.8-py3-none-any.whl", hash = "sha256:c685249d84b5b697e9114d7beb352bd8ca2e07fd268fd4057ffca888c14641e5"},
-]
-
-[package.dependencies]
-Markdown = ">=3.0"
 
 [package.source]
 type = "legacy"
@@ -3503,4 +3435,4 @@ reference = "tsinghua-mirror"
 [metadata]
 lock-version = "2.0"
 python-versions = "^3.10"
-content-hash = "171fe99898c32b5a292ac90eab08d5746830e5e846f54cb460ab9708c18f1e8b"
+content-hash = "d064574d255a39ac35809e805b342aa986a486155aa1ad79360a634409c38ab9"

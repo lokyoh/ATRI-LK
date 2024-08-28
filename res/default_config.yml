@@ -1,0 +1,28 @@
+# 设置参考文档: https://lokyoh.github.io/ATRI-LK-docs/config.html
+ConfigVersion: "1.1.0"
+
+BotConfig:
+  host: "{host}"
+  port: {port}
+  debug: false
+  superusers: {superusers}
+  nickname: [ "亚托莉", "ATRI", "Atri", "atri", "アトリ" ]
+  command_start: [ "", "/" ]
+  command_sep: [ "." ]
+  session_expire_timeout: 60
+  access_token: ""
+  proxy: "{proxy}"
+  request_timeout: 5
+
+BrowsConfig:
+  browser: "chromium"
+  download_host: ""
+  proxy_host: ""
+  browser_channel: ""
+
+SauceNAO:
+  key: "{saucenao_key}"
+
+Setu:
+  reverse_proxy: true
+  reverse_proxy_domain: "i.pixiv.re"

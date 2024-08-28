@@ -6,7 +6,7 @@ from nonebot.adapters.onebot.v11 import Adapter
 
 from .configs import Config
 
-__version__ = "YHN-LK0-005-PRE3"
+__version__ = "YHN-LK0-005-PRE4"
 __conf_path = Path(".") / "config.yml"
 __conf = Config(__conf_path)
 
@@ -16,6 +16,7 @@ FONT_DIR = RES_DIR / "font"
 IMG_DIR = RES_DIR / "img"
 RECORD_DIR = RES_DIR / "record"
 TEXT_DIR = RES_DIR / "text"
+HTML_DIR = RES_DIR / "html"
 TEMP_DIR = Path(".") / "data" / "temp"
 TEMP_DIR.mkdir(parents=True, exist_ok=True)
 
@@ -31,7 +32,8 @@ def driver():
 def init():
     nonebot.init(**__conf.get_runtime_conf())
     driver().register_adapter(Adapter)
-    nonebot.load_plugins("ATRI/plugins")
+    nonebot.load_plugins("ATRI/system")
+    nonebot.load_plugins("plugins")
     nonebot.load_plugins("ATRI/plugins/rss")
     sleep(3)
 

@@ -8,7 +8,7 @@ from .models import BotConfig, ConfigModel, RuntimeConfig
 CONFIG_DATA_PATH = Path(".") / "data" / "config"
 CONFIG_DATA_PATH.mkdir(parents=True, exist_ok=True)
 
-_DEFAULT_CONFIG_PATH = Path(".") / "ATRI" / "configs" / "default_config.yml"
+_DEFAULT_CONFIG_PATH = Path(".") / "res" / "default_config.yml"
 
 
 class Config:

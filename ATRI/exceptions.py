@@ -1,5 +1,4 @@
 import time
-import json
 from pathlib import Path
 from typing import Optional
 from traceback import format_exc

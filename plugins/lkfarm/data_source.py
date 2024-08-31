@@ -155,7 +155,8 @@ class FarmSystem:
             return f"没有物品 {crop} 的物品数据"
         if item.get_item_type() != ItemType.SEED:
             return f"{crop} 的类型是 {item.get_item_type()} 不是种子"
-        r, m = user_farm_data.seeding(user_id, row, line, re.match(r"(.*)种子", crop)[1])
+        seed = re.match(r"(.*)种子", crop)
+        r, m = user_farm_data.seeding(user_id, row, line, seed[1])
         if r:
             return None
         return m

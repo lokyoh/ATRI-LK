@@ -67,8 +67,6 @@ class Updater:
         l_v, l_v_t = await cls.show_latest_version()
         if not l_v and not l_v_t:
             return "检查更新失败"
-        if l_v[:11] < __version__[:11] or (l_v[:11] == __version__[:11] and len(__version__) == 11):
-            return "不需要更新"
         return await cls._update_from_github()
 
     @staticmethod

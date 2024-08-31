@@ -7,7 +7,7 @@ from nonebot.adapters.onebot.v11 import MessageSegment
 
 from ATRI import __version__, conf, IMG_DIR
 from ATRI.message import MessageBuilder
-from ATRI.service import SERVICES_DIR, ServiceTools, Service, CONFIG_DIR
+from ATRI.service import SERVICES_DIR, ServiceTools, Service
 from ATRI.utils.img_editor import IMGEditor
 from ATRI.exceptions import ReadFileError
 

@@ -126,18 +126,37 @@ async def _(event: GroupMessageEvent, matcher: Matcher):
         matcher.stop_propagation()
         await on_talk.send(await ai_chat(text, sender_id, event.group_id))
     else:
+        img_path = IMG_DIR / "atri"
         if re.search(r"好不好|行不行|可以吗|要不要|[行好](?:吗[?？]?|[?？])", text):
-            img = choice(["YES.png", "NO.jpg"])
-            await on_talk.finish(MessageSegment.image(get_image_bytes(IMG_DIR / "atri" / img)))
+            img = choice(["YES.png", choice(["NO.jpg", "NO1.jpg"])])
+            await on_talk.finish(MessageSegment.image(get_image_bytes(img_path / img)))
         if re.search(r"啊这", text):
             img = "AZ.jpg"
-            await on_talk.finish(MessageSegment.image(get_image_bytes(IMG_DIR / "atri" / img)))
+            await on_talk.finish(MessageSegment.image(get_image_bytes(img_path / img)))
         if re.search(r"无情", text):
             img = "WQ.jpg"
-            await on_talk.finish(MessageSegment.image(get_image_bytes(IMG_DIR / "atri" / img)))
+            await on_talk.finish(MessageSegment.image(get_image_bytes(img_path / img)))
         if re.match(r"[?？]+", text):
             img = "WH.jpg"
-            await on_talk.finish(MessageSegment.image(get_image_bytes(IMG_DIR / "atri" / img)))
+            await on_talk.finish(MessageSegment.image(get_image_bytes(img_path / img)))
+        if re.match(r"(?:[干做]得)?漂亮$", text):
+            img = choice(["DY.gif", "DY1.gif"])
+            await on_talk.finish(MessageSegment.image(get_image_bytes(img_path / img)))
+        if re.match(r"我?明白了?", text):
+            img = "MB.jpg"
+            await on_talk.finish(MessageSegment.image(get_image_bytes(img_path / img)))
+        if re.search(r"吃瓜", text):
+            img = "CG.jpg"
+            await on_talk.finish(MessageSegment.image(get_image_bytes(img_path / img)))
+        if re.search(r"加油", text):
+            img = "JY.jpg"
+            await on_talk.finish(MessageSegment.image(get_image_bytes(img_path / img)))
+        if re.match(r"不对", text):
+            img = "BD.jpg"
+            await on_talk.finish(MessageSegment.image(get_image_bytes(img_path / img)))
+        if re.search(r"看看", text):
+            img = "BYK.jpg"
+            await on_talk.finish(MessageSegment.image(get_image_bytes(img_path / img)))
 
 
 clear_chat_history = plugin.cmd_as_group(cmd="重置历史", docs="重置AI聊天的聊天历史", permission=ADMIN)
@@ -150,13 +169,21 @@ async def _(event: GroupMessageEvent):
 
 
 async def get_random_atri(handle):
-    voice_list = os.listdir(RECORD_DIR / "atri")
-    if len(voice_list) == 0:
-        return
-    voice = choice(voice_list)
-    result = RECEditor.audio_to_base64(RECORD_DIR / "atri" / voice)
-    await handle.send(MessageSegment.record(file=result))
-    await handle.send(re.sub('.mp3', '', voice))
+    if choice([True, False]):
+        voice_list = os.listdir(RECORD_DIR / "atri")
+        if len(voice_list) == 0:
+            return
+        voice = choice(voice_list)
+        result = RECEditor.audio_to_base64(RECORD_DIR / "atri" / voice)
+        await handle.send(MessageSegment.record(file=result))
+        await handle.send(re.sub('.mp3', '', voice))
+    else:
+        img_list = os.listdir(IMG_DIR / "atri")
+        if len(img_list) == 0:
+            return
+        img = choice(img_list)
+        await handle.send(MessageSegment.image(get_image_bytes(IMG_DIR / "atri" / img)))
+
 
 
 poke = plugin.on_notice("戳一戳", "处理戳一戳事件")

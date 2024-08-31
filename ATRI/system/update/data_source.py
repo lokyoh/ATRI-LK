@@ -69,7 +69,7 @@ class Updater:
             return "检查更新失败"
         if l_v[:11] < __version__[:11] or (l_v[:11] == __version__[:11] and len(__version__) == 11):
             return "不需要更新"
-        await cls._update_from_github()
+        return await cls._update_from_github()
 
     @staticmethod
     async def _update_from_github():
@@ -86,8 +86,8 @@ class Updater:
                 err = stderr1
                 if stderr2:
                     err += f"\n{stderr2}"
-                return "更新失败:\n{err}"
-            return f"更新完成，请重新启动"
+                return f"更新失败:\n{err}"
+            return f"更新完成，请手动重新启动"
         except Exception as e:
             log.error(f"{e}:{e.args}")
             return "更新失败"

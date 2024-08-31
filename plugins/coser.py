@@ -26,6 +26,7 @@ async def _(reg_group: Tuple[Any, ...] = RegexGroup()):
     for _ in range(int(num)):
         await get_coser()
 
+
 async def get_coser():
     path = TEMP_DIR / f"cos_cc{int(time.time())}.jpeg"
     retry = 0
@@ -37,7 +38,7 @@ async def get_coser():
             await wf.write(content)
         await coser.send(MessageSegment.image(get_image_bytes(path)))
     except Exception as e:
-        log.warning(f"第{retry+1}次失败")
+        log.warning(f"第{retry + 1}次失败")
         if retry >= 5:
             await coser.send("出错了，你cos给我看！")
             log.error(f"{e}:{e.args}")

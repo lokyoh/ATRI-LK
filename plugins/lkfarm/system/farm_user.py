@@ -311,7 +311,7 @@ class UserFarmDataManager:
         if not crop_data_list[crop].growable(month):
             return False, f"{crop} 不能在{Month(month).to_season().value()}播种"
         if not users.item_num_change(user_id, f"{crop}种子", -1):
-            return f"背包中没有 {crop}种子"
+            return False, f"背包中没有 {crop}种子"
         data.crop = crop
         data.days = 0
         data.harvest = False

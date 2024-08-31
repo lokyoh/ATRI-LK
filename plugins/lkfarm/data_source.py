@@ -153,7 +153,7 @@ class FarmSystem:
         item = items.get_item_by_name(crop)
         if item is None:
             return f"没有物品 {crop} 的物品数据"
-        if item.get_item_type_name() != ItemType.SEED:
+        if item.get_item_type() != ItemType.SEED:
             return f"{crop} 的类型是 {item.get_item_type()} 不是种子"
         r, m = user_farm_data.seeding(user_id, row, line, re.match(r"(.*)种子", crop)[1])
         if r:

@@ -25,13 +25,13 @@
 
 ## 📱 功能概览 | Services Overview
 
-ATRI原有的功能:
+ATRI原有的功能(划线表示可能无法使用):
 
 <details markdown='1'><summary>涩涩</summary>
 
 - 文爱
 - 涩图
-- 涩图嗅探
+- ~~涩图嗅探~~
 - 涩批翻译机
 
 </details>
@@ -39,31 +39,18 @@ ATRI原有的功能:
 <details markdown='1'><summary>实用</summary>
 
 - 以图搜图
-- 以图搜番
+- ~~以图搜番~~
 - ATRI语（加密、解密，改自[`rcnb`](https://github.com/rcnbapp/RCNB.js)）
 - 简单骰子
 - ~~b站动态订阅~~
-- ~~Twitter 动态订阅~~
 - 谁是卷王 (基于 wakatime)
 - 自定义词库（多种方式匹配）
 
 </details>
 
-<details markdown='1'><summary>娱乐</summary>
-
 - 看不懂的笑话
-- 今天吃什么
-- 老婆！
-
-</details>
-
-<details markdown='1'><summary>其它</summary>
-
-- B站小程序解析
 - 状态查看
 - RSS订阅
-
-</details>
 
 LK版新加的功能
 
@@ -87,7 +74,14 @@ LK版新加的功能
 - [ ] 宠物
   - [x] 新宠物
   - [x] AI聊天
-- [ ] 农场(计划中)
+- [ ] 农场
+  - [x] 新农场
+  - [x] 锄地、浇水、种植、收获
+  - [ ] 品质
+  - [ ] 肥料
+  - [x] 天气
+  - [ ] 幸运值
+  - [ ] 耕种等级
 - [ ] ~~钓鱼~~
 - [ ] ~~探险~~
 
@@ -103,7 +97,7 @@ LK版新加的功能
 
 </details>
 
-更多资源问件请下载`release`附带的`.zip`文件
+更多资源文件请下载`release`中`YHN-LK0-004`版本附带的`res.zip`文件
 
 ## 🚀 开始部署 | Getting Started
 
@@ -133,8 +127,6 @@ LK版新加的功能
 
 [JetBrains](https://www.jetbrains.com/?from=ATRI): 为本项目提供 [PyCharm](https://www.jetbrains.com/pycharm/?from=ATRI)
 等 IDE 的授权<br>
-[<img src="https://resources.jetbrains.com/storage/products/company/brand/logos/jb_beam.png" width="150"/>](https://www.jetbrains.com/?from=ATRI)
-[<img src="https://resources.jetbrains.com/storage/products/company/brand/logos/PyCharm_icon.png" width="130"/>](https://www.jetbrains.com/pycharm/?from=ATRI)
 
 ## 📄 许可 | License
 

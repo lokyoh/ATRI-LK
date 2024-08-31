@@ -1,8 +1,8 @@
 import psutil
 import platform
-from pydantic import BaseModel
 from sys import platform as pf
 
+from .model import BaseModel
 from .apscheduler import scheduler
 
 if pf == "win32":

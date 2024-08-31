@@ -30,7 +30,7 @@ class MessageBuilder(Message):
         return self
 
     def text(self, text: str) -> "MessageBuilder":
-        if self[-1].type == "text":
+        if len(self) != 0 and self[-1].type == "text":
             text = "\n" + text
         self.append(MessageSegment.text(text))
         return self

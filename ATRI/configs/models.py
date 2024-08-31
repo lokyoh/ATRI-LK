@@ -1,4 +1,4 @@
-from pydantic import BaseModel
+from ..utils.model import BaseModel
 
 
 class BotConfig(BaseModel):
@@ -15,6 +15,13 @@ class BotConfig(BaseModel):
     request_timeout: int
 
 
+class BrowsConfig(BaseModel):
+    browser: str
+    download_host: str
+    proxy_host: str
+    browser_channel: str
+
+
 class SauceNAO(BaseModel):
     key: str
 
@@ -27,6 +34,7 @@ class Setu(BaseModel):
 class ConfigModel(BaseModel):
     ConfigVersion: str
     BotConfig: BotConfig
+    BrowsConfig: BrowsConfig
     SauceNAO: SauceNAO
     Setu: Setu
 

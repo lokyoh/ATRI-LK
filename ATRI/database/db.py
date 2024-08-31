@@ -20,10 +20,6 @@ async def run():
                     "engine": "tortoise.backends.sqlite",
                     "credentials": {"file_path": f"{DB_DIR}/bilibili.sqlite3"},
                 },
-                "twitter": {
-                    "engine": "tortoise.backends.sqlite",
-                    "credentials": {"file_path": f"{DB_DIR}/twitter.sqlite3"},
-                },
                 "ts": {
                     "engine": "tortoise.backends.sqlite",
                     "credentials": {"file_path": f"{DB_DIR}/thesaurusstoragor.sqlite3"},
@@ -51,10 +47,6 @@ async def run():
                 "bilibili": {
                     "models": [locals()["models"]],
                     "default_connection": "bilibili",
-                },
-                "twitter": {
-                    "models": [locals()["models"]],
-                    "default_connection": "twitter",
                 },
                 "ts": {"models": [locals()["models"]], "default_connection": "ts"},
                 "tal": {"models": [locals()["models"]], "default_connection": "tal"},

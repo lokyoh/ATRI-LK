@@ -1,4 +1,4 @@
-from sqlite3 import Connection, connect, OperationalError
+from sqlite3 import Connection, connect
 
 from ATRI.database.db import DB_DIR
 
@@ -83,3 +83,13 @@ class DataBase:
 
     def disconnect(self):
         self._connection.close()
+
+
+def encode(value: str) -> str:
+    value = value.replace("%", "%0")
+    return value.replace("`", "%1").replace("'", "%2").replace("\"", "%3").replace(" ", "%4")
+
+
+def decode(value: str) -> str:
+    value = value.replace("%1", "`").replace("%2", "'").replace("%3", "\"").replace("%4", " ")
+    return value.replace("%0", "%")

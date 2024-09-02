@@ -2,13 +2,14 @@ from random import choice
 
 from nonebot.internal.matcher import Matcher
 from nonebot.params import CommandArg, ArgPlainText
-from nonebot.adapters.onebot.v11 import Event, Message, Bot, GroupMessageEvent, MessageSegment
+from nonebot.adapters.onebot.v11 import Event, Message, Bot, GroupMessageEvent
 from nonebot.adapters.onebot.v11.helpers import Cooldown
 
 from ATRI.service import Service
 from ATRI.system.lkbot import lk_util
 from ATRI.log import log
 from ATRI.permission import ADMIN, MASTER
+from ATRI.message import img_msg
 from ATRI.system.htmlrender import md_to_pic
 from ATRI.system.lkbot.checker import is_lk_user, not_safe_mode, is_test_mode, is_chat_switch_on
 
@@ -44,11 +45,10 @@ async def _(event: GroupMessageEvent, args: Message = CommandArg()):
         except Exception as e:
             log.warning(e)
             await talk_with_pet.finish("很可惜，宠物不理你了")
-            return
         log.info(response)
         response = f"{pet_manager.datas[user_id].name}:\n{response}"
         if len(response) > 100:
-            await talk_with_pet.finish(MessageSegment.image(await md_to_pic(response)))
+            await talk_with_pet.finish(img_msg(await md_to_pic(response)))
         await talk_with_pet.finish(response)
 
 
@@ -135,8 +135,8 @@ async def _(event: Event, matcher: Matcher, args: Message = CommandArg()):
     user_id = event.get_user_id()
     if user_id not in pet_manager.datas:
         await change_pet_name_cmd.finish("还没有领养宠物哟")
-    name = args.extract_plain_text().replace('\'', '')
-    if name:
+    inst = args.extract_plain_text().replace('\'', '')
+    if inst:
         matcher.set_arg("pet_inst", args)
 
 

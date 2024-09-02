@@ -1,15 +1,16 @@
 import re
 
-from nonebot.adapters.onebot.v11 import GroupMessageEvent, MessageSegment, Message
+from nonebot.adapters.onebot.v11 import GroupMessageEvent, Message
 from nonebot.params import CommandArg
 
 from ATRI.service import Service
+from ATRI.message import img_msg
 from ATRI.system.lkbot.checker import is_lk_user
 from ATRI.system.lkbot.util import lk_util
 
 from .data_source import farm_system
 
-plugin = Service("lk农场").document("l_o_o_k的农场插件v0.0.5-fix1").type(Service.ServiceType.LKPLUGIN).main_cmd("/farm")
+plugin = Service("lk农场").document("l_o_o_k的农场插件v0.1.0").type(Service.ServiceType.LKPLUGIN).main_cmd("/farm")
 
 my_farm = plugin.on_command("我的农场", "查看自己的农场")
 
@@ -17,10 +18,10 @@ my_farm = plugin.on_command("我的农场", "查看自己的农场")
 @my_farm.handle()
 async def _(event: GroupMessageEvent):
     await farm_system.check_user(my_farm, event)
-    await my_farm.finish(MessageSegment.image(await farm_system.farm_info(event.user_id)))
+    await my_farm.finish(img_msg(await farm_system.farm_info(event.user_id)))
 
 
-seeding = plugin.on_command("/播种", "在田上播种")
+seeding = plugin.on_command("/播种", "在田上播种\n使用方法:/播种 要选择的所有位置 种子名称")
 
 
 @seeding.handle()
@@ -45,7 +46,7 @@ async def _(event: GroupMessageEvent, arg: Message = CommandArg()):
     await seeding.finish("未识别出有效位置")
 
 
-hoeing = plugin.on_command("/锄地", "为田锄地")
+hoeing = plugin.on_command("/锄地", "为田锄地\n使用方法:/锄地 要选择的所有位置")
 
 
 @hoeing.handle()
@@ -65,7 +66,7 @@ async def _(event: GroupMessageEvent, arg: Message = CommandArg()):
     await hoeing.finish("未识别出有效位置")
 
 
-watering = plugin.on_command("/浇水", "为田浇水")
+watering = plugin.on_command("/浇水", "为田浇水\n使用方法:/浇水 要选择的所有位置")
 
 
 @watering.handle()
@@ -85,7 +86,7 @@ async def _(event: GroupMessageEvent, arg: Message = CommandArg()):
     await watering.finish("未识别出有效位置")
 
 
-harvesting = plugin.on_command("/收获", "收获作物")
+harvesting = plugin.on_command("/收获", "收获作物\n使用方法:/收获 要选择的所有位置")
 
 
 @harvesting.handle()

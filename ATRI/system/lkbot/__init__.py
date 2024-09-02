@@ -3,8 +3,8 @@ from random import choice
 
 from nonebot.adapters.onebot.v11 import Bot
 from nonebot.adapters.onebot.v11.event import GroupMessageEvent, Event
-from nonebot.adapters.onebot.v11.helpers import Cooldown, CooldownIsolateLevel
-from nonebot.adapters.onebot.v11.message import Message, MessageSegment
+from nonebot.adapters.onebot.v11.helpers import Cooldown
+from nonebot.adapters.onebot.v11.message import Message
 from nonebot.exception import FinishedException
 from nonebot.matcher import Matcher
 from nonebot.params import CommandArg, ArgPlainText
@@ -12,6 +12,8 @@ from nonebot.params import CommandArg, ArgPlainText
 from ATRI.log import log
 from ATRI.permission import ADMIN, MASTER
 from ATRI.service import Service
+from ATRI.message import img_msg, MessageBuilder
+from ATRI.system.htmlrender import md_to_pic
 
 from .checker import is_lk_user
 from .config import config
@@ -29,7 +31,7 @@ _lmt_notice = ["慢...慢一..点❤", "冷静1下", "歇会歇会~~", "呜呜..
 sign_in = plugin.on_command(cmd='签到', docs="全新界面的签到系统")
 
 
-@sign_in.handle([Cooldown(60, prompt=choice(_lmt_notice), isolate_level=CooldownIsolateLevel.GROUP_USER)])
+@sign_in.handle([Cooldown(60, prompt=choice(_lmt_notice))])
 async def _(event: Event):
     await is_lk_user(sign_in, event)
     r18_mode = not lk_util.is_safe_mode_group(event.group_id) if type(event) is GroupMessageEvent else True
@@ -46,8 +48,8 @@ async def _(event: Event):
         if os.path.exists(path):
             os.remove(path)
         log.warning(f"{e}:{e.args}")
-        message = Message().append(MessageSegment.at(user_id))
-        message.append(f'签到成功,你已签到{users.get_user_data(user_id).signdays}天')
+        message = MessageBuilder().at(user_id)
+        message.text(f'签到成功,你已签到{users.get_user_data(user_id).signdays}天')
         await sign_in.finish(message)
 
 
@@ -178,7 +180,7 @@ async def _():
 goods_list = plugin.on_command(cmd="商品列表", docs="列出指定商店的商品列表")
 
 
-@goods_list.handle()
+@goods_list.handle([Cooldown(5, prompt=choice(_lmt_notice))])
 async def _(matcher: Matcher, args: Message = CommandArg()):
     if args.extract_plain_text():
         matcher.set_arg("shop_name", args)
@@ -191,21 +193,23 @@ async def _(shop_name=ArgPlainText("shop_name")):
         shop = shops.get_shop_by_name(shop_name)
         item_list = shop.get_goods_list()
         num = len(item_list)
-        resp = f"{shop.get_shop_name()}-商品列表:\n{shop.get_shop_info()}\n{'-' * 20}\n商品名称-货币:价格-限制\n"
+        resp = f"# {shop.get_shop_name()}-商品列表:\n{shop.get_shop_info()}\n\n|编号|商品名称|货币|价格|限制|\n|:-:|:-:|:-:|:-:|:-:|\n"
         i = 0
         j = 1
         for item_name in item_list:
             if i == j * 20:
-                await my_backpack.send(resp + f"{'-' * 20}\n页数:{j} 商品总数:{i}/{num}")
-                resp = ''
+                resp += f"\n> 页数:{j} 商品总数:{i}/{num}"
+                await my_backpack.send(img_msg(await md_to_pic(resp)))
+                resp = '|编号|商品名称|货币|价格|限制|\n|:-:|:-:|:-:|:-:|:-:|\n'
                 j += 1
             i += 1
             index = shop.get_goods_index(item_name)
             limit = str(shop.get_goods_limit_by_index(index))
             if limit == '0':
                 limit = "无限制"
-            resp += f'{i}.{item_name} {shop.get_goods_coin_type_by_index(index)}:{shop.get_goods_price_by_index(index)} {limit}\n'
-        await my_backpack.send(resp + f"{'-' * 20}\n页数:{j} 商品总数:{i}/{num}")
+            resp += f'|{i}|{item_name}|{shop.get_goods_coin_type_by_index(index)}|{shop.get_goods_price_by_index(index)}|{limit}|\n'
+        resp += f"\n> 页数:{j} 商品总数:{i}/{num}"
+        await my_backpack.send(img_msg(await md_to_pic(resp)))
     else:
         await goods_list.finish(f"找不到商店名 {shop_name}")
 

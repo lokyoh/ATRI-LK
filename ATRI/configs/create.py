@@ -48,6 +48,28 @@ def init_config(conf_path: Path, default_conf_path: Path):
     console.success("Bot 主体配置完成\n")
 
     console.info("[b]Bot 插件设置[/b]\n", style="white")
+
+    browser = console.input(
+        "浏览器内核 (默认: [green]chromium[/green], 可选: [green]firefox[/green])",
+        "chromium",
+        str,
+    )
+    download_host = console.input(
+        "下载 playwright 的代理地址 (如无请 Enter 以跳过)",
+        str(),
+        str,
+    )
+    proxy_host = console.input(
+        "浏览器自定代理地址 (如无请 Enter 以跳过)",
+        str(),
+        str,
+    )
+    browser_channel = console.input(
+        "浏览器实现途径，手动填写可以直接使用系统自带浏览器而不用重新下载 chromium (系统无浏览器请 Enter 以跳过, 可选: [green]chrome, chrome-beta, chrome-dev, chrome-canary, msedge, msedge-beta, msedge-dev, msedge-canary[/green])",
+        str(),
+        str,
+    )
+
     saucenao_key = console.input(
         "SauceNAO 搜图密钥, 如不填写将无法启用[b]以图搜图[/b], 前往官网以获取: https://saucenao.com/ (默认: 空)",
         str(),
@@ -62,6 +84,11 @@ def init_config(conf_path: Path, default_conf_path: Path):
     raw_conf = raw_conf.replace("{superusers}", str(superusers.split(",")))
     raw_conf = raw_conf.replace("{access_token}", access_token)
     raw_conf = raw_conf.replace("{proxy}", proxy)
+
+    raw_conf = raw_conf.replace("{browser}", browser)
+    raw_conf = raw_conf.replace("{download_host}", download_host)
+    raw_conf = raw_conf.replace("{proxy_host}", proxy_host)
+    raw_conf = raw_conf.replace("{browser_channel}", browser_channel)
 
     raw_conf = raw_conf.replace("{saucenao_key}", saucenao_key)
 

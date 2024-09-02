@@ -1,5 +1,6 @@
 from threading import Lock
 
+from ATRI.utils.sqlite import encode, decode
 from ATRI.system.lkbot.data.user import Users, users, lk_db
 
 from .pet_chat import PetModel
@@ -42,7 +43,7 @@ LOVE        INT DEFAULT 0
         for row in content:
             user_id = str(row[0])
             self.datas[user_id] = PetData(row, 0)
-            self.convos[user_id] = PetModel(users.get_user_name(user_id), row[1], row[2])
+            self.convos[user_id] = PetModel(users.get_user_name(user_id), row[1], decode(row[2]))
             self.lock[user_id] = Lock()
             users.petname_set(user_id, row[1])
 
@@ -52,7 +53,7 @@ LOVE        INT DEFAULT 0
         self.datas[user_id] = PetData([user_id, name, instruction], 1)
         self.convos[user_id] = PetModel(users.get_user_name(user_id), name, instruction)
         users.petname_set(user_id, name)
-        self.sql.insert('ID, NAME, INSTRUCTION', f"{user_id}, '{name}', '{instruction}'")
+        self.sql.insert('ID, NAME, INSTRUCTION', f"{user_id}, '{name}', '{encode(instruction)}'")
         self.lock[user_id].release()
 
     def change_pet_name(self, user_id, pet_name):
@@ -67,7 +68,7 @@ LOVE        INT DEFAULT 0
         self.lock[user_id].acquire()
         self.datas[user_id].instruction = inst
         self.convos[user_id].change_instruction(inst)
-        self.sql.update(f"INSTRUCTION = '{inst}'", f"ID={user_id}")
+        self.sql.update(f"INSTRUCTION = '{encode(inst)}'", f"ID={user_id}")
         self.lock[user_id].release()
 
 

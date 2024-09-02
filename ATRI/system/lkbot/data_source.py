@@ -3,10 +3,9 @@ from datetime import datetime, date
 from io import BytesIO
 from PIL import Image
 
-from nonebot.adapters.onebot.v11 import MessageSegment, Message
-
 from ATRI import __version__
 from ATRI.log import log
+from ATRI.message import MessageBuilder
 from ATRI.utils.curve import IntToBoolRandom
 from ATRI.utils.img_editor import get_image_bytes, IMGEditor
 
@@ -30,16 +29,16 @@ class LKBot:
 
     @staticmethod
     async def sign_in(user_id, r18_mode):
-        message = Message().append(MessageSegment.at(user_id))
+        message = MessageBuilder().at(user_id)
         sign_result = users.sign(user_id)
         if sign_result:
             msg = sign_in_event.notify(user_id)
-            message.append(msg)
+            message.text(msg)
         else:
-            message.append("\n今日已签到")
+            message.text("今日已签到")
         img_path = await get_pic(user_id, r18_mode=r18_mode)
         log.info(f'{user_id}签到 r18:{r18_mode}')
-        message.append(MessageSegment.image(get_image_bytes(img_path)))
+        message.image(get_image_bytes(img_path))
         return message
 
     @staticmethod

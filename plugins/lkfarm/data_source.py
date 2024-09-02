@@ -31,7 +31,7 @@ def _():
                 seed_shop.add_goods(name if crop_data.crop_is_seed() else f"{name}种子",
                                     crop_data.get_seed_price())
         seed_shop.set_shop_info(
-            f"这是亚托莉小店售卖种子的地方,现在正在出售{Month(month).to_season().value}的种子,快来看看吧。")
+            f"这是亚托莉小店售卖种子的地方,现在正在出售`{Month(month).to_season().value}`的种子,快来看看吧。")
         log.success(f"种子商店更新完成，共{len(seed_shop.get_goods_list())}种子上架")
 
 

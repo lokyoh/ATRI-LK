@@ -37,3 +37,11 @@ class MessageBuilder(Message):
 
     def done(self) -> str:
         return str().join(map(str, self))
+
+
+def img_msg(file: str | bytes | BytesIO | Path) -> MessageSegment:
+    return MessageSegment.image(file)
+
+
+def rec_msg(file: str | bytes | BytesIO | Path) -> MessageSegment:
+    return MessageSegment.record(file)

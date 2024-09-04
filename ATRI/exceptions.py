@@ -111,22 +111,23 @@ async def _(bot: Bot, event, matcher: Matcher, exception: Optional[Exception]):
     if not exception:
         return
 
-    try:
-        prompt = exception.__class__.__name__
-        track_id = _save_error(prompt, format_exc())
-        log.warning(f"Ignore Exception: {prompt}")
-    except BaseBotException as err:
-        prompt = err.prompt or err.__class__.__name__
+    if isinstance(exception, BaseBotException):
+        exception: BaseBotException
+        prompt = "机器人基本错误 " + exception.prompt or exception.__class__.__name__
         track_id = _save_error(prompt, format_exc())
         log.warning(f"BotException: {prompt}")
-    except ActionFailed as err:
-        prompt = "请参考协议端输出"
+    elif isinstance(exception, ActionFailed):
+        prompt = "发送错误 请参考协议端输出"
         track_id = _save_error(prompt, format_exc())
         log.warning(f"ActionFailed: {prompt}")
-    except Exception as err:
-        prompt = "UnkErr " + err.__class__.__name__
+    elif isinstance(exception, exception is Exception):
+        prompt = "其他错误 " + exception.__class__.__name__
         track_id = _save_error(prompt, format_exc())
         log.warning(f"Exception: {prompt}")
+    else:
+        prompt = "未知错误 " + exception.__class__.__name__
+        track_id = _save_error(prompt, format_exc())
+        log.warning(f"Ignore Exception: {prompt}")
 
     log.error(f"Error Track ID: {track_id}")
 

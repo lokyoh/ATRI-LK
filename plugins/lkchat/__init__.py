@@ -118,7 +118,7 @@ async def _(event: GroupMessageEvent, matcher: Matcher):
             return
         text = lk_util.get_trans_text(event.get_message())
         if text == "":
-            await on_talk.send(Helper.service_list())
+            await on_talk.send(Helper.get_service_list())
             return
         sender_id = event.get_user_id()
         if not lk_util.is_valid_user(sender_id):

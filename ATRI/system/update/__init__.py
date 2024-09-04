@@ -2,7 +2,7 @@ from ATRI.service import Service
 
 from .data_source import Updater
 
-plugin = Service("更新").document("ATRI-LK的更新服务v0.1.1").type(Service.ServiceType.ADMIN).only_admin(True)
+plugin = Service("更新").document("ATRI-LK的更新服务").type(Service.ServiceType.ADMIN).only_admin(True).version("0.1.1")
 
 check_update = plugin.on_command(cmd="检查更新", docs="检查最新版本")
 

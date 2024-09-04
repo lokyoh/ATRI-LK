@@ -3,4 +3,6 @@
 /.env.prod
 /data/
 /tests/
+/ATRI-LK-plugin/
 /plugins/
+!/plugins/rss/

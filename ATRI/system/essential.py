@@ -18,7 +18,7 @@ __TEMP_DIR = Path(".") / "data" / "temp"
 __ESSENTIAL_DIR.mkdir(parents=True, exist_ok=True)
 __TEMP_DIR.mkdir(parents=True, exist_ok=True)
 
-plugin = Service("基础部件").document("对基础请求进行处理").type(Service.ServiceType.HIDDEN)
+plugin = Service("基础部件").document("对基础请求进行处理").type(Service.ServiceType.HIDDEN).version("1.0.0")
 
 group_member_event = plugin.on_notice("群成员变动", "群成员变动检测")
 

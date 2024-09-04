@@ -66,7 +66,7 @@ def handle_command(
 
 
 plugin = Service("管理").document("控制 ATRI 的各项服务").type(Service.ServiceType.ADMIN).only_admin(True).permission(
-    MASTER)
+    MASTER).version("1.0.0")
 
 block_user = plugin.on_command("封禁用户", "阻止目标用户使用 ATRI")
 handle_command(block_user, BotManager().block_user, "用户 {} 危！")

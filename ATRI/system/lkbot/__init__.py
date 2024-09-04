@@ -23,8 +23,8 @@ from .data.item import items, ItemStack
 from .data.shop import shops
 from .data.user import users
 
-plugin = Service("lk插件").document(f"l_o_o_k的综合性插件v{PLUGIN_VERSION}").type(
-    Service.ServiceType.LKPLUGIN).main_cmd("/lk")
+plugin = Service("lk插件").document(f"l_o_o_k的综合性插件").type(
+    Service.ServiceType.LKPLUGIN).version(PLUGIN_VERSION).main_cmd("/lk")
 
 _lmt_notice = ["慢...慢一..点❤", "冷静1下", "歇会歇会~~", "呜呜...别急", "太快了...受不了", "不要这么快呀"]
 

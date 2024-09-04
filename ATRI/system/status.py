@@ -15,7 +15,7 @@ from ATRI.utils import Limiter
 from ATRI.utils.apscheduler import scheduler
 from ATRI.utils.img_editor import IMGEditor
 
-plugin = Service("状态").document("检查 ATRI 状态").type(Service.ServiceType.SYSTEM)
+plugin = Service("状态").document("检查 ATRI 状态").type(Service.ServiceType.SYSTEM).version("1.0.0")
 
 ping = plugin.on_command("/ping", "检测 ATRI 是否存活")
 

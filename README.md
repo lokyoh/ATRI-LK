@@ -25,7 +25,31 @@
 
 ## 📱 功能概览 | Services Overview
 
-ATRI原有的功能(划线表示可能无法使用):
+<details markdown='1'><summary>系统插件:</summary>
+
+- 帮助
+- 管理
+- 基础
+- 状态
+- 反馈
+- 广播
+- 更新
+- ~~webapi~~
+- <details markdown='1'><summary>LKBOT插件(LK插件)</summary>
+
+  - [x] LK插件专属的用户系统Part.1
+  - [x] 签到系统
+  - [x] 物品商店系统Part.1
+  - [x] 健康模式
+  - [x] 尝鲜模式
+
+</details>
+
+</details>
+
+请在[ATRI-LK-plugin](https://github.com/lokyoh/ATRI-LK-plugin)处下载额外插件:
+
+原ATRI插件:
 
 <details markdown='1'><summary>涩涩</summary>
 
@@ -52,18 +76,13 @@ ATRI原有的功能(划线表示可能无法使用):
 - 状态查看
 - RSS订阅
 
-LK版新加的功能
+LK版新加的插件:
 
-<details markdown='1'><summary>LKBOT插件(LK插件)</summary>
+<details markdown='1'><summary>LK插件附属</summary>
 
 > 勾上的即已大致完成，但仍需优化。未被勾选的是暂时未完成但已经加入。计划中表示最近会进行开发。划线的暂时不进行更新。
 
-- [ ] lk插件主体
-  - [x] LK插件专属的用户系统Part.1
-  - [x] 签到系统
-  - [x] 物品商店系统Part.1
-  - [x] 健康模式
-  - [x] 尝鲜模式
+
 - [x] lk功能
   - [x] AI聊天
   - [x] 图聊
@@ -97,7 +116,7 @@ LK版新加的功能
 
 </details>
 
-更多资源文件请下载`release`中`YHN-LK0-004`版本附带的`res.zip`文件
+更多资源文件请下载`release`中`YHN-LK0-004`版本附带的[`res.zip`](https://github.com/lokyoh/ATRI-LK/releases/download/YHN-LK0-004/res.zip)文件
 
 ## 🚀 开始部署 | Getting Started
 

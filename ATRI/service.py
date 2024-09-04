@@ -59,6 +59,7 @@ class Service:
     {
         "service": "Service name",
         "docs": "Main helps and commands",
+        "version": ""
         "type": "",
         "permission": ["Master", ...],
         "cmd_list": {
@@ -91,6 +92,7 @@ class Service:
             self,
             service: str,
             docs: str = "无介绍",
+            version:str = str(),
             type: ServiceType = ServiceType.OTHER,
             permission: None | Permission = None,
             only_master: bool = False,
@@ -108,6 +110,7 @@ class Service:
             raise ServiceRegisterError("服务重复注册或服务名违规")
         self.service = service
         self._docs = docs
+        self._version = version
         self._type = type
         self._permission = permission
         self._only_master = only_master
@@ -120,23 +123,34 @@ class Service:
         self._state = None
         self._path = Path(".") / "data" / "plugins" / self.service
         self.__generate_service_conf()
+        if version:
+            path = SERVICES_DIR / f"{self.service}.json"
+            if path.is_file():
+                data = json.loads(path.read_bytes())
+                if self._version != data.get("version", "none"):
+                    os.remove(path)
+                    log.info(f"{self.service}信息已更新")
         service_list.append(service)
 
     def document(self, context: str) -> "Service":
         """为服务添加说明"""
-
         self._docs = context
-        path = SERVICES_DIR / f"{self.service}.json"
-        if path.is_file():
-            data = json.loads(path.read_bytes())
-            if self._docs != data.get("docs", "无介绍"):
-                os.remove(path)
-                log.info(f"{self.service}信息已更新")
         return self
 
     def type(self, _type: ServiceType) -> "Service":
         """为服务添加类型"""
         self._type = _type
+        return self
+
+    def version(self, version: str) -> "Service":
+        """设置服务版本号"""
+        self._version = version
+        path = SERVICES_DIR / f"{self.service}.json"
+        if path.is_file():
+            data = json.loads(path.read_bytes())
+            if self._version != data.get("version", "none"):
+                os.remove(path)
+                log.info(f"{self.service}信息已更新")
         return self
 
     def only_admin(self, _is: bool) -> "Service":
@@ -220,12 +234,13 @@ class Service:
         except Exception:
             raise WriteFileError("Write service config failed")
 
-    def __generate_service_config(self, service: str, docs: str = str(),
+    def __generate_service_config(self, service: str, docs: str = str(), version: str = str(),
                                   _type: ServiceType = ServiceType.OTHER) -> None:
         path = SERVICES_DIR / f"{service}.json"
         data = ServiceInfo(
             service=service,
             docs=docs,
+            version=version,
             type=_type.value,
             permission=list(),
             cmd_list=dict(),
@@ -242,7 +257,7 @@ class Service:
 
         path = SERVICES_DIR / f"{service}.json"
         if not path.is_file():
-            self.__generate_service_config(service, self._docs, self._type)
+            self.__generate_service_config(service, self._docs, self._version, self._type)
 
         with open(path, "w", encoding="utf-8") as w:
             w.write(json.dumps(service_data, indent=4, ensure_ascii=False))
@@ -250,14 +265,14 @@ class Service:
     def load_service(self, service: str) -> dict:
         path = SERVICES_DIR / f"{service}.json"
         if not path.is_file():
-            self.__generate_service_config(service, self._docs, self._type)
+            self.__generate_service_config(service, self._docs, self._version, self._type)
 
         try:
             data = json.loads(path.read_bytes())
         except Exception:
             with open(path, "w", encoding="utf-8") as w:
                 w.write(json.dumps({}))
-            self.__generate_service_config(service, self._docs, self._type)
+            self.__generate_service_config(service, self._docs, self._version, self._type)
             data = json.loads(path.read_bytes())
         return data
 
@@ -270,8 +285,7 @@ class Service:
     def __load_cmds(self) -> dict:
         path = SERVICES_DIR / f"{self.service}.json"
         if not path.is_file():
-            self.__generate_service_config(self.service, self._docs, self._type)
-
+            self.__generate_service_config(self.service, self._docs, self._version, self._type)
         data = json.loads(path.read_bytes())
         return data["cmd_list"]
 

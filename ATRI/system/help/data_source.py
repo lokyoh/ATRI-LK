@@ -5,7 +5,7 @@ from PIL import Image
 
 from nonebot.adapters.onebot.v11 import MessageSegment
 
-from ATRI import __version__, conf, IMG_DIR
+from ATRI import __version__, conf, IMG_DIR, service_list
 from ATRI.message import MessageBuilder
 from ATRI.service import SERVICES_DIR, ServiceTools, Service
 from ATRI.utils.img_editor import IMGEditor
@@ -56,14 +56,12 @@ class Helper:
         )
 
     @staticmethod
-    def service_list() -> MessageSegment:
-        files = os.listdir(SERVICES_DIR)
+    def get_service_list() -> MessageSegment:
         services: Dict[Service.ServiceType, list] = dict()
         for _type in Service.ServiceType:
             services[_type] = list()
-        for f in files:
-            prefix = f.replace(".json", "")
-            f = os.path.join(SERVICES_DIR, f)
+        for prefix in service_list:
+            f = os.path.join(SERVICES_DIR, f"{prefix}.json")
             with open(f, "r", encoding="utf-8") as r:
                 service = json.load(r)
                 if not ServiceTools(prefix).load_service_config().enabled:
@@ -74,7 +72,7 @@ class Helper:
                     continue
                 _type = Service.ServiceType(service["type"])
                 services[_type].append(prefix)
-        n = int((len(files) + len(services)) / 15) + 1
+        n = int((len(service_list) + len(services)) / 15) + 1
         top = 50
         border = 5
         width = 320
@@ -89,6 +87,8 @@ class Helper:
         i = 0
         for _type in Service.ServiceType:
             if _type == Service.ServiceType.HIDDEN:
+                continue
+            if len(services[_type]) == 0:
                 continue
             if line + len(services[_type]) + 1 > 30:
                 max_count = max(max_count, count)

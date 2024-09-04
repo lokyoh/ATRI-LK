@@ -1,3 +1,6 @@
+from datetime import datetime, timezone
+import pytz
+
 from ATRI.log import log
 
 from . import request
@@ -35,6 +38,10 @@ class CheckUpdate:
         c_msg = c_info["message"]
         c_sha = commit_data["sha"][0:5]
         c_time = c_info["author"]["date"]
+        c_time = c_time.replace('Z', '')
+        utc_datetime = datetime.fromisoformat(c_time).replace(tzinfo=timezone.utc)
+        shanghai_datetime = utc_datetime.astimezone(pytz.timezone("Asia/Shanghai"))
+        c_time = shanghai_datetime.strftime("%Y-%m-%d %H:%M")
 
         return f"Latest commit {c_msg} | sha: {c_sha} | time: {c_time}"
 

@@ -19,8 +19,9 @@ from nonebot.rule import Rule, command, keyword, regex
 from nonebot.adapters import Bot, Event
 from nonebot.adapters.onebot.v11 import Message, PrivateMessageEvent, GroupMessageEvent
 
+from ATRI import service_list
 from ATRI.permission import MASTER, Permission, MASTER_LIST
-from ATRI.exceptions import ReadFileError, WriteFileError
+from ATRI.exceptions import ReadFileError, WriteFileError, ServiceNotFoundError, ServiceRegisterError
 from ATRI.utils.model import BaseModel
 from ATRI.log import log
 
@@ -86,26 +87,40 @@ class Service:
         CLOSED = "已关闭的服务"
         HIDDEN = "隐藏服务"
 
-    def __init__(self, service: str):
+    def __init__(
+            self,
+            service: str,
+            docs: str = "无介绍",
+            type: ServiceType = ServiceType.OTHER,
+            permission: None | Permission = None,
+            only_master: bool = False,
+            priority: int = 10,
+            main_cmd: tuple[str] = (str(),),
+            temp: bool = False
+    ):
         """初始化一个服务"""
 
         super().__init__()
         if not service:
             return
 
+        if service in service_list or service == "master":
+            raise ServiceRegisterError("服务重复注册或服务名违规")
         self.service = service
-        self._only_master = False
+        self._docs = docs
+        self._type = type
+        self._permission = permission
+        self._only_master = only_master
+        self._priority = priority
+        self._main_cmd = main_cmd
+        self._temp = temp
+
         self._rule = is_in_service(service)
-        self._permission = None
         self._handlers = None
-        self._temp = False
-        self._priority = 10
         self._state = None
-        self._main_cmd = (str(),)
-        self._docs = "无介绍"
-        self._type = Service.ServiceType.OTHER
         self._path = Path(".") / "data" / "plugins" / self.service
         self.__generate_service_conf()
+        service_list.append(service)
 
     def document(self, context: str) -> "Service":
         """为服务添加说明"""
@@ -426,6 +441,8 @@ class ServiceTools:
     """针对服务的工具类"""
 
     def __init__(self, service: str):
+        if not service in service_list:
+            raise ServiceNotFoundError("找不到指定服务")
         self.service = service
 
     def save_service(self, service_data: ServiceInfo):

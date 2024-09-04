@@ -22,7 +22,7 @@ from ATRI.system.help.data_source import Helper
 from ATRI.system.lkbot.checker import is_lk_user, is_chat_switch_on
 from ATRI.system.lkbot.tools.rec_editor import RECEditor
 from ATRI.permission import ADMIN
-from message import rec_msg, img_msg
+from ATRI.message import rec_msg, img_msg
 
 from .ai_chat import ai_chat, chat_clear
 from .img_chat import get_response

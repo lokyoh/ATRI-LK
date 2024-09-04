@@ -29,7 +29,7 @@ service_list = plugin.on_command("/服务列表", "获取服务列表", aliases=
 
 @service_list.handle()
 async def _():
-    await service_list.finish(Helper().service_list())
+    await service_list.finish(Helper().get_service_list())
 
 
 service_info = plugin.on_command("/帮助", "获取对应服务详细信息", aliases={"/help"})
@@ -42,7 +42,7 @@ async def _ready_service_info(event: MessageEvent):
     try:
         service = msg[1]
     except Exception:
-        service = "idk"
+        service = "master"
 
     try:
         cmd = msg[2]

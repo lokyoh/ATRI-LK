@@ -11,6 +11,7 @@ __conf_path = Path(".") / "config.yml"
 __conf = Config(__conf_path)
 
 conf = __conf.parse()
+service_list = []
 RES_DIR = Path(".") / "res"
 FONT_DIR = RES_DIR / "font"
 IMG_DIR = RES_DIR / "img"
@@ -34,7 +35,7 @@ def init():
     driver().register_adapter(Adapter)
     nonebot.load_plugins("ATRI/system")
     nonebot.load_plugins("plugins")
-    nonebot.load_plugins("ATRI/plugins/rss")
+    nonebot.load_plugins("plugins/rss")
     sleep(3)
 
 

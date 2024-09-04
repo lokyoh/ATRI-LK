@@ -1,4 +1,6 @@
 import asyncio
+from datetime import datetime, timezone
+import pytz
 
 from ATRI import __version__
 from ATRI.log import log
@@ -33,6 +35,10 @@ class Updater:
         c_info = commit_data["commit"]
         c_msg = c_info["message"]
         c_time = c_info["author"]["date"]
+        c_time = c_time.replace('Z', '')
+        utc_datetime = datetime.fromisoformat(c_time).replace(tzinfo=timezone.utc)
+        shanghai_datetime = utc_datetime.astimezone(pytz.timezone("Asia/Shanghai"))
+        c_time = shanghai_datetime.strftime("%Y-%m-%d %H:%M")
         return f"最新提交: {c_msg}\n提交时间: {c_time}"
 
     @classmethod
@@ -66,13 +72,6 @@ class Updater:
 
     @classmethod
     async def update(cls):
-        l_v, l_v_t = await cls.show_latest_version()
-        if not l_v and not l_v_t:
-            return "检查更新失败"
-        return await cls._update_from_github()
-
-    @staticmethod
-    async def _update_from_github():
         try:
             proc = await asyncio.create_subprocess_exec(
                 "git", "fetch", "--all", "-f", stdout=asyncio.subprocess.PIPE

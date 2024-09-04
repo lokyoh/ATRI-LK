@@ -99,6 +99,10 @@ class RssError(BaseBotException):
     prompt = "RSS订阅错误"
 
 
+class ServiceNotFoundError(BaseBotException):
+    prompt = "找不到指定服务"
+
+
 limiter = Limiter(3, 600)
 
 

@@ -3,3 +3,4 @@
 /.env.prod
 /data/
 /tests/
+/plugins/

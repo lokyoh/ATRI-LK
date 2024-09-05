@@ -71,7 +71,7 @@ class FarmSystem:
 
 > {today_date}
 '''
-    WEATHER = ["晴", "雨", "雪"]
+    WEATHER = ["晴", "雨", "雷雨", "雪"]
 
     @staticmethod
     def is_valid_farm_user(user_id):

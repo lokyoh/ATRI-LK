@@ -8,8 +8,8 @@ from ATRI.message import MessageBuilder
 
 RSS_PLUGIN_DIR = Path(".") / "plugins" / "rss"
 
-rss_helper = Service("rss").document("Rss系插件助手").type(Service.ServiceType.ADMIN).version("1.0.0").only_admin(
-    True).permission(ADMIN)
+rss_helper = Service("rss").document("Rss系插件助手").type(Service.ServiceType.SUBSCRIBE).version("1.0.0").permission(
+    ADMIN)
 
 rss_menu = rss_helper.on_command("/rss", "Rss帮助菜单")
 

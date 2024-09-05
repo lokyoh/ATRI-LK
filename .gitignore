@@ -5,4 +5,7 @@
 /tests/
 /ATRI-LK-plugin/
 /plugins/
-!/plugins/rss/
+!/plugins/rss/__init__.py
+!/plugins/lkchat/
+!/plugins/lkfarm/
+!/plugins/lkpet/

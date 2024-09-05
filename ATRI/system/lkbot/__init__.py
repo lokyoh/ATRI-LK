@@ -290,7 +290,7 @@ async def _(event: Event, name: str = ArgPlainText("bind_id")):
 
 
 plugin_admin = Service("lk群管").document("l_o_o_k的综合性插件的群聊管理员指令部分").type(
-    Service.ServiceType.SYSTEM).main_cmd("/lk")
+    Service.ServiceType.SYSTEM).version(PLUGIN_VERSION).main_cmd("/lk")
 
 user_list = plugin_admin.cmd_as_group(cmd='用户列表', docs='列出本群所有的用户', permission=ADMIN)
 
@@ -368,7 +368,7 @@ async def _(event: GroupMessageEvent):
 
 
 plugin_master = Service("lk主人").document("l_o_o_k的综合性插件的主人专用指令部分").type(
-    Service.ServiceType.ADMIN).main_cmd("/lk")
+    Service.ServiceType.SYSTEM).version(PLUGIN_VERSION).main_cmd("/lk")
 
 force_change_name = plugin_master.cmd_as_group(cmd='强制改名',
                                                docs="用法:/lk.强制改名 @用户 [名称]\n将指定用户名称修改成指定名称",

@@ -67,9 +67,6 @@ class Helper:
                 if not ServiceTools(prefix).load_service_config().enabled:
                     services[Service.ServiceType.CLOSED].append(prefix)
                     continue
-                if service["only_admin"]:
-                    services[Service.ServiceType.ADMIN].append(prefix)
-                    continue
                 _type = Service.ServiceType(service["type"])
                 services[_type].append(prefix)
         n = int((len(service_list) + len(services)) / 15) + 1

@@ -20,7 +20,7 @@ from nonebot.adapters import Bot, Event
 from nonebot.adapters.onebot.v11 import Message, PrivateMessageEvent, GroupMessageEvent
 
 from ATRI import service_list
-from ATRI.permission import MASTER, Permission, MASTER_LIST
+from ATRI.permission import Permission, MASTER_LIST
 from ATRI.exceptions import ReadFileError, WriteFileError, ServiceNotFoundError, ServiceRegisterError
 from ATRI.utils.model import BaseModel
 from ATRI.log import log
@@ -34,10 +34,10 @@ CONFIG_DIR.mkdir(parents=True, exist_ok=True)
 class ServiceInfo(BaseModel):
     service: str
     docs: str
+    version: str
     type: str
     permission: list
     cmd_list: dict
-    only_admin: bool
 
 
 class ServiceConfig(BaseModel):
@@ -84,7 +84,6 @@ class Service:
         GAME = "游戏服务"
         SUBSCRIBE = "订阅服务"
         OTHER = "其他服务"
-        ADMIN = "管理服务"
         CLOSED = "已关闭的服务"
         HIDDEN = "隐藏服务"
 
@@ -92,13 +91,8 @@ class Service:
             self,
             service: str,
             docs: str = "无介绍",
-            version:str = str(),
-            type: ServiceType = ServiceType.OTHER,
-            permission: None | Permission = None,
-            only_master: bool = False,
-            priority: int = 10,
-            main_cmd: tuple[str] = (str(),),
-            temp: bool = False
+            version: str = str(),
+            type: ServiceType = ServiceType.OTHER
     ):
         """初始化一个服务"""
 
@@ -112,12 +106,11 @@ class Service:
         self._docs = docs
         self._version = version
         self._type = type
-        self._permission = permission
-        self._only_master = only_master
-        self._priority = priority
-        self._main_cmd = main_cmd
-        self._temp = temp
 
+        self._permission = None
+        self._priority = 10
+        self._main_cmd = (str(),)
+        self._temp = False
         self._rule = is_in_service(service)
         self._handlers = None
         self._state = None
@@ -151,14 +144,6 @@ class Service:
             if self._version != data.get("version", "none"):
                 os.remove(path)
                 log.info(f"{self.service}信息已更新")
-        return self
-
-    def only_admin(self, _is: bool) -> "Service":
-        """标记服务仅主人可用"""
-
-        self._only_master = _is
-        self._permission = MASTER
-
         return self
 
     def rule(self, rule: Optional[Union[Rule, T_RuleChecker]]) -> "Service":
@@ -244,7 +229,6 @@ class Service:
             type=_type.value,
             permission=list(),
             cmd_list=dict(),
-            only_admin=self._only_master,
         )
         try:
             data.write_into_file(path)

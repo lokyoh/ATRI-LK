@@ -195,7 +195,7 @@ class UserFarmDataManager:
                 self.next_weather = get_weather(_next_day.month, _next_day.day, _today_weather)
                 db.get_exist_table("LKFARM").update(
                     f"DATE = '{date.today()}', WEATHER = {self.weather}, NEXT_WEATHER = {self.next_weather}",
-                    "'rowid' = 1")
+                    f"DATE != '{date.today()}")
                 self._cache_list = LimitedQueue(8)
                 self._farm_cache = {}
 

@@ -2,21 +2,23 @@
 
 ## Coming soon...
 
-- Next: `YHN-LK0-006`
+- Next: `YHN-LK0-007`
 
 ---
 
-## Sep 5,2024
+## Sep 6,2024
 
 > 修改ATRI代码，添加`重启`插件
 
-- 更新版本至: `YHN-LK0-006-PRE2`
+- 更新版本至: `YHN-LK0-006`
 - 新增:
-  - `重启`插件，在linux系统中可能出现问题
+  - `重启`插件,在linux系统中可能出现问题
+  - `插件商店`插件,在此处下载额外的`ATRI`插件
 - 更新:
   - `ATRI`主体代码,`Service`服务变更
+  - `更新`插件
 - 移除:
-  - 移除原项目部分插件
+  - 迁移部分插件至[`ATRI-LK-plugin`](https://github.com/lokyoh/ATRI-LK-plugin)项目中,在插件商店中下载
 
 ---
 

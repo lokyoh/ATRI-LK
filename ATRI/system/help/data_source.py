@@ -5,7 +5,7 @@ from PIL import Image
 
 from nonebot.adapters.onebot.v11 import MessageSegment
 
-from ATRI import __version__, conf, IMG_DIR, service_list
+from ATRI import __version__, conf, IMG_DIR, service_list, __sub_version__
 from ATRI.message import MessageBuilder
 from ATRI.service import SERVICES_DIR, ServiceTools, Service
 from ATRI.utils.img_editor import IMGEditor
@@ -48,7 +48,7 @@ class Helper:
         return (
             MessageBuilder("吾乃 ATRI-LK版！")
             .text(f"可以称呼：{nickname}")
-            .text(f"型号是：{__version__}")
+            .text(f"型号是：{__version__} {__sub_version__}")
             .text("想进一步了解:")
             .text("项目地址:https://github.com/lokyoh/ATRI-LK")
             .text("原项目地址:https://github.com/Kyomotoi/ATRI")

@@ -65,8 +65,8 @@ def handle_command(
             await plugin.send(fail_msg.format(target, error_msg))
 
 
-plugin = Service("管理").document("控制 ATRI 的各项服务").type(Service.ServiceType.ADMIN).only_admin(True).permission(
-    MASTER)
+plugin = Service("管理").document("控制 ATRI 的各项服务").type(Service.ServiceType.SYSTEM).permission(MASTER).version(
+    "1.0.0")
 
 block_user = plugin.on_command("封禁用户", "阻止目标用户使用 ATRI")
 handle_command(block_user, BotManager().block_user, "用户 {} 危！")
@@ -258,7 +258,7 @@ async def _recall_msg(bot: Bot, event: MessageEvent):
     await bot.delete_msg(message_id=recall_id)
 
 
-add_nonebot_plugin = plugin.on_command("添加插件", "添加来自 NoneBot 商店的插件")
+add_nonebot_plugin = plugin.on_command("添加nb插件", "添加来自 NoneBot 商店的插件")
 
 
 @add_nonebot_plugin.got("plugin_name", "插件名呢?")
@@ -295,7 +295,7 @@ async def _(
 
 
 remove_nonebot_plugin = plugin.on_command(
-    "移除插件", "移除来自 NoneBot 商店的插件", aliases={"删除插件", "卸载插件"}
+    "移除nb插件", "移除来自 NoneBot 商店的插件", aliases={"删除插件", "卸载插件"}
 )
 
 
@@ -313,7 +313,7 @@ async def _(
 
 
 upgrade_nonebot_plugin = plugin.on_command(
-    "更新插件", "更新来自 NoneBot 商店的插件", aliases={"升级插件"}
+    "更新nb插件", "更新来自 NoneBot 商店的插件", aliases={"升级插件"}
 )
 
 

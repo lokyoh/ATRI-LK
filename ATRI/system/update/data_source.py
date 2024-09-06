@@ -1,8 +1,9 @@
 import asyncio
+import re
 from datetime import datetime, timezone
 import pytz
 
-from ATRI import __version__
+from ATRI import __version__, __sub_version__
 from ATRI.log import log
 from ATRI.utils import request
 from ATRI.message import MessageBuilder
@@ -23,15 +24,15 @@ class Updater:
         return req.json()
 
     @classmethod
-    async def show_latest_commit_info(cls) -> str:
+    async def show_latest_commit_info(cls) -> tuple | None:
         try:
             data = await cls._get_commits_info()
         except Exception:
-            return str()
+            return None
         try:
             commit_data: dict = data[0]
         except Exception:
-            return str()
+            return None
         c_info = commit_data["commit"]
         c_msg = c_info["message"]
         c_time = c_info["author"]["date"]
@@ -39,7 +40,15 @@ class Updater:
         utc_datetime = datetime.fromisoformat(c_time).replace(tzinfo=timezone.utc)
         shanghai_datetime = utc_datetime.astimezone(pytz.timezone("Asia/Shanghai"))
         c_time = shanghai_datetime.strftime("%Y-%m-%d %H:%M")
-        return f"最新提交: {c_msg}\n提交时间: {c_time}"
+        try:
+            r = re.match(r"(YHN-LK.-...) (.*?):", c_msg)
+            version = r[1]
+            sub_version = r[2]
+            if __sub_version__ != version:
+                return [version, sub_version], f"提交信息: {c_msg}\n提交时间: {c_time}"
+        except Exception:
+            pass
+        return None, f"提交信息: {c_msg}\n提交时间: {c_time}"
 
     @classmethod
     async def show_latest_version(cls) -> tuple:
@@ -60,15 +69,21 @@ class Updater:
         message = MessageBuilder().text(f"当前版本: {__version__}")
         l_v, l_v_t = await cls.show_latest_version()
         if l_v and l_v_t:
-            if l_v[:11] > __version__[:11] or (l_v[:11] == __version__[:11] and len(__version__) != 11):
+            if l_v[:11] > __version__[:11]:
                 message.text(f"新版本已发布,请更新\n最新版本: {l_v}\n更新时间: {l_v_t}")
             else:
-                message.text(f"最新版本: {__version__}")
+                message.text(f"最新版本: {l_v}")
+                vs, info = await cls.show_latest_commit_info()
+                if info:
+                    if vs and vs[1] != __sub_version__:
+                        message.text(f"请更新{vs[0]}最新补丁: {vs[1]}")
+                        message.text(info)
+                    message.text(info)
+                else:
+                    message.text("检查补丁版本失败")
+            return message
         else:
-            message.text("最新版本获取失败")
-        commit_info = await cls.show_latest_commit_info()
-        message.text(commit_info)
-        return message
+            return message.text("最新版本获取失败")
 
     @classmethod
     async def update(cls):

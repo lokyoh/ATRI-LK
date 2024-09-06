@@ -20,7 +20,7 @@ from nonebot.adapters import Bot, Event
 from nonebot.adapters.onebot.v11 import Message, PrivateMessageEvent, GroupMessageEvent
 
 from ATRI import service_list
-from ATRI.permission import MASTER, Permission, MASTER_LIST
+from ATRI.permission import Permission, MASTER_LIST
 from ATRI.exceptions import ReadFileError, WriteFileError, ServiceNotFoundError, ServiceRegisterError
 from ATRI.utils.model import BaseModel
 from ATRI.log import log
@@ -34,10 +34,10 @@ CONFIG_DIR.mkdir(parents=True, exist_ok=True)
 class ServiceInfo(BaseModel):
     service: str
     docs: str
+    version: str
     type: str
     permission: list
     cmd_list: dict
-    only_admin: bool
 
 
 class ServiceConfig(BaseModel):
@@ -59,6 +59,7 @@ class Service:
     {
         "service": "Service name",
         "docs": "Main helps and commands",
+        "version": ""
         "type": "",
         "permission": ["Master", ...],
         "cmd_list": {
@@ -83,7 +84,6 @@ class Service:
         GAME = "游戏服务"
         SUBSCRIBE = "订阅服务"
         OTHER = "其他服务"
-        ADMIN = "管理服务"
         CLOSED = "已关闭的服务"
         HIDDEN = "隐藏服务"
 
@@ -91,12 +91,8 @@ class Service:
             self,
             service: str,
             docs: str = "无介绍",
-            type: ServiceType = ServiceType.OTHER,
-            permission: None | Permission = None,
-            only_master: bool = False,
-            priority: int = 10,
-            main_cmd: tuple[str] = (str(),),
-            temp: bool = False
+            version: str = str(),
+            type: ServiceType = ServiceType.OTHER
     ):
         """初始化一个服务"""
 
@@ -108,30 +104,30 @@ class Service:
             raise ServiceRegisterError("服务重复注册或服务名违规")
         self.service = service
         self._docs = docs
+        self._version = version
         self._type = type
-        self._permission = permission
-        self._only_master = only_master
-        self._priority = priority
-        self._main_cmd = main_cmd
-        self._temp = temp
 
+        self._permission = None
+        self._priority = 10
+        self._main_cmd = (str(),)
+        self._temp = False
         self._rule = is_in_service(service)
         self._handlers = None
         self._state = None
         self._path = Path(".") / "data" / "plugins" / self.service
         self.__generate_service_conf()
+        if version:
+            path = SERVICES_DIR / f"{self.service}.json"
+            if path.is_file():
+                data = json.loads(path.read_bytes())
+                if self._version != data.get("version", "none"):
+                    os.remove(path)
+                    log.info(f"{self.service}信息已更新")
         service_list.append(service)
 
     def document(self, context: str) -> "Service":
         """为服务添加说明"""
-
         self._docs = context
-        path = SERVICES_DIR / f"{self.service}.json"
-        if path.is_file():
-            data = json.loads(path.read_bytes())
-            if self._docs != data.get("docs", "无介绍"):
-                os.remove(path)
-                log.info(f"{self.service}信息已更新")
         return self
 
     def type(self, _type: ServiceType) -> "Service":
@@ -139,12 +135,15 @@ class Service:
         self._type = _type
         return self
 
-    def only_admin(self, _is: bool) -> "Service":
-        """标记服务仅主人可用"""
-
-        self._only_master = _is
-        self._permission = MASTER
-
+    def version(self, version: str) -> "Service":
+        """设置服务版本号"""
+        self._version = version
+        path = SERVICES_DIR / f"{self.service}.json"
+        if path.is_file():
+            data = json.loads(path.read_bytes())
+            if self._version != data.get("version", "none"):
+                os.remove(path)
+                log.info(f"{self.service}信息已更新")
         return self
 
     def rule(self, rule: Optional[Union[Rule, T_RuleChecker]]) -> "Service":
@@ -220,16 +219,16 @@ class Service:
         except Exception:
             raise WriteFileError("Write service config failed")
 
-    def __generate_service_config(self, service: str, docs: str = str(),
+    def __generate_service_config(self, service: str, docs: str = str(), version: str = str(),
                                   _type: ServiceType = ServiceType.OTHER) -> None:
         path = SERVICES_DIR / f"{service}.json"
         data = ServiceInfo(
             service=service,
             docs=docs,
+            version=version,
             type=_type.value,
             permission=list(),
             cmd_list=dict(),
-            only_admin=self._only_master,
         )
         try:
             data.write_into_file(path)
@@ -242,7 +241,7 @@ class Service:
 
         path = SERVICES_DIR / f"{service}.json"
         if not path.is_file():
-            self.__generate_service_config(service, self._docs, self._type)
+            self.__generate_service_config(service, self._docs, self._version, self._type)
 
         with open(path, "w", encoding="utf-8") as w:
             w.write(json.dumps(service_data, indent=4, ensure_ascii=False))
@@ -250,14 +249,14 @@ class Service:
     def load_service(self, service: str) -> dict:
         path = SERVICES_DIR / f"{service}.json"
         if not path.is_file():
-            self.__generate_service_config(service, self._docs, self._type)
+            self.__generate_service_config(service, self._docs, self._version, self._type)
 
         try:
             data = json.loads(path.read_bytes())
         except Exception:
             with open(path, "w", encoding="utf-8") as w:
                 w.write(json.dumps({}))
-            self.__generate_service_config(service, self._docs, self._type)
+            self.__generate_service_config(service, self._docs, self._version, self._type)
             data = json.loads(path.read_bytes())
         return data
 
@@ -270,8 +269,7 @@ class Service:
     def __load_cmds(self) -> dict:
         path = SERVICES_DIR / f"{self.service}.json"
         if not path.is_file():
-            self.__generate_service_config(self.service, self._docs, self._type)
-
+            self.__generate_service_config(self.service, self._docs, self._version, self._type)
         data = json.loads(path.read_bytes())
         return data["cmd_list"]
 

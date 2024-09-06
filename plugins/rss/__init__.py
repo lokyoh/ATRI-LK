@@ -6,9 +6,10 @@ from ATRI.permission import ADMIN
 from ATRI.service import Service
 from ATRI.message import MessageBuilder
 
-RSS_PLUGIN_DIR = Path(".") / "ATRI" / "plugins" / "rss"
+RSS_PLUGIN_DIR = Path(".") / "plugins" / "rss"
 
-rss_helper = Service("rss").document("Rss系插件助手").type(Service.ServiceType.ADMIN).only_admin(True).permission(ADMIN)
+rss_helper = Service("rss").document("Rss系插件助手").type(Service.ServiceType.SUBSCRIBE).version("1.0.0").permission(
+    ADMIN)
 
 rss_menu = rss_helper.on_command("/rss", "Rss帮助菜单")
 
@@ -21,9 +22,7 @@ async def _rss_menu(event: MessageEvent):
     result = (
         MessageBuilder("Rss Helper:")
         .text(
-            f"可用订阅源: {', '.join(map(str, rss_list)).replace('rss_', str())}".replace(
-                "mikanan", "mikan"
-            )
+            f"可用订阅源: {', '.join(map(str, rss_list)).replace('rss_', str())}"
         )
         .text("详细请: /帮助 rss.(订阅源)")
     )

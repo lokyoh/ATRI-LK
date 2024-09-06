@@ -6,7 +6,7 @@ from ATRI.service import Service
 
 from .data_source import Helper
 
-plugin = Service("帮助").document("ATRI 的食用指南~").type(Service.ServiceType.SYSTEM)
+plugin = Service("帮助").document("ATRI 的食用指南~").type(Service.ServiceType.SYSTEM).version("1.0.0")
 
 menu = plugin.on_command("/菜单", "获取食用bot的方法", aliases={"/menu"})
 

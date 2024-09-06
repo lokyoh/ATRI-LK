@@ -103,6 +103,10 @@ class ServiceNotFoundError(BaseBotException):
     prompt = "找不到指定服务"
 
 
+class PluginError(BaseBotException):
+    prompt = "插件错误"
+
+
 limiter = Limiter(3, 600)
 
 

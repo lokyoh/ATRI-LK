@@ -27,7 +27,8 @@ from ATRI.message import rec_msg, img_msg
 from .ai_chat import ai_chat, chat_clear
 from .img_chat import get_response
 
-plugin = Service("lk聊天").document("lk插件处理聊天的部分v0.1.0").type(Service.ServiceType.LKPLUGIN).main_cmd("chat")
+plugin = Service("lk聊天").document("lk插件处理聊天的部分").type(Service.ServiceType.LKPLUGIN).version(
+    "0.1.0").main_cmd("chat")
 
 _lmt_notice = ["慢...慢一..点❤", "冷静1下", "歇会歇会~~", "呜呜...别急", "太快了...受不了", "不要这么快呀"]
 

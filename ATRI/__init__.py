@@ -6,7 +6,8 @@ from nonebot.adapters.onebot.v11 import Adapter
 
 from .configs import Config
 
-__version__ = "YHN-LK0-005"
+__version__ = "YHN-LK0-006-PRE3"
+__sub_version__ = "RELEASE"
 __conf_path = Path(".") / "config.yml"
 __conf = Config(__conf_path)
 

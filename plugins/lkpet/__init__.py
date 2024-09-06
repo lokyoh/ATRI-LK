@@ -16,8 +16,8 @@ from ATRI.system.lkbot.checker import is_lk_user, not_safe_mode, is_test_mode, i
 from .pet_chat import PetModel
 from .pet_data import PetData, pet_manager
 
-plugin = Service("lk宠物").document("l_o_o_k的赛博宠物插件v0.1.3-fix1").type(Service.ServiceType.LKPLUGIN).main_cmd(
-    "/pet")
+plugin = Service("lk宠物").document("l_o_o_k的赛博宠物插件").type(Service.ServiceType.LKPLUGIN).version(
+    "0.1.3-fix1").main_cmd("/pet")
 
 _lmt_notice = ["慢...慢一..点❤", "冷静1下", "歇会歇会~~", "呜呜...别急", "太快了...受不了", "不要这么快呀"]
 

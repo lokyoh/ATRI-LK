@@ -1,6 +1,7 @@
 import os
 import shutil
 from pathlib import Path
+from pip import main as pipmain
 
 import nonebot
 
@@ -60,10 +61,12 @@ class PluginManager:
                 file_path.parent.mkdir(parents=True, exist_ok=True)
                 with open(file_path, 'w', encoding="utf-8") as f:
                     f.write(data.text)
+                if "requirements.txt" in file_path:
+                    pipmain(["install", "-r", file_path])
             if load:
                 nonebot.load_plugin(path)
         except Exception as e:
-            raise PluginError(f"安装失败:{e}")
+            raise PluginError(f"插件安装失败:{e}")
 
     @classmethod
     async def remove_plugin(cls, plugin_name: str):

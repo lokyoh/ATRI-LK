@@ -11,7 +11,7 @@ from ATRI.system.lkbot.util import lk_util
 from .data_source import farm_system
 
 plugin = Service("lk农场").document("l_o_o_k的农场插件").type(Service.ServiceType.LKPLUGIN).main_cmd("/farm").version(
-    "0.1.0")
+    "0.1.1")
 
 my_farm = plugin.on_command("我的农场", "查看自己的农场")
 

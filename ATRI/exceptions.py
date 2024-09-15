@@ -124,7 +124,7 @@ async def _(bot: Bot, event, matcher: Matcher, exception: Optional[Exception]):
         prompt = "发送错误 请参考协议端输出"
         track_id = _save_error(prompt, format_exc())
         log.warning(f"ActionFailed: {prompt}")
-    elif isinstance(exception, exception is Exception):
+    elif isinstance(exception, Exception):
         prompt = "其他错误 " + exception.__class__.__name__
         track_id = _save_error(prompt, format_exc())
         log.warning(f"Exception: {prompt}")

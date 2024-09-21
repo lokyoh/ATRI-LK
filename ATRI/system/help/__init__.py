@@ -1,7 +1,5 @@
-from nonebot import on_message
-from nonebot.adapters.onebot.v11 import MessageEvent, GroupMessageEvent
+from nonebot.adapters.onebot.v11 import MessageEvent, ActionFailed
 
-from ATRI.rule import to_bot
 from ATRI.service import Service
 
 from .data_source import Helper
@@ -29,7 +27,10 @@ service_list = plugin.on_command("/服务列表", "获取服务列表", aliases=
 
 @service_list.handle()
 async def _():
-    await service_list.finish(Helper().get_service_list())
+    try:
+        await service_list.finish(Helper().get_service_list())
+    except ActionFailed:
+        await service_list.finish(Helper().get_text_list())
 
 
 service_info = plugin.on_command("/帮助", "获取对应服务详细信息", aliases={"/help"})
@@ -38,6 +39,12 @@ service_info = plugin.on_command("/帮助", "获取对应服务详细信息", al
 @service_info.handle()
 async def _ready_service_info(event: MessageEvent):
     msg = str(event.get_message()).split(" ")
+
+    if not msg:
+        try:
+            await service_info.finish(Helper().get_service_list())
+        except ActionFailed:
+            await service_list.finish(Helper().get_text_list())
 
     try:
         service = msg[1]

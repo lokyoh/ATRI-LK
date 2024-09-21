@@ -1,10 +1,16 @@
 > 此处仅为记录重大更新，修复 BUG/以及其它 请关注[`GitHub commits`](https://github.com/lokyoh/ATRI-LK/commits/main)
 
-## Coming soon...
+## Sep 21,2024
 
-- Next: `YHN-LK0-007`
+> 为插件商店下载插件提供资源以及依赖安装
 
----
+- 更新版本至: `YHN-LK0-007`
+- 更新:
+  - `插件商店`插件
+  - 图片资源大小
+  - 为服务列表添加临时文字描述
+- 移除
+  - 本体移除部分插件商店中的资源
 
 ## Sep 6,2024
 

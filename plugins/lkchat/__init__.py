@@ -4,7 +4,7 @@ import string
 from random import choice
 
 from nonebot import on_keyword
-from nonebot.adapters.onebot.v11 import MessageEvent, Bot
+from nonebot.adapters.onebot.v11 import MessageEvent, Bot, ActionFailed
 from nonebot.adapters.onebot.v11.event import Event, GroupMessageEvent, PokeNotifyEvent
 from nonebot.adapters.onebot.v11.helpers import Cooldown, extract_image_urls
 from nonebot.adapters.onebot.v11.message import Message
@@ -28,7 +28,7 @@ from .ai_chat import ai_chat, chat_clear
 from .img_chat import get_response
 
 plugin = Service("lk聊天").document("lk插件处理聊天的部分").type(Service.ServiceType.LKPLUGIN).version(
-    "0.1.0").main_cmd("chat")
+    "0.1.1").main_cmd("chat")
 
 _lmt_notice = ["慢...慢一..点❤", "冷静1下", "歇会歇会~~", "呜呜...别急", "太快了...受不了", "不要这么快呀"]
 
@@ -119,7 +119,10 @@ async def _(event: GroupMessageEvent, matcher: Matcher):
             return
         text = lk_util.get_trans_text(event.get_message())
         if text == "":
-            await on_talk.send(Helper.get_service_list())
+            try:
+                await on_talk.send(Helper().get_service_list())
+            except ActionFailed:
+                await on_talk.send(Helper().get_text_list())
             return
         sender_id = event.get_user_id()
         if not lk_util.is_valid_user(sender_id):
@@ -156,7 +159,7 @@ async def _(event: GroupMessageEvent, matcher: Matcher):
         if re.match(r"不对", text):
             img = "BD.jpg"
             await on_talk.finish(img_msg(get_image_bytes(img_path / img)))
-        if re.search(r"看看", text):
+        if re.search(r"看看你|我看看", text):
             img = "BYK.jpg"
             await on_talk.finish(img_msg(get_image_bytes(img_path / img)))
 
@@ -171,20 +174,13 @@ async def _(event: GroupMessageEvent):
 
 
 async def get_random_atri(handle):
-    if choice([True, False]):
-        voice_list = os.listdir(RECORD_DIR / "atri")
-        if len(voice_list) == 0:
-            return
-        voice = choice(voice_list)
-        result = RECEditor.audio_to_base64(RECORD_DIR / "atri" / voice)
-        await handle.send(rec_msg(file=result))
-        await handle.send(re.sub('.mp3', '', voice))
-    else:
-        img_list = os.listdir(IMG_DIR / "atri")
-        if len(img_list) == 0:
-            return
-        img = choice(img_list)
-        await handle.send(img_msg(get_image_bytes(IMG_DIR / "atri" / img)))
+    voice_list = os.listdir(RECORD_DIR / "atri")
+    if len(voice_list) == 0:
+        return
+    voice = choice(voice_list)
+    result = RECEditor.audio_to_base64(RECORD_DIR / "atri" / voice)
+    await handle.send(rec_msg(file=result))
+    await handle.send(re.sub('.mp3', '', voice))
 
 
 poke = plugin.on_notice("戳一戳", "处理戳一戳事件")
@@ -193,7 +189,14 @@ poke = plugin.on_notice("戳一戳", "处理戳一戳事件")
 @poke.handle()
 async def _(event: PokeNotifyEvent, bot: Bot):
     if str(event.target_id) == bot.self_id:
-        await get_random_atri(poke)
+        if choice([True, False]):
+            await get_random_atri(poke)
+        else:
+            img_list = os.listdir(IMG_DIR / "atri")
+            if len(img_list) == 0:
+                return
+            img = choice(img_list)
+            await poke.send(img_msg(get_image_bytes(IMG_DIR / "atri" / img)))
 
 
 atri_voice = plugin.on_command(cmd="亚托莉语音", docs="随机亚托莉语音")

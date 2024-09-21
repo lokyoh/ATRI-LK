@@ -6,10 +6,11 @@ from PIL import Image
 from nonebot.adapters.onebot.v11 import MessageSegment
 
 from ATRI import __version__, conf, IMG_DIR, service_list, __sub_version__
-from ATRI.message import MessageBuilder
+from ATRI.message import MessageBuilder, img_msg
 from ATRI.service import SERVICES_DIR, ServiceTools, Service
 from ATRI.utils.img_editor import IMGEditor
 from ATRI.exceptions import ServiceNotFoundError
+from ATRI.system.htmlrender import md_to_pic
 
 _SERVICE_INFO_FORMAT = (
     MessageBuilder("服务名：{service}")
@@ -118,7 +119,32 @@ class Helper:
                               top + (max_count + 1) * border + (max_line + 1) * height)
                       )
         background.img.paste(info.get_image(), (0, 0), info.get_image())
-        return MessageSegment.image(background.to_bytes())
+        return img_msg(background.to_bytes())
+
+    @staticmethod
+    def get_text_list():
+        services: Dict[Service.ServiceType, list] = dict()
+        for _type in Service.ServiceType:
+            services[_type] = list()
+        for prefix in service_list:
+            f = os.path.join(SERVICES_DIR, f"{prefix}.json")
+            with open(f, "r", encoding="utf-8") as r:
+                service = json.load(r)
+                if not ServiceTools(prefix).load_service_config().enabled:
+                    services[Service.ServiceType.CLOSED].append(prefix)
+                    continue
+                _type = Service.ServiceType(service["type"])
+                services[_type].append(prefix)
+        services_info = ""
+        for _type in Service.ServiceType:
+            if _type == Service.ServiceType.HIDDEN:
+                continue
+            if len(services[_type]) == 0:
+                continue
+            services_info += f'->{_type.value}<-:\n'
+            for j in range(len(services[_type])):
+                services_info += f'· {services[_type][j]}\n'
+        return f'咱搭载了以下服务~\n{services_info}/帮助 (服务) -以查看对应服务帮助'
 
     @staticmethod
     def service_info(service: str) -> str:

@@ -1,3 +1,4 @@
+import base64
 import os
 from io import BytesIO
 from PIL import Image, ImageFont, ImageDraw
@@ -81,6 +82,13 @@ class IMGEditor:
         bytes_io = BytesIO()
         self.img.save(bytes_io, format='JPEG')
         return bytes_io.getvalue()
+
+    def to_base64(self) -> str:
+        bytes_io = BytesIO()
+        self.img.save(bytes_io, format='JPEG')
+        buffer = bytes_io.getvalue()
+        base64_encoded = base64.b64encode(buffer).decode('utf-8')
+        return f'base64://{base64_encoded}'
 
     def get_image(self) -> Image:
         """获取Image对象"""

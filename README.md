@@ -34,7 +34,7 @@
 - 反馈
 - 广播
 - 更新
-- ~~webapi~~
+- ~~webapi~~(开发中)
 - <details markdown='1'><summary>LKBOT插件(LK插件)</summary>
 
   - [x] LK插件专属的用户系统Part.1
@@ -86,10 +86,7 @@ LK版新加的插件:
 - [x] lk功能
   - [x] AI聊天
   - [x] 图聊
-  - [x] 戳一戳ATRI语录
-  - [x] 钉宫语录
-  - [x] 舔狗日记
-  - [x] 每日发癫
+  - [x] 戳一戳ATRI
 - [ ] 宠物
   - [x] 新宠物
   - [x] AI聊天
@@ -113,6 +110,9 @@ LK版新加的插件:
 - coser
 - mc服务器查询
 - 棋类游戏
+- 钉宫语录
+- 舔狗日记
+- 每日发癫
 
 </details>
 

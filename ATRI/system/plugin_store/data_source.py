@@ -1,10 +1,11 @@
 import os
 import shutil
+import subprocess
 from pathlib import Path
-from pip import main as pipmain
 
 import nonebot
 
+from ATRI.log import log
 from ATRI.service import service_list
 from ATRI.utils import request
 from ATRI.exceptions import PluginError
@@ -44,15 +45,38 @@ class PluginManager:
         if not plugin_name in cls.plugin_list:
             raise PluginError(f"找不到插件 {plugin_name}")
         _plugin = cls.plugin_list[plugin_name]
+        res = _plugin.get("res")
+        try:
+            if res:
+                data = await request.get(FILE_URL.format(res))
+                if data.status_code != 200:
+                    raise PluginError(f"网络连接错误,code:{data.status_code}")
+                if '.' in res:
+                    file = data.json()
+                    file_list = [file]
+                else:
+                    file_list = data.json()
+                for file in file_list:
+                    file_path = Path(".") / file["path"]
+                    data = await request.get(file["download_url"])
+                    file_path.parent.mkdir(parents=True, exist_ok=True)
+                    with open(file_path, 'wb') as f:
+                        f.write(data.content)
+        except Exception as e:
+            raise PluginError(f"资源安装失败:{e}")
         path = _plugin["path"]
         p_path = path.replace(".", "/")
         try:
             if _plugin["is_dir"]:
                 data = await request.get(FILE_URL.format(p_path))
+                if data.status_code != 200:
+                    raise PluginError(f"网络连接错误,code:{data.status_code}")
                 file_list = data.json()
             else:
                 p_path += ".py"
                 data = await request.get(FILE_URL.format(p_path))
+                if data.status_code != 200:
+                    raise PluginError(f"网络连接错误,code:{data.status_code}")
                 file = data.json()
                 file_list = [file]
             for file in file_list:
@@ -61,8 +85,15 @@ class PluginManager:
                 file_path.parent.mkdir(parents=True, exist_ok=True)
                 with open(file_path, 'w', encoding="utf-8") as f:
                     f.write(data.text)
-                if "requirements.txt" in file_path:
-                    pipmain(["install", "-r", file_path])
+            req_path = Path('.') / p_path / "requirements.txt"
+            if req_path.exists():
+                result = subprocess.run(
+                    ["pip", "install", "-r", str(req_path)],
+                    check=True,
+                    capture_output=True,
+                    text=True,
+                )
+                log.info(f"{plugin_name}依赖安装信息:{result}")
             if load:
                 nonebot.load_plugin(path)
         except Exception as e:

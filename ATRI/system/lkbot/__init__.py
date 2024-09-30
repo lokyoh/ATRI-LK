@@ -16,7 +16,7 @@ from ATRI.message import img_msg, MessageBuilder
 from ATRI.system.htmlrender import md_to_pic
 
 from .checker import is_lk_user
-from .config import config
+from .config import config, save_config
 from .data_source import LKBot
 from .util import lk_util, PLUGIN_VERSION, PLUGIN_DIR
 from .data.item import items, ItemStack
@@ -338,13 +338,13 @@ r18_mode_switch = plugin_admin.cmd_as_group(cmd="健康模式开关", docs="使�
 async def _(event: GroupMessageEvent):
     group_id = str(event.group_id)
     if lk_util.is_safe_mode_group(group_id):
-        config.config.r18_groups.append(group_id)
-        config.save_config()
+        config.r18_groups.append(group_id)
+        save_config()
         log.info(f'群聊{group_id}关闭健康模式by{event.get_user_id()}')
         await r18_mode_switch.finish("健康模式已关闭")
     else:
-        config.config.r18_groups.remove(group_id)
-        config.save_config()
+        config.r18_groups.remove(group_id)
+        save_config()
         log.info(f'群聊{group_id}开启健康模式by{event.get_user_id()}')
         await r18_mode_switch.finish("健康模式已开启")
 
@@ -356,13 +356,13 @@ broad_new_switch = plugin_admin.cmd_as_group(cmd="尝新开关", docs="使用后
 async def _(event: GroupMessageEvent):
     group_id = str(event.group_id)
     if lk_util.is_test_group(group_id):
-        config.config.test_groups.remove(group_id)
-        config.save_config()
+        config.test_groups.remove(group_id)
+        save_config()
         log.info(f'群聊{group_id}关闭尝新模式by{event.get_user_id()}')
         await r18_mode_switch.finish("尝新模式已关闭")
     else:
-        config.config.test_groups.append(group_id)
-        config.save_config()
+        config.test_groups.append(group_id)
+        save_config()
         log.info(f'群聊{group_id}开启尝新模式by{event.get_user_id()}')
         await r18_mode_switch.finish("尝新模式已开启")
 
@@ -414,5 +414,5 @@ broad_new = plugin_master.cmd_as_group(cmd="广播新内容", docs="向尝新模
 
 @broad_new.handle()
 async def _(bot: Bot):
-    for group in config.config.test_groups:
+    for group in config.test_groups:
         await bot.send_group_msg(group_id=group, message=LKBot.broad_message)

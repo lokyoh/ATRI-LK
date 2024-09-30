@@ -14,7 +14,7 @@ from .data.shop import Shop, shops
 from .data.user import users
 from .tools.daily_update import daily_update
 
-PLUGIN_VERSION = "0.4.7"
+PLUGIN_VERSION = "0.5.0"
 PLUGIN_DIR = Path(".") / "data" / "plugins" / "lkbot"
 
 
@@ -36,7 +36,7 @@ class BaseFunc:
         """检查群聊是否是测试模式的群聊"""
         if type(group_id) is int:
             group_id = str(group_id)
-        if group_id in config.config.test_groups:
+        if group_id in config.test_groups:
             return True
         return False
 
@@ -45,7 +45,7 @@ class BaseFunc:
         """检查群聊是否是安全模式群聊"""
         if type(group_id) is int:
             group_id = str(group_id)
-        if group_id in config.config.r18_groups:
+        if group_id in config.r18_groups:
             return False
         return True
 

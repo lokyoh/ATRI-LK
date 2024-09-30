@@ -1,5 +1,5 @@
 import json
-import os.path
+import os
 from pydantic import BaseModel as PBaseModel
 
 

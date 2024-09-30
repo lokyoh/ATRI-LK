@@ -45,10 +45,6 @@ def init_config(conf_path: Path, default_conf_path: Path):
         str,
         "输入不正确 示例: http://127.0.0.1:8100",
     )
-    console.success("Bot 主体配置完成\n")
-
-    console.info("[b]Bot 插件设置[/b]\n", style="white")
-
     browser = console.input(
         "浏览器内核 (默认: [green]chromium[/green], 可选: [green]firefox[/green])",
         "chromium",
@@ -70,12 +66,6 @@ def init_config(conf_path: Path, default_conf_path: Path):
         str,
     )
 
-    saucenao_key = console.input(
-        "SauceNAO 搜图密钥, 如不填写将无法启用[b]以图搜图[/b], 前往官网以获取: https://saucenao.com/ (默认: 空)",
-        str(),
-        str,
-    )
-
     console.success("[white]至此, 所需基本配置已填写完毕[white]")
 
     raw_conf = default_conf_path.read_text("utf-8")
@@ -89,8 +79,6 @@ def init_config(conf_path: Path, default_conf_path: Path):
     raw_conf = raw_conf.replace("{download_host}", download_host)
     raw_conf = raw_conf.replace("{proxy_host}", proxy_host)
     raw_conf = raw_conf.replace("{browser_channel}", browser_channel)
-
-    raw_conf = raw_conf.replace("{saucenao_key}", saucenao_key)
 
     with open(conf_path, "w", encoding="utf-8") as w:
         w.write(raw_conf)

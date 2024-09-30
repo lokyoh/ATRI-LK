@@ -10,7 +10,7 @@ from ATRI.message import MessageBuilder, img_msg
 from ATRI.service import SERVICES_DIR, ServiceTools, Service
 from ATRI.utils.img_editor import IMGEditor
 from ATRI.exceptions import ServiceNotFoundError
-from ATRI.system.htmlrender import md_to_pic
+from ATRI.log import log
 
 _SERVICE_INFO_FORMAT = (
     MessageBuilder("服务名：{service}")
@@ -57,7 +57,7 @@ class Helper:
         )
 
     @staticmethod
-    def get_service_list() -> MessageSegment:
+    def get_typed_services() -> dict:
         services: Dict[Service.ServiceType, list] = dict()
         for _type in Service.ServiceType:
             services[_type] = list()
@@ -70,6 +70,10 @@ class Helper:
                     continue
                 _type = Service.ServiceType(service["type"])
                 services[_type].append(prefix)
+        return services
+
+    def get_service_list(self) -> MessageSegment:
+        services = self.get_typed_services()
         n = int((len(service_list) + len(services)) / 15) + 1
         top = 50
         border = 5
@@ -121,20 +125,9 @@ class Helper:
         background.img.paste(info.get_image(), (0, 0), info.get_image())
         return img_msg(background.to_bytes())
 
-    @staticmethod
-    def get_text_list():
-        services: Dict[Service.ServiceType, list] = dict()
-        for _type in Service.ServiceType:
-            services[_type] = list()
-        for prefix in service_list:
-            f = os.path.join(SERVICES_DIR, f"{prefix}.json")
-            with open(f, "r", encoding="utf-8") as r:
-                service = json.load(r)
-                if not ServiceTools(prefix).load_service_config().enabled:
-                    services[Service.ServiceType.CLOSED].append(prefix)
-                    continue
-                _type = Service.ServiceType(service["type"])
-                services[_type].append(prefix)
+    def get_text_list(self):
+        log.info("发送服务列表图片失败，使用用文字方式发送")
+        services = self.get_typed_services()
         services_info = ""
         for _type in Service.ServiceType:
             if _type == Service.ServiceType.HIDDEN:

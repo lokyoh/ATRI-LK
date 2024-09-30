@@ -33,5 +33,5 @@ async def is_test_mode(matcher: Type[Matcher], event: GroupMessageEvent):
 
 async def is_chat_switch_on(matcher: Type[Matcher]):
     """检查是否开启聊天，不是则中断当前事件处理"""
-    if not config.config.chat_switch:
+    if not config.chat_switch:
         await matcher.finish(lk_util.chat_switch_off)

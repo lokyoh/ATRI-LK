@@ -22,7 +22,3 @@ BrowsConfig:
 
 SauceNAO:
   key: "{saucenao_key}"
-
-Setu:
-  reverse_proxy: true
-  reverse_proxy_domain: "i.pixiv.re"

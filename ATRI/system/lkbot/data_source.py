@@ -17,15 +17,18 @@ from .tools.get_pic import get_pic_from
 class LKBot:
     new_things = f'''ATRI-LK版
 {__version__} 新内容:
-    - lk农场part.1'''
+    - lk农场part.1
+    - 更新插件
+    - 重启插件
+    - 插件商店插件'''
     broad_message = f'''*本群已开启尝新模式，这是新功能的人工推送*
 #lk插件v{PLUGIN_VERSION}:
     !输入"/帮助 lk插件"查看具体指令!
     !输入"/lk.新内容"查看更新内容!
 #lk宠物v0.1.3-fix1:
     !输入"/帮助 lk宠物"查看具体指令!
-#组队插件1.0.0-fix2-正式版：
-    !输入"/帮助 组队插件"查看具体指令!'''
+#lk农场v0.1.1:
+    !输入"/帮助 lk农场"查看具体指令!'''
 
     @staticmethod
     async def sign_in(user_id, r18_mode):
@@ -80,7 +83,7 @@ async def get_pic(user_id, r18_mode: bool = False, src: str = 'lolicon'):
         if modification_date == today_date:
             return save_path
         else:
-            log.info(f"{modification_date}->{today_date}")
+            log.debug(f"{user_id}签到日期变化:{modification_date}->{today_date}")
     user_data = users.get_user_data(user_id)
     if r18_mode:
         my_random = IntToBoolRandom(80, 200)

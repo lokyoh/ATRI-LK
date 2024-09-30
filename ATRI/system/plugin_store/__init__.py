@@ -8,7 +8,7 @@ from ATRI.exceptions import PluginError
 
 from .data_source import PluginManager
 
-plugin = Service("插件商店").document("插件商店").type(Service.ServiceType.SYSTEM).version("0.2.0").permission(MASTER)
+plugin = Service("插件商店").document("插件商店").type(Service.ServiceType.SYSTEM).version("0.3.0").permission(MASTER)
 
 plugins = plugin.on_command("插件列表", "查看插件列表")
 

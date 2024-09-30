@@ -22,21 +22,10 @@ class BrowsConfig(BaseModel):
     browser_channel: str
 
 
-class SauceNAO(BaseModel):
-    key: str
-
-
-class Setu(BaseModel):
-    reverse_proxy: bool
-    reverse_proxy_domain: str
-
-
 class ConfigModel(BaseModel):
     ConfigVersion: str
     BotConfig: BotConfig
     BrowsConfig: BrowsConfig
-    SauceNAO: SauceNAO
-    Setu: Setu
 
 
 class RuntimeConfig(BaseModel):

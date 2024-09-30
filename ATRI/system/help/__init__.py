@@ -4,7 +4,7 @@ from ATRI.service import Service
 
 from .data_source import Helper
 
-plugin = Service("帮助").document("ATRI 的食用指南~").type(Service.ServiceType.SYSTEM).version("1.0.0")
+plugin = Service("帮助").document("ATRI 的食用指南~").type(Service.ServiceType.SYSTEM).version("1.1.1")
 
 menu = plugin.on_command("/菜单", "获取食用bot的方法", aliases={"/menu"})
 
@@ -40,12 +40,6 @@ service_info = plugin.on_command("/帮助", "获取对应服务详细信息", al
 async def _ready_service_info(event: MessageEvent):
     msg = str(event.get_message()).split(" ")
 
-    if not msg:
-        try:
-            await service_info.finish(Helper().get_service_list())
-        except ActionFailed:
-            await service_list.finish(Helper().get_text_list())
-
     try:
         service = msg[1]
     except Exception:
@@ -57,6 +51,11 @@ async def _ready_service_info(event: MessageEvent):
         cmd = None
 
     if not cmd:
+        if service == "master":
+            try:
+                await service_info.finish(Helper().get_service_list())
+            except ActionFailed:
+                await service_list.finish(Helper().get_text_list())
         repo = Helper().service_info(service)
         await service_info.finish(repo)
 

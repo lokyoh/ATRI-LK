@@ -9,57 +9,35 @@ from ATRI.log import log
 DB_DIR = Path(".") / "data" / "sql"
 DB_DIR.mkdir(parents=True, exist_ok=True)
 
+data = {}
+
+
+def add_database(name: str, model):
+    data[name] = model
+
 
 async def run():
-    from ATRI.database import models
-
-    await Tortoise.init(
-        {
-            "connections": {
-                "bilibili": {
-                    "engine": "tortoise.backends.sqlite",
-                    "credentials": {"file_path": f"{DB_DIR}/bilibili.sqlite3"},
-                },
-                "ts": {
-                    "engine": "tortoise.backends.sqlite",
-                    "credentials": {"file_path": f"{DB_DIR}/thesaurusstoragor.sqlite3"},
-                },
-                "tal": {
-                    "engine": "tortoise.backends.sqlite",
-                    "credentials": {
-                        "file_path": f"{DB_DIR}/thesaurusauditlist.sqlite3"
-                    },
-                },
-                "rrs": {
-                    "engine": "tortoise.backends.sqlite",
-                    "credentials": {
-                        "file_path": f"{DB_DIR}/rssrsshubsubscription.sqlite3"
-                    },
-                },
-                "rms": {
-                    "engine": "tortoise.backends.sqlite",
-                    "credentials": {
-                        "file_path": f"{DB_DIR}/rssmikananisubscription.sqlite3"
-                    },
-                },
-            },
-            "apps": {
-                "bilibili": {
-                    "models": [locals()["models"]],
-                    "default_connection": "bilibili",
-                },
-                "ts": {"models": [locals()["models"]], "default_connection": "ts"},
-                "tal": {"models": [locals()["models"]], "default_connection": "tal"},
-                "rrs": {"models": [locals()["models"]], "default_connection": "rrs"},
-                "rms": {"models": [locals()["models"]], "default_connection": "rms"},
-            },
+    database = {
+        "connections": {},
+        "apps": {}
+    }
+    for d in data:
+        database["connections"][d] = {
+            "engine": "tortoise.backends.sqlite",
+            "credentials": {
+                "file_path": f"{DB_DIR}/{d}.sqlite3",
+            }
         }
-    )
+        database["apps"][d] = {
+            "models": [data[d]],
+            "default_connection": d,
+        }
+    await Tortoise.init(database)
     await Tortoise.generate_schemas()
 
 
 async def init_database():
-    log.info("正在初始化数据库...")
+    log.info(f"正在初始化{len(data)}个数据库...")
     await run()
     log.success("数据库初始化完成")
 

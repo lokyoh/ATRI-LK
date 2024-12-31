@@ -1,8 +1,10 @@
 from io import BytesIO
 from pathlib import Path
-from typing import Optional, Union
+from time import sleep
+from typing import Optional, Union, Type
 
 from nonebot.adapters.onebot.v11.message import Message, MessageSegment
+from nonebot.internal.matcher import Matcher
 
 
 class MessageBuilder(Message):
@@ -37,6 +39,24 @@ class MessageBuilder(Message):
 
     def done(self) -> str:
         return str().join(map(str, self))
+
+
+class MessageGroup:
+    """消息组:用于储存消息并分条发送"""
+
+    def __init__(self):
+        self.message_list = []
+
+    def add_message(self, message: str | MessageSegment | Message):
+        """向消息组添加消息"""
+        self.message_list.append(message)
+        return self
+
+    async def send_message(self, matcher: Type[Matcher]):
+        """使用指定匹配器逐条发送消息"""
+        for m in self.message_list:
+            await matcher.send(m)
+            sleep(1)
 
 
 def img_msg(file: str | bytes | BytesIO | Path) -> MessageSegment:

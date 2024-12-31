@@ -107,6 +107,10 @@ class PluginError(BaseBotException):
     prompt = "插件错误"
 
 
+class BotRuntimeError(BaseBotException):
+    prompt = "机器人运行时错误"
+
+
 limiter = Limiter(3, 600)
 
 

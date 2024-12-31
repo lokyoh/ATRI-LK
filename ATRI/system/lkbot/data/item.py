@@ -4,6 +4,9 @@ from enum import Enum
 from typing import Dict, Any
 
 from ATRI.log import log
+from ATRI.message import MessageBuilder
+
+from .item_func import ConditionNotMet, ItemFuncs, item_funcs
 
 
 class ItemType(Enum):
@@ -22,7 +25,8 @@ class ItemType(Enum):
 class Item:
     """定义物品及其基本数据，注意默认方法无物品消耗，请自行添加"""
 
-    def __init__(self, item_name, item_type: ItemType = ItemType.OTHER, item_info='', item_price=0, using_func=None):
+    def __init__(self, item_name: str, item_type: ItemType = ItemType.OTHER, item_info='', item_price=0,
+                 using_funcs: ItemFuncs = None):
         """
         name 物品名称，要求不为空
         """
@@ -30,13 +34,21 @@ class Item:
         self._type = item_type
         self._info = item_info
         self._price = item_price
-        self._using_func = using_func
+        self._using_funcs = using_funcs
 
     def use_item(self, user_id: str):
         """在背包使用指定物品"""
-        if self._using_func is None:
-            return None
-        return self._using_func(user_id)
+        from .user import users
+        func_message = MessageBuilder()
+        try:
+            for check in self._using_funcs.checks:
+                item_funcs.exec_check(check, user_id)
+            users.item_num_change(user_id, self._name, -1)
+            for func in self._using_funcs.funcs:
+                func_message.text(item_funcs.exec_func(func, user_id))
+        except ConditionNotMet as e:
+            return func_message.text(f'{e.prompt}')
+        return func_message
 
     def get_item_name(self) -> str:
         """获取物品名"""
@@ -60,13 +72,19 @@ class Item:
 
     def item_can_use(self) -> bool:
         """获取物品是否能在背包中使用"""
-        if self._using_func is None:
+        if self._using_funcs is None:
             return False
         return True
 
     def get_item_type(self) -> ItemType:
         """获取物品的类型的ItemType对象"""
         return self._type
+
+    def get_use_funcs(self) -> ItemFuncs | None:
+        return self._using_funcs
+
+    def set_use_funcs(self, funcs: ItemFuncs):
+        self._using_funcs = funcs
 
 
 class ItemRegister:
@@ -120,7 +138,7 @@ class ItemRegister:
         return self._item_list
 
     def has_item(self, item_name):
-        """获取是否注册指定物品"""
+        """返回是否已注册指定物品"""
         if item_name in self._item_list:
             return True
         return False

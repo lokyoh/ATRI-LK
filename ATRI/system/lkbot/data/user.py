@@ -4,6 +4,7 @@ from datetime import datetime
 import json
 from sqlite3 import Connection
 
+from ATRI.log import log
 from ATRI.utils.event import Event
 from ATRI.utils.curve import LvlManager
 from ATRI.utils.sqlite import DataBase
@@ -11,6 +12,7 @@ from ATRI.utils.limiter import LimitedQueue
 from ATRI.utils.lock import SingleLock, GroupLock
 
 from .item import BackPack
+from .system import lk_data
 
 user_level_manager = LvlManager(10, 1.5)
 
@@ -32,43 +34,60 @@ class UserData:
     """
 
     def __init__(self, data, data_type):
+        self.id = data[0]
+        self.name = data[1]
         if data_type == 0:
-            self.id = data[0]
-            self.name = data[1]
             self.exp = data[2]
             self.money = data[3]
             self.lastsign = data[4]
             self.signdays = data[5]
             self.love = data[6]
-            self.lvl = user_level_manager.to_lvl(self.exp)
-            self.left_exp = user_level_manager.get_left_exp(self.exp, self.lvl)
-            self.petname = ''
-            self.extra = {}
+            self.exp_mul = data[7]
+            self.exp_mul_count = data[8]
+            self.love_mul = data[9]
+            self.love_mul_count = data[10]
         else:
-            self.id = data[0]
-            self.name = data[1]
             self.exp = 0
             self.money = 0
             self.lastsign = '2000-01-01'
             self.signdays = 0
             self.love = 0
-            self.lvl = 0
-            self.left_exp = user_level_manager.get_left_exp(self.exp, self.lvl)
-            self.petname = ''
-            self.extra = {}
+            self.exp_mul = 100
+            self.exp_mul_count = 0
+            self.love_mul = 100
+            self.love_mul_count = 0
+        self.lvl = user_level_manager.to_lvl(self.exp)
+        self.left_exp = user_level_manager.get_left_exp(self.exp, self.lvl)
+        self.petname = ''
+        self.extra = {}
 
     def get_lvl_exp(self):
         """获取当前等级的经验总值"""
         return user_level_manager.get_lvl_exp(self.lvl)
 
-    def add_exp(self, exp: int):
+    def add_exp(self, exp: int, mult: bool):
         """建议用users.exp_change()代替"""
+        if mult:
+            exp = int(exp * lk_data.exp_mul / 100)
+            if self.exp_mul_count > 0:
+                self.exp_mul_count -= 1
+                exp = int(exp * self.exp_mul / 100)
         self.exp += exp
         self.left_exp += exp
         lvl_exp = self.get_lvl_exp()
-        if self.left_exp >= lvl_exp:
+        while self.left_exp >= lvl_exp:
             self.left_exp -= lvl_exp
             self.lvl += 1
+            lvl_exp = self.get_lvl_exp()
+
+    def add_love(self, num: int, mult: bool):
+        """建议用users.love_change()代替"""
+        if mult:
+            num = int(num * lk_data.love_mul / 100)
+            if self.love_mul_count > 0:
+                self.love_mul_count -= 1
+                num = int(num * self.love_mul / 100)
+        self.love += num
 
 
 class UserNameChangedEvent(Event):
@@ -78,7 +97,7 @@ class UserNameChangedEvent(Event):
 
 class Users:
     """
-    使用users来使用其中的方法，from ATRI.plugins.lkbot.system.data.user import users
+    用户信息管理器
     """
     user_name_changed_event = UserNameChangedEvent()
     _lock = SingleLock()
@@ -98,19 +117,27 @@ MONEY       INTEGER DEFAULT 0,
 LASTSIGN    TEXT DEFAULT '2000-01-01',
 SIGNDAYS    INTEGER DEFAULT 0,
 BACKPACK    TEXT DEFAULT '{}',
-LOVE        INTEGER DEFAULT 0
+LOVE        INTEGER DEFAULT 0,
+EXPMUL      INTEGER DEFAULT 100,
+EXPMULCOUNT INTEGER DEFAULT 0,
+LOVEMUL     INTEGER DEFAULT 100,
+LOVEMULCOUNT    INTEGER DEFAULT 0
 '''
 
         def update_db(connection, version):
             cursor = connection.cursor()
             if version < 1:
-                cursor.execute("ALTER TABLE `TEST` DROP COLUMN `PETNAME`")
-                cursor.execute("ALTER TABLE `TEST` DROP COLUMN `DATA`")
+                cursor.execute("ALTER TABLE `USERINFO` ADD COLUMN `EXPMUL` INTEGER DEFAULT 100")
+                cursor.execute("ALTER TABLE `USERINFO` ADD COLUMN `EXPMULCOUNT` INTEGER DEFAULT 0")
+                cursor.execute("ALTER TABLE `USERINFO` ADD COLUMN `LOVEMUL` INTEGER DEFAULT 100")
+                cursor.execute("ALTER TABLE `USERINFO` ADD COLUMN `LOVEMULCOUNT` INTEGER DEFAULT 0")
                 connection.commit()
             cursor.close()
+            log.info(f"用户数据表升级完成")
 
-        self.sql = lk_db.get_table("USERINFO", table_content, 0, update_db)
-        content = self.sql.select_all("ID, NAME, EXP, MONEY, LASTSIGN, SIGNDAYS, LOVE")
+        self.sql = lk_db.get_table("USERINFO", table_content, 1, update_db)
+        content = self.sql.select_all(
+            "ID, NAME, EXP, MONEY, LASTSIGN, SIGNDAYS, LOVE, EXPMUL, EXPMULCOUNT, LOVEMUL, LOVEMULCOUNT")
         for row in content:
             self._name.append(row[1])
             self._userdata[str(row[0])] = UserData(row, 0)
@@ -179,23 +206,25 @@ LOVE        INTEGER DEFAULT 0
                 self._userdata[user_id].lastsign = today
                 self._userdata[user_id].signdays += 1
                 self.sql.update(f"LASTSIGN = '{today}', SIGNDAYS = {self._userdata[user_id].signdays}", f"ID={user_id}")
-                self._exp_change(user_id, 3)
+                self._exp_change(user_id, 3, True)
                 self._money_change(user_id, 10)
-                self._love_change(user_id, 1)
+                self._love_change(user_id, 1, True)
 
             self._user_lock.run(_sign, user_id)()
             return True
 
-    def exp_change(self, user_id: str, num: int) -> bool:
+    def exp_change(self, user_id: str, num: int, mult: bool = True) -> bool:
         """增减经验"""
         if num > 0:
-            self._user_lock.run(self.exp_change, user_id)(user_id, num)
+            self._user_lock.run(self._exp_change, user_id)(user_id, num, mult)
             return True
         return False
 
-    def _exp_change(self, user_id: str, num: int):
-        self._userdata[user_id].add_exp(num)
+    def _exp_change(self, user_id: str, num: int, mult: bool):
+        self._userdata[user_id].add_exp(num, mult)
         self.sql.update(f"EXP = '{self._userdata[user_id].exp}'", f"ID = {user_id}")
+        if mult:
+            self.sql.update(f"EXPMULCOUNT = '{self._userdata[user_id].exp_mul_count}'", f"ID = {user_id}")
 
     def money_change(self, user_id: str, num: int) -> bool:
         """增减ATRI币"""
@@ -212,18 +241,18 @@ LOVE        INTEGER DEFAULT 0
             return True
         return False
 
-    def love_change(self, user_id: str, num: int) -> bool:
+    def love_change(self, user_id: str, num: int, mult: bool = True) -> bool:
         """增减好感度"""
         if num > 0:
-            self._user_lock.run(self._love_change, user_id)(user_id, num)
+            self._user_lock.run(self._love_change, user_id)(user_id, num, mult)
             return True
         return False
 
-    def _love_change(self, user_id: str, num: int):
-        love = self._userdata[user_id].love
-        love += num
-        self._userdata[user_id].love = love
-        self.sql.update(f"LOVE = '{love}'", f"ID = {user_id}")
+    def _love_change(self, user_id: str, num: int, mult: bool):
+        self._userdata[user_id].add_love(num, mult)
+        self.sql.update(f"LOVE = '{self._userdata[user_id].love}'", f"ID = {user_id}")
+        if mult:
+            self.sql.update(f"LOVEMULCOUNT = '{self._userdata[user_id].love_mul_count}'", f"ID = {user_id}")
 
     def petname_set(self, user_id: str, name: str):
         """设置用户的宠物名，使用对lk宠物插件无效，只改变显示名称"""
@@ -297,6 +326,34 @@ LOVE        INTEGER DEFAULT 0
         self._backpack_cache[user_id].set_item_with_stack(item_stack)
         self.sql.update(f"BACKPACK = '{self._backpack_cache[user_id].bp_to_str()}'",
                         f"ID = {user_id}")
+        return True
+
+    def exp_mul_change(self, user_id: str, exp_mul: int, times: int) -> bool:
+        """经验倍率改变"""
+        return self._user_lock.run(self._exp_mul_change, user_id)(user_id, exp_mul, times)
+
+    def _exp_mul_change(self, user_id: str, exp_mul: int, times: int):
+        if self._userdata[user_id].exp_mul != 100 and self._userdata[user_id].love_mul != exp_mul:
+            if self._userdata[user_id].exp_mul_count != 0:
+                return False
+        self._userdata[user_id].exp_mul = exp_mul
+        self._userdata[user_id].exp_mul_count += times
+        self.sql.update(f"EXPMUL = '{self._userdata[user_id].exp_mul}'", f"ID = {user_id}")
+        self.sql.update(f"EXPMULCOUNT = '{self._userdata[user_id].exp_mul_count}'", f"ID = {user_id}")
+        return True
+
+    def love_mul_change(self, user_id: str, love_mul: int, times: int) -> bool:
+        """好感倍率改变"""
+        return self._user_lock.run(self._love_mul_change, user_id)(user_id, love_mul, times)
+
+    def _love_mul_change(self, user_id: str, love_mul: int, times: int):
+        if self._userdata[user_id].love_mul != 100 and self._userdata[user_id].love_mul != love_mul:
+            if self._userdata[user_id].love_mul_count != 0:
+                return False
+        self._userdata[user_id].love_mul = love_mul
+        self._userdata[user_id].love_mul_count += times
+        self.sql.update(f"LOVEMUL = '{self._userdata[user_id].love_mul}'", f"ID = {user_id}")
+        self.sql.update(f"LOVEMULCOUNT = '{self._userdata[user_id].love_mul_count}'", f"ID = {user_id}")
         return True
 
 

@@ -78,7 +78,8 @@ class PetModel:
         return cleaned_string
 
     def chat_clear(self):
-        self.convo.history.clear()
+        self.chat_history = LimitedQueue(20)
+        self.init_convo()
 
     def change_user_name(self, user_name):
         self.user_name = user_name

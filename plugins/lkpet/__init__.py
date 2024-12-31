@@ -1,7 +1,7 @@
 from random import choice
 
 from nonebot.internal.matcher import Matcher
-from nonebot.params import CommandArg, ArgPlainText
+from nonebot.params import CommandArg, ArgPlainText, Depends
 from nonebot.adapters.onebot.v11 import Event, Message, Bot, GroupMessageEvent
 from nonebot.adapters.onebot.v11.helpers import Cooldown
 
@@ -17,19 +17,16 @@ from .pet_chat import PetModel
 from .pet_data import PetData, pet_manager
 
 plugin = Service("lk宠物").document("l_o_o_k的赛博宠物插件").type(Service.ServiceType.LKPLUGIN).version(
-    "0.1.3-fix1").main_cmd("/pet")
+    "0.1.3-fix2").main_cmd("/pet")
 
 _lmt_notice = ["慢...慢一..点❤", "冷静1下", "歇会歇会~~", "呜呜...别急", "太快了...受不了", "不要这么快呀"]
 
 talk_with_pet = plugin.on_command("/宠物", "与赛博宠物聊天")
 
 
-@talk_with_pet.handle([Cooldown(10, prompt=choice(_lmt_notice))])
+@talk_with_pet.handle([Cooldown(10, prompt=choice(_lmt_notice)), Depends(is_chat_switch_on), Depends(not_safe_mode),
+                       Depends(is_test_mode), Depends(is_lk_user)])
 async def _(event: GroupMessageEvent, args: Message = CommandArg()):
-    await is_chat_switch_on(talk_with_pet)
-    await not_safe_mode(talk_with_pet, event)
-    await is_test_mode(talk_with_pet, event)
-    await is_lk_user(talk_with_pet, event)
     user_id = event.get_user_id()
     if user_id not in pet_manager.datas:
         await talk_with_pet.finish("你还没领养过宠物哟，赶快领养一个吧")
@@ -55,9 +52,8 @@ async def _(event: GroupMessageEvent, args: Message = CommandArg()):
 adopt = plugin.cmd_as_group("领养", "领养一只专属自己赛博宠物吧")
 
 
-@adopt.handle()
+@adopt.handle([Depends(is_lk_user)])
 async def _(event: Event, matcher: Matcher, args: Message = CommandArg()):
-    await is_lk_user(adopt, event)
     user_id = event.get_user_id()
     if user_id in pet_manager.datas:
         pet: PetData = pet_manager.datas[user_id]

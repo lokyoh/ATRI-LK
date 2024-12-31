@@ -19,6 +19,3 @@ BrowsConfig:
   download_host: "{download_host}"
   proxy_host: "{proxy_host}"
   browser_channel: "{browser_channel}"
-
-SauceNAO:
-  key: "{saucenao_key}"

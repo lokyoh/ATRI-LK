@@ -1,0 +1,46 @@
+改名卡:
+  name: "改名卡"
+  type: "道具"
+  info: "用于修改自己的名字，改名时自动使用哦"
+  shop:
+    name: "基础商店"
+    price: 200
+    type: "ATRI币"
+一次经验双倍卡:
+  name: "一次经验双倍卡"
+  type: "道具"
+  info: "使用后获得一次经验双倍"
+  price: 100
+  shop:
+    name: "基础商店"
+    price: 200
+    type: "ATRI币"
+  func:
+    checks:
+      - name: exp_mul_check
+        args:
+          multiplier: 200
+    funcs:
+      - name: exp_mul
+        args:
+          multiplier: 200
+          times: 1
+一次好感双倍卡:
+  name: "一次好感双倍卡"
+  type: "道具"
+  info: "使用后获得一次好感双倍"
+  price: 100
+  shop:
+    name: "基础商店"
+    price: 200
+    type: "ATRI币"
+  func:
+    checks:
+      - name: love_mul_check
+        args:
+          multiplier: 200
+    funcs:
+      - name: love_mul
+        args:
+          multiplier: 200
+          times: 1

@@ -1,7 +1,7 @@
 import re
 
 from nonebot.adapters.onebot.v11 import GroupMessageEvent, Message
-from nonebot.params import CommandArg
+from nonebot.params import CommandArg, Depends
 
 from ATRI.service import Service
 from ATRI.message import img_msg
@@ -11,7 +11,7 @@ from ATRI.system.lkbot.util import lk_util
 from .data_source import farm_system
 
 plugin = Service("lk农场").document("l_o_o_k的农场插件").type(Service.ServiceType.LKPLUGIN).main_cmd("/farm").version(
-    "0.1.1")
+    "0.1.1-patch1")
 
 my_farm = plugin.on_command("我的农场", "查看自己的农场")
 
@@ -110,9 +110,8 @@ async def _(event: GroupMessageEvent, arg: Message = CommandArg()):
 new_farm = plugin.cmd_as_group("新农场", "创建一个新农场")
 
 
-@new_farm.handle()
+@new_farm.handle([Depends(is_lk_user)])
 async def _(event: GroupMessageEvent):
-    await is_lk_user(new_farm, event)
     user_id = event.user_id
     user_name = lk_util.get_name(user_id)
     if farm_system.new_farm(user_id):

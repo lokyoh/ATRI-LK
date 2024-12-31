@@ -7,13 +7,12 @@ from nonebot.adapters.onebot.v11.helpers import Cooldown
 from nonebot.adapters.onebot.v11.message import Message
 from nonebot.exception import FinishedException
 from nonebot.matcher import Matcher
-from nonebot.params import CommandArg, ArgPlainText
+from nonebot.params import CommandArg, ArgPlainText, Depends
 
 from ATRI.log import log
 from ATRI.permission import ADMIN, MASTER
 from ATRI.service import Service
-from ATRI.message import img_msg, MessageBuilder
-from ATRI.system.htmlrender import md_to_pic
+from ATRI.message import MessageBuilder
 
 from .checker import is_lk_user
 from .config import config, save_config
@@ -23,17 +22,19 @@ from .data.item import items, ItemStack
 from .data.shop import shops
 from .data.user import users
 
-plugin = Service("lk插件").document(f"l_o_o_k的综合性插件").type(
-    Service.ServiceType.LKPLUGIN).version(PLUGIN_VERSION).main_cmd("/lk")
+plugin = (Service("lk插件")
+          .document(f"l_o_o_k的综合性插件")
+          .type(Service.ServiceType.LKPLUGIN)
+          .version(PLUGIN_VERSION)
+          .main_cmd("/lk"))
 
 _lmt_notice = ["慢...慢一..点❤", "冷静1下", "歇会歇会~~", "呜呜...别急", "太快了...受不了", "不要这么快呀"]
 
 sign_in = plugin.on_command(cmd='签到', docs="全新界面的签到系统")
 
 
-@sign_in.handle([Cooldown(60, prompt=choice(_lmt_notice))])
+@sign_in.handle([Cooldown(60, prompt=choice(_lmt_notice)), Depends(is_lk_user)])
 async def _(event: Event):
-    await is_lk_user(sign_in, event)
     r18_mode = not lk_util.is_safe_mode_group(event.group_id) if type(event) is GroupMessageEvent else True
     try:
         await sign_in.finish(await LKBot.sign_in(event.get_user_id(), r18_mode))
@@ -56,33 +57,17 @@ async def _(event: Event):
 my_info = plugin.on_command(cmd="我的信息", docs="查询自己的信息")
 
 
-@my_info.handle()
+@my_info.handle([Depends(is_lk_user)])
 async def _(event: Event):
-    await is_lk_user(my_info, event)
     await my_info.finish(LKBot.get_info(event.get_user_id()))
 
 
 my_backpack = plugin.on_command(cmd="我的背包", docs="查看背包中的内容")
 
 
-@my_backpack.handle()
+@my_backpack.handle([Depends(is_lk_user)])
 async def _(event: Event):
-    await is_lk_user(my_backpack, event)
-    user_id = event.get_user_id()
-    backpack = users.get_backpack(user_id).get_item_list()
-    resp = f"{lk_util.get_name(user_id)} 的背包:\n{'-' * 20}\n名称-类型-数量\n"
-    num = len(backpack)
-    i = 0
-    j = 1
-    for item in backpack:
-        item: ItemStack
-        if i == j * 20:
-            await my_backpack.send(resp + f"{'-' * 20}\n页数:{j} 物品总数:{i}/{num}")
-            resp = ''
-            j += 1
-        i += 1
-        resp += f'{i}.{item.get_name()}-{item.get_type().value}-{item.meta.num}\n'
-    await my_backpack.send(resp + f"{'-' * 20}\n页数:{j} 物品总数:{i}/{num}")
+    await LKBot.get_backpack_info(event.get_user_id()).send_message(my_backpack)
 
 
 item_inquiry = plugin.on_command(cmd="物品查询", docs="查询指定物品信息")
@@ -96,24 +81,14 @@ async def _(matcher: Matcher, args: Message = CommandArg()):
 
 @item_inquiry.got("item_inquiry_name", prompt="要查询的物品呢？速速")
 async def _(item_name=ArgPlainText("item_inquiry_name")):
-    item_name = lk_util.clean_str(item_name)
-    if items.has_item(item_name):
-        item = items.get_item_by_name(item_name)
-        item_info = f'''{item_name}:
-{item.get_item_info()}
-类型:{item.get_item_type().value}
-价值:{item.get_item_price_dis()}
-可使用:{item.item_can_use()}'''
-        await item_inquiry.finish(item_info)
-    await item_inquiry.finish(f"找不到指定物品 {item_name}")
+    await item_inquiry.finish(LKBot.get_item_info(lk_util.clean_str(item_name)))
 
 
 use_item = plugin.on_command(cmd="/使用", docs="使用指定物品,'全部物品'使用全部,'物品*n'使用n个物品")
 
 
-@use_item.handle()
-async def _(event: Event, matcher: Matcher, args: Message = CommandArg()):
-    await is_lk_user(use_item, event)
+@use_item.handle([Depends(is_lk_user)])
+async def _(matcher: Matcher, args: Message = CommandArg()):
     if args.extract_plain_text():
         matcher.set_arg("use_item_name", args)
 
@@ -128,7 +103,7 @@ async def _(event: Event, item_name=ArgPlainText("use_item_name")):
         return use_item.finish("数量不符合规范")
     have_used, msg = lk_util.use_item(event.get_user_id(), item_name, num)
     if have_used:
-        await use_item.finish(f"使用成功:\n{msg}")
+        await use_item.finish(f"使用信息:\n{msg}")
     else:
         await use_item.finish(f"使用失败:\n{msg}")
 
@@ -136,9 +111,8 @@ async def _(event: Event, item_name=ArgPlainText("use_item_name")):
 recycle_item = plugin.on_command(cmd="/回收", docs="将指定数量物品换成ATRI币,'全部物品'回收全部,'物品*n'回收n个物品")
 
 
-@recycle_item.handle()
-async def _(event: Event, matcher: Matcher, args: Message = CommandArg()):
-    await is_lk_user(my_backpack, event)
+@recycle_item.handle([Depends(is_lk_user)])
+async def _(matcher: Matcher, args: Message = CommandArg()):
     if args.extract_plain_text():
         matcher.set_arg("recycle_item", args)
 
@@ -162,19 +136,7 @@ shop_list = plugin.on_command(cmd="商店列表", docs="列出所有商店")
 
 @shop_list.handle()
 async def _():
-    shop_l = shops.get_shop_names()
-    num = len(shop_l)
-    resp = f"商店列表:\n{'-' * 20}\n"
-    i = 0
-    j = 1
-    for shop in shop_l:
-        if i == j * 20:
-            await my_backpack.send(resp + f"{'-' * 20}\n页数:{j} 商店总数:{i}/{num}")
-            resp = ''
-            j += 1
-        i += 1
-        resp += f'{i}.{shop}\n'
-    await my_backpack.send(resp + f"{'-' * 20}\n页数:{j} 商店总数:{i}/{num}")
+    await LKBot.get_shop_list().send_message(shop_list)
 
 
 goods_list = plugin.on_command(cmd="商品列表", docs="列出指定商店的商品列表")
@@ -189,37 +151,15 @@ async def _(matcher: Matcher, args: Message = CommandArg()):
 @goods_list.got("shop_name", prompt="要浏览那个商店呢?速速")
 async def _(shop_name=ArgPlainText("shop_name")):
     shop_name = lk_util.clean_str(shop_name)
-    if shops.has_shop(shop_name):
-        shop = shops.get_shop_by_name(shop_name)
-        item_list = shop.get_goods_list()
-        num = len(item_list)
-        resp = f"# {shop.get_shop_name()}-商品列表:\n{shop.get_shop_info()}\n\n|编号|商品名称|货币|价格|限制|\n|:-:|:-:|:-:|:-:|:-:|\n"
-        i = 0
-        j = 1
-        for item_name in item_list:
-            if i == j * 20:
-                resp += f"\n> 页数:{j} 商品总数:{i}/{num}"
-                await my_backpack.send(img_msg(await md_to_pic(resp)))
-                resp = '|编号|商品名称|货币|价格|限制|\n|:-:|:-:|:-:|:-:|:-:|\n'
-                j += 1
-            i += 1
-            index = shop.get_goods_index(item_name)
-            limit = str(shop.get_goods_limit_by_index(index))
-            if limit == '0':
-                limit = "无限制"
-            resp += f'|{i}|{item_name}|{shop.get_goods_coin_type_by_index(index)}|{shop.get_goods_price_by_index(index)}|{limit}|\n'
-        resp += f"\n> 页数:{j} 商品总数:{i}/{num}"
-        await my_backpack.send(img_msg(await md_to_pic(resp)))
-    else:
-        await goods_list.finish(f"找不到商店名 {shop_name}")
+    mg = await LKBot.get_goods_list(shop_name)
+    await mg.send_message(goods_list)
 
 
 buy_item = plugin.on_command(cmd="/购买", docs="从指定商店中购买指定数量的商品\n用法:/lk.购买 [商店名] [物品|物品*n]")
 
 
-@buy_item.handle()
-async def _(event: Event, matcher: Matcher, args: Message = CommandArg()):
-    await is_lk_user(buy_item, event)
+@buy_item.handle([Depends(is_lk_user)])
+async def _(matcher: Matcher, args: Message = CommandArg()):
     if args.extract_plain_text():
         args = args.extract_plain_text().split(' ')
         index = 0
@@ -248,9 +188,8 @@ async def _(event: Event, shop_name: str = ArgPlainText("buy_shop_name"),
 change_name = plugin.cmd_as_group(cmd="改名", docs="用改名卡修改自己的名称")
 
 
-@change_name.handle()
-async def _(event: Event, matcher: Matcher, args: Message = CommandArg()):
-    await is_lk_user(change_name, event)
+@change_name.handle([Depends(is_lk_user)])
+async def _(matcher: Matcher, args: Message = CommandArg()):
     if args.extract_plain_text():
         matcher.set_arg("user_new_name", args)
 
@@ -297,25 +236,8 @@ user_list = plugin_admin.cmd_as_group(cmd='用户列表', docs='列出本群所�
 
 @user_list.handle()
 async def _(bot: Bot, event: Event):
-    group_id = int(event.group_id)
-    member_list = await bot.get_group_member_list(group_id=group_id)
-    members = []
-    for member in member_list:
-        user_id = str(member['user_id'])
-        if lk_util.is_valid_user(user_id):
-            members.append(user_id)
-    num = len(members)
-    resp = '本群用户列表:\n'
-    i = 0
-    j = 0
-    while i < num:
-        for i in range(20 + j * 20):
-            if i == num:
-                break
-            resp += f'{i + 1}.{lk_util.get_name(members[i])}:{members[i]}\n'
-        await  user_list.send(resp + f'用户总数:{i}/{num}')
-        j += 1
-        resp = ''
+    mg = await LKBot.get_group_user_list(bot, int(event.group_id))
+    await mg.send_message(user_list)
 
 
 sup_bind = plugin_admin.cmd_as_group(cmd='添加绑定', docs="用法:/lk.添加绑定 @用户 [名称]\n为指定用户绑定名称",
@@ -394,19 +316,8 @@ all_user_list = plugin_master.cmd_as_group(cmd='所有用户', docs='列出所�
 
 @all_user_list.handle()
 async def _():
-    resp = '所有用户列表:\n'
-    i = 0
-    j = 0
-    id_list = users.get_id_list()
-    num = len(id_list)
-    for user_id in id_list:
-        if i > 20 * (j + 1):
-            await all_user_list.send(resp + f'用户总数:{i}/{num}')
-            j += 1
-            resp = ''
-        resp += f'{i + 1}.{lk_util.get_name(user_id)}:{user_id}\n'
-        i += 1
-    await all_user_list.send(resp + f'用户总数:{i}/{num}')
+    mg = await LKBot.get_user_list()
+    mg.send_message(all_user_list)
 
 
 broad_new = plugin_master.cmd_as_group(cmd="广播新内容", docs="向尝新模式的群聊广播新内容", permission=MASTER)

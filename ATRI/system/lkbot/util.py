@@ -9,12 +9,14 @@ from ATRI.utils.event import Event
 from ATRI.utils.apscheduler import scheduler
 
 from .config import config
-from .data.item import Item, ItemType, items
-from .data.shop import Shop, shops
+from .data.item import items
+from .data.item_func import register_core_func, item_funcs
+from .data.shop import shops
 from .data.user import users
 from .tools.daily_update import daily_update
+from .data.load_item import auto_load_items
 
-PLUGIN_VERSION = "0.5.0"
+PLUGIN_VERSION = "0.6.0"
 PLUGIN_DIR = Path(".") / "data" / "plugins" / "lkbot"
 
 
@@ -80,14 +82,19 @@ class BaseFunc:
         index = shop.get_goods_index(item_name)
         price = shop.get_goods_price_by_index(index)
         coin_type = shop.get_goods_coin_type_by_index(index)
+        money = price * num
         if coin_type == "ATRI币":
-            money = price * num
             if users.money_change(user_id, -money):
                 self.item_change(user_id, item_name, num)
                 return f"购买 {item_name}*{num} 成功，共花费{money}ATRI币，你还有{users.get_money(user_id)}ATRI币"
             return f"ATRI币不足，需要{money}ATRI币，而你只有{users.get_money(user_id)}ATRI币"
         else:
-            return "暂不支持物品购买"
+            if not items.has_item(coin_type):
+                return f"错误，请反馈:\n找不到交易货币`{coin_type}`"
+            if self.item_change(user_id, coin_type, -money):
+                self.item_change(user_id, item_name, num)
+                return f"购买 {item_name}*{num} 成功，共花费{money}{coin_type}，你还有{users.get_backpack(user_id).get_item_stack(coin_type).meta.num}{coin_type}"
+            return f"{coin_type}不足，需要{money}{coin_type}，而你只有{users.get_backpack(user_id).get_item_stack(coin_type).meta.num}{coin_type}"
 
     def sell_item(self, user_id, item_name, num) -> str:
         """用户回收(出售)物品"""
@@ -108,8 +115,8 @@ class BaseFunc:
         if not item.item_can_use():
             return False, f"物品 {item_name} 不能使用"
         backpack = users.get_backpack(user_id)
-        if item_name in backpack:
-            item_num = backpack[item_name]["num"]
+        if backpack.bp_has_item(item_name):
+            item_num = backpack.get_item_stack(item_name).meta.num
             if num == -1:
                 num = item_num
             if item_num < num:
@@ -204,31 +211,33 @@ class SignInEvent(Event):
 
 item_loading_event = Event()
 sign_in_event = SignInEvent()
+func_register_event = Event()
+init_finish_event = Event()
 
 
 def load_item_data():
-    """加载物品与商店数据，可调用以实现随时加载数据"""
+    """加载物品与商店数据，可通过调用以实现随时加载数据"""
     items.items_clear()
     shops.shops_clear()
-    """定义物品"""
-    rename_card = Item("改名卡", ItemType.PROP, item_info='用于修改自己的名字，改名时自动使用哦')
-    items.register(rename_card)
 
-    """定义商店与添加物品"""
-    base_shop = Shop("基础商店", "亚托莉开的小店,专门售卖一些实用基础物品给客户使用。")
-    base_shop.add_goods(rename_card, 100)
-    shops.register(base_shop)
+    # 从本地文件加载物品数据
+    auto_load_items()
 
+    # 可以在此事件为物品添加使用方法的添加
     item_loading_event.notify()
 
     log.success(f'物品商店注册完成:共注册{len(items.get_item_list())}个物品，{len(shops.get_shop_names())}个商店')
 
 
 def on_startup():
+    register_core_func()
+    func_register_event.notify()
+    log.success(f'物品方法注册成功:共注册{item_funcs.check_num()}个检测器，{item_funcs.func_num()}个物品方法')
     load_item_data()
     scheduler.add_job(daily_update, 'cron', hour=0, minute=0)
+    init_finish_event.notify()
 
-
-driver().on_startup(on_startup)
 
 lk_util = BaseFunc()
+
+driver().on_startup(on_startup)

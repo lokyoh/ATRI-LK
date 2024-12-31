@@ -9,7 +9,7 @@ from nonebot.adapters.onebot.v11.event import Event, GroupMessageEvent, PokeNoti
 from nonebot.adapters.onebot.v11.helpers import Cooldown, extract_image_urls
 from nonebot.adapters.onebot.v11.message import Message
 from nonebot.matcher import Matcher
-from nonebot.params import CommandArg, ArgPlainText
+from nonebot.params import CommandArg, ArgPlainText, Depends
 
 from ATRI import TEMP_DIR, RECORD_DIR, IMG_DIR
 from ATRI.service import Service
@@ -28,17 +28,15 @@ from .ai_chat import ai_chat, chat_clear
 from .img_chat import get_response
 
 plugin = Service("lk聊天").document("lk插件处理聊天的部分").type(Service.ServiceType.LKPLUGIN).version(
-    "0.1.2").main_cmd("chat")
+    "0.2.0").main_cmd("chat")
 
 _lmt_notice = ["慢...慢一..点❤", "冷静1下", "歇会歇会~~", "呜呜...别急", "太快了...受不了", "不要这么快呀"]
 
 tu_chat = plugin.on_command(cmd="图聊", docs="用法:图聊 [可选:文字]\n进行有关图像的一般聊天")
 
 
-@tu_chat.handle([Cooldown(10, prompt=choice(_lmt_notice))])
-async def _(event: Event, matcher: Matcher, args: Message = CommandArg()):
-    await is_chat_switch_on(tu_chat)
-    await is_lk_user(tu_chat, event)
+@tu_chat.handle([Cooldown(10, prompt=choice(_lmt_notice)), Depends(is_lk_user), Depends(is_chat_switch_on)])
+async def _(matcher: Matcher, args: Message = CommandArg()):
     text = args.extract_plain_text()
     if text:
         matcher.set_arg("chat_text", args)

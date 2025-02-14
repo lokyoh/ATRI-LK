@@ -197,7 +197,7 @@ async def _(event: PokeNotifyEvent, bot: Bot):
             await poke.send(img_msg(get_image_bytes(IMG_DIR / "atri" / img)))
 
 
-atri_voice = plugin.on_command(cmd="亚托莉语音", docs="随机亚托莉语音")
+atri_voice = plugin.on_command(cmd="/亚托莉语音", docs="随机亚托莉语音")
 
 
 @atri_voice.handle()

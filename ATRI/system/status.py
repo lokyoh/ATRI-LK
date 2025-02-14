@@ -12,10 +12,9 @@ from ATRI.log import log
 from ATRI.system.lkbot.tools.get_pic import local_image
 from ATRI.service import Service
 from ATRI.utils import Limiter
-from ATRI.utils.apscheduler import scheduler
 from ATRI.utils.img_editor import IMGEditor
 
-plugin = Service("状态").document("检查 ATRI 状态").type(Service.ServiceType.SYSTEM).version("1.0.0")
+plugin = Service("状态").document("检查 ATRI 状态").type(Service.ServiceType.SYSTEM).version("1.0.1")
 
 ping = plugin.on_command("/ping", "检测 ATRI 是否存活")
 
@@ -37,8 +36,7 @@ async def _():
 limiter = Limiter(5, 21600)
 
 
-@scheduler.scheduled_job("interval", name="状态检查", minutes=30, misfire_grace_time=15)
-async def _():
+async def check_status():
     log.info("检查资源消耗中...")
     msg, stat = get_status()
     if not stat:
@@ -62,6 +60,9 @@ async def _():
             return
     else:
         log.info("资源消耗正常")
+
+
+plugin.scheduler_jobs().add_job(check_status, "状态检查", trigger='interval', minutes=30, misfire_grace_time=15)
 
 
 def get_status() -> Tuple[MessageSegment, bool]:

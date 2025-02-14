@@ -196,22 +196,23 @@ LOVEMULCOUNT    INTEGER DEFAULT 0
         self._name.append(new_name)
         return True
 
-    def sign(self, user_id: str) -> bool:
+    def sign(self, user_id: str) -> tuple[bool, str]:
         """签到"""
         today = datetime.now().strftime("%Y-%m-%d")
         if self._userdata[user_id].lastsign == today:
-            return False
+            return False, "今日已签到"
         else:
             def _sign():
+                from ..util import sign_in_event
                 self._userdata[user_id].lastsign = today
                 self._userdata[user_id].signdays += 1
                 self.sql.update(f"LASTSIGN = '{today}', SIGNDAYS = {self._userdata[user_id].signdays}", f"ID={user_id}")
                 self._exp_change(user_id, 3, True)
                 self._money_change(user_id, 10)
                 self._love_change(user_id, 1, True)
+                return f'{sign_in_event.notify(user_id)}'
 
-            self._user_lock.run(_sign, user_id)()
-            return True
+            return True, self._user_lock.run(_sign, user_id)()
 
     def exp_change(self, user_id: str, num: int, mult: bool = True) -> bool:
         """增减经验"""

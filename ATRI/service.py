@@ -1,6 +1,4 @@
-import os
 import re
-import json
 from enum import Enum
 from pathlib import Path
 from types import ModuleType
@@ -23,10 +21,8 @@ from ATRI import service_list
 from ATRI.permission import Permission, MASTER_LIST
 from ATRI.exceptions import ReadFileError, WriteFileError, ServiceNotFoundError, ServiceRegisterError
 from ATRI.utils.model import BaseModel
-from ATRI.log import log
+from ATRI.utils.apscheduler import SchedulerController
 
-SERVICES_DIR = Path(".") / "data" / "services"
-SERVICES_DIR.mkdir(parents=True, exist_ok=True)
 CONFIG_DIR = Path(".") / "data" / "config"
 CONFIG_DIR.mkdir(parents=True, exist_ok=True)
 
@@ -36,8 +32,8 @@ class ServiceInfo(BaseModel):
     docs: str
     version: str
     type: str
-    permission: list
-    cmd_list: dict
+    permission: str | None | list
+    cmd_list: dict | None
 
 
 class ServiceConfig(BaseModel):
@@ -54,31 +50,12 @@ class CommandInfo(BaseModel):
 
 class Service:
     """
-    集成一套服务管理, 对功能信息持久化
-    服务文件结构:
-    {
-        "service": "Service name",
-        "docs": "Main helps and commands",
-        "version": ""
-        "type": "",
-        "permission": ["Master", ...],
-        "cmd_list": {
-            "/cmd0": {
-                "type": "Command type",
-                "docs": "Command help",
-                "aliases": ["More trigger ways."],
-            }
-        },
-        "enabled": True,
-        "only_admin": False,
-        "disable_user": [],
-        "disable_group": [],
-    }
+    服务统一注册管理系统
     """
 
     class ServiceType(Enum):
         SYSTEM = "系统服务"
-        LKPLUGIN = "LK服务by l_o_o_k"
+        LKPLUGIN = "LK服务"
         FUNCTION = "功能性服务"
         ENTERTAINMENT = "娱乐服务"
         GAME = "游戏服务"
@@ -106,7 +83,7 @@ class Service:
         self._docs = docs
         self._version = version
         self._type = type
-
+        self._cmd_list = {}
         self._permission = None
         self._priority = 10
         self._main_cmd = (str(),)
@@ -116,14 +93,7 @@ class Service:
         self._state = None
         self._path = Path(".") / "data" / "plugins" / self.service
         self.__generate_service_conf()
-        if version:
-            path = SERVICES_DIR / f"{self.service}.json"
-            if path.is_file():
-                data = json.loads(path.read_bytes())
-                if self._version != data.get("version", "none"):
-                    os.remove(path)
-                    log.info(f"{self.service}信息已更新")
-        service_list.append(service)
+        service_list[service] = self
 
     def document(self, context: str) -> "Service":
         """为服务添加说明"""
@@ -138,12 +108,6 @@ class Service:
     def version(self, version: str) -> "Service":
         """设置服务版本号"""
         self._version = version
-        path = SERVICES_DIR / f"{self.service}.json"
-        if path.is_file():
-            data = json.loads(path.read_bytes())
-            if self._version != data.get("version", "none"):
-                os.remove(path)
-                log.info(f"{self.service}信息已更新")
         return self
 
     def rule(self, rule: Optional[Union[Rule, T_RuleChecker]]) -> "Service":
@@ -156,13 +120,6 @@ class Service:
         """为服务添加权限判定"""
 
         self._permission = perm
-
-        data = self.load_service(self.service)
-        if perm.name in data["permission"]:
-            pass
-        else:
-            data["permission"].append(perm.name)  # type: ignore
-        self.save_service(data, self.service)
         return self
 
     def handlers(self, hand: Optional[List[T_Handler]]) -> "Service":
@@ -196,13 +153,13 @@ class Service:
         return self
 
     def is_nonebot_plugin(self) -> "Service":
-        cmd_list = self.__load_cmds()
+        """设置插件为nonebot插件"""
         name = "请参考对应插件文档"
-        cmd_list[name] = CommandInfo(type="ignore", docs=str(), aliases=list()).model_dump()
-        self.__save_cmds(cmd_list)
+        self._cmd_list[name] = CommandInfo(type="ignore", docs=str(), aliases=list()).model_dump()
         return self
 
     def get_path(self) -> Path:
+        """获取服务专属路径"""
         return self._path
 
     def __generate_service_conf(self):
@@ -218,60 +175,6 @@ class Service:
             data.write_into_file(path)
         except Exception:
             raise WriteFileError("Write service config failed")
-
-    def __generate_service_config(self, service: str, docs: str = str(), version: str = str(),
-                                  _type: ServiceType = ServiceType.OTHER) -> None:
-        path = SERVICES_DIR / f"{service}.json"
-        data = ServiceInfo(
-            service=service,
-            docs=docs,
-            version=version,
-            type=_type.value,
-            permission=list(),
-            cmd_list=dict(),
-        )
-        try:
-            data.write_into_file(path)
-        except Exception:
-            raise WriteFileError("Write service info failed!")
-
-    def save_service(self, service_data: dict, service: str) -> None:
-        if not service:
-            service = self.service
-
-        path = SERVICES_DIR / f"{service}.json"
-        if not path.is_file():
-            self.__generate_service_config(service, self._docs, self._version, self._type)
-
-        with open(path, "w", encoding="utf-8") as w:
-            w.write(json.dumps(service_data, indent=4, ensure_ascii=False))
-
-    def load_service(self, service: str) -> dict:
-        path = SERVICES_DIR / f"{service}.json"
-        if not path.is_file():
-            self.__generate_service_config(service, self._docs, self._version, self._type)
-
-        try:
-            data = json.loads(path.read_bytes())
-        except Exception:
-            with open(path, "w", encoding="utf-8") as w:
-                w.write(json.dumps({}))
-            self.__generate_service_config(service, self._docs, self._version, self._type)
-            data = json.loads(path.read_bytes())
-        return data
-
-    def __save_cmds(self, cmds: dict) -> None:
-        data = self.load_service(self.service)
-        temp_data: dict = data["cmd_list"]
-        temp_data.update(cmds)
-        self.save_service(data, self.service)
-
-    def __load_cmds(self) -> dict:
-        path = SERVICES_DIR / f"{self.service}.json"
-        if not path.is_file():
-            self.__generate_service_config(self.service, self._docs, self._version, self._type)
-        data = json.loads(path.read_bytes())
-        return data["cmd_list"]
 
     def on_message(
             self,
@@ -294,14 +197,10 @@ class Service:
             state = self._state
 
         if name:
-            cmd_list = self.__load_cmds()
-
             name = name + "-onmsg"
-
-            cmd_list[name] = CommandInfo(
+            self._cmd_list[name] = CommandInfo(
                 type="message", docs=docs, aliases=list()
             ).model_dump()
-            self.__save_cmds(cmd_list)
 
         matcher = Matcher.new(
             "message",
@@ -317,12 +216,8 @@ class Service:
         return matcher
 
     def on_notice(self, name: str, docs: str, block: bool = True) -> Type[Matcher]:
-        cmd_list = self.__load_cmds()
-
         name = name + "-onntc"
-
-        cmd_list[name] = CommandInfo(type="notice", docs=docs, aliases=list()).model_dump()
-        self.__save_cmds(cmd_list)
+        self._cmd_list[name] = CommandInfo(type="notice", docs=docs, aliases=list()).model_dump()
 
         matcher = Matcher.new(
             "notice",
@@ -338,12 +233,8 @@ class Service:
         return matcher
 
     def on_request(self, name: str, docs: str, block: bool = True) -> Type[Matcher]:
-        cmd_list = self.__load_cmds()
-
         name = name + "-onreq"
-
-        cmd_list[name] = CommandInfo(type="request", docs=docs, aliases=list()).model_dump()
-        self.__save_cmds(cmd_list)
+        self._cmd_list[name] = CommandInfo(type="request", docs=docs, aliases=list()).model_dump()
 
         matcher = Matcher.new(
             "request",
@@ -367,7 +258,6 @@ class Service:
             block: bool = True,
             **kwargs,
     ) -> Type[Matcher]:
-        cmd_list = self.__load_cmds()
         if not rule:
             rule = self._rule
         if not aliases:
@@ -376,10 +266,9 @@ class Service:
         if isinstance(cmd, tuple):
             cmd = ".".join(map(str, cmd))
 
-        cmd_list[cmd] = CommandInfo(
+        self._cmd_list[cmd] = CommandInfo(
             type="command", docs=docs, aliases=list(aliases)
         ).model_dump()
-        self.__save_cmds(cmd_list)
         commands = {cmd} | (aliases or set())
         return self.on_message(rule=command(*commands) & rule, block=block, **kwargs)
 
@@ -394,11 +283,7 @@ class Service:
             rule = self._rule
 
         name = list(keywords)[0] + "-onkw"
-
-        cmd_list = self.__load_cmds()
-
-        cmd_list[name] = CommandInfo(type="keyword", docs=docs, aliases=list(keywords)).model_dump()
-        self.__save_cmds(cmd_list)
+        self._cmd_list[name] = CommandInfo(type="keyword", docs=docs, aliases=list(keywords)).model_dump()
 
         return self.on_message(rule=keyword(*keywords) & rule, **kwargs)
 
@@ -413,9 +298,7 @@ class Service:
         if not rule:
             rule = self._rule
 
-        cmd_list = self.__load_cmds()
-        cmd_list[pattern] = CommandInfo(type="regex", docs=docs, aliases=list()).model_dump()
-        self.__save_cmds(cmd_list)
+        self._cmd_list[pattern] = CommandInfo(type="regex", docs=docs, aliases=list()).model_dump()
 
         return self.on_message(rule=regex(pattern, flags) & rule, **kwargs)
 
@@ -434,6 +317,24 @@ class Service:
         for m in MASTER_LIST:
             await bot.send_private_msg(user_id=m, message=message)
 
+    def get_info(self) -> ServiceInfo:
+        """获取该服务信息"""
+        p = self._permission
+        if p:
+            p = p.name
+        return ServiceInfo(
+            service=self.service,
+            docs=self._docs,
+            version=self._version,
+            type=self._type,
+            permission=p,
+            cmd_list=self._cmd_list
+        )
+
+    def scheduler_jobs(self) -> SchedulerController:
+        """该服务的计划任务控制器"""
+        return SchedulerController(self.service)
+
 
 class ServiceTools:
     """针对服务的工具类"""
@@ -443,27 +344,8 @@ class ServiceTools:
             raise ServiceNotFoundError("找不到指定服务")
         self.service = service
 
-    def save_service(self, service_data: ServiceInfo):
-        path = SERVICES_DIR / f"{self.service}.json"
-        if not path.is_file():
-            raise ReadFileError(
-                f"无法找到服务 {self.service} 对应的信息文件\n"
-                "请删除此目录下的文件: data/service/services\n"
-                "接着重新启动"
-            )
-
-        service_data.write_into_file(path)
-
     def load_service(self) -> ServiceInfo:
-        path = SERVICES_DIR / f"{self.service}.json"
-        if not path.is_file():
-            raise ReadFileError(
-                f"无法找到服务 {self.service} 对应的信息文件\n"
-                "请删除此目录下的文件: data/service/services\n"
-                "接着重新启动"
-            )
-
-        return ServiceInfo.read_from_file(path)
+        return service_list[self.service].get_info()
 
     def save_service_config(self, service_config: ServiceConfig):
         path = CONFIG_DIR / f"{self.service}.json"
@@ -488,8 +370,6 @@ class ServiceTools:
         return ServiceConfig.read_from_file(path)
 
     def del_service(self):
-        path = SERVICES_DIR / f"{self.service}.json"
-        path.unlink()
         c_path = CONFIG_DIR / f"{self.service}.json"
         c_path.unlink()
 

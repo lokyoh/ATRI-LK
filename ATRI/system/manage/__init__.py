@@ -66,7 +66,7 @@ def handle_command(
 
 
 plugin = Service("管理").document("控制 ATRI 的各项服务").type(Service.ServiceType.SYSTEM).permission(MASTER).version(
-    "1.0.0")
+    "1.0.1")
 
 block_user = plugin.on_command("封禁用户", "阻止目标用户使用 ATRI")
 handle_command(block_user, BotManager().block_user, "用户 {} 危！")
@@ -328,17 +328,17 @@ async def _(event: MessageEvent):
 
 
 from ATRI import driver
-from ATRI.utils.apscheduler import scheduler
 
 from .listener import init_listener
 
 driver().on_startup(init_listener)
 driver().on_startup(NonebotPluginManager().get_store_list)
 driver().on_startup(NonebotPluginManager().load_plugin)
-scheduler.scheduled_job(
+plugin.scheduler_jobs().add_job(
+    NonebotPluginManager().get_store_list,
+    "NoneBot商店刷新",
     "interval",
-    name="NoneBot 商店刷新",
     hours=1,
     max_instances=3,
-    misfire_grace_time=60,
-)(NonebotPluginManager().get_store_list)
+    misfire_grace_time=60
+)

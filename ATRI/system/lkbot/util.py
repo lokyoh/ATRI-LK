@@ -6,7 +6,6 @@ from nonebot.adapters.onebot.v11 import Message
 from ATRI import conf, driver
 from ATRI.log import log
 from ATRI.utils.event import Event
-from ATRI.utils.apscheduler import scheduler
 
 from .config import config
 from .data.item import items
@@ -16,7 +15,7 @@ from .data.user import users
 from .tools.daily_update import daily_update
 from .data.load_item import auto_load_items
 
-PLUGIN_VERSION = "0.6.0"
+PLUGIN_VERSION = "0.7.0"
 PLUGIN_DIR = Path(".") / "data" / "plugins" / "lkbot"
 
 
@@ -209,10 +208,10 @@ class SignInEvent(Event):
         return msg
 
 
-item_loading_event = Event()
-sign_in_event = SignInEvent()
-func_register_event = Event()
-init_finish_event = Event()
+item_loading_event = Event()  # 物品加载事件，在加载物品列表时触发
+sign_in_event = SignInEvent()  # 签到事件，在用户签到时触发
+func_register_event = Event()  # 物品功能注册事件，在注册物品时触发
+init_finish_event = Event()  # 初始化完成事件，在该插件系统所以数据加载完成后触发
 
 
 def load_item_data():
@@ -230,11 +229,13 @@ def load_item_data():
 
 
 def on_startup():
+    """所以插件加载完毕后启动时的启动项"""
+    from ATRI.system.lkbot import plugin
     register_core_func()
     func_register_event.notify()
     log.success(f'物品方法注册成功:共注册{item_funcs.check_num()}个检测器，{item_funcs.func_num()}个物品方法')
     load_item_data()
-    scheduler.add_job(daily_update, 'cron', hour=0, minute=0)
+    plugin.scheduler_jobs().add_job(daily_update, '每日更新任务', 'cron', hour=0, minute=0)
     init_finish_event.notify()
 
 

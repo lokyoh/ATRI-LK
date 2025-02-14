@@ -9,3 +9,5 @@
 !/plugins/lkchat/
 !/plugins/lkfarm/
 !/plugins/lkpet/
+!/plugins/signin.py
+!/plugins/feed.py

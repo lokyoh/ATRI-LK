@@ -6,13 +6,13 @@ from nonebot.adapters.onebot.v11 import Adapter
 
 from .configs import Config
 
-__version__ = "YHN-LK0-009"
+__version__ = "YHN-LK0-010"
 __sub_version__ = "Release"
 __conf_path = Path(".") / "config.yml"
 __conf = Config(__conf_path)
 
 conf = __conf.parse()
-service_list = []
+service_list = {}
 RES_DIR = Path(".") / "res"
 FONT_DIR = RES_DIR / "font"
 IMG_DIR = RES_DIR / "img"

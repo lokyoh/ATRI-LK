@@ -1,18 +1,15 @@
-import os
 from random import choice
 
 from nonebot.adapters.onebot.v11 import Bot
 from nonebot.adapters.onebot.v11.event import GroupMessageEvent, Event
 from nonebot.adapters.onebot.v11.helpers import Cooldown
 from nonebot.adapters.onebot.v11.message import Message
-from nonebot.exception import FinishedException
 from nonebot.matcher import Matcher
 from nonebot.params import CommandArg, ArgPlainText, Depends
 
 from ATRI.log import log
 from ATRI.permission import ADMIN, MASTER
 from ATRI.service import Service
-from ATRI.message import MessageBuilder
 
 from .checker import is_lk_user
 from .config import config, save_config
@@ -29,30 +26,6 @@ plugin = (Service("lk插件")
           .main_cmd("/lk"))
 
 _lmt_notice = ["慢...慢一..点❤", "冷静1下", "歇会歇会~~", "呜呜...别急", "太快了...受不了", "不要这么快呀"]
-
-sign_in = plugin.on_command(cmd='签到', docs="全新界面的签到系统")
-
-
-@sign_in.handle([Cooldown(60, prompt=choice(_lmt_notice)), Depends(is_lk_user)])
-async def _(event: Event):
-    r18_mode = not lk_util.is_safe_mode_group(event.group_id) if type(event) is GroupMessageEvent else True
-    try:
-        await sign_in.finish(await LKBot.sign_in(event.get_user_id(), r18_mode))
-    except FinishedException as e:
-        raise e
-    except Exception as e:
-        user_id = event.get_user_id()
-        if r18_mode:
-            path = os.path.join(PLUGIN_DIR, 'sign_in', 'r18', f"{user_id}.jpg")
-        else:
-            path = os.path.join(PLUGIN_DIR, 'sign_in', f"{user_id}.jpg")
-        if os.path.exists(path):
-            os.remove(path)
-        log.warning(f"{e}:{e.args}")
-        message = MessageBuilder().at(user_id)
-        message.text(f'签到成功,你已签到{users.get_user_data(user_id).signdays}天')
-        await sign_in.finish(message)
-
 
 my_info = plugin.on_command(cmd="我的信息", docs="查询自己的信息")
 

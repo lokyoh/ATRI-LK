@@ -1,5 +1,3 @@
-import os
-import json
 from typing import Dict
 from PIL import Image
 
@@ -7,7 +5,7 @@ from nonebot.adapters.onebot.v11 import MessageSegment
 
 from ATRI import __version__, conf, IMG_DIR, service_list, __sub_version__
 from ATRI.message import MessageBuilder, img_msg
-from ATRI.service import SERVICES_DIR, ServiceTools, Service
+from ATRI.service import ServiceTools, Service
 from ATRI.utils.img_editor import IMGEditor
 from ATRI.exceptions import ServiceNotFoundError
 from ATRI.log import log
@@ -61,15 +59,13 @@ class Helper:
         services: Dict[Service.ServiceType, list] = dict()
         for _type in Service.ServiceType:
             services[_type] = list()
-        for prefix in service_list:
-            f = os.path.join(SERVICES_DIR, f"{prefix}.json")
-            with open(f, "r", encoding="utf-8") as r:
-                service = json.load(r)
-                if not ServiceTools(prefix).load_service_config().enabled:
-                    services[Service.ServiceType.CLOSED].append(prefix)
-                    continue
-                _type = Service.ServiceType(service["type"])
-                services[_type].append(prefix)
+        for sname in service_list:
+            service = ServiceTools(sname)
+            if not service.load_service_config().enabled:
+                services[Service.ServiceType.CLOSED].append(sname)
+                continue
+            _type = Service.ServiceType(service.load_service().type)
+            services[_type].append(sname)
         return services
 
     def get_service_list(self) -> MessageSegment:

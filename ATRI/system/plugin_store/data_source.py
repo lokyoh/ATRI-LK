@@ -6,7 +6,7 @@ from pathlib import Path
 import nonebot
 
 from ATRI.log import log
-from ATRI.service import service_list
+from ATRI import service_list
 from ATRI.utils import request
 from ATRI.exceptions import PluginError
 

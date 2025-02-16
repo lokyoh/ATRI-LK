@@ -66,7 +66,7 @@ class Updater:
 
     @classmethod
     async def check(cls):
-        message = MessageBuilder().text(f"当前版本: {__version__}")
+        message = MessageBuilder().text(f"当前版本: {__version__} {__sub_version__}")
         l_v, l_v_t = await cls.show_latest_version()
         if l_v and l_v_t:
             if l_v[:11] > __version__[:11]:
@@ -77,7 +77,6 @@ class Updater:
                 if info:
                     if vs and vs[1] != __sub_version__:
                         message.text(f"请更新{vs[0]}最新补丁: {vs[1]}")
-                        message.text(info)
                     message.text(info)
                 else:
                     message.text("检查补丁版本失败")

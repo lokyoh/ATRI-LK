@@ -1,5 +1,5 @@
 from ATRI import driver as atri_driver
-from ATRI import __version__
+from ATRI import __version__, __sub_version__
 from ATRI.log import log
 from ATRI.utils.apscheduler import scheduler
 from ATRI.utils.check_update import CheckUpdate
@@ -14,7 +14,7 @@ driver = atri_driver()
 async def startup():
     await init_database()
 
-    log.info(f"当前版本: {__version__}")
+    log.info(f"当前版本: {__version__} {__sub_version__}")
 
     log.info("开始检查更新...")
     commit_info = await CheckUpdate.show_latest_commit_info()

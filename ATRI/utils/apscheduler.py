@@ -28,14 +28,25 @@ class SchedulerController:
 
     def add_job(self, func, name: str, trigger: str | BaseTrigger = 'date', **kwargs):
         if name in self.service_schedulers[self.service]:
-            raise BotRuntimeError(f'创建服务{self.service}的任务{name}失败：该任务名称已存在')
-        self.service_schedulers[self.service][name] = scheduler.add_job(func=func, trigger=trigger,
+            raise BotRuntimeError(f'创建服务`{self.service}`的任务`{name}`失败：该任务名称已存在')
+
+        def job_func(f):
+            def wrapper():
+                try:
+                    f()
+                except Exception as e:
+                    from ATRI.log import log
+                    log.error(f'在执行`{self.service}`的任务`{name}`时失败:`{e}`')
+
+            return wrapper
+
+        self.service_schedulers[self.service][name] = scheduler.add_job(func=job_func(func), trigger=trigger,
                                                                         id=f'{self.service}-{name}', name=name,
                                                                         **kwargs)
 
     def get_job(self, name) -> Job:
         if self.service not in self.service_schedulers or name not in self.service_schedulers[self.service]:
-            raise BotRuntimeError(f'找不到服务{self.service}的任务{name}')
+            raise BotRuntimeError(f'找不到服务`{self.service}`的任务`{name}`')
         return self.service_schedulers[self.service][name]
 
     def remove_job(self, name):

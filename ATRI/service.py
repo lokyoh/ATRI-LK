@@ -326,7 +326,7 @@ class Service:
             service=self.service,
             docs=self._docs,
             version=self._version,
-            type=self._type,
+            type=self._type.value,
             permission=p,
             cmd_list=self._cmd_list
         )

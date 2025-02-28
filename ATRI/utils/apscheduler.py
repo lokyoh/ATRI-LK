@@ -31,9 +31,12 @@ class SchedulerController:
             raise BotRuntimeError(f'创建服务`{self.service}`的任务`{name}`失败：该任务名称已存在')
 
         def job_func(f):
-            def wrapper():
+            async def wrapper():
                 try:
-                    f()
+                    if (f.__code__.co_flags & 80) != 0:
+                        await f()
+                    else:
+                        f()
                 except Exception as e:
                     from ATRI.log import log
                     log.error(f'在执行`{self.service}`的任务`{name}`时失败:`{e}`')

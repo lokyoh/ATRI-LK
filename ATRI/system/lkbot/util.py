@@ -3,7 +3,7 @@ from pathlib import Path
 
 from nonebot.adapters.onebot.v11 import Message
 
-from ATRI import conf, driver
+from ATRI import conf
 from ATRI.log import log
 from ATRI.utils.event import Event
 
@@ -15,7 +15,7 @@ from .data.user import users
 from .tools.daily_update import daily_update
 from .data.load_item import auto_load_items
 
-PLUGIN_VERSION = "0.7.0"
+PLUGIN_VERSION = "0.7.1"
 PLUGIN_DIR = Path(".") / "data" / "plugins" / "lkbot"
 
 
@@ -229,7 +229,7 @@ def load_item_data():
 
 
 def on_startup():
-    """所以插件加载完毕后启动时的启动项"""
+    """所有插件加载完毕后启动时的启动项"""
     from ATRI.system.lkbot import plugin
     register_core_func()
     func_register_event.notify()
@@ -240,5 +240,3 @@ def on_startup():
 
 
 lk_util = BaseFunc()
-
-driver().on_startup(on_startup)

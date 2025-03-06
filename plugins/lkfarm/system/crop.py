@@ -2,15 +2,13 @@ import os
 import re
 from datetime import date
 from enum import Enum
+from pathlib import Path
 from random import randint
 import yaml
 
-from ATRI import RES_DIR
 from ATRI.log import log
 from ATRI.system.lkbot.data.item import items, Item, ItemType
 from ATRI.system.lkbot.data.shop import Shop
-
-FARM_RES_PATH = RES_DIR / "lkfarm"
 
 
 class Season(Enum):
@@ -164,12 +162,12 @@ seed_shop = Shop("种子商店",
 crop_data_list = {}
 
 
-def load_crop_data():
+def load_crop_data(loader_name: str, path: Path):
     global crop_data_list
-    crop_dirs = os.listdir(FARM_RES_PATH / "Crop")
+    crop_dirs = os.listdir(path)
     for crop_dir in crop_dirs:
         try:
-            conf = yaml.safe_load((FARM_RES_PATH / "Crop" / crop_dir / "data.yml").read_bytes())
+            conf = yaml.safe_load((path / crop_dir / "data.yml").read_bytes())
             crop_data = CropData(crop_dir, conf)
             crop_name = conf["name"]
             crop_intro = conf.get("intro", "无介绍")
@@ -197,5 +195,5 @@ def load_crop_data():
             crop_data_list[crop_name] = crop_data
         except Exception as e:
             log.error(f"{e}: {e.args}")
-    log.success(f"共加载{len(crop_data_list)}种作物")
-    log.success(f"共{len(seed_shop.get_goods_list())}种作物上架商店")
+    log.success(f"{loader_name}共加载{len(crop_data_list)}种作物")
+    log.success(f"{loader_name}共有{len(seed_shop.get_goods_list())}种作物上架商店")

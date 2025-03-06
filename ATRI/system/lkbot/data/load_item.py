@@ -87,9 +87,13 @@ def load_items(item_file: Path):
             # 商品注册(可选)
             shop_data = data.get('shop', None)
             if shop_data:
-                shops.get_shop_by_name(shop_data['name']).add_goods(item, shop_data['price'], shop_data['type'])
+                if type(shop_data) is dict:
+                    shops.get_shop_by_name(shop_data['name']).add_goods(item, shop_data['price'], shop_data['type'])
+                else:
+                    for sd in shop_data:
+                        shops.get_shop_by_name(sd['name']).add_goods(item, sd['price'], sd['type'])
         except Exception as e:
-            log.warning(f'{item_file}-{key}无效物品配置:{e.args}')
+            log.error(f'{item_file}-{key}无效物品配置:{e.args}')
 
 
 def auto_load_items():

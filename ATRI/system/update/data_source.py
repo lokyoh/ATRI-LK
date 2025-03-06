@@ -69,13 +69,13 @@ class Updater:
         message = MessageBuilder().text(f"当前版本: {__version__} {__sub_version__}")
         l_v, l_v_t = await cls.show_latest_version()
         if l_v and l_v_t:
-            if l_v[:11] > __version__[:11]:
+            if l_v[:11] > __version__:
                 message.text(f"新版本已发布,请更新\n最新版本: {l_v}\n更新时间: {l_v_t}")
             else:
                 message.text(f"最新版本: {l_v}")
                 vs, info = await cls.show_latest_commit_info()
                 if info:
-                    if vs and vs[1] != __sub_version__:
+                    if vs and vs[1] != __sub_version__ and vs[0] > __version__:
                         message.text(f"请更新{vs[0]}最新补丁: {vs[1]}")
                     message.text(info)
                 else:

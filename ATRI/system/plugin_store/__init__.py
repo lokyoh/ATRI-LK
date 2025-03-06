@@ -8,7 +8,7 @@ from ATRI.exceptions import PluginError
 
 from .data_source import PluginManager
 
-plugin = Service("插件商店").document("插件商店").type(Service.ServiceType.SYSTEM).version("0.3.0").permission(MASTER)
+plugin = Service("插件商店").document("插件商店").type(Service.ServiceType.SYSTEM).version("0.3.1").permission(MASTER)
 
 plugins = plugin.on_command("插件列表", "查看插件列表")
 
@@ -88,8 +88,8 @@ async def _(args: Message = CommandArg()):
     if plugin_name in service_list:
         await add.finish(f"插件 {plugin_name} 已经安装")
     try:
-        await PluginManager.install_plugin(plugin_name, True)
-        await add.finish(f"{plugin_name}安装成功,部分功能需重启才生效")
+        await PluginManager.install_plugin(plugin_name, False)
+        await add.finish(f"{plugin_name}安装成功,部分功能需重启才生效(暂时关闭自动加载到下一版本)")
     except PluginError as e:
         await add.finish(e.prompt)
     except Exception as e:

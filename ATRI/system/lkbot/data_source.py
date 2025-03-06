@@ -1,29 +1,13 @@
-from ATRI import __version__
 from ATRI.message import MessageGroup, img_msg
 from ATRI.system.htmlrender import md_to_pic
 
-from .util import lk_util, PLUGIN_VERSION
+from .util import lk_util
 from .data.user import users
 from .data.item import ItemStack, items
 from .data.shop import shops
 
 
 class LKBot:
-    new_things = f'''ATRI-LK版
-{__version__} 新内容:
-    - lk农场part.1
-    - 更新插件
-    - 重启插件
-    - 插件商店插件'''
-    broad_message = f'''*本群已开启尝新模式，这是新功能的人工推送*
-#lk插件v{PLUGIN_VERSION}:
-    !输入"/帮助 lk插件"查看具体指令!
-    !输入"/lk.新内容"查看更新内容!
-#lk宠物v0.1.3-fix1:
-    !输入"/帮助 lk宠物"查看具体指令!
-#lk农场v0.1.1:
-    !输入"/帮助 lk农场"查看具体指令!'''
-
     @staticmethod
     def get_info(user_id):
         user = users.get_user_data(user_id)

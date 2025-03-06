@@ -14,7 +14,7 @@ from ATRI.service import Service
 from .checker import is_lk_user
 from .config import config, save_config
 from .data_source import LKBot
-from .util import lk_util, PLUGIN_VERSION, PLUGIN_DIR
+from .util import lk_util, PLUGIN_VERSION, PLUGIN_DIR, on_startup
 from .data.item import items, ItemStack
 from .data.shop import shops
 from .data.user import users
@@ -178,14 +178,6 @@ async def _(event: Event, name: str = ArgPlainText("user_new_name")):
         await change_name.finish("没有改名卡，请先购买")
 
 
-new_things = plugin.cmd_as_group(cmd="新内容", docs="展示更新内容")
-
-
-@new_things.handle()
-async def _():
-    await new_things.finish(LKBot.new_things)
-
-
 bind = plugin.cmd_as_group(cmd='绑定', docs="为自己绑定一个名称")
 
 
@@ -293,10 +285,4 @@ async def _():
     mg.send_message(all_user_list)
 
 
-broad_new = plugin_master.cmd_as_group(cmd="广播新内容", docs="向尝新模式的群聊广播新内容", permission=MASTER)
-
-
-@broad_new.handle()
-async def _(bot: Bot):
-    for group in config.test_groups:
-        await bot.send_group_msg(group_id=group, message=LKBot.broad_message)
+plugin.on_startup(on_startup)

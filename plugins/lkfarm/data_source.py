@@ -2,6 +2,7 @@ import os
 import re
 from datetime import date
 
+from ATRI import RES_DIR
 from ATRI.system.htmlrender import md_to_pic
 from ATRI.system.lkbot.util import item_loading_event, lk_util, sign_in_event
 from ATRI.system.lkbot.data.item import items, ItemType
@@ -12,10 +13,12 @@ from ATRI.log import log
 from .system.crop import load_crop_data, seed_shop, crop_data_list, CropData, Month, Season
 from .system.farm_user import user_farm_data
 
+FARM_RES_PATH = RES_DIR / "lkfarm"
+
 
 @item_loading_event.handle()
 def _():
-    load_crop_data()
+    load_crop_data('Core', FARM_RES_PATH / "Crop")
     shops.register(seed_shop)
 
 

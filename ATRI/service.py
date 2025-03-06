@@ -1,3 +1,4 @@
+import asyncio
 import re
 from enum import Enum
 from pathlib import Path
@@ -17,7 +18,8 @@ from nonebot.rule import Rule, command, keyword, regex
 from nonebot.adapters import Bot, Event
 from nonebot.adapters.onebot.v11 import Message, PrivateMessageEvent, GroupMessageEvent
 
-from ATRI import service_list
+from ATRI import service_list, driver
+from ATRI.log import log
 from ATRI.permission import Permission, MASTER_LIST
 from ATRI.exceptions import ReadFileError, WriteFileError, ServiceNotFoundError, ServiceRegisterError
 from ATRI.utils.model import BaseModel
@@ -52,6 +54,8 @@ class Service:
     """
     服务统一注册管理系统
     """
+
+    driver_started = False
 
     class ServiceType(Enum):
         SYSTEM = "系统服务"
@@ -335,6 +339,16 @@ class Service:
         """该服务的计划任务控制器"""
         return SchedulerController(self.service)
 
+    def on_startup(self, func):
+        """注册一个启动时执行的函数"""
+        if not self.driver_started:
+            driver().on_startup(func)
+        else:
+            if (func.__code__.co_flags & 80) != 0:
+                asyncio.run(func())
+            else:
+                func()
+
 
 class ServiceTools:
     """针对服务的工具类"""
@@ -414,3 +428,8 @@ def is_in_service(service: str) -> Rule:
             return True
 
     return Rule(_is_in_service)
+
+
+def driver_startup():
+    log.success("启动函数执行完成")
+    Service.driver_started = True

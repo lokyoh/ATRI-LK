@@ -1,7 +1,7 @@
 import re
 from datetime import datetime
 
-from ATRI.system.lkbot.tools.chat import genai
+from ATRI.system.lkbot.tools.chat import genai, sub_model_name
 from ATRI.utils.limiter import LimitedQueue
 
 
@@ -43,7 +43,7 @@ class PetModel:
         self.init_convo()
 
     def init_convo(self):
-        self.model = genai.GenerativeModel(model_name="gemini-1.5-flash",
+        self.model = genai.GenerativeModel(model_name=sub_model_name,
                                            generation_config=self.generation_config,
                                            safety_settings=self.safety_settings,
                                            system_instruction=f'''你需要实现一个与多用户聊天的应用场景，请注意区分不同用户。这个聊天场景中，你需要与不同用户对话。

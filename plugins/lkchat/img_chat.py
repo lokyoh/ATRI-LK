@@ -2,7 +2,7 @@ import os
 from pathlib import Path
 
 from ATRI.log import log
-from ATRI.system.lkbot.tools.chat import genai
+from ATRI.system.lkbot.tools.chat import genai, sub_model_name
 
 generation_config = {
     "temperature": 0.4,
@@ -30,7 +30,7 @@ safety_settings = [
     },
 ]
 
-model = genai.GenerativeModel(model_name="gemini-1.5-flash",
+model = genai.GenerativeModel(model_name=sub_model_name,
                               generation_config=generation_config,
                               safety_settings=safety_settings)
 

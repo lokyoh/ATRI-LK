@@ -8,7 +8,7 @@ from ATRI.log import log
 from ATRI.utils.limiter import RateLimiter, LimitedQueue
 from ATRI.system.htmlrender import md_to_pic
 from ATRI.system.lkbot.util import lk_util
-from ATRI.system.lkbot.tools.chat import genai
+from ATRI.system.lkbot.tools.chat import genai, model_name
 from ATRI.system.lkbot.tools.rec_editor import RECEditor
 
 
@@ -41,7 +41,7 @@ class ChatModel:
                 "threshold": "BLOCK_NONE"
             },
         ]
-        self.model = genai.GenerativeModel(model_name="gemini-1.0-pro",
+        self.model = genai.GenerativeModel(model_name=model_name,
                                            generation_config=generation_config,
                                            safety_settings=safety_settings,
                                            )

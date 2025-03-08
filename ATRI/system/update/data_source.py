@@ -75,7 +75,7 @@ class Updater:
                 message.text(f"最新版本: {l_v}")
                 vs, info = await cls.show_latest_commit_info()
                 if info:
-                    if vs and vs[1] != __sub_version__ and vs[0] > __version__:
+                    if vs and vs[1] != __sub_version__ and vs[0][:3] != 'Pre':
                         message.text(f"请更新{vs[0]}最新补丁: {vs[1]}")
                     message.text(info)
                 else:

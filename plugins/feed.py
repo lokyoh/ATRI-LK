@@ -13,7 +13,7 @@ from ATRI.system.lkbot.data.user import users, lk_db
 plugin = Service(
     "投喂",
     "向可爱的亚托利投喂食物",
-    "0.1.0",
+    "0.1.1",
     Service.ServiceType.LKPLUGIN
 )
 
@@ -34,6 +34,8 @@ feed_db = lk_db.get_table("LKFEEDDATA", '''
         DATE        TEXT    DEFAULT '2000-01-01'
         ''', 0, update_feed_db)
 
+love_num = 1
+
 
 def feed_func(user_id):
     message = MessageBuilder().at(user_id)
@@ -45,8 +47,8 @@ def feed_func(user_id):
         if content[0][0] == today:
             return '今天已经投喂过了'
         feed_db.update(f"DATE = '{today}'", f'ID={user_id}')
-    users.love_change(user_id, 1, False)
-    message.text('投喂食物成功，获得1点好感')
+    users.love_change(user_id, love_num, False)
+    message.text(f'投喂食物成功，获得{love_num}点好感')
     state, msg = users.sign(user_id)
     if state:
         message.text('今天尚未签到，已自动签到：')

@@ -22,14 +22,14 @@ from ATRI.system.lkbot.tools.get_pic import get_pic_from
 
 plugin = Service(
     "每日签到",
-    "亚托利的签到系统",
-    "0.1.0",
+    "亚托莉的签到系统",
+    "0.1.1",
     Service.ServiceType.LKPLUGIN
 )
 
 _lmt_notice = ["慢...慢一..点❤", "冷静1下", "歇会歇会~~", "呜呜...别急", "太快了...受不了", "不要这么快呀"]
 
-sign_in = plugin.on_command(cmd='签到', docs="亚托利的签到系统")
+sign_in = plugin.on_command(cmd='签到', docs="亚托莉的签到系统")
 
 
 @sign_in.handle([Cooldown(60, prompt=choice(_lmt_notice)), Depends(is_lk_user)])
@@ -96,10 +96,9 @@ async def get_pic(user_id, r18_mode: bool = False, src: str = 'lolicon'):
      .add_text(30, 450, f'签到成功！--{src}', 35)
      .add_right_text(420, 500, f'--你已签到{user_data.signdays}天', 25)
      .add_text(30, 540, f'等级: {user_data.lvl}', 25)
-     .add_text(30, 580, f'经验: {user_data.left_exp} / {user_data.get_lvl_exp()}', 25)
-     .add_text(30, 620, f'ATRI币: {user_data.money}', 25)
-     .add_text(30, 660, f'好感: {user_data.love}', 25)
-     .add_text(30, 700, f'宠物: {user_data.petname:}', 25)
+     .add_text(30, 590, f'经验: {user_data.left_exp} / {user_data.get_lvl_exp()}', 25)
+     .add_text(30, 640, f'ATRI币: {user_data.money}', 25)
+     .add_text(30, 690, f'好感: {user_data.love}', 25)
      .add_text(30, 740, f'日期: {datetime.now().strftime("%Y年%m月%d日 %H:%M")}', 25)
      .save_rgb(save_path)
      )

@@ -45,7 +45,7 @@ class Helper:
             temp_list.append(i)
         nickname = "、".join(map(str, temp_list))
         return (
-            MessageBuilder("吾乃 ATRI-LK版！")
+            MessageBuilder("吾乃 ATRI！")
             .text(f"可以称呼：{nickname}")
             .text(f"型号是：{__version__} {__sub_version__}")
             .text("想进一步了解:")

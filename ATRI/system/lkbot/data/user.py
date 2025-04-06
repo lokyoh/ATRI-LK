@@ -2,7 +2,6 @@ import copy
 from copy import deepcopy
 from datetime import datetime
 import json
-from sqlite3 import Connection
 
 from ATRI.log import log
 from ATRI.utils.event import Event
@@ -356,11 +355,6 @@ LOVEMULCOUNT    INTEGER DEFAULT 0
         self.sql.update(f"LOVEMUL = '{self._userdata[user_id].love_mul}'", f"ID = {user_id}")
         self.sql.update(f"LOVEMULCOUNT = '{self._userdata[user_id].love_mul_count}'", f"ID = {user_id}")
         return True
-
-
-class DataBaseUpdateEvent(Event):
-    def notify(self, connection: Connection, version: int):
-        super().notify(connection, version)
 
 
 lk_db = DataBase("lkbot.db")

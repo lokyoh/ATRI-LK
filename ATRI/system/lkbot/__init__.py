@@ -215,7 +215,7 @@ async def _(args: Message = CommandArg()):
         await sup_bind.finish('真是的，参数数量出错啦')
     if args[0].type != 'at':
         await sup_bind.finish('第一个参数为@用户啦')
-    await sup_bind.finish(LKBot.bind(args[0].data['qq'], args[1].get('text')))
+    await sup_bind.finish(LKBot.bind(args[0].data['qq'], args[1].data['text']))
 
 
 r18_mode_switch = plugin_admin.cmd_as_group(cmd="健康模式开关", docs="使用后更改群聊的健康模式", permission=ADMIN)

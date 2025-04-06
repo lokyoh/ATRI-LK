@@ -21,7 +21,7 @@ class Config(BaseModel):
 
 
 _config_manage = PluginConfig("lk插件", Config)
-config = _config_manage.config()
+config: Config = _config_manage.config()
 
 
 def load_config():

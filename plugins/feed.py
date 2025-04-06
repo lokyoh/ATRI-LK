@@ -12,14 +12,14 @@ from ATRI.system.lkbot.data.user import users, lk_db
 
 plugin = Service(
     "投喂",
-    "向可爱的亚托利投喂食物",
-    "0.1.1",
+    "向可爱的亚托莉投喂食物",
+    "0.2.0",
     Service.ServiceType.LKPLUGIN
 )
 
 _lmt_notice = ["慢...慢一..点❤", "冷静1下", "歇会歇会~~", "呜呜...别急", "太快了...受不了", "不要这么快呀"]
 
-feed = plugin.on_command("投食", "向可爱的亚托利投喂食物", aliases={'投喂', '投喂食物'})
+feed = plugin.on_command("投食", "向可爱的亚托莉投喂食物", aliases={'投喂', '投喂食物'})
 
 
 def update_feed_db(connection, version):
@@ -37,22 +37,26 @@ feed_db = lk_db.get_table("LKFEEDDATA", '''
 love_num = 1
 
 
+def chang_love_num(num: int):
+    global love_num
+    love_num = num
+
+
 def feed_func(user_id):
-    message = MessageBuilder().at(user_id)
+    message = MessageBuilder().at(user_id).text('')
     content = feed_db.select('DATE', f'ID={user_id}')
     today = datetime.now().strftime("%Y-%m-%d")
     if len(content) == 0:
         feed_db.insert('ID, DATE', f"{user_id}, '{today}'")
     else:
         if content[0][0] == today:
-            return '今天已经投喂过了'
+            return message.text('今天已经投喂过了')
         feed_db.update(f"DATE = '{today}'", f'ID={user_id}')
     users.love_change(user_id, love_num, False)
     message.text(f'投喂食物成功，获得{love_num}点好感')
     state, msg = users.sign(user_id)
     if state:
-        message.text('今天尚未签到，已自动签到：')
-        message.text(msg)
+        message.text(f'今天尚未签到，已自动签到：{msg}')
     return message
 
 

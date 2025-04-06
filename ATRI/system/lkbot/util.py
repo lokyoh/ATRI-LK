@@ -15,7 +15,7 @@ from .data.user import users
 from .tools.daily_update import daily_update
 from .data.load_item import auto_load_items
 
-PLUGIN_VERSION = "0.7.1"
+PLUGIN_VERSION = "0.7.2"
 PLUGIN_DIR = Path(".") / "data" / "plugins" / "lkbot"
 
 
@@ -24,7 +24,7 @@ class BaseFunc:
     其中.system.tools目录为工具类合集可随意使用，这些工具是lk插件添加的但并不包含lk插件的服务"""
     bind_tip = '还未绑定名称哟，使用指令 /lk.绑定 进行绑定'
     safe_mode_tip = '健康模式群聊无法使用此功能'
-    chat_switch_off = '此服务已关闭'
+    chat_switch_off = 'AI聊天服务已关闭'
     test_mode_tip = '此功能为测试功能，只能在测试模式群聊下使用'
 
     def __init__(self):
@@ -196,9 +196,6 @@ class BaseFunc:
 
 
 class SignInEvent(Event):
-    def __init__(self):
-        super().__init__()
-
     def notify(self, user_id):
         msg = "\n"
         for listener in self.listeners:

@@ -1,3 +1,4 @@
+import inspect
 import logging
 
 from apscheduler.job import Job
@@ -31,17 +32,25 @@ class SchedulerController:
             raise BotRuntimeError(f'创建服务`{self.service}`的任务`{name}`失败：该任务名称已存在')
 
         def job_func(f):
-            async def wrapper():
-                try:
-                    if (f.__code__.co_flags & 80) != 0:
+            from ATRI.log import log
+            if inspect.iscoroutinefunction(f):
+                async def wrapper():
+                    try:
+                        log.debug(f"开始执行`{self.service}`的任务`{name}`")
                         await f()
-                    else:
-                        f()
-                except Exception as e:
-                    from ATRI.log import log
-                    log.error(f'在执行`{self.service}`的任务`{name}`时失败:`{e}`')
+                    except Exception as e:
+                        log.error(f'在执行`{self.service}`的任务`{name}`时失败:`{e}`')
 
-            return wrapper
+                return wrapper
+            else:
+                async def wrapper():
+                    try:
+                        log.debug(f"开始执行`{self.service}`的任务`{name}`")
+                        f()
+                    except Exception as e:
+                        log.error(f'在执行`{self.service}`的任务`{name}`时失败:`{e}`')
+
+                return wrapper
 
         self.service_schedulers[self.service][name] = scheduler.add_job(func=job_func(func), trigger=trigger,
                                                                         id=f'{self.service}-{name}', name=name,

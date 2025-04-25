@@ -28,7 +28,6 @@ class UserData:
     love: int 用户好感值
     lvl: int 用户等级
     left_exp: int 用户升级剩余经验
-    petname: str 用户宠物名
     extra: dict 供其他插件使用的额外信息
     """
 
@@ -57,7 +56,6 @@ class UserData:
             self.love_mul_count = 0
         self.lvl = user_level_manager.to_lvl(self.exp)
         self.left_exp = user_level_manager.get_left_exp(self.exp, self.lvl)
-        self.petname = ''
         self.extra = {}
 
     def get_lvl_exp(self):
@@ -253,14 +251,6 @@ LOVEMULCOUNT    INTEGER DEFAULT 0
         self.sql.update(f"LOVE = '{self._userdata[user_id].love}'", f"ID = {user_id}")
         if mult:
             self.sql.update(f"LOVEMULCOUNT = '{self._userdata[user_id].love_mul_count}'", f"ID = {user_id}")
-
-    def petname_set(self, user_id: str, name: str):
-        """设置用户的宠物名，使用对lk宠物插件无效，只改变显示名称"""
-
-        def _petname_set():
-            self._userdata[user_id].petname = name
-
-        self._user_lock.run(_petname_set, user_id)()
 
     def get_user_name(self, user_id: str) -> str:
         """获取用户名，用户id错误会报错，lk_util.get_name为包装后的方法"""

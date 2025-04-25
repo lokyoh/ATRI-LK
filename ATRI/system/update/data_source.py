@@ -71,7 +71,7 @@ class Updater:
         if l_v and l_v_t:
             if l_v[:11] > __version__:
                 message.text(f"新版本已发布,请更新\n最新版本: {l_v}\n更新时间: {l_v_t}")
-            else:
+            elif l_v[:11] == __version__:
                 message.text(f"最新版本: {l_v}")
                 vs, info = await cls.show_latest_commit_info()
                 if info:

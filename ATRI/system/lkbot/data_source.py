@@ -1,7 +1,7 @@
 from ATRI.message import MessageGroup, img_msg
 from ATRI.system.htmlrender import md_to_pic
 
-from .util import lk_util
+from .util import lk_util, user_info_event
 from .data.user import users
 from .data.item import ItemStack, items
 from .data.shop import shops
@@ -14,9 +14,8 @@ class LKBot:
         info = f'''用户 {user.name}:
 等级:{user.lvl} 升级还需要{user.get_lvl_exp() - user.left_exp}经验
 ATRI币:{user.money}
-好感:{user.love}
-宠物:{user.petname}'''
-        return info
+好感:{user.love}'''
+        return user_info_event.notify(user_id, info)
 
     @staticmethod
     def get_backpack_info(user_id):
@@ -51,10 +50,10 @@ ATRI币:{user.money}
     @staticmethod
     def bind(user_id, name):
         name = lk_util.clean_str(name)
-        if lk_util.is_valid_user(user_id):
-            return f"那个...{user_id} 已绑定名称 {lk_util.get_name(user_id)} 啦"
         if len(name) > 10 or name == '':
             return "那个...名称字数超出限制10或为空"
+        if lk_util.is_valid_user(user_id):
+            return f"那个...{user_id} 已绑定名称 {lk_util.get_name(user_id)} 啦"
         if not lk_util.is_valid_name(name):
             return "那个...这个名字不太合适吧"
         if users.add_user(user_id, name):

@@ -127,10 +127,10 @@ class FarmSystem:
     @staticmethod
     def get_positions(text) -> list:
         p_list = []
-        match = re.match(r"(?: ?[A-D][1-8]-[A-D][1-8]| ?[A-D][1-8])+$", text)
+        match = re.match(r"(?: ?[A-D][1-8][-_][A-D][1-8]| ?[A-D][1-8])+$", text)
         if match:
             position = match[0]
-            m_match = re.findall(r"[A-D][1-8]-[A-D][1-8]", position)
+            m_match = re.findall(r"[A-D][1-8][-_][A-D][1-8]", position)
             for m in m_match:
                 position = position.replace(str(m), "")
                 start_x = ord(min(m[0], m[3]))

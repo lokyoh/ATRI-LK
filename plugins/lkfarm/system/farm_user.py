@@ -302,9 +302,9 @@ class UserFarmDataManager:
         self._init_farm_data(user_id)
         data: FarmField = self._farm_cache[user_id].get_field(row, line)
         if data.state == 0:
-            return False, f"{row}{line} 请先锄地"
+            return False, f"请先锄地"
         if data.crop != "" or data.state == 0:
-            return False, f"{row}{line} 已经有作物了"
+            return False, f"已经有作物了"
         if not crop in crop_data_list:
             return False, f"{crop} 的作物数据未找到"
         month = date.today().month
@@ -323,9 +323,9 @@ class UserFarmDataManager:
         self._init_farm_data(user_id)
         data: FarmField = self._farm_cache[user_id].get_field(row, line)
         if data.state == 0:
-            return False, f"{row}{line} 请先锄地"
+            return False, f"请先锄地"
         if data.water == 1:
-            return False, f"{row}{line} 已经浇水了"
+            return False, f"已经浇水了"
         if not self._endurance_change(user_id, -20):
             return False, "体力不足"
         data.water = 1
@@ -338,14 +338,14 @@ class UserFarmDataManager:
         self._init_farm_data(user_id)
         data: FarmField = self._farm_cache[user_id].get_field(row, line)
         if data.state == 0:
-            return False, f"{row}{line} 请先锄地"
+            return False, f"请先锄地"
         if data.crop == "":
-            return False, f"{row}{line} 没有作物"
+            return False, f"没有作物"
         if not data.crop in crop_data_list:
-            return False, f"{row}{line} 未知作物"
+            return False, f"未知作物"
         crop_data: CropData = crop_data_list[data.crop]
         if not crop_data.can_harvest(data.days, data.harvest):
-            return False, f"{row}{line} 不可收获"
+            return False, f"不可收获"
         if crop_data.is_lasting():
             data.harvest = True
         else:
@@ -364,7 +364,7 @@ class UserFarmDataManager:
         self._init_farm_data(user_id)
         data: FarmField = self._farm_cache[user_id].get_field(row, line)
         if data.state == 1:
-            return False, f"{row}{line} 已经锄过地了"
+            return False, f"已经锄过地了"
         if not self._endurance_change(user_id, -20):
             return False, "体力不足"
         data.state = 1

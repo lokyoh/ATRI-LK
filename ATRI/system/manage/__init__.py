@@ -66,7 +66,7 @@ def handle_command(
 
 
 plugin = Service("管理").document("控制 ATRI 的各项服务").type(Service.ServiceType.SYSTEM).permission(MASTER).version(
-    "1.0.2")
+    "1.0.3")
 
 block_user = plugin.on_command("封禁用户", "阻止目标用户使用 ATRI")
 handle_command(block_user, BotManager().block_user, "用户 {} 危！")
@@ -87,14 +87,14 @@ handle_command(
     "服务 {} 已全局",
 )
 
-toggle_group_service = plugin.on_command("控制", "针对所在群禁用/启用某一服务", permission=ADMIN)
+toggle_group_service = plugin.on_command("/控制", "针对所在群禁用/启用某一服务", permission=ADMIN)
 handle_command(
     toggle_group_service,
     BotManager().toggle_group_service,
     "服务 {} 已针对本群",
 )
 
-track_error = plugin.on_command("追踪", "根据ID获取对应报错信息", aliases={"/track"})
+track_error = plugin.on_command("/追踪", "根据ID获取对应报错信息", aliases={"/track"})
 handle_command(
     track_error,
     BotManager().track_error,
@@ -245,7 +245,7 @@ async def _():
     await get_group_req_list.finish(result)
 
 
-recall_msg = plugin.on_command("撤回", "撤回 ATRI 已发送的信息", to_bot())
+recall_msg = plugin.on_command("/撤回", "撤回 ATRI 已发送的信息", to_bot())
 
 
 @recall_msg.handle()

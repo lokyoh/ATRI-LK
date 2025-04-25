@@ -15,7 +15,7 @@ from .data.user import users
 from .tools.daily_update import daily_update
 from .data.load_item import auto_load_items
 
-PLUGIN_VERSION = "0.7.2"
+PLUGIN_VERSION = "0.8.0"
 PLUGIN_DIR = Path(".") / "data" / "plugins" / "lkbot"
 
 
@@ -205,10 +205,18 @@ class SignInEvent(Event):
         return msg
 
 
+class UserInfoEvent(Event):
+    def notify(self, user_id, info: str):
+        for listener in self.listeners:
+            info = listener(user_id, info)
+        return info
+
+
 item_loading_event = Event()  # 物品加载事件，在加载物品列表时触发
 sign_in_event = SignInEvent()  # 签到事件，在用户签到时触发
 func_register_event = Event()  # 物品功能注册事件，在注册物品时触发
 init_finish_event = Event()  # 初始化完成事件，在该插件系统所以数据加载完成后触发
+user_info_event = UserInfoEvent()  # 玩家信息事件
 
 
 def load_item_data():

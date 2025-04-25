@@ -1,3 +1,4 @@
+import base64
 from io import BytesIO
 from pathlib import Path
 from time import sleep
@@ -65,3 +66,14 @@ def img_msg(file: str | bytes | BytesIO | Path) -> MessageSegment:
 
 def rec_msg(file: str | bytes | BytesIO | Path) -> MessageSegment:
     return MessageSegment.record(file)
+
+
+def file_msg(name: str, data: bytes):
+    """用于上传文件，只接受文件的bytes数据"""
+    return MessageSegment(
+        'file',
+        {
+            "name": name,
+            "file": f'base64://{base64.b64encode(data).decode('utf-8')}'
+        }
+    )

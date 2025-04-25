@@ -215,7 +215,7 @@ async def _(args: Message = CommandArg()):
         await sup_bind.finish('真是的，参数数量出错啦')
     if args[0].type != 'at':
         await sup_bind.finish('第一个参数为@用户啦')
-    await sup_bind.finish(LKBot.bind(args[0].data['qq'], args[1].data['text']))
+    await sup_bind.finish(LKBot.bind(args[0].data['qq'], args[1].data.get('text', '')))
 
 
 r18_mode_switch = plugin_admin.cmd_as_group(cmd="健康模式开关", docs="使用后更改群聊的健康模式", permission=ADMIN)
@@ -269,7 +269,7 @@ async def _(args: Message = CommandArg()):
     if args[0].type != 'at':
         await force_change_name.finish('第一个参数为@用户啦')
     user_id = args[0].data['qq']
-    name = lk_util.clean_str(args[1].data.get('text'))
+    name = lk_util.clean_str(args[1].data.get('text', ''))
     if not lk_util.is_valid_user(user_id):
         await force_change_name.finish('可惜捏，没找到那个人')
     _, result = lk_util.user_change_name(user_id, name)

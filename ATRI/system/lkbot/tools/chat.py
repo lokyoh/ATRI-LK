@@ -4,7 +4,7 @@ from ..config import config
 
 genai.configure(api_key=config.api_key)
 
-model_name = 'gemini-1.5-pro'
+model_name = 'gemini-2.0-flash'
 sub_model_name = 'gemini-1.5-flash'
 
 

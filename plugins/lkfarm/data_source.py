@@ -2,12 +2,16 @@ import os
 import re
 from datetime import date
 
+from nonebot.adapters.onebot.v11 import Event
+from nonebot.internal.matcher import Matcher
+from nonebot.internal.params import Depends
+
 from ATRI import RES_DIR
 from ATRI.system.htmlrender import md_to_pic
-from ATRI.system.lkbot.util import item_loading_event, lk_util, sign_in_event
-from ATRI.system.lkbot.data.item import items, ItemType
-from ATRI.system.lkbot.data.shop import shops
-from ATRI.system.lkbot.tools.daily_update import daily_update_event
+from ATRI.system.lkapi.bot import util as lk_util
+from ATRI.system.lkapi.bot.events import item_loading_event, sign_in_event, daily_update_event
+from ATRI.system.lkapi.entity.item import items, ItemType
+from ATRI.system.lkapi.entity.shop import shops
 from ATRI.log import log
 
 from .system.crop import load_crop_data, seed_shop, crop_data_list, CropData, Month, Season
@@ -81,7 +85,7 @@ class FarmSystem:
         user_id = str(user_id)
         return user_farm_data.has_user(user_id)
 
-    async def check_user(self, matcher, event):
+    async def check_user(self, matcher: Matcher, event: Event):
         if not self.is_valid_farm_user(event.user_id):
             await matcher.finish("请先使用 /farm.新农场 新建个农场")
 
@@ -196,3 +200,5 @@ class FarmSystem:
 
 
 farm_system = FarmSystem()
+
+CheckFarmUser = Depends(farm_system.check_user)

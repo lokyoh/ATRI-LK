@@ -5,13 +5,13 @@ from nonebot.adapters.onebot.v11.event import GroupMessageEvent, Event
 from nonebot.adapters.onebot.v11.helpers import Cooldown
 from nonebot.adapters.onebot.v11.message import Message
 from nonebot.matcher import Matcher
-from nonebot.params import CommandArg, ArgPlainText, Depends
+from nonebot.params import CommandArg, ArgPlainText
 
 from ATRI.log import log
 from ATRI.permission import ADMIN, MASTER
 from ATRI.service import Service
 
-from .checker import is_lk_user
+from .checker import IsLkUser
 from .config import config, save_config
 from .data_source import LKBot
 from .util import lk_util, PLUGIN_VERSION, PLUGIN_DIR, on_startup
@@ -19,18 +19,19 @@ from .data.item import items, ItemStack
 from .data.shop import shops
 from .data.user import users
 
-plugin = (Service("lk插件")
-          .document(f"l_o_o_k的综合性插件")
-          .type(Service.ServiceType.LKPLUGIN)
-          .version(PLUGIN_VERSION)
-          .main_cmd("/lk"))
+plugin = Service(
+    "lk插件",
+    "l_o_o_k的综合性用户系统插件",
+    PLUGIN_VERSION,
+    Service.ServiceType.LKPLUGIN
+).main_cmd("/lk")
 
 _lmt_notice = ["慢...慢一..点❤", "冷静1下", "歇会歇会~~", "呜呜...别急", "太快了...受不了", "不要这么快呀"]
 
 my_info = plugin.on_command(cmd="我的信息", docs="查询自己的信息")
 
 
-@my_info.handle([Depends(is_lk_user)])
+@my_info.handle([IsLkUser])
 async def _(event: Event):
     await my_info.finish(LKBot.get_info(event.get_user_id()))
 
@@ -38,7 +39,7 @@ async def _(event: Event):
 my_backpack = plugin.on_command(cmd="我的背包", docs="查看背包中的内容")
 
 
-@my_backpack.handle([Depends(is_lk_user)])
+@my_backpack.handle([IsLkUser])
 async def _(event: Event):
     await LKBot.get_backpack_info(event.get_user_id()).send_message(my_backpack)
 
@@ -60,7 +61,7 @@ async def _(item_name=ArgPlainText("item_inquiry_name")):
 use_item = plugin.on_command(cmd="/使用", docs="使用指定物品,'全部物品'使用全部,'物品*n'使用n个物品")
 
 
-@use_item.handle([Depends(is_lk_user)])
+@use_item.handle([IsLkUser])
 async def _(matcher: Matcher, args: Message = CommandArg()):
     if args.extract_plain_text():
         matcher.set_arg("use_item_name", args)
@@ -84,7 +85,7 @@ async def _(event: Event, item_name=ArgPlainText("use_item_name")):
 recycle_item = plugin.on_command(cmd="/回收", docs="将指定数量物品换成ATRI币,'全部物品'回收全部,'物品*n'回收n个物品")
 
 
-@recycle_item.handle([Depends(is_lk_user)])
+@recycle_item.handle([IsLkUser])
 async def _(matcher: Matcher, args: Message = CommandArg()):
     if args.extract_plain_text():
         matcher.set_arg("recycle_item", args)
@@ -131,7 +132,7 @@ async def _(shop_name=ArgPlainText("shop_name")):
 buy_item = plugin.on_command(cmd="/购买", docs="从指定商店中购买指定数量的商品\n用法:/lk.购买 [商店名] [物品|物品*n]")
 
 
-@buy_item.handle([Depends(is_lk_user)])
+@buy_item.handle([IsLkUser])
 async def _(matcher: Matcher, args: Message = CommandArg()):
     if args.extract_plain_text():
         args = args.extract_plain_text().split(' ')
@@ -161,7 +162,7 @@ async def _(event: Event, shop_name: str = ArgPlainText("buy_shop_name"),
 change_name = plugin.cmd_as_group(cmd="改名", docs="用改名卡修改自己的名称")
 
 
-@change_name.handle([Depends(is_lk_user)])
+@change_name.handle([IsLkUser])
 async def _(matcher: Matcher, args: Message = CommandArg()):
     if args.extract_plain_text():
         matcher.set_arg("user_new_name", args)

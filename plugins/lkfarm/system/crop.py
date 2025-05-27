@@ -7,8 +7,9 @@ from random import randint
 import yaml
 
 from ATRI.log import log
-from ATRI.system.lkbot.data.item import items, Item, ItemType
-from ATRI.system.lkbot.data.shop import Shop
+from ATRI.system.lkapi.entity.item import items, Item, ItemType
+from ATRI.system.lkapi.entity.shop import Shop
+from ATRI.exceptions import str_traceback
 
 
 class Season(Enum):
@@ -194,6 +195,6 @@ def load_crop_data(loader_name: str, path: Path):
                 seed_shop.add_goods(seed, crop_data.get_seed_price())
             crop_data_list[crop_name] = crop_data
         except Exception as e:
-            log.error(f"{e}: {e.args}")
+            log.error(f"加载作物失败:\n{str_traceback(e)}")
     log.success(f"{loader_name}共加载{len(crop_data_list)}种作物")
     log.success(f"{loader_name}共有{len(seed_shop.get_goods_list())}种作物上架商店")

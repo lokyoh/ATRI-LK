@@ -4,7 +4,7 @@ from .item import Item, items
 
 
 class Shop:
-    """创建一个商店"""
+    """商店"""
 
     def __init__(self, shop_name: str, shop_info: str = ""):
         self._name = shop_name
@@ -132,3 +132,4 @@ class ShopRegister:
 
 
 shops = ShopRegister()
+"""所有商店数据"""

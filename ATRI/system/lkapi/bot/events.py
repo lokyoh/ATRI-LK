@@ -6,3 +6,5 @@ from ATRI.system.lkbot.util import (
     user_info_event
 )
 from ATRI.system.lkbot.tools.daily_update import daily_update_event
+
+from ..entity.user import user_name_changed_event

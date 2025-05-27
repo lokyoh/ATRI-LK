@@ -21,18 +21,18 @@ class CheckUpdate:
         return req.json()
 
     @classmethod
-    async def show_latest_commit_info(cls) -> str:
+    async def show_latest_commit_info(cls) -> tuple | None:
         try:
             data = await cls._get_commits_info()
         except Exception:
             log.error("获取最新推送信息失败...")
-            return str()
+            return None
 
         try:
             commit_data: dict = data[0]
         except Exception:
             log.error("GitHub 数据结构已更改, 请前往仓库提交 Issue.")
-            return str()
+            return None
 
         c_info = commit_data["commit"]
         c_msg = c_info["message"]
@@ -43,7 +43,7 @@ class CheckUpdate:
         shanghai_datetime = utc_datetime.astimezone(pytz.timezone("Asia/Shanghai"))
         c_time = shanghai_datetime.strftime("%Y-%m-%d %H:%M")
 
-        return f"Latest commit {c_msg} | sha: {c_sha} | time: {c_time}"
+        return c_msg, c_sha, c_time
 
     @classmethod
     async def show_latest_version(cls) -> tuple:

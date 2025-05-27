@@ -17,10 +17,13 @@ async def startup():
     log.info("开始检查更新...")
     commit_info = await CheckUpdate.show_latest_commit_info()
     if commit_info:
-        log.info(commit_info)
+        log.info(f"Latest commit {commit_info[0]} | sha: {commit_info[1]} | time: {commit_info[2]}")
     l_v, l_v_t = await CheckUpdate.show_latest_version()
     if l_v and l_v_t:
-        if l_v[:11] > __version__:
+        if l_v[:11] > __version__ or (
+                l_v != __version__ and l_v[:11] == __version__ and l_v[12:] != __sub_version__ and l_v[
+                                                                                                   12:15] != 'Pre') or (
+                l_v == __version__ and __sub_version__ != 'Release'):
             log.warning("新版本已发布, 请更新")
             log.warning(f"最新版本: {l_v} 更新时间: {l_v_t}")
             sleep(3)

@@ -88,6 +88,8 @@ class UserData:
 
 
 class UserNameChangedEvent(Event):
+    """用户名改变事件"""
+
     def notify(self, user_id: str, user_name: str):
         super().notify(user_id, user_name)
 
@@ -97,6 +99,7 @@ class Users:
     用户信息管理器
     """
     user_name_changed_event = UserNameChangedEvent()
+    """用户名改变事件"""
     _lock = SingleLock()
     _name_lock = SingleLock()
     _user_lock = GroupLock()
@@ -348,4 +351,6 @@ LOVEMULCOUNT    INTEGER DEFAULT 0
 
 
 lk_db = DataBase("lkbot.db")
+"""插件专用数据库"""
 users = Users()
+"""管理用户数据"""

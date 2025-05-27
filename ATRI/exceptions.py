@@ -1,17 +1,17 @@
 import time
+import traceback
 from pathlib import Path
 from typing import Optional
-from traceback import format_exc
 
 from nonebot.matcher import Matcher
 from nonebot.adapters.onebot.v11 import ActionFailed
 from nonebot.adapters.onebot.v11 import Bot, GroupMessageEvent
 from nonebot.message import run_postprocessor
 
-from .log import log
-from .message import MessageBuilder
-from .utils import Limiter, gen_random_str
-from .utils.model import BaseModel
+from ATRI.log import log
+from ATRI.message import MessageBuilder
+from ATRI.utils import Limiter, gen_random_str
+from ATRI.utils.model import BaseModel
 
 ERROR_DIR = Path(".") / "data" / "errors"
 ERROR_DIR.mkdir(parents=True, exist_ok=True)
@@ -47,7 +47,7 @@ class BaseBotException(Exception):
 
     def __init__(self, prompt: Optional[str]) -> None:
         self.prompt = prompt or self.__class__.prompt or self.__class__.__name__
-        self.track_id = _save_error(self.prompt, format_exc())
+        self.track_id = _save_error(self.prompt, traceback.format_stack()[-2])
         super().__init__(self.prompt)
 
 
@@ -71,32 +71,12 @@ class RequestError(BaseBotException):
     prompt = "网页/接口请求错误"
 
 
-class GetStatusError(BaseBotException):
-    prompt = "获取状态失败"
-
-
 class FormatError(BaseBotException):
     prompt = "格式错误"
 
 
 class ServiceRegisterError(BaseBotException):
     prompt = "服务注册错误"
-
-
-class BilibiliDynamicError(BaseBotException):
-    prompt = "b站动态订阅错误"
-
-
-class TwitterDynamicError(BaseBotException):
-    prompt = "Twitter动态订阅错误"
-
-
-class ThesaurusError(BaseBotException):
-    prompt = "词库相关错误"
-
-
-class RssError(BaseBotException):
-    prompt = "RSS订阅错误"
 
 
 class ServiceNotFoundError(BaseBotException):
@@ -122,19 +102,19 @@ async def _(bot: Bot, event, matcher: Matcher, exception: Optional[Exception]):
     if isinstance(exception, BaseBotException):
         exception: BaseBotException
         prompt = "机器人基本错误 " + exception.prompt or exception.__class__.__name__
-        track_id = _save_error(prompt, format_exc())
+        track_id = _save_error(prompt, str_traceback(exception))
         log.warning(f"BotException: {prompt}")
     elif isinstance(exception, ActionFailed):
         prompt = "发送错误 请参考协议端输出"
-        track_id = _save_error(prompt, format_exc())
+        track_id = _save_error(prompt, str_traceback(exception))
         log.warning(f"ActionFailed: {prompt}")
     elif isinstance(exception, Exception):
         prompt = "其他错误 " + exception.__class__.__name__
-        track_id = _save_error(prompt, format_exc())
+        track_id = _save_error(prompt, str_traceback(exception))
         log.warning(f"Exception: {prompt}")
     else:
         prompt = "未知错误 " + exception.__class__.__name__
-        track_id = _save_error(prompt, format_exc())
+        track_id = _save_error(prompt, str_traceback(exception))
         log.warning(f"Ignore Exception: {prompt}")
 
     log.error(f"Error Track ID: {track_id}")
@@ -159,3 +139,9 @@ async def _(bot: Bot, event, matcher: Matcher, exception: Optional[Exception]):
         await bot.send(event, msg)
     except Exception:
         return
+
+
+def str_traceback(e) -> str:
+    """获取错误的追踪信息"""
+    traceback_msg = traceback.format_exception(type(e), e, e.__traceback__)
+    return ''.join([traceback_msg[0]] + traceback_msg[-2:])

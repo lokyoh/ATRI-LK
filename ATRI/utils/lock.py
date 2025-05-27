@@ -25,7 +25,7 @@ class SingleLock:
                 r = func(*args, **kwargs)
             except Exception as e:
                 self._lock.release()
-                raise e
+                raise e from e
             self._lock.release()
             return r
 
@@ -55,10 +55,10 @@ class GroupLock:
                     r = func(*args, **kwargs)
                 except Exception as e:
                     self._lock[key].release()
-                    raise e
+                    raise e from e
                 self._lock[key].release()
                 return r
             else:
-                raise RuntimeError(f"非法关键字{key}")
+                raise ValueError(f"非法关键字{key}")
 
         return wrapper

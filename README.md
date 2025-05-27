@@ -85,7 +85,7 @@
 - ~~以图搜番~~
 - ATRI语（加密、解密，改自[`rcnb`](https://github.com/rcnbapp/RCNB.js)）
 - 简单骰子
-- ~~b站动态订阅~~
+- b站动态订阅
 - 谁是卷王 (基于 wakatime)
 - 自定义词库（多种方式匹配）
 - 看不懂的笑话

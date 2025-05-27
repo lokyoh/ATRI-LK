@@ -160,6 +160,7 @@ class ItemRegister:
 
 
 items = ItemRegister()
+"""所有物品数据"""
 
 
 class ItemMeta:

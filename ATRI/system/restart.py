@@ -1,24 +1,22 @@
 import os
-import platform
 from pathlib import Path
+import sys
 
 from nonebot.adapters.onebot.v11 import Bot, Event, PrivateMessageEvent, GroupMessageEvent
 
 from ATRI import driver as atri_driver
-from ATRI.log import log
 from ATRI.service import Service
 from ATRI.permission import MASTER
 
 plugin = Service(
     service="重启",
-    docs="重新启动ATRI,测试中请注意",
+    docs="重新启动ATRI",
     type=Service.ServiceType.SYSTEM,
-    version="0.1.0"
+    version="0.2.0"
 )
 
-RESTART_TEMP = Path(".") / "data" / "config" / "restart_temp"
 PLUGIN_DIR = Path(".") / "data" / "plugins" / "restart"
-RESTART_SCRIPT = PLUGIN_DIR / "restart.sh"
+RESTART_TEMP = PLUGIN_DIR / "restart_temp"
 PLUGIN_DIR.mkdir(parents=True, exist_ok=True)
 
 driver = atri_driver()
@@ -27,12 +25,7 @@ driver = atri_driver()
 async def restart_bot(bot_id: str, target_id):
     with open(RESTART_TEMP, "w", encoding="utf8") as f:
         f.write(f"{bot_id} {target_id}")
-    if str(platform.system()).lower() == "windows":
-        import sys
-        python = sys.executable
-        os.execl(python, python, *sys.argv)
-    else:
-        os.system(f"./{RESTART_SCRIPT}")
+    os.execv(sys.executable, [sys.executable] + sys.argv)
 
 
 restart = plugin.on_command("/重启", "重新启动ATRI", permission=MASTER)
@@ -52,19 +45,6 @@ async def _(bot: Bot, event: Event):
 
 @driver.on_bot_connect
 async def _(bot: Bot):
-    if str(platform.system()).lower() != "windows":
-        if not RESTART_SCRIPT.exists():
-            with open(RESTART_SCRIPT, "w", encoding="utf8") as f:
-                f.write(
-                    f"pid=$(ss -tunlp | grep "
-                    + str(bot.config.port)
-                    + " | sed -n 's/.*pid=\\([0-9]*\\).*/\\1/p')\n"
-                      "kill -9 $pid\n"
-                      "sleep 3\n"
-                      "python3 main.py"
-                )
-            os.system(f"chmod +x ./{RESTART_SCRIPT}")
-            log.info("已自动生成 restart.sh(重启) 文件，请检查脚本是否与本地指令符合...")
     if RESTART_TEMP.exists():
         with open(RESTART_TEMP, "r", encoding="utf8") as f:
             bot_id, target_id = f.read().split()

@@ -7,23 +7,23 @@ from PIL import Image
 from nonebot.adapters.onebot.v11.event import GroupMessageEvent, Event
 from nonebot.adapters.onebot.v11.helpers import Cooldown
 from nonebot.exception import FinishedException
-from nonebot.params import Depends
 
+from ATRI.exceptions import str_traceback
 from ATRI.log import log
 from ATRI.service import Service
 from ATRI.message import MessageBuilder
 from ATRI.utils.img_editor import get_image_bytes
 from ATRI.utils.curve import IntToBoolRandom
 from ATRI.utils.img_editor import IMGEditor
-from ATRI.system.lkbot.util import lk_util, PLUGIN_DIR
-from ATRI.system.lkbot.data.user import users
-from ATRI.system.lkbot.checker import is_lk_user
-from ATRI.system.lkbot.tools.get_pic import get_pic_from
+from ATRI.system.lkapi.bot import util as lk_util, PLUGIN_DIR
+from ATRI.system.lkapi.entity.user import users
+from ATRI.system.lkapi.bot.checker import IsLkUser
+from ATRI.system.lkapi.utils.picture import get_pic_from
 
 plugin = Service(
     "每日签到",
     "亚托莉的签到系统",
-    "0.1.1",
+    "0.1.2",
     Service.ServiceType.LKPLUGIN
 )
 
@@ -32,7 +32,7 @@ _lmt_notice = ["慢...慢一..点❤", "冷静1下", "歇会歇会~~", "呜呜..
 sign_in = plugin.on_command(cmd='签到', docs="亚托莉的签到系统")
 
 
-@sign_in.handle([Cooldown(60, prompt=choice(_lmt_notice)), Depends(is_lk_user)])
+@sign_in.handle([IsLkUser, Cooldown(60, prompt=choice(_lmt_notice))])
 async def _(event: Event):
     r18_mode = not lk_util.is_safe_mode_group(event.group_id) if type(event) is GroupMessageEvent else True
     user_id = event.get_user_id()
@@ -45,7 +45,7 @@ async def _(event: Event):
         message.image(get_image_bytes(img_path))
         await sign_in.finish(message)
     except FinishedException as e:
-        raise e
+        raise e from e
     except Exception as e:
         if r18_mode:
             path = os.path.join(PLUGIN_DIR, 'sign_in', 'r18', f"{user_id}.jpg")
@@ -53,7 +53,7 @@ async def _(event: Event):
             path = os.path.join(PLUGIN_DIR, 'sign_in', f"{user_id}.jpg")
         if os.path.exists(path):
             os.remove(path)
-        log.warning(f"{e}:{e.args}")
+        log.warning(f"签到发生错误:\n{str_traceback(e)}")
         message = MessageBuilder().at(user_id)
         message.text(f'签到成功,你已签到{users.get_user_data(user_id).signdays}天')
         await sign_in.finish(message)
@@ -83,7 +83,7 @@ async def get_pic(user_id, r18_mode: bool = False, src: str = 'lolicon'):
             image_content = await get_pic_from(src)
             image = Image.open(BytesIO(image_content))
         except Exception as e:
-            log.warning(f'{e}:\n{e.args}')
+            log.warning(f'获取图片失败:\n{str_traceback(e)}')
             return await get_pic(user_id)
     else:
         src = 'local'

@@ -1,20 +1,42 @@
 import os
 import time
-from datetime import datetime
+from datetime import datetime, UTC
 from typing import Tuple
 
 import psutil
 from nonebot import get_bot
 from nonebot.adapters.onebot.v11 import MessageSegment
 
-from ATRI.exceptions import GetStatusError
+from ATRI.exceptions import BaseBotException
 from ATRI.log import log
 from ATRI.system.lkbot.tools.get_pic import local_image
 from ATRI.service import Service
 from ATRI.utils import Limiter
 from ATRI.utils.img_editor import IMGEditor
+from ATRI.configs import PluginConfig
+from ATRI.utils.model import BaseModel
 
-plugin = Service("状态").document("检查 ATRI 状态").type(Service.ServiceType.SYSTEM).version("1.0.1")
+plugin = Service(
+    "状态",
+    "检查 ATRI 状态",
+    "1.1.0",
+    Service.ServiceType.SYSTEM
+)
+
+
+class GetStatusError(BaseBotException):
+    prompt = "获取状态失败"
+
+
+class StatusConfig(BaseModel):
+    check_status: bool = True
+    hours: int = 1
+    minutes: int = 0
+
+
+config_manage = PluginConfig(plugin.service, StatusConfig)
+
+config: StatusConfig = config_manage.config()
 
 ping = plugin.on_command("/ping", "检测 ATRI 是否存活")
 
@@ -31,6 +53,20 @@ status = plugin.on_command("/status", "检查 ATRI 运行资源占用")
 async def _():
     msg, _ = get_status()
     await status.send(msg)
+
+
+check = plugin.on_command("/status.check", "定时检查开关")
+
+
+@check.handle()
+async def _():
+    jobs = plugin.scheduler_jobs()
+    if jobs.has_job("状态检查"):
+        jobs.remove_job("状态检查")
+        await check.finish("定时检查已关闭")
+    else:
+        add_check_job()
+        await check.finish("定时检查已开启")
 
 
 limiter = Limiter(5, 21600)
@@ -62,7 +98,13 @@ async def check_status():
         log.info("资源消耗正常")
 
 
-plugin.scheduler_jobs().add_job(check_status, "状态检查", trigger='interval', minutes=30, misfire_grace_time=15)
+def add_check_job():
+    plugin.scheduler_jobs().add_job(check_status, "状态检查", trigger='interval', hours=config.hours,
+                                    minutes=config.minutes, misfire_grace_time=15)
+
+
+if config.check_status:
+    add_check_job()
 
 
 def get_status() -> Tuple[MessageSegment, bool]:
@@ -81,12 +123,12 @@ def get_status() -> Tuple[MessageSegment, bool]:
         boot = psutil.boot_time()
         b = process.create_time()
         boot_time = str(
-            datetime.utcfromtimestamp(now).replace(microsecond=0)
-            - datetime.utcfromtimestamp(boot).replace(microsecond=0)
+            datetime.fromtimestamp(now, UTC).replace(microsecond=0)
+            - datetime.fromtimestamp(boot, UTC).replace(microsecond=0)
         )
         bot_time = str(
-            datetime.utcfromtimestamp(now).replace(microsecond=0)
-            - datetime.utcfromtimestamp(b).replace(microsecond=0)
+            datetime.fromtimestamp(now, UTC).replace(microsecond=0)
+            - datetime.fromtimestamp(b, UTC).replace(microsecond=0)
         )
     except Exception:
         raise GetStatusError("Failed to get status.")

@@ -3,7 +3,12 @@ from ATRI.permission import MASTER
 
 from .data_source import Updater
 
-plugin = Service("更新").document("ATRI-LK的更新服务").type(Service.ServiceType.SYSTEM).version("0.1.7")
+plugin = Service(
+    "更新",
+    "ATRI-LK的更新服务",
+    "0.2.0",
+    Service.ServiceType.SYSTEM
+)
 
 check_update = plugin.on_command(cmd="检查更新", docs="检查最新版本", permission=MASTER)
 

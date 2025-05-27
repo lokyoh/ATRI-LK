@@ -3,7 +3,7 @@ import yaml
 from pathlib import Path
 
 from ATRI import RES_DIR
-from ATRI.exceptions import InvalidConfigured
+from ATRI.exceptions import InvalidConfigured, str_traceback
 from ATRI.log import log
 
 from .item import Item, ItemType, items
@@ -18,7 +18,7 @@ def dict_to_shop(data: dict) -> Shop:
     """将商店从字典转化为Item对象"""
     name = data.get('name', '')
     if name == '':
-        raise InvalidConfigured("无效名称")
+        raise RuntimeError("无效商店名称")
     return Shop(
         name,
         data.get('info', '')
@@ -29,7 +29,7 @@ def dict_to_item(data: dict) -> Item:
     """将物品从字典转化为Item对象"""
     name = data.get('name', '')
     if name == '':
-        raise InvalidConfigured("无效名称")
+        raise RuntimeError("无效物品名称")
     return Item(
         name,
         ItemType(data.get('type', '其他')),
@@ -39,6 +39,7 @@ def dict_to_item(data: dict) -> Item:
 
 
 def dict_to_funcs(data: dict) -> ItemFuncs:
+    """将物品功能从字典转化为ItemFuncs对象"""
     _item_funcs = ItemFuncs()
     funcs = data.get('funcs', [])
     checks = data.get('checks', [])
@@ -66,7 +67,7 @@ def load_shops(shop_file: Path):
             shop = dict_to_shop(data)
             shops.register(shop)
         except Exception as e:
-            log.warning(f'{shop_file}-{key}无效商店配置:{e.args}')
+            log.warning(f'{shop_file}-{key}无效商店配置:\n{str_traceback(e)}')
 
 
 def load_items(item_file: Path):
@@ -93,7 +94,7 @@ def load_items(item_file: Path):
                     for sd in shop_data:
                         shops.get_shop_by_name(sd['name']).add_goods(item, sd['price'], sd['type'])
         except Exception as e:
-            log.error(f'{item_file}-{key}无效物品配置:{e.args}')
+            log.error(f'{item_file}-{key}无效物品配置:\n{str_traceback(e)}')
 
 
 def auto_load_items():

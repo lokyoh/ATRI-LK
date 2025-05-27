@@ -15,8 +15,10 @@ from .data.user import users
 from .tools.daily_update import daily_update
 from .data.load_item import auto_load_items
 
-PLUGIN_VERSION = "0.8.0"
+PLUGIN_VERSION = "0.8.1"
+"""lkbot插件版本"""
 PLUGIN_DIR = Path(".") / "data" / "plugins" / "lkbot"
+"""lkbot插件数据路径"""
 
 
 class BaseFunc:
@@ -212,11 +214,16 @@ class UserInfoEvent(Event):
         return info
 
 
-item_loading_event = Event()  # 物品加载事件，在加载物品列表时触发
-sign_in_event = SignInEvent()  # 签到事件，在用户签到时触发
-func_register_event = Event()  # 物品功能注册事件，在注册物品时触发
-init_finish_event = Event()  # 初始化完成事件，在该插件系统所以数据加载完成后触发
-user_info_event = UserInfoEvent()  # 玩家信息事件
+item_loading_event = Event()
+"""物品加载事件，在加载物品列表时触发"""
+sign_in_event = SignInEvent()
+"""签到事件，在用户签到时触发"""
+func_register_event = Event()
+"""物品功能注册事件，在注册物品时触发"""
+init_finish_event = Event()
+"""初始化完成事件，在该插件系统所以数据加载完成后触发"""
+user_info_event = UserInfoEvent()
+"""获取玩家信息事件"""
 
 
 def load_item_data():
@@ -245,3 +252,4 @@ def on_startup():
 
 
 lk_util = BaseFunc()
+"""用户管理工具"""

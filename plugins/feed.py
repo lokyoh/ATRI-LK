@@ -2,20 +2,21 @@ from datetime import datetime
 
 from nonebot.adapters.onebot.v11 import Event, Message
 from nonebot.adapters.onebot.v11.helpers import Cooldown
-from nonebot.params import Depends, CommandArg
+from nonebot.params import CommandArg
 
 from ATRI.service import Service
 from ATRI.message import MessageBuilder
 from ATRI.log import log
 from ATRI.system.lkapi.ai.gemini import genai, sub_model_name, block_none_safety_settings, default_generation_config
 from ATRI.system.lkapi.bot import db as lk_db, config as lk_config
-from ATRI.system.lkapi.bot.checker import is_lk_user
-from ATRI.system.lkapi.bot.user import users
+from ATRI.system.lkapi.bot.checker import IsLkUser
+from ATRI.system.lkapi.entity.user import users
+from ATRI.exceptions import str_traceback
 
 plugin = Service(
     "投喂",
     "向可爱的亚托莉投喂食物",
-    "0.3.1",
+    "0.3.2",
     Service.ServiceType.LKPLUGIN
 )
 
@@ -56,7 +57,7 @@ def feed_func(user_id, food):
             response = response.replace("\n", "")
             message.append(response)
         except Exception as e:
-            log.warning(e.args)
+            log.warning(f'获取评价失败:{str_traceback(e)}')
     content = feed_db.select('DATE', f'ID={user_id}')
     today = datetime.now().strftime("%Y-%m-%d")
     if len(content) == 0:
@@ -73,7 +74,7 @@ def feed_func(user_id, food):
     return message
 
 
-@feed.handle([Cooldown(600, prompt="稍后再投喂吧"), Depends(is_lk_user)])
+@feed.handle([IsLkUser, Cooldown(600, prompt="稍后再投喂吧")])
 async def _(event: Event, args: Message = CommandArg()):
     user_id = event.get_user_id()
     food = args.extract_plain_text()

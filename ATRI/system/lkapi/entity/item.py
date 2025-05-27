@@ -7,7 +7,8 @@ from ATRI.system.lkbot.data.item import (
 )
 from ATRI.system.lkbot.data.item_func import (
     item_funcs,
-    register_core_func
+    ItemUsingFunc,
+    ItemFuncs
 )
 from ATRI.system.lkbot.util import load_item_data
 from ATRI.system.lkbot.data.load_item import (

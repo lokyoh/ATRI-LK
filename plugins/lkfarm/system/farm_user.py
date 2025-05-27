@@ -7,8 +7,9 @@ from ATRI.log import log
 from ATRI.utils.limiter import LimitedQueue
 from ATRI.utils.lock import SingleLock
 from ATRI.utils.sqlite import DataBase
-from ATRI.system.lkbot.data.user import lk_db, users
-from ATRI.system.lkbot.tools.daily_update import daily_update_event
+from ATRI.system.lkapi.bot import db as lk_db
+from ATRI.system.lkapi.entity.user import users
+from ATRI.system.lkapi.bot.events import daily_update_event
 
 from .crop import crop_data_list, CropData, Month
 from .weather import get_weather

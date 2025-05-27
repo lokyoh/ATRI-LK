@@ -96,6 +96,7 @@ class Service:
         self._handlers = None
         self._state = None
         self._path = Path(".") / "data" / "plugins" / self.service
+        self._scheduler_jobs = None
         self.__generate_service_conf()
         service_list[service] = self
 
@@ -337,7 +338,9 @@ class Service:
 
     def scheduler_jobs(self) -> SchedulerController:
         """该服务的计划任务控制器"""
-        return SchedulerController(self.service)
+        if not self._scheduler_jobs:
+            self._scheduler_jobs = SchedulerController(self.service)
+        return self._scheduler_jobs
 
     def on_startup(self, func):
         """注册一个启动时执行的函数"""
@@ -348,6 +351,9 @@ class Service:
                 asyncio.run(func())
             else:
                 func()
+
+    def conf(self) -> ServiceConfig:
+        return ServiceTools(self.service).load_service_config()
 
 
 class ServiceTools:

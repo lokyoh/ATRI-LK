@@ -1,33 +1,35 @@
 import re
 
 from nonebot.adapters.onebot.v11 import GroupMessageEvent, Message
-from nonebot.params import CommandArg, Depends
+from nonebot.params import CommandArg
 
 from ATRI.service import Service
 from ATRI.message import img_msg
-from ATRI.system.lkbot.checker import is_lk_user
-from ATRI.system.lkbot.util import lk_util
+from ATRI.system.lkapi.bot import util as lk_util
+from ATRI.system.lkapi.bot.checker import IsLkUser
 
-from .data_source import farm_system
+from .data_source import farm_system, CheckFarmUser
 
-plugin = Service("lk农场").document("l_o_o_k的农场插件").type(Service.ServiceType.LKPLUGIN).main_cmd("/farm").version(
-    "0.1.3")
+plugin = Service(
+    "lk农场",
+    "l_o_o_k的农场插件",
+    "0.1.4",
+    Service.ServiceType.LKPLUGIN
+).main_cmd("/farm")
 
 my_farm = plugin.on_command("我的农场", "查看自己的农场")
 
 
-@my_farm.handle()
+@my_farm.handle([CheckFarmUser])
 async def _(event: GroupMessageEvent):
-    await farm_system.check_user(my_farm, event)
     await my_farm.finish(img_msg(await farm_system.farm_info(event.user_id)))
 
 
 seeding = plugin.on_command("/播种", "在田上播种\n使用方法:/播种 要选择的所有位置 种子名称")
 
 
-@seeding.handle()
+@seeding.handle([CheckFarmUser])
 async def _(event: GroupMessageEvent, arg: Message = CommandArg()):
-    await farm_system.check_user(seeding, event)
     text = arg.extract_plain_text().upper()
     match = re.match(r"((?: ?[A-D][1-8][-_][A-D][1-8]| ?[A-D][1-8])+) (.*)$", text)
     if not match:
@@ -59,9 +61,8 @@ async def _(event: GroupMessageEvent, arg: Message = CommandArg()):
 hoeing = plugin.on_command("/锄地", "为田锄地\n使用方法:/锄地 要选择的所有位置")
 
 
-@hoeing.handle()
+@hoeing.handle([CheckFarmUser])
 async def _(event: GroupMessageEvent, arg: Message = CommandArg()):
-    await farm_system.check_user(hoeing, event)
     location = arg.extract_plain_text().upper()
     p_list = farm_system.get_positions(location)
     if len(p_list) > 0:
@@ -88,9 +89,8 @@ async def _(event: GroupMessageEvent, arg: Message = CommandArg()):
 watering = plugin.on_command("/浇水", "为田浇水\n使用方法:/浇水 要选择的所有位置")
 
 
-@watering.handle()
+@watering.handle([CheckFarmUser])
 async def _(event: GroupMessageEvent, arg: Message = CommandArg()):
-    await farm_system.check_user(watering, event)
     location = arg.extract_plain_text().upper()
     p_list = farm_system.get_positions(location)
     if len(p_list) > 0:
@@ -117,9 +117,8 @@ async def _(event: GroupMessageEvent, arg: Message = CommandArg()):
 harvesting = plugin.on_command("/收获", "收获作物\n使用方法:/收获 要选择的所有位置")
 
 
-@harvesting.handle()
+@harvesting.handle([CheckFarmUser])
 async def _(event: GroupMessageEvent, arg: Message = CommandArg()):
-    await farm_system.check_user(harvesting, event)
     location = arg.extract_plain_text().upper()
     p_list = farm_system.get_positions(location)
     if len(p_list) > 0:
@@ -146,7 +145,7 @@ async def _(event: GroupMessageEvent, arg: Message = CommandArg()):
 new_farm = plugin.cmd_as_group("新农场", "创建一个新农场")
 
 
-@new_farm.handle([Depends(is_lk_user)])
+@new_farm.handle([IsLkUser])
 async def _(event: GroupMessageEvent):
     user_id = event.user_id
     user_name = lk_util.get_name(user_id)

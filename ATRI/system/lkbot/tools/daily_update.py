@@ -2,6 +2,7 @@ from ATRI.utils.event import Event
 from ATRI.log import log
 
 daily_update_event = Event()
+"""每日数据更新事件"""
 
 
 def daily_update():

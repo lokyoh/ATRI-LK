@@ -22,14 +22,15 @@ class Config(BaseModel):
 
 _config_manage = PluginConfig("lk插件", Config)
 config: Config = _config_manage.config()
+"""lkbot插件设置"""
 
 
 def load_config():
-    """加载配置"""
+    """加载lkbot插件配置"""
     global config
     config = _config_manage.config()
 
 
 def save_config():
-    """保存设置"""
+    """保存lkbot插件设置"""
     _config_manage.change_config(config)

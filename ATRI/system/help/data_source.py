@@ -1,3 +1,6 @@
+import json
+import os.path
+from pathlib import Path
 from typing import Dict
 from PIL import Image
 
@@ -6,7 +9,7 @@ from nonebot.adapters.onebot.v11 import MessageSegment
 from ATRI import __version__, conf, IMG_DIR, service_list, __sub_version__
 from ATRI.message import MessageBuilder, img_msg
 from ATRI.service import ServiceTools, Service
-from ATRI.utils.img_editor import IMGEditor
+from ATRI.utils.img_editor import IMGEditor, get_image_bytes
 from ATRI.exceptions import ServiceNotFoundError
 from ATRI.log import log
 
@@ -25,9 +28,15 @@ _COMMAND_INFO_FORMAT = (
     .text("更多触发方式：{aliases}")
     .done()
 )
+PLUGIN_PATH = Path('.') / 'data' / 'plugins' / 'help'
+PLUGIN_PATH.mkdir(parents=True, exist_ok=True)
+SERVICES_PATH = PLUGIN_PATH / 'services.json'
+SERVICES_IMG_PATH = PLUGIN_PATH / 'help.jpg'
 
 
 class Helper:
+    service_dict: Dict[str, list] = dict()
+
     @staticmethod
     def menu() -> str:
         return (
@@ -54,23 +63,60 @@ class Helper:
             .done()
         )
 
-    @staticmethod
-    def get_typed_services() -> dict:
-        services: Dict[Service.ServiceType, list] = dict()
+    @classmethod
+    def save_service_dict(cls):
+        with open(SERVICES_PATH, 'w', encoding='utf-8') as f:
+            json.dump(cls.service_dict, f, ensure_ascii=False, indent=4)
+
+    @classmethod
+    def get_typed_services(cls) -> bool:
         for _type in Service.ServiceType:
-            services[_type] = list()
-        for sname in service_list:
-            service = ServiceTools(sname)
+            if _type.name not in cls.service_dict:
+                cls.service_dict[_type.name] = list()
+        refresh = False
+        for _type in Service.ServiceType:
+            for s in cls.service_dict[_type.name]:
+                if s not in service_list or (
+                        _type != Service.ServiceType.CLOSED and service_list[s].get_info().type != _type.value):
+                    cls.service_dict[_type.name].remove(s)
+                    refresh = True
+        for s in service_list:
+            service = ServiceTools(s)
             if not service.load_service_config().enabled:
-                services[Service.ServiceType.CLOSED].append(sname)
+                if s in cls.service_dict[Service.ServiceType.CLOSED.name]:
+                    continue
+                _type = Service.ServiceType(service.load_service().type).name
+                if s in cls.service_dict[_type]:
+                    cls.service_dict[_type].remove(s)
+                cls.service_dict[Service.ServiceType.CLOSED.name].append(s)
+                refresh = True
                 continue
             _type = Service.ServiceType(service.load_service().type)
-            services[_type].append(sname)
-        return services
+            if s in cls.service_dict[_type.name]:
+                continue
+            cls.service_dict[_type.name].append(s)
+            refresh = True
+        if refresh:
+            cls.save_service_dict()
+        return refresh
 
-    def get_service_list(self) -> MessageSegment:
-        services = self.get_typed_services()
-        n = int((len(service_list) + len(services)) / 15) + 1
+    @classmethod
+    def init_services(cls) -> None:
+        if os.path.exists(SERVICES_PATH):
+            with open(SERVICES_PATH, 'r', encoding='utf-8') as f:
+                cls.service_dict = json.load(f)
+        cls.get_service_list()
+
+    @classmethod
+    def get_service_list(cls) -> MessageSegment:
+        refresh = cls.get_typed_services()
+        if not SERVICES_IMG_PATH.exists() or refresh:
+            cls.get_services_img()
+        return img_msg(get_image_bytes(SERVICES_IMG_PATH))
+
+    @classmethod
+    def get_services_img(cls):
+        n = int((len(service_list) + len(cls.service_dict)) / 15) + 1
         top = 50
         border = 5
         width = 320
@@ -86,22 +132,22 @@ class Helper:
         for _type in Service.ServiceType:
             if _type == Service.ServiceType.HIDDEN:
                 continue
-            if len(services[_type]) == 0:
+            if len(cls.service_dict[_type.name]) == 0:
                 continue
-            if line + len(services[_type]) + 1 > 30:
+            if line + len(cls.service_dict[_type.name]) + 1 > 30:
                 max_count = max(max_count, count)
                 max_line = max(max_line, line)
                 all_count += 1
                 count = 0
                 line = 0
             info.add_rectangle((border + width) * all_count + border, top + (count * border) + (line * height),
-                               width, (len(services[_type]) + 1) * height, 192, 5)
+                               width, (len(cls.service_dict[_type.name]) + 1) * height, 192, 5)
             info.add_text((border + width) * all_count + border * 2, top + (count * border) + (line * height),
                           f'{_type.value}:', 20)
             line += 1
-            for j in range(len(services[_type])):
+            for j in cls.service_dict[_type.name]:
                 info.add_text((border + width) * all_count + border * 3, top + (count * border) + (line * height),
-                              f'· {services[_type][j]}', 20)
+                              f'· {j}', 20)
                 line += 1
             count += 1
             i += 1
@@ -119,20 +165,20 @@ class Helper:
                               top + (max_count + 1) * border + (max_line + 1) * height)
                       )
         background.img.paste(info.get_image(), (0, 0), info.get_image())
-        return img_msg(background.to_bytes())
+        background.save_rgb(SERVICES_IMG_PATH)
 
-    def get_text_list(self):
+    @classmethod
+    def get_text_list(cls):
         log.info("发送服务列表图片失败，使用用文字方式发送")
-        services = self.get_typed_services()
         services_info = ""
         for _type in Service.ServiceType:
             if _type == Service.ServiceType.HIDDEN:
                 continue
-            if len(services[_type]) == 0:
+            if len(cls.service_dict[_type.name]) == 0:
                 continue
             services_info += f'->{_type.value}<-:\n'
-            for j in range(len(services[_type])):
-                services_info += f'· {services[_type][j]}\n'
+            for j in cls.service_dict[_type.name]:
+                services_info += f'· {j}\n'
         return f'咱搭载了以下服务~\n{services_info}/帮助 (服务) -以查看对应服务帮助'
 
     @staticmethod

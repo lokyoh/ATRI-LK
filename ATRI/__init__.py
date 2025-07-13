@@ -1,4 +1,3 @@
-from time import sleep
 from pathlib import Path
 
 import nonebot
@@ -6,8 +5,8 @@ from nonebot.adapters.onebot.v11 import Adapter
 
 from .configs import Config
 
-__version__ = "YHN-LK0-013"
-__sub_version__ = "Release"
+__version__ = "YHN-LK0-014"
+__sub_version__ = "Pre1"
 __conf_path = Path(".") / "config.yml"
 __conf = Config(__conf_path)
 
@@ -39,7 +38,6 @@ def init():
     nonebot.load_plugins("plugins/rss")
     from ATRI.service import driver_startup
     driver().on_startup(driver_startup)
-    sleep(3)
 
 
 def run():

@@ -1,4 +1,4 @@
-class Event:
+class BaseEvent:
     """一个基础事件"""
 
     def __init__(self):
@@ -25,6 +25,7 @@ class Event:
             return func
 
         return wrapper
+
 
 class DictEvent:
     """一个字典方式存储监听器的事件"""
@@ -53,3 +54,6 @@ class DictEvent:
             return func
 
         return wrapper
+
+
+Event = BaseEvent

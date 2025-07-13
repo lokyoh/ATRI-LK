@@ -4,7 +4,8 @@
 
 アトリは、高性能ですから！
 
-为🐧即时聊天工具中复现一只优秀的**功能性**机器人是本项目的目标.
+为🐧即时聊天工具中复现一只优秀的**功能性**机器人是本项目的目标.  
+本项目新版采用[napcatAPI](https://napcat.apifox.cn/)功能，在非[NapCatQQ](https://napneko.github.io/)机器人使用可能报错
 
 ## 📌 声明 | Declarations
 

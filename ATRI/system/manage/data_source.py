@@ -58,13 +58,13 @@ class BotManager:
         await self.__store_data("block_user.json", data)
 
     async def load_friend_req(self) -> RequestList:
-        return RequestList.parse_obj(await self.__load_data("friend_add.json"))
+        return RequestList.model_validate(await self.__load_data("friend_add.json"))
 
     async def store_friend_req(self, data: dict) -> None:
         await self.__store_data("friend_add.json", data)
 
     async def load_group_req(self) -> RequestList:
-        return RequestList.parse_obj(await self.__load_data("group_invite.json"))
+        return RequestList.model_validate(await self.__load_data("group_invite.json"))
 
     async def store_group_req(self, data: dict) -> None:
         await self.__store_data("group_invite.json", data)

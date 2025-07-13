@@ -1,4 +1,5 @@
 import os
+import random
 import re
 import string
 from random import choice
@@ -13,14 +14,15 @@ from nonebot.params import CommandArg, ArgPlainText, Depends
 
 from ATRI import TEMP_DIR, RECORD_DIR, IMG_DIR
 from ATRI.service import Service
+from ATRI.log import log
 from ATRI.utils import request
 from ATRI.utils.img_editor import get_image_bytes
 from ATRI.rule import to_bot
-from ATRI.system.lkbot.config import config
-from ATRI.system.lkbot.util import lk_util
+from ATRI.system.lkapi.bot.config import configs
+from ATRI.system.lkapi.bot import util as lk_util
+from ATRI.system.lkapi.bot.checker import is_lk_user, is_chat_switch_on
+from ATRI.system.lkapi.utils.audio import AudioEditor
 from ATRI.system.help.data_source import Helper
-from ATRI.system.lkbot.checker import is_lk_user, is_chat_switch_on
-from ATRI.system.lkbot.tools.rec_editor import RECEditor
 from ATRI.permission import ADMIN
 from ATRI.message import rec_msg, img_msg
 
@@ -28,7 +30,7 @@ from .ai_chat import ai_chat, chat_clear
 from .img_chat import get_response
 
 plugin = Service("lk聊天").document("lk插件处理聊天的部分").type(Service.ServiceType.LKPLUGIN).version(
-    "0.2.0").main_cmd("chat")
+    "0.3.0").main_cmd("chat")
 
 _lmt_notice = ["慢...慢一..点❤", "冷静1下", "歇会歇会~~", "呜呜...别急", "太快了...受不了", "不要这么快呀"]
 
@@ -75,7 +77,7 @@ async def _(event: GroupMessageEvent, matcher: Matcher):
         # 语音匹配模块
         async def send_voice(name):
             matcher.stop_propagation()
-            res = RECEditor.audio_to_base64(RECORD_DIR / "atri" / f"{name}.mp3")
+            res = AudioEditor.audio_to_base64(RECORD_DIR / "atri" / f"{name}.mp3")
             await on_talk.send(rec_msg(file=res))
             await on_talk.send(name)
 
@@ -113,7 +115,7 @@ async def _(event: GroupMessageEvent, matcher: Matcher):
                 await send_voice(pattern_dict[pattern_item])
                 return
         # 聊天模块
-        if not config.chat_switch:
+        if not configs.chat_switch:
             return
         text = lk_util.get_trans_text(event.get_message())
         if text == "":
@@ -176,25 +178,70 @@ async def get_random_atri(handle):
     if len(voice_list) == 0:
         return
     voice = choice(voice_list)
-    result = RECEditor.audio_to_base64(RECORD_DIR / "atri" / voice)
+    result = AudioEditor.audio_to_base64(RECORD_DIR / "atri" / voice)
     await handle.send(rec_msg(file=result))
     await handle.send(re.sub('.mp3', '', voice))
 
 
 poke = plugin.on_notice("戳一戳", "处理戳一戳事件")
 
+REPLY_MESSAGE = [
+    "lsp你再戳？",
+    "连个可爱美少女都要戳的肥宅真恶心啊。",
+    "你再戳！",
+    "？再戳试试？",
+    "别戳了别戳了再戳就坏了555",
+    f"{lk_util.bot_name}爪巴爪巴，球球别再戳了",
+    "你戳你🐎呢？！",
+    "那...那里...那里不能戳...绝对...",
+    "(。´・ω・)ん?",
+    f"有事恁叫{lk_util.bot_name}，别天天一个劲戳戳戳！",
+    "欸很烦欸！你戳🔨呢",
+    "?",
+    "再戳一下试试？",
+    "???",
+    "正在关闭对您的所有服务...关闭成功",
+    "啊呜，太舒服刚刚竟然睡着了。什么事？",
+    "正在定位您的真实地址...定位成功。轰炸机已起飞",
+    f"别戳了，别戳了，{lk_util.bot_name}的呆毛要掉拉！",
+    f"{lk_util.bot_name}在呢！",
+    f"你是来找{lk_util.bot_name}玩的嘛？",
+    f"别急呀, {lk_util.bot_name}要宕机了!QAQ",
+    "你好！Ov<",
+    "别戳了，怕疼QwQ",
+    f"再戳，{lk_util.bot_name}就要咬你了嗷~",
+    "恶龙咆哮，嗷呜~",
+    "生气(╯▔皿▔)╯",
+    "不要这样子啦（*/ w \\*）",
+    "戳坏了",
+    "戳坏了，赔钱！",
+    f"喂，110吗，有人老戳{lk_util.bot_name}",
+    f"别戳{lk_util.bot_name}啦，您歇会吧~",
+    f"喂(#`O′) 戳{lk_util.bot_name}干嘛！",
+]
 
 @poke.handle()
 async def _(event: PokeNotifyEvent, bot: Bot):
     if str(event.target_id) == bot.self_id:
-        if choice([True, False]):
+        rand = random.random()
+        if rand < 0.25:
             await get_random_atri(poke)
-        else:
+        elif rand < 0.50:
             img_list = os.listdir(IMG_DIR / "atri")
             if len(img_list) == 0:
                 return
             img = choice(img_list)
             await poke.send(img_msg(get_image_bytes(IMG_DIR / "atri" / img)))
+        elif rand < 0.75:
+            await poke.send(choice(REPLY_MESSAGE), at_sender=True)
+        else:
+            try:
+                if event.group_id:
+                    await bot.call_api("group_poke", user_id=event.user_id, group_id=event.group_id)
+                else:
+                    await bot.call_api("friend_poke", user_id=event.user_id)
+            except Exception:
+                log.warning("戳一戳发送失败")
 
 
 atri_voice = plugin.on_command(cmd="/亚托莉语音", docs="随机亚托莉语音")

@@ -5,7 +5,7 @@ from nonebot.adapters.onebot.v11 import Message
 
 from ATRI import conf
 from ATRI.log import log
-from ATRI.utils.event import Event
+from ATRI.utils.event import BaseEvent
 
 from .config import config
 from .data.item import items
@@ -15,7 +15,7 @@ from .data.user import users
 from .tools.daily_update import daily_update
 from .data.load_item import auto_load_items
 
-PLUGIN_VERSION = "0.8.1"
+PLUGIN_VERSION = "0.9.0"
 """lkbot插件版本"""
 PLUGIN_DIR = Path(".") / "data" / "plugins" / "lkbot"
 """lkbot插件数据路径"""
@@ -197,7 +197,7 @@ class BaseFunc:
         return False, "那个...此名称已经被使用了，换个名字吧"
 
 
-class SignInEvent(Event):
+class SignInEvent(BaseEvent):
     def notify(self, user_id):
         msg = "\n"
         for listener in self.listeners:
@@ -207,20 +207,20 @@ class SignInEvent(Event):
         return msg
 
 
-class UserInfoEvent(Event):
+class UserInfoEvent(BaseEvent):
     def notify(self, user_id, info: str):
         for listener in self.listeners:
             info = listener(user_id, info)
         return info
 
 
-item_loading_event = Event()
+item_loading_event = BaseEvent()
 """物品加载事件，在加载物品列表时触发"""
 sign_in_event = SignInEvent()
 """签到事件，在用户签到时触发"""
-func_register_event = Event()
+func_register_event = BaseEvent()
 """物品功能注册事件，在注册物品时触发"""
-init_finish_event = Event()
+init_finish_event = BaseEvent()
 """初始化完成事件，在该插件系统所以数据加载完成后触发"""
 user_info_event = UserInfoEvent()
 """获取玩家信息事件"""

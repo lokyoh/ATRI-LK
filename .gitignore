@@ -5,7 +5,9 @@
 /tests/
 /ATRI-LK-plugin/
 /plugins/
+__pycache__/
 /.idea/
+*.pyc
 !/plugins/rss/__init__.py
 !/plugins/lkchat/
 !/plugins/lkfarm/

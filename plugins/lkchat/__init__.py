@@ -30,7 +30,7 @@ from .ai_chat import ai_chat, chat_clear
 from .img_chat import get_response
 
 plugin = Service("lk聊天").document("lk插件处理聊天的部分").type(Service.ServiceType.LKPLUGIN).version(
-    "0.3.0").main_cmd("chat")
+    "0.3.1").main_cmd("chat")
 
 _lmt_notice = ["慢...慢一..点❤", "冷静1下", "歇会歇会~~", "呜呜...别急", "太快了...受不了", "不要这么快呀"]
 
@@ -132,36 +132,23 @@ async def _(event: GroupMessageEvent, matcher: Matcher):
         await on_talk.send(await ai_chat(text, sender_id, event.group_id))
     else:
         img_path = IMG_DIR / "atri"
-        if re.search(r"好不好|行不行|可以吗|要不要|[行好](?:吗[?？]?|[?？])", text):
-            img = choice(["YES.png", choice(["NO.jpg", "NO1.jpg"])])
-            await on_talk.finish(img_msg(get_image_bytes(img_path / img)))
-        if re.search(r"啊这", text):
-            img = "AZ.jpg"
-            await on_talk.finish(img_msg(get_image_bytes(img_path / img)))
-        if re.search(r"无情", text):
-            img = "WQ.jpg"
-            await on_talk.finish(img_msg(get_image_bytes(img_path / img)))
-        if re.match(r"[?？]+", text):
-            img = "WH.jpg"
-            await on_talk.finish(img_msg(get_image_bytes(img_path / img)))
-        if re.match(r"(?:[干做]得)?漂亮$", text):
-            img = choice(["DY.gif", "DY1.gif"])
-            await on_talk.finish(img_msg(get_image_bytes(img_path / img)))
-        if re.match(r"我?明白了?", text):
-            img = "MB.jpg"
-            await on_talk.finish(img_msg(get_image_bytes(img_path / img)))
-        if re.search(r"吃瓜", text):
-            img = "CG.jpg"
-            await on_talk.finish(img_msg(get_image_bytes(img_path / img)))
-        if re.search(r"加油", text):
-            img = "JY.jpg"
-            await on_talk.finish(img_msg(get_image_bytes(img_path / img)))
-        if re.match(r"不对", text):
-            img = "BD.jpg"
-            await on_talk.finish(img_msg(get_image_bytes(img_path / img)))
-        if re.search(r"看看你|我看看", text):
-            img = "BYK.jpg"
-            await on_talk.finish(img_msg(get_image_bytes(img_path / img)))
+        pattern_img_map = [
+            (r"好不好|行不行|可以吗|要不要|[行好](?:吗[?？]?|[?？])",
+             lambda: choice(["YES.png", choice(["NO.jpg", "NO1.jpg"])])),
+            (r"啊这", "AZ.jpg"),
+            (r"无情", "WQ.jpg"),
+            (r"^[?？]+$", "WH.jpg"),
+            (r"^(?:[干做]得)?漂亮$", lambda: choice(["DY.gif", "DY1.gif"])),
+            (r"我?明白了?", "MB.jpg"),
+            (r"吃瓜", "CG.jpg"),
+            (r"加油", "JY.jpg"),
+            (r"^不对", "BD.jpg"),
+            (r"看看你|我看看", "BYK.jpg"),
+        ]
+        for pattern, img in pattern_img_map:
+            if re.search(pattern, text):
+                selected_img = img() if callable(img) else img
+                await on_talk.finish(img_msg(get_image_bytes(img_path / selected_img)))
 
 
 clear_chat_history = plugin.cmd_as_group(cmd="重置历史", docs="重置AI聊天的聊天历史", permission=ADMIN)

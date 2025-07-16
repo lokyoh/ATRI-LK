@@ -1,51 +1,29 @@
 import os
 from pathlib import Path
+from google.genai import types
 
 from ATRI.log import log
-from ATRI.system.lkbot.tools.chat import genai, sub_model_name
-
-generation_config = {
-    "temperature": 0.4,
-    "top_p": 1,
-    "top_k": 32,
-    "max_output_tokens": 1024,
-}
-
-safety_settings = [
-    {
-        "category": "HARM_CATEGORY_HARASSMENT",
-        "threshold": "BLOCK_NONE"
-    },
-    {
-        "category": "HARM_CATEGORY_HATE_SPEECH",
-        "threshold": "BLOCK_NONE"
-    },
-    {
-        "category": "HARM_CATEGORY_SEXUALLY_EXPLICIT",
-        "threshold": "BLOCK_NONE"
-    },
-    {
-        "category": "HARM_CATEGORY_DANGEROUS_CONTENT",
-        "threshold": "BLOCK_NONE"
-    },
-]
-
-model = genai.GenerativeModel(model_name=sub_model_name,
-                              generation_config=generation_config,
-                              safety_settings=safety_settings)
+from ATRI.system.lkapi.ai.gemini import client, sub_model_name
 
 
 def get_response(img_paths, text):
-    prompt_parts = []
+    prompt_parts = types.Content(role='user',parts=[])
     for path in img_paths:
         if not (img := Path(path)).exists():
             raise FileNotFoundError(f"Could not find image: {img}")
-        prompt_parts.append({
-            "mime_type": "image/jpeg",
-            "data": Path(path).read_bytes()
-        })
-    prompt_parts.append(text)
-    response = model.generate_content(prompt_parts)
+        prompt_parts.parts.append(
+            types.Part.from_bytes(mime_type = "image/jpeg",data = Path(path).read_bytes())
+        )
+    prompt_parts.parts.append(
+        types.Part.from_text(text=text)
+    )
+    response = client.models.generate_content(
+        model=sub_model_name,
+        contents=prompt_parts,
+        config=types.GenerateContentConfig(
+            response_mime_type="text/plain",
+        )
+    )
     log.info(response.text)
     for path in img_paths:
         try:

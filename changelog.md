@@ -1,11 +1,14 @@
 > 此处仅为记录重大更新，修复 BUG/以及其它 请关注[`GitHub commits`](https://github.com/lokyoh/ATRI-LK/commits/main)
 
-- 版本: `YHN-LK0-014 Pre1`
+> 请重新安装依赖。
+
+- 预览版本: `YHN-LK0-014 Pre2`
 - 新增:
   - `lkbot`每日任务新增自动清理`data\temp`下超过24小时的文件
 - 更新:
   - `帮助`插件更新
   - `lk聊天`戳一戳内容更新
+  - `gemini`的api重构
 
 ## May 27, 2025
 

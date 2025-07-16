@@ -6,18 +6,18 @@ from nonebot.adapters.onebot.v11 import Event, Message, Bot, GroupMessageEvent
 from nonebot.adapters.onebot.v11.helpers import Cooldown
 
 from ATRI.service import Service
-from ATRI.system.lkbot import lk_util
 from ATRI.log import log
 from ATRI.permission import ADMIN, MASTER
 from ATRI.message import img_msg
-from ATRI.system.htmlrender import md_to_pic
-from ATRI.system.lkbot.checker import is_lk_user, not_safe_mode, is_test_mode, is_chat_switch_on
+from ATRI.system.htmlrender import text_to_pic
+from ATRI.system.lkapi.bot import util as lk_util
+from ATRI.system.lkapi.bot.checker import is_lk_user, not_safe_mode, is_test_mode, is_chat_switch_on
 
 from .pet_chat import PetModel
 from .pet_data import PetData, pet_manager
 
 plugin = Service("lk宠物").document("l_o_o_k的赛博宠物插件").type(Service.ServiceType.LKPLUGIN).version(
-    "0.1.4").main_cmd("/pet")
+    "0.1.5").main_cmd("/pet")
 
 _lmt_notice = ["慢...慢一..点❤", "冷静1下", "歇会歇会~~", "呜呜...别急", "太快了...受不了", "不要这么快呀"]
 
@@ -38,14 +38,14 @@ async def _(event: GroupMessageEvent, args: Message = CommandArg()):
             text = data.name
         try:
             convo: PetModel = pet_manager.convos[user_id]
-            response = convo.chat_with(nickname + ":" + text)
+            response = await convo.chat_with(nickname + ":" + text)
         except Exception as e:
             log.warning(e)
             await talk_with_pet.finish("很可惜，宠物不理你了")
         log.info(response)
         response = f"{pet_manager.datas[user_id].name}:\n{response}"
         if len(response) > 100:
-            await talk_with_pet.finish(img_msg(await md_to_pic(response)))
+            await talk_with_pet.finish(img_msg(await text_to_pic(response)))
         await talk_with_pet.finish(response)
 
 

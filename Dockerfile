@@ -15,7 +15,7 @@ RUN pip install "poetry==$POETRY_VERSION"
 # 3. 复制依赖文件并安装
 COPY pyproject.toml poetry.lock ./
 RUN poetry config virtualenvs.create false \
-    && poetry install --no-interaction --no-ansi --only main
+    && poetry install --no-interaction --no-ansi --no-root --only main
 
 # 4. 安装 Playwright 及其依赖
 RUN playwright install chromium \

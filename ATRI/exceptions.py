@@ -144,4 +144,9 @@ async def _(bot: Bot, event, matcher: Matcher, exception: Optional[Exception]):
 def str_traceback(e) -> str:
     """获取错误的追踪信息"""
     traceback_msg = traceback.format_exception(type(e), e, e.__traceback__)
-    return ''.join([traceback_msg[0]] + traceback_msg[-2:])
+    filtered_lines = [traceback_msg[0]]
+    for line in traceback_msg[1:-1]:
+        if "site-packages" not in line:
+            filtered_lines.append(line)
+    filtered_lines.append(traceback_msg[-1])
+    return "".join(filtered_lines)

@@ -68,7 +68,7 @@ class DictEvent:
                 log.warning(str_tb)
         if exceptions:
             formatted_str = "".join([f"\n{key}:{value}" for key, value in exceptions.items()])
-            raise BotRuntimeError(f"以下事件出现错误:{formatted_str}")
+            raise BotRuntimeError(f"{self.name}在执行时出现错误:{formatted_str}")
 
     def handle(self, key: str):
         """装饰一个函数来响应事件"""

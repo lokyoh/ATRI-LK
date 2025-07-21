@@ -16,7 +16,7 @@ from .data.user import users
 from .tools.daily_update import daily_update
 from .data.load_item import auto_load_items
 
-PLUGIN_VERSION = "0.9.1"
+PLUGIN_VERSION = "0.9.2"
 """lkbot插件版本"""
 PLUGIN_DIR = Path(".") / "data" / "plugins" / "lkbot"
 """lkbot插件数据路径"""
@@ -213,7 +213,7 @@ class SignInEvent(DictEvent):
                 log.warning(str_tb)
         if exceptions:
             formatted_str = "".join([f"\n{key}:{value}" for key, value in exceptions.items()])
-            raise BotRuntimeError(f"以下事件出现错误:{formatted_str}")
+            raise BotRuntimeError(f"{self.name}在执行时出现错误:{formatted_str}")
         return msg
 
 
@@ -222,14 +222,14 @@ class UserInfoEvent(DictEvent):
         exceptions = {}
         for key in self.listeners:
             try:
-                info = self.listeners[key](user_id)
+                info = self.listeners[key](user_id, info)
             except Exception as e:
                 str_tb = str_traceback(e)
                 exceptions[key] = str_tb
                 log.warning(str_tb)
         if exceptions:
             formatted_str = "".join([f"\n{key}:{value}" for key, value in exceptions.items()])
-            raise BotRuntimeError(f"以下事件出现错误:{formatted_str}")
+            raise BotRuntimeError(f"{self.name}在执行时出现错误:{formatted_str}")
         return info
 
 

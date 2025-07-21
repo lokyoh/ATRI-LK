@@ -5,7 +5,8 @@ from nonebot.adapters.onebot.v11 import Message
 
 from ATRI import conf
 from ATRI.log import log
-from ATRI.utils.event import BaseEvent
+from ATRI.exceptions import str_traceback, BotRuntimeError
+from ATRI.utils.event import DictEvent
 
 from .config import config
 from .data.item import items
@@ -15,7 +16,7 @@ from .data.user import users
 from .tools.daily_update import daily_update
 from .data.load_item import auto_load_items
 
-PLUGIN_VERSION = "0.9.0"
+PLUGIN_VERSION = "0.9.1"
 """lkbot插件版本"""
 PLUGIN_DIR = Path(".") / "data" / "plugins" / "lkbot"
 """lkbot插件数据路径"""
@@ -197,32 +198,50 @@ class BaseFunc:
         return False, "那个...此名称已经被使用了，换个名字吧"
 
 
-class SignInEvent(BaseEvent):
+class SignInEvent(DictEvent):
     def notify(self, user_id):
+        exceptions = {}
         msg = "\n"
-        for listener in self.listeners:
-            r = listener(user_id)
-            if r:
-                msg += r
+        for key in self.listeners:
+            try:
+                r = self.listeners[key](user_id)
+                if r:
+                    msg += r
+            except Exception as e:
+                str_tb = str_traceback(e)
+                exceptions[key] = str_tb
+                log.warning(str_tb)
+        if exceptions:
+            formatted_str = "".join([f"\n{key}:{value}" for key, value in exceptions.items()])
+            raise BotRuntimeError(f"以下事件出现错误:{formatted_str}")
         return msg
 
 
-class UserInfoEvent(BaseEvent):
+class UserInfoEvent(DictEvent):
     def notify(self, user_id, info: str):
-        for listener in self.listeners:
-            info = listener(user_id, info)
+        exceptions = {}
+        for key in self.listeners:
+            try:
+                info = self.listeners[key](user_id)
+            except Exception as e:
+                str_tb = str_traceback(e)
+                exceptions[key] = str_tb
+                log.warning(str_tb)
+        if exceptions:
+            formatted_str = "".join([f"\n{key}:{value}" for key, value in exceptions.items()])
+            raise BotRuntimeError(f"以下事件出现错误:{formatted_str}")
         return info
 
 
-item_loading_event = BaseEvent()
+item_loading_event = DictEvent("item_loading")
 """物品加载事件，在加载物品列表时触发"""
-sign_in_event = SignInEvent()
+sign_in_event = SignInEvent("sign_in")
 """签到事件，在用户签到时触发"""
-func_register_event = BaseEvent()
+func_register_event = DictEvent("func_register")
 """物品功能注册事件，在注册物品时触发"""
-init_finish_event = BaseEvent()
+init_finish_event = DictEvent("init_finish")
 """初始化完成事件，在该插件系统所以数据加载完成后触发"""
-user_info_event = UserInfoEvent()
+user_info_event = UserInfoEvent("user_info")
 """获取玩家信息事件"""
 
 

@@ -7,7 +7,7 @@ from ATRI.system.lkapi.bot.events import user_info_event
 from .pet_chat import PetModel
 
 
-@user_info_event.handle()
+@user_info_event.handle("lkpet")
 def _(user_id: str, info: str):
     return f'{info}\n宠物:{pet_manager.datas[user_id].name}'
 
@@ -78,6 +78,7 @@ LOVE        INT DEFAULT 0
 pet_manager = PetManager()
 
 
-@Users.user_name_changed_event.handle()
+@Users.user_name_changed_event.handle("lkpet")
 def _(user_id, new_name):
-    pet_manager.convos[user_id].change_user_name(new_name)
+    if user_id in pet_manager.convos:
+        pet_manager.convos[user_id].change_user_name(new_name)

@@ -4,7 +4,7 @@ WORKDIR /app
 
 # 1. 更新 pip 和系统基础工具
 RUN apt-get update \
-    && apt-get install -y --no-install-recommends curl \
+    && apt-get install -y --no-install-recommends curl git \
     && rm -rf /var/lib/apt/lists/* \
     && pip install --upgrade pip setuptools wheel
 
@@ -21,7 +21,6 @@ RUN poetry config virtualenvs.create false \
 RUN playwright install chromium \
     && apt-get update \
     && apt-get install -y --no-install-recommends ca-certificates gnupg \
-    && apt-key adv --keyserver keyserver.ubuntu.com --recv-keys 0E98404D386FA1D9 6ED0E7B82643E131 \
     && playwright install-deps \
     && rm -rf /var/lib/apt/lists/* /tmp/*
 

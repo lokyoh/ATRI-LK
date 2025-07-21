@@ -32,7 +32,7 @@ from .img_chat import get_response
 plugin = Service(
     "lk聊天",
     "lk插件处理聊天的部分",
-    "0.3.2",
+    "0.3.3",
     Service.ServiceType.LKPLUGIN
 ).main_cmd("chat")
 

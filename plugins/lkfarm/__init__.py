@@ -13,7 +13,7 @@ from .data_source import farm_system, CheckFarmUser
 plugin = Service(
     "lk农场",
     "l_o_o_k的农场插件",
-    "0.1.4",
+    "0.1.5",
     Service.ServiceType.LKPLUGIN
 ).main_cmd("/farm")
 

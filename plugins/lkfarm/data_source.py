@@ -20,13 +20,13 @@ from .system.farm_user import user_farm_data
 FARM_RES_PATH = RES_DIR / "lkfarm"
 
 
-@item_loading_event.handle()
+@item_loading_event.handle("lkfarm")
 def _():
     load_crop_data('Core', FARM_RES_PATH / "Crop")
     shops.register(seed_shop)
 
 
-@daily_update_event.handle()
+@daily_update_event.handle("lkfarm_seed_shop")
 def _():
     month = date.today().month
     if date.today().day == 1 and month % 3 == 0:
@@ -42,7 +42,7 @@ def _():
         log.success(f"种子商店更新完成，共{len(seed_shop.get_goods_list())}种子上架")
 
 
-@sign_in_event.handle()
+@sign_in_event.handle("lkfarm")
 def _(user_id):
     season = Month(date.today().month).to_season()
     item = ""

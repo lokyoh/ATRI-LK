@@ -14,8 +14,8 @@ class Config(BaseModel):
     chat_switch: bool 聊天开关
     api_key: str 谷歌AI的api_key
     """
-    test_groups: list[str] = list[str]
-    r18_groups: list[str] = list[str]
+    test_groups: list[str] = []
+    r18_groups: list[str] = []
     chat_switch: bool = True
     api_key: str = ''
 

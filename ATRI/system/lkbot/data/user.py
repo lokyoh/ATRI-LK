@@ -4,7 +4,7 @@ from datetime import datetime
 import json
 
 from ATRI.log import log
-from ATRI.utils.event import BaseEvent
+from ATRI.utils.event import DictEvent
 from ATRI.utils.curve import LvlManager
 from ATRI.utils.sqlite import DataBase
 from ATRI.utils.limiter import LimitedQueue
@@ -87,7 +87,7 @@ class UserData:
         self.love += num
 
 
-class UserNameChangedEvent(BaseEvent):
+class UserNameChangedEvent(DictEvent):
     """用户名改变事件"""
 
     def notify(self, user_id: str, user_name: str):
@@ -98,7 +98,7 @@ class Users:
     """
     用户信息管理器
     """
-    user_name_changed_event = UserNameChangedEvent()
+    user_name_changed_event = UserNameChangedEvent("user_name_changed")
     """用户名改变事件"""
     _lock = SingleLock()
     _name_lock = SingleLock()

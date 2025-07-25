@@ -39,9 +39,9 @@ class ServiceInfo(BaseModel):
 
 
 class ServiceConfig(BaseModel):
-    enabled: bool
-    disable_user: list
-    disable_group: list
+    enabled: bool = True
+    disable_user: list = []
+    disable_group: list = []
 
 
 class CommandInfo(BaseModel):

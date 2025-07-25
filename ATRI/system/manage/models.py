@@ -9,7 +9,7 @@ class RequestInfo(BaseModel):
 
 
 class RequestList(BaseModel):
-    data: Dict[str, RequestInfo]
+    data: Dict[str, RequestInfo] = {}
 
 
 class NonebotPluginInfo(BaseModel):

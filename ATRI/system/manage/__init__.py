@@ -66,7 +66,7 @@ def handle_command(
 
 
 plugin = Service("管理").document("控制 ATRI 的各项服务").type(Service.ServiceType.SYSTEM).permission(MASTER).version(
-    "1.0.3")
+    "1.0.4")
 
 block_user = plugin.on_command("封禁用户", "阻止目标用户使用 ATRI")
 handle_command(block_user, BotManager().block_user, "用户 {} 危！")
@@ -143,12 +143,12 @@ async def _(event: FriendRequestEvent):
     now_time = str(datetime.now().timestamp())
 
     raw_data = await BotManager().load_friend_req()
-    data = raw_data.dict()
+    data = raw_data.model_dump()
     data["data"][apply_code] = RequestInfo(
         user_id=user_id,
         comment=apply_comment,
         time=now_time,
-    ).dict()
+    ).model_dump()
     await BotManager().store_friend_req(data)
 
     result = (
@@ -176,12 +176,12 @@ async def _(event: GroupRequestEvent):
     now_time = str(datetime.now().timestamp())
 
     raw_data = await BotManager().load_group_req()
-    data = raw_data.dict()
+    data = raw_data.model_dump()
     data["data"][apply_code] = RequestInfo(
         user_id=user_id,
         comment=apply_comment + f"(目标群{target_group})",
         time=now_time,
-    ).dict()
+    ).model_dump()
     await BotManager().store_group_req(data)
 
     result = (

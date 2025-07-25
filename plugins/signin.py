@@ -23,13 +23,13 @@ from ATRI.system.lkapi.utils.picture import get_pic_from
 plugin = Service(
     "每日签到",
     "亚托莉的签到系统",
-    "0.1.2",
+    "0.1.3",
     Service.ServiceType.LKPLUGIN
 )
 
 _lmt_notice = ["慢...慢一..点❤", "冷静1下", "歇会歇会~~", "呜呜...别急", "太快了...受不了", "不要这么快呀"]
 
-sign_in = plugin.on_command(cmd='签到', docs="亚托莉的签到系统")
+sign_in = plugin.on_command(cmd='签到', docs="亚托莉的签到系统", aliases={"今日签到", "每日签到"})
 
 
 @sign_in.handle([IsLkUser, Cooldown(60, prompt=choice(_lmt_notice))])

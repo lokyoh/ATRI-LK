@@ -18,7 +18,12 @@ class PluginConfig:
         plugin_config[service] = self
 
     def config(self):
-        return self.model.read_from_file(self.path)
+        try:
+            return self.model.read_from_file(self.path)
+        except Exception as e:
+            from ATRI.log import log
+            log.error(f"加载配置文件错误:{e}")
+            return self.model()
 
     def change_config(self, value: BaseModel):
         value.write_into_file(self.path)

@@ -30,7 +30,6 @@ class BotManager:
         dealer = FileDealer(path)
         if not path.is_file():
             await dealer.write_json(dict())
-
         try:
             data = dealer.json()
         except Exception:
@@ -42,7 +41,6 @@ class BotManager:
         dealer = FileDealer(path)
         if not path.is_file():
             await dealer.write_json(dict())
-
         await dealer.write_json(data)
 
     async def __load_block_group(self) -> dict:
@@ -185,7 +183,7 @@ class BotManager:
         data = raw_data.data
         data.pop(code)
         raw_data.data = data
-        await self.store_friend_req(raw_data.dict())
+        await self.store_friend_req(raw_data.model_dump())
 
     async def reject_friend_req(self, code: str) -> None:
         bot = self.__get_bot()
@@ -197,7 +195,7 @@ class BotManager:
         data = raw_data.data
         data.pop(code)
         raw_data.data = data
-        await self.store_friend_req(raw_data.dict())
+        await self.store_friend_req(raw_data.model_dump())
 
     async def apply_group_req(self, code: str) -> None:
         bot = self.__get_bot()
@@ -211,7 +209,7 @@ class BotManager:
         data = raw_data.data
         data.pop(code)
         raw_data.data = data
-        await self.store_group_req(raw_data.dict())
+        await self.store_group_req(raw_data.model_dump())
 
     async def reject_group_req(self, code: str) -> None:
         bot = self.__get_bot()
@@ -225,4 +223,4 @@ class BotManager:
         data = raw_data.data
         data.pop(code)
         raw_data.data = data
-        await self.store_group_req(raw_data.dict())
+        await self.store_group_req(raw_data.model_dump())

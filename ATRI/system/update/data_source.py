@@ -2,7 +2,7 @@ import asyncio
 
 from ATRI import __version__, __sub_version__
 from ATRI.log import log
-from ATRI.utils.check_update import CheckUpdate
+from ATRI.utils.check_update import CheckUpdate, get_version_num
 from ATRI.message import MessageBuilder
 from ATRI.exceptions import str_traceback
 
@@ -13,10 +13,11 @@ class Updater:
         message = MessageBuilder().text(f"当前版本: {__version__} {__sub_version__}")
         l_v, l_v_t = await CheckUpdate.show_latest_version()
         if l_v and l_v_t:
-            if l_v[:11] > __version__ or (
-                    l_v != __version__ and l_v[:11] == __version__ and l_v[12:] != __sub_version__ and l_v[
-                                                                                                       12:15] != 'Pre') or (
-                    l_v == __version__ and __sub_version__ != 'Release'):
+            if (
+                l_v[:11] > __version__ or (
+                l_v[:11] == __version__ and l_v != f"{__version__} {__sub_version__}" and (
+                __sub_version__[:3] == "Pre" or get_version_num(l_v[12:]) > get_version_num(__sub_version__)))
+        ):
                 message.text(f"新版本已发布,请更新\n最新版本: {l_v}\n更新时间: {l_v_t}")
             info = await CheckUpdate.show_latest_commit_info()
             if info:

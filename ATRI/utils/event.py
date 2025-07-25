@@ -1,5 +1,5 @@
 from ATRI.log import log
-from ATRI.exceptions import str_traceback, BotRuntimeError
+from ATRI.exceptions import str_traceback, EventRuntimeError
 
 class BaseEvent:
     """一个基础事件"""
@@ -18,14 +18,16 @@ class BaseEvent:
     def notify(self, *args, **kwargs):
         """触发该事件"""
         exception = False
+        tb = ""
         for listener in self.listeners:
             try:
                 listener(*args, **kwargs)
             except Exception as e:
                 exception = True
-                log.warning(str_traceback(e))
+                tb = str_traceback(e)
+                log.error(tb)
         if exception:
-            raise BotRuntimeError("事件触发过程中出现错误，请检查后台代码输出")
+            raise EventRuntimeError("事件运行错误", tb)
 
     def handle(self):
         """装饰一个函数来响应事件"""
@@ -49,7 +51,7 @@ class DictEvent:
         if not key:
             raise ValueError(f"`{self.name}`未命名监听器")
         if key in self.listeners:
-            log.info(f"`{self.name}`事件中监听器`{key}`已经存在并覆盖")
+            log.warning(f"`{self.name}`事件中监听器`{key}`已经存在并覆盖")
         self.listeners[key] = listener
 
     def unsubscribe(self, key):
@@ -65,10 +67,11 @@ class DictEvent:
             except Exception as e:
                 str_tb = str_traceback(e)
                 exceptions[key] = str_tb
-                log.warning(str_tb)
+                log.error(str_tb)
         if exceptions:
             formatted_str = "".join([f"\n{key}:{value}" for key, value in exceptions.items()])
-            raise BotRuntimeError(f"{self.name}在执行时出现错误:{formatted_str}")
+            key_str = ",".join([key for key in exceptions])
+            raise EventRuntimeError(f"事件{self.name}在执行{key_str}时出现错误", formatted_str)
 
     def handle(self, key: str):
         """装饰一个函数来响应事件"""

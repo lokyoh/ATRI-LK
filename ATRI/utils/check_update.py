@@ -62,3 +62,10 @@ class CheckUpdate:
         l_v = release_data["tag_name"]
         l_v_t = release_data["published_at"]
         return l_v, l_v_t
+
+
+def get_version_num(v: str):
+    try:
+        return int(v.replace("Release", "Patch0").replace("Patch", ""))
+    except ValueError:
+        return 0

@@ -6,7 +6,7 @@ from .data_source import Updater
 plugin = Service(
     "更新",
     "ATRI-LK的更新服务",
-    "0.2.0",
+    "0.2.1",
     Service.ServiceType.SYSTEM
 )
 

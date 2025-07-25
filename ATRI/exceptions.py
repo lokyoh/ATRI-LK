@@ -47,7 +47,6 @@ class BaseBotException(Exception):
 
     def __init__(self, prompt: Optional[str]) -> None:
         self.prompt = prompt or self.__class__.prompt or self.__class__.__name__
-        self.track_id = _save_error(self.prompt, traceback.format_stack()[-2])
         super().__init__(self.prompt)
 
 
@@ -91,6 +90,14 @@ class BotRuntimeError(BaseBotException):
     prompt = "机器人运行时错误"
 
 
+class EventRuntimeError(BaseBotException):
+    prompt = "事件运行错误"
+
+    def __init__(self, prompt: str, content: str) -> None:
+        self.content = content
+        super().__init__(prompt)
+
+
 limiter = Limiter(3, 600)
 
 
@@ -98,27 +105,29 @@ limiter = Limiter(3, 600)
 async def _(bot: Bot, event, matcher: Matcher, exception: Optional[Exception]):
     if not exception:
         return
-
-    if isinstance(exception, BaseBotException):
+    if isinstance(exception, EventRuntimeError):
+        exception: EventRuntimeError
+        prompt = "事件运行错误 " + exception.prompt or exception.__class__.__name__
+        track_id = _save_error(prompt, exception.content)
+        log.error(f"EventRuntimeError: {prompt}")
+    elif isinstance(exception, BaseBotException):
         exception: BaseBotException
         prompt = "机器人基本错误 " + exception.prompt or exception.__class__.__name__
         track_id = _save_error(prompt, str_traceback(exception))
-        log.warning(f"BotException: {prompt}")
+        log.error(f"BotException: {prompt}")
     elif isinstance(exception, ActionFailed):
         prompt = "发送错误 请参考协议端输出"
         track_id = _save_error(prompt, str_traceback(exception))
-        log.warning(f"ActionFailed: {prompt}")
+        log.error(f"ActionFailed: {prompt}")
     elif isinstance(exception, Exception):
         prompt = "其他错误 " + exception.__class__.__name__
         track_id = _save_error(prompt, str_traceback(exception))
-        log.warning(f"Exception: {prompt}")
+        log.error(f"Exception: {prompt}")
     else:
         prompt = "未知错误 " + exception.__class__.__name__
         track_id = _save_error(prompt, str_traceback(exception))
-        log.warning(f"Ignore Exception: {prompt}")
-
+        log.error(f"Ignore Exception: {prompt}")
     log.error(f"Error Track ID: {track_id}")
-
     msg = (
         MessageBuilder("呜——出错了...请反馈维护者")
         .text(f"来自: {matcher.module_name}")
@@ -131,10 +140,8 @@ async def _(bot: Bot, event, matcher: Matcher, exception: Optional[Exception]):
             msg = MessageBuilder("该群报错提示已达限制, 将冷却10min").text("如需反馈请: 来杯红茶")
         else:
             limiter.increase(group_id)
-
         if limiter.get_times(group_id) > 3:
             return
-
     try:
         await bot.send(event, msg)
     except Exception:
@@ -143,7 +150,10 @@ async def _(bot: Bot, event, matcher: Matcher, exception: Optional[Exception]):
 
 def str_traceback(e) -> str:
     """获取错误的追踪信息"""
-    traceback_msg = traceback.format_exception(type(e), e, e.__traceback__)
+    return _str_traceback(traceback.format_exception(type(e), e, e.__traceback__))
+
+
+def _str_traceback(traceback_msg: list) -> str:
     filtered_lines = [traceback_msg[0]]
     for line in traceback_msg[1:-1]:
         if "site-packages" not in line:

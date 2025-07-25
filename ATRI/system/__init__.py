@@ -2,7 +2,7 @@ from ATRI import driver as atri_driver
 from ATRI import __version__, __sub_version__
 from ATRI.log import log
 from ATRI.utils.apscheduler import scheduler
-from ATRI.utils.check_update import CheckUpdate
+from ATRI.utils.check_update import CheckUpdate, get_version_num
 from ATRI.database import init_database, close_database_connection
 
 from time import sleep
@@ -20,10 +20,11 @@ async def startup():
         log.info(f"Latest commit {commit_info[0]} | sha: {commit_info[1]} | time: {commit_info[2]}")
     l_v, l_v_t = await CheckUpdate.show_latest_version()
     if l_v and l_v_t:
-        if l_v[:11] > __version__ or (
-                l_v != __version__ and l_v[:11] == __version__ and l_v[12:] != __sub_version__ and l_v[
-                                                                                                   12:15] != 'Pre') or (
-                l_v == __version__ and __sub_version__ != 'Release'):
+        if (
+                l_v[:11] > __version__ or (
+                l_v[:11] == __version__ and l_v != f"{__version__} {__sub_version__}" and (
+                __sub_version__[:3] == "Pre" or get_version_num(l_v[12:]) > get_version_num(__sub_version__)))
+        ):
             log.warning("新版本已发布, 请更新")
             log.warning(f"最新版本: {l_v} 更新时间: {l_v_t}")
             sleep(3)

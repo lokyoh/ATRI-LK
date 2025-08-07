@@ -1,7 +1,7 @@
 from datetime import datetime
 
 from ATRI.system.lkapi.ai import chat_manager
-from utils.limiter import LimitedQueue
+from ATRI.utils.limiter import LimitedQueue
 
 
 class PetModel:

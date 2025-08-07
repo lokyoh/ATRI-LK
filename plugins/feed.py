@@ -7,7 +7,7 @@ from nonebot.params import CommandArg
 from ATRI.service import Service
 from ATRI.message import MessageBuilder
 from ATRI.log import log
-from ATRI.system.lkapi.ai.gemini import Model
+from ATRI.system.lkapi.ai import chat_manager
 from ATRI.system.lkapi.bot import db as lk_db, config as lk_config
 from ATRI.system.lkapi.bot.checker import IsLkUser
 from ATRI.system.lkapi.entity.user import users
@@ -16,7 +16,7 @@ from ATRI.exceptions import str_traceback
 plugin = Service(
     "投喂",
     "向可爱的亚托莉投喂食物",
-    "0.4.0",
+    "0.4.1",
     Service.ServiceType.LKPLUGIN
 )
 
@@ -39,10 +39,8 @@ async def feed_func(user_id, food):
     message = MessageBuilder().at(user_id)
     if lk_config.configs.chat_switch and food:
         try:
-            model = Model(system_instruction=atri)
-            response = await model.generate_content(
-                f'用户"{users.get_user_name(user_id)}"(好感度:{users.get_love(user_id)})向你投喂了:{food}')
-            log.info(response)
+            response = await chat_manager.generate_content(
+                f'{atri}用户"{users.get_user_name(user_id)}"(好感度:{users.get_love(user_id)})向你投喂了:{food}')
             response = response.replace("\n", "")
             message.append(response)
         except Exception as e:

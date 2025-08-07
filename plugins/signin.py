@@ -21,7 +21,7 @@ from ATRI.system.lkapi.bot.checker import IsLkUser
 from ATRI.system.lkapi.utils.picture import get_pic_from
 
 plugin = Service(
-    "每日签到",
+    "签到",
     "亚托莉的签到系统",
     "0.1.3",
     Service.ServiceType.LKPLUGIN

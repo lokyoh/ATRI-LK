@@ -3,7 +3,10 @@ from .model import (
     sub_model_name,
     set_model_name,
     set_sub_model_name,
-    client,
-    Model,
-    Chats
+    GeminiModel
 )
+
+from .. import chat_manager
+
+chat_manager.register('gemini', GeminiModel())
+chat_manager.register('gemini-main', GeminiModel(model_name))

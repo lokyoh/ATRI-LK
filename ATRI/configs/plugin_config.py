@@ -22,8 +22,16 @@ class PluginConfig:
             return self.model.read_from_file(self.path)
         except Exception as e:
             from ATRI.log import log
-            log.error(f"加载配置文件错误:{e}")
+            from ATRI.exceptions import str_traceback
+            log.error(f"加载配置文件错误:{str_traceback(e)}")
             return self.model()
 
     def change_config(self, value: BaseModel):
         value.write_into_file(self.path)
+
+    @classmethod
+    def get(cls, service: str):
+        if service in plugin_config:
+            return plugin_config[service]
+        else:
+            return None

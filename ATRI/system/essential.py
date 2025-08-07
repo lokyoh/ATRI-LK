@@ -18,13 +18,15 @@ __TEMP_DIR = Path(".") / "data" / "temp"
 __ESSENTIAL_DIR.mkdir(parents=True, exist_ok=True)
 __TEMP_DIR.mkdir(parents=True, exist_ok=True)
 
-plugin = Service("基础部件").document("对基础请求进行处理").type(Service.ServiceType.HIDDEN).version("1.0.0")
+plugin = Service("基础部件").document("对基础请求进行处理").type(Service.ServiceType.HIDDEN).version("1.0.1")
 
 group_member_event = plugin.on_notice("群成员变动", "群成员变动检测")
 
 
 @group_member_event.handle()
 async def _(event: GroupIncreaseNoticeEvent):
+    if event.is_tome():
+        pass
     await asyncio.sleep(randint(1, 6))
     await group_member_event.finish(
         MessageBuilder("好欸! 事新人!").at(user_id=event.user_id).text(f"在下 {choice(list(conf.BotConfig.nickname))}")
@@ -33,6 +35,8 @@ async def _(event: GroupIncreaseNoticeEvent):
 
 @group_member_event.handle()
 async def _(event: GroupDecreaseNoticeEvent):
+    if event.is_tome():
+        pass
     await asyncio.sleep(randint(1, 6))
     await group_member_event.finish("呜——有人跑了...")
 

@@ -42,9 +42,9 @@ async def __store_reject_list(data: list) -> None:
 
 
 plugin = Service("广播").document("向 ATRI 所在的所有群发送信息").rule(to_bot()).type(
-    Service.ServiceType.FUNCTION).version("1.0.0")
+    Service.ServiceType.FUNCTION).version("1.0.1").permission(ADMIN)
 
-caster = plugin.on_command("广播", "向 ATRI 所在的群发送信息", aliases={"/bc"}, permission=MASTER)
+caster = plugin.on_command("/广播", "向 ATRI 所在的群发送信息", aliases={"/bc"}, permission=MASTER)
 
 
 @caster.handle()
@@ -86,7 +86,7 @@ async def _(bot: Bot, event: MessageEvent, msg: str = ArgPlainText("bc_msg")):
     await caster.finish(Message(result))
 
 
-reject_bc = plugin.on_command("拒绝广播", "拒绝来自维护者的信息推送", permission=ADMIN)
+reject_bc = plugin.on_command("/拒绝广播", "拒绝来自维护者的信息推送", permission=ADMIN)
 
 
 @reject_bc.handle()
@@ -102,7 +102,7 @@ async def _(event: GroupMessageEvent):
         await reject_bc.finish("完成!")
 
 
-accept_bc = plugin.on_command("接受广播", "接受来自维护者的信息推送", permission=ADMIN)
+accept_bc = plugin.on_command("/接受广播", "接受来自维护者的信息推送", permission=ADMIN)
 
 
 @accept_bc.handle()

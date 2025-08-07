@@ -19,7 +19,15 @@ class DBTable:
 
     def select(self, content, req):
         cursor = self._conn.cursor()
-        result = cursor.execute(f"SELECT {content} FROM {self.table_name} WHERE {req}")
+        if isinstance(req, str):
+            result = cursor.execute(f"SELECT {content} FROM {self.table_name} WHERE {req}")
+        elif isinstance(req, tuple):
+            condition = req[0]
+            values = req[1]
+            result = cursor.execute(
+                f"SELECT {content} FROM {self.table_name} WHERE {'AND '.join(f'{c} = ?' for c in condition)}", values)
+        else:
+            raise TypeError
         content = []
         for row in result:
             content.append(row)
@@ -28,19 +36,56 @@ class DBTable:
 
     def insert(self, content, value):
         cursor = self._conn.cursor()
-        cursor.execute(f"INSERT INTO {self.table_name} ({content}) VALUES ({value})")
+        if isinstance(content, str):
+            pass
+        elif isinstance(content, tuple):
+            content = ', '.join(content)
+        else:
+            raise TypeError
+        if isinstance(value, str):
+            cursor.execute(f"INSERT INTO {self.table_name} ({content}) VALUES ({value})")
+        elif isinstance(value, tuple):
+            placeholder = ', '.join(f'?' for _ in value)
+            cursor.execute(f"INSERT INTO {self.table_name} ({content}) VALUES ({placeholder})", value)
+        else:
+            raise TypeError
         self._conn.commit()
         cursor.close()
 
     def update(self, content, req):
         cursor = self._conn.cursor()
-        cursor.execute(f"UPDATE {self.table_name} SET {content} WHERE {req}")
+        values = ()
+        if isinstance(req, str):
+            condition = req
+        elif isinstance(req, tuple):
+            condition = 'AND '.join(f'{c} = ?' for c in req[0])
+            values = req[1]
+        else:
+            raise TypeError
+        if isinstance(content, str):
+            pass
+        elif isinstance(content, tuple):
+            values = (*content[1], *values)
+            content = ', '.join(f'{c} = ?' for c in content[0])
+        else:
+            raise TypeError
+        if values:
+            cursor.execute(f"UPDATE {self.table_name} SET {content} WHERE {condition}", values)
+        else:
+            cursor.execute(f"UPDATE {self.table_name} SET {content} WHERE {condition}")
         self._conn.commit()
         cursor.close()
 
     def delete(self, req):
         cursor = self._conn.cursor()
-        cursor.execute(f"DELETE FROM {self.table_name} WHERE {req}")
+        if isinstance(req, str):
+            cursor.execute(f"DELETE FROM {self.table_name} WHERE {req}")
+        elif isinstance(req, tuple):
+            condition = req[0]
+            values = req[1]
+            cursor.execute(f"DELETE FROM {self.table_name} WHERE {', '.join(f'{c} = ?' for c in condition)}", values)
+        else:
+            raise TypeError
         self._conn.commit()
         cursor.close()
 
@@ -83,13 +128,3 @@ class DataBase:
 
     def disconnect(self):
         self._connection.close()
-
-
-def encode(value: str) -> str:
-    value = value.replace("%", "%0")
-    return value.replace("`", "%1").replace("'", "%2").replace("\"", "%3").replace(" ", "%4")
-
-
-def decode(value: str) -> str:
-    value = value.replace("%1", "`").replace("%2", "'").replace("%3", "\"").replace("%4", " ")
-    return value.replace("%0", "%")

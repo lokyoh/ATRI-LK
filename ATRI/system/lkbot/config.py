@@ -1,9 +1,5 @@
-from pathlib import Path
-
 from ATRI.utils.model import BaseModel
 from ATRI.configs import PluginConfig
-
-DATA_PATH = Path(".") / "data" / "plugins" / "lkbot" / "config.json"
 
 
 class Config(BaseModel):
@@ -18,6 +14,7 @@ class Config(BaseModel):
     r18_groups: list[str] = []
     chat_switch: bool = True
     api_key: str = ''
+    active_chat: str = 'gemini'
 
 
 _config_manage = PluginConfig("lk插件", Config)

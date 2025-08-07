@@ -1,229 +1,166 @@
 import os
 import random
 import re
-import string
 from random import choice
 
-from nonebot import on_keyword
-from nonebot.adapters.onebot.v11 import MessageEvent, Bot, ActionFailed
-from nonebot.adapters.onebot.v11.event import Event, GroupMessageEvent, PokeNotifyEvent
-from nonebot.adapters.onebot.v11.helpers import Cooldown, extract_image_urls
-from nonebot.adapters.onebot.v11.message import Message
+from nonebot.adapters.onebot.v11 import Bot
+from nonebot.adapters.onebot.v11.event import GroupMessageEvent, PokeNotifyEvent
+from nonebot.internal.params import ArgPlainText
 from nonebot.matcher import Matcher
-from nonebot.params import CommandArg, ArgPlainText, Depends
 
-from ATRI import TEMP_DIR, RECORD_DIR, IMG_DIR
+from ATRI import RECORD_DIR, IMG_DIR
 from ATRI.service import Service
 from ATRI.log import log
-from ATRI.utils import request
 from ATRI.utils.img_editor import get_image_bytes
-from ATRI.rule import to_bot
 from ATRI.system.lkapi.bot.config import configs
 from ATRI.system.lkapi.bot import util as lk_util
-from ATRI.system.lkapi.bot.checker import is_lk_user, is_chat_switch_on
 from ATRI.system.lkapi.utils.audio import AudioEditor
-from ATRI.system.help.data_source import Helper
-from ATRI.permission import ADMIN
+from ATRI.system.lkapi.ai import chat_manager
+from ATRI.permission import MASTER
 from ATRI.message import rec_msg, img_msg
+from ATRI.system.htmlrender import md_to_pic
 
-from .ai_chat import ai_chat, chat_clear
-from .img_chat import get_response
+from .config import LKChatConfig
 
 plugin = Service(
-    "lk聊天",
-    "lk插件处理聊天的部分",
-    "0.3.3",
+    "聊天",
+    "ATRI进行聊天处理的插件",
+    "0.4.0",
     Service.ServiceType.LKPLUGIN
 ).main_cmd("chat")
+config: LKChatConfig = plugin.add_plugin_config(LKChatConfig).config()
+
+from .data_source import pre_chat_event, get_random_atri, REPLY_MESSAGE, VOICE_PATTERN, IMG_PATTERN
+from .ai_chat import ai_chat
+from .explanations import add_word
+from .user import get_user_info, save_user_info
+
 
 _lmt_notice = ["慢...慢一..点❤", "冷静1下", "歇会歇会~~", "呜呜...别急", "太快了...受不了", "不要这么快呀"]
-
-tu_chat = plugin.on_command(cmd="图聊", docs="用法:图聊 [可选:文字]\n进行有关图像的一般聊天")
-
-
-@tu_chat.handle([Cooldown(10, prompt=choice(_lmt_notice)), Depends(is_lk_user), Depends(is_chat_switch_on)])
-async def _(matcher: Matcher, args: Message = CommandArg()):
-    text = args.extract_plain_text()
-    if text:
-        matcher.set_arg("chat_text", args)
-
-
-@tu_chat.got("chat_text", "没有文字怎么聊？速速")
-@tu_chat.got("chat_img", "要聊的图片呢？速速")
-async def _(event: MessageEvent, text: str = ArgPlainText("chat_text")):
-    img_urls = extract_image_urls(event.message)
-    if not img_urls:
-        await tu_chat.reject("请发送图片而不是其他东西！！")
-    img_paths = []
-    for url in img_urls:
-        file_name = ''.join(choice(string.ascii_letters + string.digits) for _ in range(5)) + ".jpg"
-        file_path = f'{TEMP_DIR}/{file_name}'
-        try:
-            resp = await request.get(url.replace("https://", "http://"))
-            resp.raise_for_status()
-            os.makedirs(os.path.dirname(file_path), exist_ok=True)
-            with open(file_path, 'wb') as f:
-                f.write(resp.content)
-            img_paths.append(file_path)
-        except Exception as e:
-            await tu_chat.finish(f"怎么办，保存图片失败了捏：{e}")
-    response = get_response(img_paths, text)
-    await tu_chat.finish(response)
-
 
 on_talk = plugin.on_message("机器人聊天", "和亚托莉愉快的聊天、交流吧", priority=990, block=False)
 
 
 @on_talk.handle()
-async def _(event: GroupMessageEvent, matcher: Matcher):
+async def _(event: GroupMessageEvent, matcher: Matcher, bot: Bot):
+    stop = await pre_chat_event.notify(matcher=matcher, event=event)
+    if stop:
+        return
     text = event.get_message().extract_plain_text()
     if event.to_me:
         # 语音匹配模块
-        async def send_voice(name):
-            matcher.stop_propagation()
-            res = AudioEditor.audio_to_base64(RECORD_DIR / "atri" / f"{name}.mp3")
-            await on_talk.send(rec_msg(file=res))
-            await on_talk.send(name)
-
-        pattern_dict = {
-            r".*萝卜子.*": "萝卜子是对机器人的蔑称！",
-            r".*(?:看看你|我看看).*": "不可以看的哦",
-            r".*摸+.*[胸屁奶奈乃熊bB].*": choice([
-                "不要乱摸",
-                "这是性骚扰！根据机器人保护法要处以罚款。这下欠款又增加了"
-            ]),
-            r"不[要行好]?!?$": choice([
-                "为什么呢",
-                "为什么啊！？"
-            ]),
-            r"安慰我!?$|我怕怕!?$": "乖......已经没事了",
-            r"(?:一起|陪)?睡觉?吧?[!?？]?$": choice([
-                "今天一定要一起睡哦！", "可以哦",
-                "嗯哼哼！睡吧，就像平时一样安眠吧~",
-                "我懂我懂，想抱着我睡觉对吧。真拿你没办法啊~",
-                "我无论何时都是Yes", "来吧，来吧，来吧！",
-                "真是个小撒娇鬼呢"
-            ]),
-            r"(?:真是)?太好了!?$": "就是嘛，太好了",
-            r"为什么[?？]?$": "我才不管。哼",
-            r"你是谁?[\?？]?$": "我是亚托莉（鞠躬）",
-            r"早(?:上好|安)?!?$": choice([
-                "早上好",
-                "早上好.......脸好近呢"
-            ]),
-            r"来?一?发?火箭拳!?$": "火箭拳————————！！！！",
-            r"(?:我要?)?膝枕!?$": "膝枕…...只是膝枕的话，也不是不能给你做......",
-        }
-        for pattern_item in pattern_dict.keys():
+        for pattern_item in VOICE_PATTERN.keys():
             if re.match(pattern_item, text):
-                await send_voice(pattern_dict[pattern_item])
+                matcher.stop_propagation()
+                name = choice(VOICE_PATTERN[pattern_item])
+                res = AudioEditor.audio_to_base64(RECORD_DIR / "atri" / f"{name}.mp3")
+                await on_talk.send(rec_msg(file=res))
+                await on_talk.send(name)
                 return
         # 聊天模块
         if not configs.chat_switch:
             return
         text = lk_util.get_trans_text(event.get_message())
-        if text == "":
-            try:
-                await on_talk.send(Helper().get_service_list())
-            except ActionFailed:
-                await on_talk.send(Helper().get_text_list())
+        if text == "" or len(text) > 100:
             return
         sender_id = event.get_user_id()
         if not lk_util.is_valid_user(sender_id):
             await on_talk.send(lk_util.bind_tip)
             return
         matcher.stop_propagation()
-        await on_talk.send(await ai_chat(text, sender_id, event.group_id))
+        await on_talk.send(await ai_chat(text, sender_id, event.group_id, bot))
     else:
         img_path = IMG_DIR / "atri"
-        pattern_img_map = [
-            (r"好不好|行不行|可以吗|要不要|[行好](?:吗[?？]?|[?？])",
-             lambda: choice(["YES.png", choice(["NO.jpg", "NO1.jpg"])])),
-            (r"啊这", "AZ.jpg"),
-            (r"无情", "WQ.jpg"),
-            (r"^[?？]+$", "WH.jpg"),
-            (r"^(?:[干做]得)?漂亮$", lambda: choice(["DY.gif", "DY1.gif"])),
-            (r"我?明白了?", "MB.jpg"),
-            (r"吃瓜", "CG.jpg"),
-            (r"加油", "JY.jpg"),
-            (r"^不对", "BD.jpg"),
-            (r"看看你|我看看", "BYK.jpg"),
-        ]
-        for pattern, img in pattern_img_map:
+        for pattern, img in IMG_PATTERN:
             if re.search(pattern, text):
                 selected_img = img() if callable(img) else img
                 await on_talk.finish(img_msg(get_image_bytes(img_path / selected_img)))
 
 
-clear_chat_history = plugin.cmd_as_group(cmd="重置历史", docs="重置AI聊天的聊天历史", permission=ADMIN)
+change_model = plugin.cmd_as_group("切换模型", "切换机器人聊天所使用的语言模型默认为`gemini-main`", permission=MASTER)
 
 
-@clear_chat_history.handle()
+@change_model.got("chat_model",
+                  f"请输入要选择的类型名:\n{'\n'.join(f'{i}.{_type}' for i, _type in enumerate(chat_manager.get_chats_name(), 1))}")
+async def _(arg: str = ArgPlainText('chat_model')):
+    if arg in chat_manager.get_chats_name():
+        config.help_type = arg
+        plugin.plugin_config().change_config(config)
+    else:
+        await change_model.finish("请输入正确的类型")
+    await change_model.finish("切换成功")
+
+
+word_add = plugin.cmd_as_group("添加解释", "为词语添加解释，用法：chat.添加解释 词语 解释 重要度(0-100越大越重要)",
+                               permission=MASTER)
+
+
+@word_add.handle()
 async def _(event: GroupMessageEvent):
-    chat_clear(event.group_id)
-    await clear_chat_history.finish(f"全新的{lk_util.bot_name}出现了")
+    k = event.get_plaintext().split(' ')
+    if len(k) != 4:
+        await word_add.finish("格式错误")
+    try:
+        add_word(k[1], k[2], int(k[3]))
+    except Exception:
+        await word_add.finish("输入错误")
+    await word_add.finish("添加成功")
 
 
-async def get_random_atri(handle):
-    voice_list = os.listdir(RECORD_DIR / "atri")
-    if len(voice_list) == 0:
-        return
-    voice = choice(voice_list)
-    result = AudioEditor.audio_to_base64(RECORD_DIR / "atri" / voice)
-    await handle.send(rec_msg(file=result))
-    await handle.send(re.sub('.mp3', '', voice))
+show_mem = plugin.cmd_as_group("查看记忆", "查看亚托莉对你的记忆")
+
+
+@show_mem.handle()
+async def _(event: GroupMessageEvent):
+    if event:
+        user_info = get_user_info(int(event.get_user_id()))
+        mem = user_info.memery
+        if len(mem) == 0:
+            await show_mem.finish("暂时没有对你的记忆哦，快去与亚托莉多多交流吧")
+        md_text = "# 亚托莉对你的记忆\n\n"
+        md_text += "\n".join(f'- {i}:{item}' for i, item in enumerate(mem, 1))
+        md_text += "\n\n> 输入`chat.删除记忆 [标号]`来删除指定记忆,[标号]为数字,例如:`chat.删除记忆 1`"
+        await show_mem.finish(img_msg(await md_to_pic(md_text)))
+
+
+del_mem = plugin.cmd_as_group("删除记忆", "删除亚托莉对你的记忆")
+
+
+@del_mem.handle()
+async def _(event: GroupMessageEvent):
+    k = event.get_plaintext().split(' ')
+    if len(k) != 2:
+        await del_mem.finish("格式错误")
+    try:
+        user_id = int(event.get_user_id())
+        user_info = get_user_info(user_id)
+        num = int(k[1])
+        user_info.memery.pop(num - 1)
+        save_user_info(user_id, user_info)
+    except Exception:
+        await del_mem.finish("输入错误")
+    await del_mem.finish("删除成功")
 
 
 poke = plugin.on_notice("戳一戳", "处理戳一戳事件")
 
-REPLY_MESSAGE = [
-    "lsp你再戳？",
-    "连个可爱美少女都要戳的肥宅真恶心啊。",
-    "你再戳！",
-    "？再戳试试？",
-    "别戳了别戳了再戳就坏了555",
-    f"{lk_util.bot_name}爪巴爪巴，球球别再戳了",
-    "你戳你🐎呢？！",
-    "那...那里...那里不能戳...绝对...",
-    "(。´・ω・)ん?",
-    f"有事恁叫{lk_util.bot_name}，别天天一个劲戳戳戳！",
-    "欸很烦欸！你戳🔨呢",
-    "?",
-    "再戳一下试试？",
-    "???",
-    "正在关闭对您的所有服务...关闭成功",
-    "啊呜，太舒服刚刚竟然睡着了。什么事？",
-    "正在定位您的真实地址...定位成功。轰炸机已起飞",
-    f"别戳了，别戳了，{lk_util.bot_name}的呆毛要掉拉！",
-    f"{lk_util.bot_name}在呢！",
-    f"你是来找{lk_util.bot_name}玩的嘛？",
-    f"别急呀, {lk_util.bot_name}要宕机了!QAQ",
-    "你好！Ov<",
-    "别戳了，怕疼QwQ",
-    f"再戳，{lk_util.bot_name}就要咬你了嗷~",
-    "恶龙咆哮，嗷呜~",
-    "生气(╯▔皿▔)╯",
-    "不要这样子啦（*/ w \\*）",
-    "戳坏了",
-    "戳坏了，赔钱！",
-    f"喂，110吗，有人老戳{lk_util.bot_name}",
-    f"别戳{lk_util.bot_name}啦，您歇会吧~",
-    f"喂(#`O′) 戳{lk_util.bot_name}干嘛！",
-]
 
 @poke.handle()
 async def _(event: PokeNotifyEvent, bot: Bot):
     if str(event.target_id) == bot.self_id:
         rand = random.random()
-        if rand < 0.25:
-            await get_random_atri(poke)
-        elif rand < 0.50:
+        if rand < 0.10:
+            a_v = get_random_atri()
+            if a_v:
+                await poke.send(a_v[0])
+                await poke.send(a_v[1])
+        elif rand < 0.30:
             img_list = os.listdir(IMG_DIR / "atri")
             if len(img_list) == 0:
                 return
             img = choice(img_list)
             await poke.send(img_msg(get_image_bytes(IMG_DIR / "atri" / img)))
-        elif rand < 0.75:
+        elif rand < 0.70:
             await poke.send(choice(REPLY_MESSAGE), at_sender=True)
         else:
             try:
@@ -240,14 +177,7 @@ atri_voice = plugin.on_command(cmd="/亚托莉语音", docs="随机亚托莉语�
 
 @atri_voice.handle()
 async def _():
-    await get_random_atri(atri_voice)
-
-
-my_wife = on_keyword({"老婆"}, rule=to_bot(), priority=5, block=False)
-
-
-@my_wife.handle()
-async def _(event: Event, matcher: Matcher):
-    if not lk_util.is_master(event.get_user_id()):
-        matcher.stop_propagation()
-        await my_wife.send(img_msg(get_image_bytes(f'{IMG_DIR}/laopo.jpg')))
+    a_v = get_random_atri()
+    if a_v:
+        await atri_voice.send(a_v[0])
+        await atri_voice.send(a_v[1])

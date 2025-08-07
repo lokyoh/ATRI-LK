@@ -35,7 +35,6 @@ aiofiles = "^24.1.0"
 markdown = "^3.7"
 pymdown-extensions = "^10.15"
 python-markdown-math = "^0.9"
-google-genai = "^1.25.0"
 
 [build-system]
 requires = ["poetry-core"]

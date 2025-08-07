@@ -13,13 +13,12 @@ from ATRI.system.lkbot.tools.get_pic import local_image
 from ATRI.service import Service
 from ATRI.utils import Limiter
 from ATRI.utils.img_editor import IMGEditor
-from ATRI.configs import PluginConfig
 from ATRI.utils.model import BaseModel
 
 plugin = Service(
     "状态",
     "检查 ATRI 状态",
-    "1.1.0",
+    "1.1.1",
     Service.ServiceType.SYSTEM
 )
 
@@ -34,9 +33,7 @@ class StatusConfig(BaseModel):
     minutes: int = 0
 
 
-config_manage = PluginConfig(plugin.service, StatusConfig)
-
-config: StatusConfig = config_manage.config()
+config: StatusConfig = plugin.add_plugin_config(StatusConfig).config()
 
 ping = plugin.on_command("/ping", "检测 ATRI 是否存活")
 

@@ -1,6 +1,7 @@
 from ATRI.log import log
 from ATRI.exceptions import str_traceback, EventRuntimeError
 
+
 class BaseEvent:
     """一个基础事件"""
 

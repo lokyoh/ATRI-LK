@@ -163,7 +163,7 @@ LOVEMULCOUNT    INTEGER DEFAULT 0
 
         def _add_user():
             self._userdata[user_id] = UserData([user_id, name], 1)
-            self.sql.insert('ID, NAME', f"{user_id}, '{name}'")
+            self.sql.insert('ID, NAME', (int(user_id), name))
 
         self._user_lock.run(_add_user, user_id)()
         return True
@@ -182,7 +182,7 @@ LOVEMULCOUNT    INTEGER DEFAULT 0
 
         def _change_name():
             self._userdata[user_id].name = new_name
-            self.sql.update(f"NAME = '{new_name}'", f"ID = {user_id}")
+            self.sql.update((('NAME',), (new_name,)), (('ID',), (int(user_id),)))
 
         self._user_lock.run(_change_name, user_id)()
         self.user_name_changed_event.notify(user_id, new_name)
@@ -317,8 +317,8 @@ LOVEMULCOUNT    INTEGER DEFAULT 0
             return False
         item_stack.meta.num = num
         self._backpack_cache[user_id].set_item_with_stack(item_stack)
-        self.sql.update(f"BACKPACK = '{self._backpack_cache[user_id].bp_to_str()}'",
-                        f"ID = {user_id}")
+        bp_data = self._backpack_cache[user_id].bp_to_str()
+        self.sql.update((('BACKPACK',), (bp_data,)), (('ID',), (int(user_id),)))
         return True
 
     def exp_mul_change(self, user_id: str, exp_mul: int, times: int) -> bool:

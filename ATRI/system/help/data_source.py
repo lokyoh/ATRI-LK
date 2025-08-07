@@ -1,17 +1,23 @@
+import inspect
 import json
 import os.path
 from pathlib import Path
 from typing import Dict
 from PIL import Image
+from jinja2 import Environment, FileSystemLoader
 
-from nonebot.adapters.onebot.v11 import MessageSegment
+from nonebot.adapters.onebot.v11 import MessageSegment, GroupMessageEvent
 
-from ATRI import __version__, conf, IMG_DIR, service_list, __sub_version__
+from ATRI import __version__, conf, IMG_DIR, service_list, __sub_version__, RES_DIR
 from ATRI.message import MessageBuilder, img_msg
 from ATRI.service import ServiceTools, Service
 from ATRI.utils.img_editor import IMGEditor, get_image_bytes
 from ATRI.exceptions import ServiceNotFoundError
 from ATRI.log import log
+from ATRI.permission import MASTER_LIST
+from ATRI.system.htmlrender import html_to_pic
+
+from . import help_config
 
 _SERVICE_INFO_FORMAT = (
     MessageBuilder("服务名：{service}")
@@ -32,6 +38,7 @@ PLUGIN_PATH = Path('.') / 'data' / 'plugins' / 'help'
 PLUGIN_PATH.mkdir(parents=True, exist_ok=True)
 SERVICES_PATH = PLUGIN_PATH / 'services.json'
 SERVICES_IMG_PATH = PLUGIN_PATH / 'help.jpg'
+help_type = {}
 
 
 class Helper:
@@ -105,10 +112,11 @@ class Helper:
         if os.path.exists(SERVICES_PATH):
             with open(SERVICES_PATH, 'r', encoding='utf-8') as f:
                 cls.service_dict = json.load(f)
-        cls.get_service_list()
+        if help_config.help_type == 'image':
+            cls.get_image_list()
 
     @classmethod
-    def get_service_list(cls) -> MessageSegment:
+    def get_image_list(cls, event=None) -> MessageSegment:
         refresh = cls.get_typed_services()
         if not SERVICES_IMG_PATH.exists() or refresh:
             cls.get_services_img()
@@ -168,7 +176,7 @@ class Helper:
         background.save_rgb(SERVICES_IMG_PATH)
 
     @classmethod
-    def get_text_list(cls):
+    def get_text_list(cls, event=None):
         log.info("发送服务列表图片失败，使用用文字方式发送")
         services_info = ""
         for _type in Service.ServiceType:
@@ -180,6 +188,74 @@ class Helper:
             for j in cls.service_dict[_type.name]:
                 services_info += f'· {j}\n'
         return f'咱搭载了以下服务~\n{services_info}/帮助 (服务) -以查看对应服务帮助'
+
+    @classmethod
+    async def get_html_help(cls, event):
+        level = 0
+        user_id = str(event.user_id)
+        if user_id in MASTER_LIST:
+            level = 2
+        elif isinstance(event, GroupMessageEvent) and event.sender.role in ["admin", "owner"]:
+            level = 1
+        group_id = str(event.group_id) if isinstance(event, GroupMessageEvent) else str()
+        services = {}
+        for _type in Service.ServiceType:
+            services[_type.value] = []
+        s_l = list(service_list.keys())
+        s_l.sort()
+        length = len(s_l)
+        for s in s_l:
+            _s: Service = service_list[s]
+            info = _s.get_info()
+            _type = info.type
+            if _type == Service.ServiceType.HIDDEN.value:
+                continue
+            if info.permission == "Master":
+                if level < 2:
+                    continue
+            elif info.permission == "Admin":
+                if level < 1:
+                    continue
+            usable = False
+            sc = ServiceTools(s).load_service_config()
+            if sc.enabled:
+                usable = True
+                if user_id in sc.disable_user:
+                    usable = False
+                elif isinstance(event, GroupMessageEvent) and group_id in sc.disable_group:
+                    usable = False
+            si = _s.get_info().model_dump()
+            si["usable"] = usable
+            services[_type].append(si)
+        services = {k: v for k, v in services.items() if not (isinstance(v, list) and len(v) == 0)}
+        simp_s = {}
+        for key in services:
+            k_l = services[key]
+            simp_s[key] = list(
+                map(lambda se: {'service': se['service'], 'version': se['version'], 'usable': se['usable']}, k_l))
+        if group_id:
+            (PLUGIN_PATH / group_id).mkdir(parents=True, exist_ok=True)
+            img_path = PLUGIN_PATH / group_id / f"{user_id}.png"
+            json_path = PLUGIN_PATH / group_id / f"{user_id}.json"
+        else:
+            (PLUGIN_PATH / 'user').mkdir(parents=True, exist_ok=True)
+            img_path = PLUGIN_PATH / "user" / f"{user_id}.png"
+            json_path = PLUGIN_PATH / "user" / f"{user_id}.json"
+        if json_path.exists() and img_path.exists():
+            data = json.load(open(json_path))
+            if data.get('length', 0) == length:
+                if data.get('services', []) == simp_s:
+                    return img_msg(get_image_bytes(img_path))
+
+        log.info(f'开始为{f'{group_id}中的{user_id}' if group_id else f'{user_id}'}生成新的帮助')
+        json.dump({'length': length, 'services': simp_s}, open(json_path, 'w'), indent=4, ensure_ascii=False)
+        env = Environment(loader=FileSystemLoader(RES_DIR / 'html' / 'help'))
+        template = env.get_template("help.html")
+        html_output = template.render(categories=services)
+        data = await html_to_pic(html_output, viewport={"width": 800, "height": 600}, device_scale_factor=1)
+        with open(img_path, "wb") as f:
+            f.write(data)
+        return img_msg(data)
 
     @staticmethod
     def service_info(service: str) -> str:
@@ -223,3 +299,15 @@ class Helper:
             cmd=cmd, cmd_type=cmd_type, docs=docs, aliases=aliases
         )
         return repo
+
+    @classmethod
+    async def get_service_list(cls, event):
+        func = help_type[help_config.help_type]
+        if inspect.iscoroutinefunction(func):
+            return await func(event)
+        return func(event)
+
+
+help_type['text'] = Helper.get_text_list
+help_type['image'] = Helper.get_image_list
+help_type['html'] = Helper.get_html_help

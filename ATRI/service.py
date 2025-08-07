@@ -24,6 +24,7 @@ from ATRI.permission import Permission, MASTER_LIST
 from ATRI.exceptions import ReadFileError, WriteFileError, ServiceNotFoundError, ServiceRegisterError
 from ATRI.utils.model import BaseModel
 from ATRI.utils.apscheduler import SchedulerController
+from ATRI.configs import PluginConfig
 
 CONFIG_DIR = Path(".") / "data" / "config"
 CONFIG_DIR.mkdir(parents=True, exist_ok=True)
@@ -59,7 +60,7 @@ class Service:
 
     class ServiceType(Enum):
         SYSTEM = "系统服务"
-        LKPLUGIN = "LK服务"
+        LKPLUGIN = "LK扩展服务"
         FUNCTION = "功能性服务"
         ENTERTAINMENT = "娱乐服务"
         GAME = "游戏服务"
@@ -355,6 +356,12 @@ class Service:
     def conf(self) -> ServiceConfig:
         return ServiceTools(self.service).load_service_config()
 
+    def plugin_config(self) -> PluginConfig:
+        return PluginConfig.get(self.service)
+
+    def add_plugin_config(self, model: Type[BaseModel]) -> PluginConfig:
+        return PluginConfig(self.service, model)
+
 
 class ServiceTools:
     """针对服务的工具类"""
@@ -372,7 +379,7 @@ class ServiceTools:
         if not path.is_file():
             raise ReadFileError(
                 f"无法找到服务 {self.service} 对应的信息文件\n"
-                "请删除此目录下的文件: data/service/services\n"
+                f"请删除此目录下的文件: data/config/{self.service}.json\n"
                 "接着重新启动"
             )
 
@@ -383,7 +390,7 @@ class ServiceTools:
         if not path.is_file():
             raise ReadFileError(
                 f"无法找到服务 {self.service} 对应的信息文件\n"
-                "请删除此目录下的文件: data/service/services\n"
+                f"请删除此目录下的文件: data/config/{self.service}.json\n"
                 "接着重新启动"
             )
 
@@ -395,19 +402,16 @@ class ServiceTools:
 
     def auth_service(self, user_id: str = str(), group_id: str = str()) -> bool:
         data = self.load_service_config()
-
         auth_global = data.enabled
+        if not auth_global:
+            return False
         auth_user = data.disable_user
+        if user_id and user_id in auth_user:
+            return False
         auth_group = data.disable_group
-
-        if user_id:
-            if user_id in auth_user:
-                return False
-
-        if group_id:
-            return False if group_id in auth_group else True
-
-        return auth_global
+        if group_id and group_id in auth_group:
+            return False
+        return True
 
     def service_controller(self, is_enabled: bool):
         data = self.load_service_config()
@@ -417,21 +421,15 @@ class ServiceTools:
 
 def is_in_service(service: str) -> Rule:
     async def _is_in_service(bot: Bot, event: Event) -> bool:
-        result = ServiceTools(service).auth_service()
-        if not result:
-            return False
-
+        user_id = str()
+        group_id = str()
         if isinstance(event, PrivateMessageEvent):
             user_id = event.get_user_id()
-            result = ServiceTools(service).auth_service(user_id)
-            return result
         elif isinstance(event, GroupMessageEvent):
             user_id = event.get_user_id()
             group_id = str(event.group_id)
-            result = ServiceTools(service).auth_service(user_id, group_id)
-            return result
-        else:
-            return True
+        result = ServiceTools(service).auth_service(user_id, group_id)
+        return result
 
     return Rule(_is_in_service)
 

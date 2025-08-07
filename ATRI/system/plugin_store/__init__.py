@@ -11,11 +11,11 @@ from .data_source import PluginManager
 plugin = Service(
     "插件商店",
     "插件商店",
-    "0.3.2",
+    "0.3.3",
     Service.ServiceType.SYSTEM
 ).permission(MASTER)
 
-plugins = plugin.on_command("插件列表", "查看插件列表")
+plugins = plugin.on_command("/插件列表", "查看插件列表")
 
 
 @plugins.handle()
@@ -46,7 +46,7 @@ async def _():
     await plugins.send(info)
 
 
-plugin_info = plugin.on_command("插件详情", "查看指定插件详情")
+plugin_info = plugin.on_command("/插件详情", "查看指定插件详情")
 
 
 @plugin_info.handle()
@@ -78,7 +78,7 @@ async def _(args: Message = CommandArg()):
     await plugin_info.finish(message)
 
 
-add = plugin.on_command("添加插件", "添加指定插件")
+add = plugin.on_command("/添加插件", "添加指定插件")
 
 
 @add.handle()
@@ -101,7 +101,7 @@ async def _(args: Message = CommandArg()):
         raise e from e
 
 
-remove = plugin.on_command("移除插件", "移除指定插件")
+remove = plugin.on_command("/移除插件", "移除指定插件")
 
 
 @remove.handle()
@@ -122,7 +122,7 @@ async def _(args: Message = CommandArg()):
         raise e from e
 
 
-update = plugin.on_command("更新插件", "更新指定插件")
+update = plugin.on_command("/更新插件", "更新指定插件")
 
 
 @update.handle()

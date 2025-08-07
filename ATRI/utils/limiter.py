@@ -65,5 +65,14 @@ class LimitedQueue:
         """
         return list(self.queue)
 
+    def pop(self):
+        return self.queue.pop()
+
+    def popleft(self):
+        return self.queue.popleft()
+
+    def clear(self):
+        self.queue.clear()
+
     def __repr__(self):
         return f"LimitedQueue({list(self.queue)})"

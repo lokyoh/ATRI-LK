@@ -14,6 +14,7 @@ def daily_update():
     daily_update_event.notify()
     log.success("每日更新完成")
 
+
 @daily_update_event.handle("clean_temp_files")
 def clean_temp_files():
     now = time.time()

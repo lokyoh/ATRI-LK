@@ -59,8 +59,12 @@ class CheckUpdate:
             log.error("GitHub 数据结构已更改, 请前往仓库提交 Issue.")
             return str(), str()
 
-        l_v = release_data["tag_name"]
-        l_v_t = release_data["published_at"]
+        l_v = release_data["name"]
+        l_v_t = release_data["created_at"]
+        l_v_t = l_v_t.replace('Z', '')
+        utc_datetime = datetime.fromisoformat(l_v_t).replace(tzinfo=timezone.utc)
+        shanghai_datetime = utc_datetime.astimezone(pytz.timezone("Asia/Shanghai"))
+        l_v_t = shanghai_datetime.strftime("%Y-%m-%d %H:%M")
         return l_v, l_v_t
 
 

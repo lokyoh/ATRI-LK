@@ -16,7 +16,7 @@ from .data.user import users
 from .tools.daily_update import daily_update
 from .data.load_item import auto_load_items
 
-PLUGIN_VERSION = "0.9.2"
+PLUGIN_VERSION = "0.9.3"
 """lkbot插件版本"""
 PLUGIN_DIR = Path(".") / "data" / "plugins" / "lkbot"
 """lkbot插件数据路径"""
@@ -25,7 +25,7 @@ PLUGIN_DIR = Path(".") / "data" / "plugins" / "lkbot"
 class BaseFunc:
     """lk插件的实用工具，用于其他插件使用lk插件提供的服务，当这里没有所需的方法时再从.system中使用底层代码
     其中.system.tools目录为工具类合集可随意使用，这些工具是lk插件添加的但并不包含lk插件的服务"""
-    bind_tip = '还未绑定名称哟，使用指令 /lk.绑定 进行绑定'
+    bind_tip = '还未绑定名称哟，使用指令 /绑定 进行绑定'
     safe_mode_tip = '健康模式群聊无法使用此功能'
     chat_switch_off = 'AI聊天服务已关闭'
     test_mode_tip = '此功能为测试功能，只能在测试模式群聊下使用'
@@ -240,7 +240,7 @@ sign_in_event = SignInEvent("sign_in")
 func_register_event = DictEvent("func_register")
 """物品功能注册事件，在注册物品时触发"""
 init_finish_event = DictEvent("init_finish")
-"""初始化完成事件，在该插件系统所以数据加载完成后触发"""
+"""初始化完成事件，在该插件系统所有的数据加载完成后触发"""
 user_info_event = UserInfoEvent("user_info")
 """获取玩家信息事件"""
 

@@ -13,7 +13,7 @@ plugin = Service(
     docs="重新启动ATRI",
     type=Service.ServiceType.SYSTEM,
     version="0.2.0"
-)
+).permission(MASTER)
 
 PLUGIN_DIR = Path(".") / "data" / "plugins" / "restart"
 RESTART_TEMP = PLUGIN_DIR / "restart_temp"

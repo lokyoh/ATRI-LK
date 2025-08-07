@@ -1,15 +1,10 @@
-from google import genai
-from google.genai import types
-import re
+import json
 
-from ATRI.utils.limiter import LimitedQueue
+from ATRI.utils import request
+from ATRI.log import log
 
+from .. import BaseChat
 from ...bot.config import configs
-
-try:
-    client = genai.Client(api_key=configs.api_key)
-except Exception:
-    client = None
 
 model_name = 'gemini-2.5-flash'
 """主模型名称"""
@@ -29,62 +24,40 @@ def set_sub_model_name(name: str):
     sub_model_name = name
 
 
-class Model:
-    def __init__(self, model: str = sub_model_name, system_instruction: str = ''):
+class GeminiModel(BaseChat):
+    def __init__(self, model: str = sub_model_name):
         self.model = model
-        self.config = types.GenerateContentConfig(
-            response_mime_type="text/plain",
+
+    async def generate_content(self, content: str, r_type: str = 'text', data: dict = None):
+        g_c: dict = {"thinkingConfig": {
+            "thinkingBudget": 0
+        }}
+        if r_type == 'json':
+            g_c["responseMimeType"] = "application/json"
+            g_c["responseSchema"] = data
+        else:
+            g_c["responseMimeType"] = "text/plain"
+        response = await request.post(
+            f'https://generativelanguage.googleapis.com/v1beta/models/{self.model}:generateContent',
+            headers={
+                'x-goog-api-key': configs.api_key,
+                'Content-Type': 'application/json'
+            },
+            json={
+                "contents": [{
+                    "parts": [
+                        {"text": content}
+                    ]
+                }],
+                "generationConfig": g_c
+            }
         )
-        if system_instruction:
-            self.config.system_instruction = system_instruction
-
-    async def generate_content(self, content: str):
-        if client is None:
-            raise RuntimeError('No Client.')
-        response = await client.aio.models.generate_content(
-            model=self.model,
-            contents=content,
-            config=self.config
-        )
-        return response.text
-
-    def change_system_instruction(self, system_instruction: str):
-        self.config.system_instruction = system_instruction
-
-
-class Chats(Model):
-    def __init__(self, model: str = sub_model_name, system_instruction: str = '', limit: int = 20):
-        super().__init__(model, system_instruction)
-        self.limit = limit
-        self.history = LimitedQueue(self.limit)
-
-    async def generate_content(self, content: str):
-        if client is None:
-            raise RuntimeError('No Client.')
-        self.history.add(
-            types.Content(
-                role='user',
-                parts=[
-                    types.Part.from_text(text=content)
-                ]
-            )
-        )
-        response = await client.aio.models.generate_content(
-            model=self.model,
-            contents=self.history.get_data(),
-            config=self.config
-        )
-        cleaned_string = re.sub(r'\n+', '\n', response.text)
-        cleaned_string = cleaned_string.rstrip('\n')
-        self.history.add(
-            types.Content(
-                role='model',
-                parts=[
-                    types.Part.from_text(text=cleaned_string)
-                ]
-            )
-        )
-        return cleaned_string
-
-    def clear(self):
-        self.history = LimitedQueue(self.limit)
+        if response.status_code == 200:
+            data = response.json()
+            text = data['candidates'][0]['content']['parts'][0]['text']
+            log.debug(f'生成成功:Token共使用{data['usageMetadata']['totalTokenCount']}')
+            if r_type == 'json':
+                return json.loads(text)
+            return text
+        log.warning(f'请求失败了:{response.status_code}\n{response.text}')
+        return f'请求失败了:{response.status_code}\n具体信息请查看后台警告'

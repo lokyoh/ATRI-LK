@@ -1,0 +1,667 @@
+pufferfish:
+  name: "河豚"
+  description: "它受到威胁时会膨胀。"
+  price: 200
+  position:
+    - "ocean"
+  time:
+    start: 12
+    end: 16
+  season:
+    - "summer"
+  weather:
+    - "sun"
+  size:
+    min: 3
+    max: 94
+  xp: 29
+  difficulty: 80
+  weight: 14
+anchovy:
+  name: "鳀鱼"
+  description: "一种海里的小银鱼。"
+  price: 30
+  position:
+    - "ocean"
+  time: ~
+  season:
+    - "spring"
+    - "fall"
+  weather: ~
+  size:
+    min: 3
+    max: 43
+  xp: 13
+  difficulty: 30
+  weight: 76
+tuna:
+  name: "金枪鱼"
+  description: "一种住在海里的大型鱼。"
+  price: 100
+  position:
+    - "ocean"
+  time:
+    start: 4
+    end: 19
+  season:
+    - "summer"
+    - "winter"
+  weather: ~
+  size:
+    min: 30
+    max: 155
+  xp: 26
+  difficulty: 70
+  weight: 39
+sardine:
+  name: "沙丁鱼"
+  description: "一种常见的海鱼。"
+  price: 40
+  position:
+    - "ocean"
+  time:
+    start: 4
+    end: 19
+  season:
+    - "spring"
+    - "fall"
+    - "winter"
+  weather: ~
+  size:
+    min: 3
+    max: 33
+  xp: 13
+  difficulty: 30
+  weight: 74
+bream:
+  name: "鲷鱼"
+  description: "一种夜间活跃的常见河鱼。"
+  price: 45
+  position:
+    - "river"
+  time:
+    start: 18
+    end: 4
+  season:
+    - "spring"
+    - "summer"
+    - "fall"
+    - "winter"
+  weather: ~
+  size:
+    min: 30
+    max: 79
+  xp: 14
+  difficulty: 35
+  weight: 70
+largemouthbass:
+  name: "大嘴鲈鱼"
+  description: "一种住在湖里的受欢迎鱼类。"
+  price: 100
+  position:
+    - "lake"
+  time:
+    start: 4
+    end: 19
+  season:
+    - "spring"
+    - "summer"
+    - "fall"
+    - "winter"
+  weather: ~
+  size:
+    min: 28
+    max: 79
+  xp: 19
+  difficulty: 50
+  weight: 51
+smallmouthbass:
+  name: "小嘴鲈鱼"
+  description: "一种对污染很敏感的淡水鱼。"
+  price: 50
+  position:
+    - "river"
+  time: ~
+  season:
+    - "spring"
+    - "fall"
+  weather: ~
+  size:
+    min: 30
+    max: 64
+  xp: 12
+  difficulty: 28
+  weight: 73
+rainbowtrout:
+  name: "虹鳟鱼"
+  description: "一种身上有彩虹带的淡水鳟鱼。"
+  price: 65
+  position:
+    - "river"
+    - "lake"
+  time:
+    start: 4
+    end: 19
+  season:
+    - "summer"
+  weather:
+    - "sun"
+  size:
+    min: 25
+    max: 66
+  xp: 18
+  difficulty: 45
+  weight: 60
+salmon:
+  name: "鲑鱼"
+  description: "它会游到上游产卵。"
+  price: 75
+  position:
+    - "river"
+  time:
+    start: 4
+    end: 19
+  season:
+    - "fall"
+  weather:
+    - "sun"
+  size:
+    min: 61
+    max: 168
+  xp: 19
+  difficulty: 50
+  weight: 56
+walleye:
+  name: "大眼鱼"
+  description: "一种在夜间捕捉的淡水鱼。"
+  price: 105
+  position:
+    - "river"
+    - "lake"
+  time:
+    start: 12
+    end: 4
+  season:
+    - "fall"
+    - "winter"
+  weather:
+    - "rain"
+  size:
+    min: 25
+    max: 104
+  xp: 18
+  difficulty: 45
+  weight: 52
+perch:
+  name: "河鲈"
+  description: "一种冬季淡水鱼。"
+  price: 55
+  position:
+    - "river"
+    - "lake"
+  time: ~
+  season:
+    - "winter"
+  weather: ~
+  size:
+    min: 25
+    max: 64
+  xp: 14
+  difficulty: 35
+  weight: 68
+carp:
+  name: "鲤鱼"
+  description: "一种常见的池鱼。"
+  price: 30
+  position:
+    - "lake"
+  time: ~
+  season:
+    - "spring"
+    - "summer"
+    - "fall"
+    - "winter"
+  weather: ~
+  size:
+    min: 38
+    max: 130
+  xp: 8
+  difficulty: 35
+  weight: 76
+catfish:
+  name: "鲶鱼"
+  description: "一种能在小溪里找到的罕见鱼类。"
+  price: 200
+  position:
+    - "river"
+  time:
+    start: 4
+    end: 12
+  season:
+    - "spring"
+    - "fall"
+  weather:
+    - "rain"
+  size:
+    min: 30
+    max: 185
+  xp: 28
+  difficulty: 75
+  weight: 16
+pike:
+  name: "狗鱼"
+  description: "一种很难捕捉的淡水鱼。"
+  price: 100
+  position:
+    - "river"
+  time: ~
+  season:
+    - "summer"
+    - "winter"
+  weather: ~
+  size:
+    min: 38
+    max: 155
+  xp: 23
+  difficulty: 60
+  weight: 45
+sunfish:
+  name: "太阳鱼"
+  description: "一种常见的河鱼。"
+  price: 30
+  position:
+    - "river"
+  time:
+    start: 4
+    end: 19
+  season:
+    - "spring"
+    - "summer"
+  weather:
+    - "sun"
+  size:
+    min: 13
+    max: 41
+  xp: 13
+  difficulty: 30
+  weight: 76
+redmullet:
+  name: "红鲻鱼"
+  description: "从前它们被当做宠物饲养。"
+  price: 75
+  position:
+    - "ocean"
+  time:
+    start: 4
+    end: 19
+  season:
+    - "summer"
+    - "winter"
+  weather: ~
+  size:
+    min: 20
+    max: 58
+  xp: 21
+  difficulty: 55
+  weight: 53
+herring:
+  name: "鲱鱼"
+  description: "一种常见的海鱼。"
+  price: 30
+  position:
+    - "ocean"
+  time: ~
+  season:
+    - "spring"
+    - "winter"
+  weather: ~
+  size:
+    min: 20
+    max: 53
+  xp: 11
+  difficulty: 25
+  weight: 79
+eel:
+  name: "鳗鱼"
+  description: "一种长而滑溜的小鱼。"
+  price: 85
+  position:
+    - "ocean"
+  time:
+    start: 16
+    end: 4
+  season:
+    - "spring"
+    - "fall"
+  weather:
+    - "rain"
+  size:
+    min: 30
+    max: 206
+  xp: 26
+  difficulty: 70
+  weight: 42
+octopus:
+  name: "章鱼"
+  description: "一种神秘聪明的生物。"
+  price: 150
+  position:
+    - "ocean"
+  time:
+    start: 6
+    end: 13
+  season:
+    - "summer"
+  weather: ~
+  size:
+    min: 30
+    max: 124
+  xp: 34
+  difficulty: 95
+  weight: 15
+redsnapper:
+  name: "红鲷鱼"
+  description: "一种身上是漂亮红色的受欢迎鱼类。"
+  price: 50
+  position:
+    - "ocean"
+  time:
+    start: 6
+    end: 19
+  season:
+    - "summer"
+    - "fall"
+    - "winter"
+  weather:
+    - "rain"
+  size:
+    min: 20
+    max: 66
+  xp: 16
+  difficulty: 40
+  weight: 66
+squid:
+  name: "鱿鱼"
+  description: "一种可以长得很大的深海生物。"
+  price: 80
+  position:
+    - "ocean"
+  time:
+    start: 18
+    end: 4
+  season:
+    - "winter"
+  weather: ~
+  size:
+    min: 30
+    max: 124
+  xp: 28
+  difficulty: 75
+  weight: 40
+seacucumber:
+  name: "海参"
+  description: "一种在海底能找到的黏滑生物。"
+  price: 75
+  position:
+    - "ocean"
+  time:
+    start: 4
+    end: 19
+  season:
+    - "fall"
+    - "winter"
+  weather: ~
+  size:
+    min: 8
+    max: 53
+  xp: 16
+  difficulty: 40
+  weight: 61
+supercucumber:
+  name: "大海参"
+  description: "一种稀有紫色品种的海参。"
+  price: 250
+  position:
+    - "ocean"
+  time:
+    start: 18
+    end: 4
+  season:
+    - "summer"
+    - "fall"
+  weather: ~
+  size:
+    min: 30
+    max: 94
+  xp: 29
+  difficulty: 80
+  weight: 14
+flounder:
+  name: "比目鱼"
+  description: "它生活在底部，所以两只眼睛都在它的头顶上。"
+  price: 100
+  position:
+    - "ocean"
+  time:
+    start: 4
+    end: 20
+  season:
+    - "spring"
+    - "summer"
+  weather: ~
+  size:
+    min: 10
+    max: 43
+  xp: 19
+  difficulty: 50
+  weight: 51
+midnightcarp:
+  name: "午夜鲤鱼"
+  description: "这种害羞的鱼只在晚上感到舒适。"
+  price: 150
+  position:
+    - "lake"
+  time:
+    start: 22
+    end: 4
+  season:
+    - "fall"
+    - "winter"
+  weather: ~
+  size:
+    min: 30
+    max: 135
+  xp: 21
+  difficulty: 55
+  weight: 38
+sturgeon:
+  name: "鲟鱼"
+  description: "古老的生物链底层生物，数量一直在减少。雌性的寿命长达150年。"
+  price: 200
+  position:
+    - "lake"
+  time:
+    start: 4
+    end: 19
+  season:
+    - "summer"
+    - "winter"
+  weather: ~
+  size:
+    min: 30
+    max: 155
+  xp: 29
+  difficulty: 78
+  weight: 15
+tigertrout:
+  name: "虎纹鳟鱼"
+  description: "一种不能繁殖后代的稀有杂交鳟鱼。"
+  price: 150
+  position:
+    - "river"
+  time:
+    start: 4
+    end: 19
+  season:
+    - "fall"
+    - "winter"
+  weather: ~
+  size:
+    min: 25
+    max: 53
+  xp: 23
+  difficulty: 60
+  weight: 35
+bullhead:
+  name: "大头鱼"
+  description: "鲶鱼的近亲，以湖底的多种食物为食。"
+  price: 75
+  position:
+    - "lake"
+  time: ~
+  season:
+    - "spring"
+    - "summer"
+    - "fall"
+    - "winter"
+  weather: ~
+  size:
+    min: 30
+    max: 79
+  xp: 18
+  difficulty: 46
+  weight: 58
+tilapia:
+  name: "罗非鱼"
+  description: "一种主要食素、喜爱温水的鱼。"
+  price: 75
+  position:
+    - "ocean"
+  time:
+    start: 4
+    end: 14
+  season:
+    - "summer"
+    - "fall"
+  weather: ~
+  size:
+    min: 28
+    max: 79
+  xp: 19
+  difficulty: 50
+  weight: 56
+chub:
+  name: "鲢鱼"
+  description: "一种常见的淡水鱼，因贪吃的食性而广为人知。"
+  price: 50
+  position:
+    - "river"
+    - "lake"
+  time: ~
+  season:
+    - "spring"
+    - "summer"
+    - "fall"
+    - "winter"
+  weather: ~
+  size:
+    min: 30
+    max: 64
+  xp: 14
+  difficulty: 35
+  weight: 69
+dorado:
+  name: "麻哈脂鲤"
+  description: "凶猛的肉食鱼，有着绚烂的橙色鳞片。"
+  price: 100
+  position:
+    - "river"
+  time:
+    start: 4
+    end: 19
+  season:
+    - "summer"
+  weather: ~
+  size:
+    min: 61
+    max: 84
+  xp: 29
+  difficulty: 78
+  weight: 35
+albacore:
+  name: "青花鱼"
+  description: "喜欢温度的\"交界处\"，即指冷水与温水交界的地方。"
+  price: 75
+  position:
+    - "ocean"
+  time:
+    start: 18
+    end: 11
+  season:
+    - "fall"
+    - "winter"
+  weather: ~
+  size:
+    min: 51
+    max: 104
+  xp: 23
+  difficulty: 60
+  weight: 50
+shad:
+  name: "西鲱"
+  description: "结群生活在海里，但会回到河里产卵。"
+  price: 60
+  position:
+    - "river"
+  time:
+    start: 9
+    end: 4
+  season:
+    - "spring"
+    - "summer"
+    - "fall"
+  weather:
+    - "rain"
+  size:
+    min: 51
+    max: 124
+  xp: 18
+  difficulty: 45
+  weight: 61
+lingcod:
+  name: "蛇齿单线鱼"
+  description: "可怕的捕食者，会吞下一切可以吃下的东西。"
+  price: 120
+  position:
+    - "river"
+    - "lake"
+  time: ~
+  season:
+    - "winter"
+  weather: ~
+  size:
+    min: 76
+    max: 130
+  xp: 31
+  difficulty: 85
+  weight: 27
+halibut:
+  name: "大比目鱼"
+  description: "形状扁平、居住在大洋底的鱼。"
+  price: 80
+  position:
+    - "ocean"
+  time:
+    start: 19
+    end: 11
+  season:
+    - "spring"
+    - "summer"
+    - "winter"
+  weather: ~
+  size:
+    min: 25
+    max: 86
+  xp: 19
+  difficulty: 50
+  weight: 55

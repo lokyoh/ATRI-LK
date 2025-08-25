@@ -1,0 +1,35 @@
+wood_rod:
+  name: "木钓竿"
+  description: "木质的普通钓竿,有10点耐久"
+  durable: 10
+  time: 0
+  quality: 0
+  price: 100
+copper_rod:
+  name: "铜钓竿"
+  description: "铜质的普通钓竿,有50点耐久"
+  durable: 50
+  time: 1
+  quality: 10
+  price: 600
+iron_rod:
+  name: "铁钓竿"
+  description: "铁质的普通钓竿,有100点耐久"
+  durable: 100
+  time: 2
+  quality: 20
+  price: 1400
+gold_rod:
+  name: "金钓竿"
+  description: "金质的普通钓竿,有250点耐久"
+  durable: 200
+  time: 3
+  quality: 30
+  price: 4000
+iridium_rod:
+  name: "铱钓竿"
+  description: "铱质的普通钓竿,有500点耐久"
+  durable: 500
+  time: 4
+  quality: 40
+  price: 9000

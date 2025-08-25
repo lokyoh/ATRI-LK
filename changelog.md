@@ -1,5 +1,22 @@
 > 此处仅为记录重大更新，修复 BUG/以及其它 请关注[`GitHub commits`](https://github.com/lokyoh/ATRI-LK/commits/main)
 
+## Aug 25, 2025
+
+> `lkbot`与用户数据有关的代码更新,新插件钓鱼。
+
+- 更新版本至: `YHN-LK0-016`
+- 新增:
+  - `lkfishing`插件,依赖于`lkfarm`
+- 更新:
+  - `lkchat`更新内置的语音,更新部分代码
+  - `lkbot`更新与用户数据有关的代码,依赖于此的插件同步更新
+  - `ATRI`插件配置更新,
+- 修改:
+  - `lkfarm`的数据位置更改,`lock`工具更新,`sqlite`工具更新
+  - `lkapi.entity.user`修改内容
+- 移除:
+  - 移除几张背景图片
+
 ## Aug 7, 2025
 
 > 帮助插件重大更新,AI聊天系统重大更新。

@@ -11,12 +11,14 @@ class History:
         self.time = datetime.now().strftime("%m月%d日%A %H:%M")
         self.text = text
 
+
 class Dialogue:
     def __init__(self, history: History, text):
         self.sender = history.sender
         self.time = history.time
         self.text = history.text
         self.resp = text
+
 
 class ChatHistory:
     def __init__(self):

@@ -1,0 +1,18 @@
+primary_bait:
+  name: "初级鱼饵"
+  description: "初级鱼饵,没有特殊属性"
+  time: 0
+  quality: 0
+  price: 5
+middle_bait:
+  name: "中级鱼饵"
+  description: "中级鱼饵,更快的咬钩与更高的品质"
+  time: 3
+  quality: 30
+  price: 10
+advanced_bait:
+  name: "高级鱼饵"
+  description: "高级鱼饵,更快的咬钩与更高的品质"
+  time: 5
+  quality: 70
+  price: 15

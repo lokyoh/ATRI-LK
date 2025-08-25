@@ -12,19 +12,18 @@ from .config import config
 from .data.item import items
 from .data.item_func import register_core_func, item_funcs
 from .data.shop import shops
-from .data.user import users
+from .data.user import users, UserData
 from .tools.daily_update import daily_update
 from .data.load_item import auto_load_items
 
-PLUGIN_VERSION = "0.9.3"
+PLUGIN_VERSION = "0.10.0"
 """lkbot插件版本"""
 PLUGIN_DIR = Path(".") / "data" / "plugins" / "lkbot"
 """lkbot插件数据路径"""
 
 
 class BaseFunc:
-    """lk插件的实用工具，用于其他插件使用lk插件提供的服务，当这里没有所需的方法时再从.system中使用底层代码
-    其中.system.tools目录为工具类合集可随意使用，这些工具是lk插件添加的但并不包含lk插件的服务"""
+    """lk插件的实用工具，用于其他插件使用lk插件提供的服务"""
     bind_tip = '还未绑定名称哟，使用指令 /绑定 进行绑定'
     safe_mode_tip = '健康模式群聊无法使用此功能'
     chat_switch_off = 'AI聊天服务已关闭'
@@ -78,63 +77,88 @@ class BaseFunc:
             return users.get_user_name(user_id)
         return None
 
-    def buy_item(self, user_id, shop_name, item_name: str, num: int) -> str:
-        """用户从商店购买物品"""
+    def buy_item_func(self, user_data: UserData, shop_name: str, item_name: str, num: int) -> str:
+        """用户从商店购买物品,注意数据保护及保存"""
         shop = shops.get_shop_by_name(shop_name)
         index = shop.get_goods_index(item_name)
         price = shop.get_goods_price_by_index(index)
         coin_type = shop.get_goods_coin_type_by_index(index)
         money = price * num
         if coin_type == "ATRI币":
-            if users.money_change(user_id, -money):
-                self.item_change(user_id, item_name, num)
-                return f"购买 {item_name}*{num} 成功，共花费{money}ATRI币，你还有{users.get_money(user_id)}ATRI币"
-            return f"ATRI币不足，需要{money}ATRI币，而你只有{users.get_money(user_id)}ATRI币"
+            if user_data.money_change(-money):
+                self.item_change_func(user_data, item_name, num)
+                return f"购买 {item_name}*{num} 成功，共花费{money}ATRI币，你还有{user_data.money}ATRI币"
+            return f"ATRI币不足，需要{money}ATRI币，而你只有{user_data.money}ATRI币"
         else:
             if not items.has_item(coin_type):
                 return f"错误，请反馈:\n找不到交易货币`{coin_type}`"
-            if self.item_change(user_id, coin_type, -money):
-                self.item_change(user_id, item_name, num)
-                return f"购买 {item_name}*{num} 成功，共花费{money}{coin_type}，你还有{users.get_backpack(user_id).get_item_stack(coin_type).meta.num}{coin_type}"
-            return f"{coin_type}不足，需要{money}{coin_type}，而你只有{users.get_backpack(user_id).get_item_stack(coin_type).meta.num}{coin_type}"
+            if self.item_change_func(user_data, coin_type, -money):
+                self.item_change_func(user_data, item_name, num)
+                return f"购买 {item_name}*{num} 成功，共花费{money}{coin_type}，你还有{user_data.backpack.get_item_stack(coin_type).meta.num}{coin_type}"
+            return f"{coin_type}不足，需要{money}{coin_type}，而你只有{user_data.backpack.get_item_stack(coin_type).meta.num}{coin_type}"
 
-    def sell_item(self, user_id, item_name, num) -> str:
-        """用户回收(出售)物品"""
+    def buy_item(self, user_id: str, shop_name: str, item_name: str, num: int) -> str:
+        """用户从商店购买物品,包装后的方法,推荐处理流程少使用"""
+        with users.get_user_data(user_id) as user_data:
+            return self.buy_item_func(user_data, shop_name, item_name, num)
+
+    def sell_item_func(self, user_data: UserData, item_name: str, num: int) -> str:
+        """用户回收(出售)物品,注意数据保护及保存"""
         item = items.get_item_by_name(item_name)
-        backpack = users.get_backpack(user_id)
+        backpack = user_data.backpack
         if backpack.bp_has_item(item_name):
-            if not self.item_change(user_id, item_name, -num):
-                item_num = backpack[item_name]["num"]
-                return f"物品 {item_name} 数量不足{num}个, 你只有{item_num}个"
-            users.money_change(user_id, item.get_item_price() * num)
-            return f"回收 {item_name}*{num} 成功"
+            item_stack = backpack.get_item_stack(item_name)
+            if num == -1:
+                num = item_stack.meta.num
+            elif num < -1 or num == 0:
+                raise ValueError('数量错误')
+            if not self.item_change_func(user_data, item_name, -num):
+                item_num = item_stack.meta.num
+                return f"物品 {item_name} 数量不足{num}个，你只有{item_num}个"
+            user_data.money_change(item.get_item_price() * num)
+            return f"回收 {item_name}*{num} 成功，获得{item.get_item_price() * num}ATRI币"
         return f"你没有 {item_name}"
 
+    def sell_item(self, user_id: str, item_name: str, num: int) -> str:
+        """用户回收(出售)物品,包装后的方法,推荐处理流程少使用"""
+        with users.get_user_data(user_id) as user_data:
+            return self.sell_item_func(user_data, item_name, num)
+
     @staticmethod
-    def use_item(user_id: str, item_name: str, num: int) -> tuple[bool, str]:
-        """用户使用物品"""
+    def use_item_func(user_data: UserData, item_name: str, num: int) -> tuple[bool, str]:
+        """用户使用物品,注意数据保护及保存"""
         item = items.get_item_by_name(item_name)
         if not item.item_can_use():
             return False, f"物品 {item_name} 不能使用"
-        backpack = users.get_backpack(user_id)
+        backpack = user_data.backpack
         if backpack.bp_has_item(item_name):
             item_num = backpack.get_item_stack(item_name).meta.num
             if num == -1:
                 num = item_num
             if item_num < num:
-                return False, f"物品 {item_name} 数量不足{num}个, 你只有{item_num}个"
+                return False, f"物品 {item_name} 数量不足{num}个，你只有{item_num}个"
             msg = ''
             for i in range(num):
-                resp = item.use_item(user_id)
+                resp = item.use_item(user_data)
                 msg += f'{i + 1}. {resp}\n'
             return True, msg
         else:
             return False, f"你没有物品 {item_name}"
 
+    def use_item(self, user_id: str, item_name: str, num: int) -> tuple[bool, str]:
+        """用户使用物品,包装后的方法,推荐处理流程少使用"""
+        with users.get_user_data(user_id) as user_data:
+            return self.use_item_func(user_data, item_name, num)
+
     @staticmethod
-    def item_change(user_id, item_name: str, num: int):
-        """对物品数量进行修改，自动添加或删除物品条目，注意:请确保修改后的数量不为负数"""
-        return users.item_num_change(user_id, item_name, num)
+    def item_change_func(user_data: UserData, item_name: str, num: int):
+        """对物品数量进行修改，自动添加或删除物品条目，注意:请确保修改后的数量不为负数,注意数据保护及保存"""
+        return user_data.item_num_change(item_name, num)
+
+    def item_change(self, user_id: str, item_name: str, num: int):
+        """对物品数量进行修改，自动添加或删除物品条目，注意:请确保修改后的数量不为负数,包装后的方法,推荐处理流程少使用"""
+        with users.get_user_data(user_id) as user_data:
+            return self.item_change_func(user_data, item_name, num)
 
     @staticmethod
     def clean_str(original_string: str) -> str:
@@ -177,6 +201,10 @@ class BaseFunc:
                 text = text + '[' + self.get_name(segment.data['qq']) + ']'
             elif segment.type == 'text':
                 text = text + segment.data['text']
+            elif segment.type == "face":
+                face_text = segment.data.get("raw", {}).get("faceText", '')
+                if face_text:
+                    text += face_text
         return text
 
     def user_change_name(self, user_id, new_name, limit: int = 10) -> tuple[bool, str]:
@@ -199,12 +227,12 @@ class BaseFunc:
 
 
 class SignInEvent(DictEvent):
-    def notify(self, user_id):
+    def notify(self, user_data):
         exceptions = {}
         msg = "\n"
         for key in self.listeners:
             try:
-                r = self.listeners[key](user_id)
+                r = self.listeners[key](user_data)
                 if r:
                     msg += r
             except Exception as e:

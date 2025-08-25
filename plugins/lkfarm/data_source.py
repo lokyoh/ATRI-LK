@@ -9,15 +9,21 @@ from nonebot.internal.params import Depends
 from ATRI import RES_DIR
 from ATRI.system.htmlrender import md_to_pic
 from ATRI.system.lkapi.bot import util as lk_util
-from ATRI.system.lkapi.bot.events import item_loading_event, sign_in_event, daily_update_event
+from ATRI.system.lkapi.bot.events import item_loading_event, sign_in_event, daily_update_event, user_info_event
 from ATRI.system.lkapi.entity.item import items, ItemType
 from ATRI.system.lkapi.entity.shop import shops
 from ATRI.log import log
 
 from .system.crop import load_crop_data, seed_shop, crop_data_list, CropData, Month, Season
 from .system.farm_user import user_farm_data
+from .system.forecast import weather_forecast
+from . import config, plugin
 
-FARM_RES_PATH = RES_DIR / "lkfarm"
+_config = config.config()
+
+plugin.scheduler_jobs().add_job(weather_forecast, "农场天气预报", 'cron', hour=_config.hour, minute=_config.minute)
+
+FARM_RES_PATH = RES_DIR / 'data' / "lkfarm"
 
 
 @item_loading_event.handle("lkfarm")
@@ -43,7 +49,7 @@ def _():
 
 
 @sign_in_event.handle("lkfarm")
-def _(user_id):
+def _(user_data):
     season = Month(date.today().month).to_season()
     item = ""
     if season == Season.SPRING:
@@ -55,10 +61,17 @@ def _(user_id):
     elif season == Season.WINTER:
         item = "霜瓜种子"
     if items.has_item(item):
-        lk_util.item_change(user_id, item, 1)
+        lk_util.item_change_func(user_data, item, 1)
         return f"获得1个{item}。"
     else:
         return f"{item}没有注册进物品。"
+
+
+@user_info_event.handle("lkfarm")
+def _(user_id, info):
+    user_farm_data.has_user(user_id)
+    info += f'\n体力:{user_farm_data.get_farm_data(user_id).endurance}'
+    return info
 
 
 class FarmSystem:
@@ -153,7 +166,7 @@ class FarmSystem:
         return p_list
 
     @staticmethod
-    def seeding(user_id, location: str, crop):
+    def seeding(user_id, location: str, crop, user_data):
         user_id = str(user_id)
         row = location[0]
         line = int(location[1])
@@ -163,7 +176,7 @@ class FarmSystem:
         if item.get_item_type() != ItemType.SEED:
             return f"{crop} 的类型是 {item.get_item_type()} 不是种子"
         crop = re.match(r"(.*)种子", crop)[1]
-        r, m = user_farm_data.seeding(user_id, row, line, crop)
+        r, m = user_farm_data.seeding(user_id, row, line, crop, user_data)
         if r:
             return None
         return m
@@ -189,11 +202,11 @@ class FarmSystem:
         return m
 
     @staticmethod
-    def harvesting(user_id, location):
+    def harvesting(user_id, location, user_data):
         user_id = str(user_id)
         row = location[0]
         line = int(location[1])
-        r, m = user_farm_data.harvesting(user_id, row, line)
+        r, m = user_farm_data.harvesting(user_id, row, line, user_data)
         if r:
             m = None
         return m

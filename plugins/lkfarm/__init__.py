@@ -7,15 +7,20 @@ from ATRI.service import Service
 from ATRI.message import img_msg
 from ATRI.system.lkapi.bot import util as lk_util
 from ATRI.system.lkapi.bot.checker import IsLkUser
+from ATRI.system.lkapi.entity.user import get_user_data
+from ATRI.permission import ADMIN
 
-from .data_source import farm_system, CheckFarmUser
+from .config import LKFarmConfig
 
 plugin = Service(
     "农场",
     "ATRI的农场插件",
-    "0.1.5",
+    "0.1.6",
     Service.ServiceType.LKPLUGIN
 ).main_cmd("/farm")
+config = plugin.add_plugin_config(LKFarmConfig)
+
+from .data_source import farm_system, CheckFarmUser
 
 my_farm = plugin.on_command("我的农场", "查看自己的农场")
 
@@ -40,12 +45,14 @@ async def _(event: GroupMessageEvent, arg: Message = CommandArg()):
     if len(p_list) > 0:
         resp = "开始操作:"
         r_l = {}
-        for p in p_list:
-            r = farm_system.seeding(event.user_id, p, crop)
-            if r:
-                if r not in r_l.keys():
-                    r_l[r] = []
-                r_l[r].append(p)
+        user_id = event.get_user_id()
+        with get_user_data(user_id) as user_data:
+            for p in p_list:
+                r = farm_system.seeding(user_id, p, crop, user_data)
+                if r:
+                    if r not in r_l.keys():
+                        r_l[r] = []
+                    r_l[r].append(p)
         if r_l == {}:
             resp += "\n种植成功"
         else:
@@ -58,7 +65,7 @@ async def _(event: GroupMessageEvent, arg: Message = CommandArg()):
     await seeding.finish("未识别出有效位置")
 
 
-hoeing = plugin.on_command("/锄地", "为田锄地\n使用方法:/锄地 要选择的所有位置")
+hoeing = plugin.on_command("/锄地", "为田锄地\n使用方法:/锄地 要选择的所有位置", aliases={'/耕地'})
 
 
 @hoeing.handle([CheckFarmUser])
@@ -75,7 +82,7 @@ async def _(event: GroupMessageEvent, arg: Message = CommandArg()):
                     r_l[r] = []
                 r_l[r].append(p)
         if r_l == {}:
-            resp += "\n耕种成功"
+            resp += "\n锄地成功"
         else:
             for m in r_l.keys():
                 resp += "\n"
@@ -124,12 +131,15 @@ async def _(event: GroupMessageEvent, arg: Message = CommandArg()):
     if len(p_list) > 0:
         resp = "开始操作:"
         r_l = {}
-        for p in p_list:
-            r = farm_system.harvesting(event.user_id, p)
-            if r:
-                if r not in r_l.keys():
-                    r_l[r] = []
-                r_l[r].append(p)
+        user_id = event.get_user_id()
+        with get_user_data(user_id) as user_data:
+            for p in p_list:
+                r = farm_system.harvesting(event.user_id, p, user_data)
+                if r:
+                    if r not in r_l.keys():
+                        r_l[r] = []
+                    r_l[r].append(p)
+            user_data.save_user_data()
         if r_l == {}:
             resp += "\n收获成功"
         else:
@@ -140,6 +150,25 @@ async def _(event: GroupMessageEvent, arg: Message = CommandArg()):
                 resp += m
         await harvesting.finish(resp)
     await harvesting.finish("未识别出有效位置")
+
+
+weather_forecast = plugin.cmd_as_group("天气预报订阅", "订阅或关闭本群的天气预报的订阅", permission=ADMIN)
+
+
+@weather_forecast.handle()
+async def _(event: GroupMessageEvent):
+    group_id = event.group_id
+    msg = ''
+    conf = config.config()
+    if group_id in conf.weather_forecast_group:
+        conf.weather_forecast_group.remove(group_id)
+        config.change_config(conf)
+        msg = '已取消了本群的农场天气预报'
+    else:
+        conf.weather_forecast_group.append(group_id)
+        config.change_config(conf)
+        msg = '已为本群订阅了农场天气预报'
+    await weather_forecast.send(msg)
 
 
 new_farm = plugin.cmd_as_group("新农场", "创建一个新农场")

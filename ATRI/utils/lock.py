@@ -42,23 +42,48 @@ class GroupLock:
         """添加锁的键值"""
         self._lock[key] = Lock()
 
-    def run(self, func: (), key: str):
+    def run(self, key: str, func: ()):
         """
         用法:
-        your_locks.run(your_func, key)(args)
+        your_locks.run(key, your_func)
+        """
+        if key in self._lock:
+            self._lock[key].acquire()
+            try:
+                r = func()
+            except Exception as e:
+                self._lock[key].release()
+                raise e from e
+            self._lock[key].release()
+            return r
+        else:
+            raise ValueError(f"非法关键字{key}")
+
+    def __getitem__(self, key: str):
+        if key not in self._lock:
+            self.add_lock(key)
+        return self._lock[key]
+
+    def lock(self, key: str):
+        """
+        用法:
+        @your_locks.lock(key)
         """
 
-        def wrapper(*args, **kwargs):
-            if key in self._lock:
-                self._lock[key].acquire()
-                try:
-                    r = func(*args, **kwargs)
-                except Exception as e:
+        def handle_wrapper(func):
+            def wrapper(*args, **kwargs):
+                if key in self._lock:
+                    self._lock[key].acquire()
+                    try:
+                        r = func(*args, **kwargs)
+                    except Exception as e:
+                        self._lock[key].release()
+                        raise e from e
                     self._lock[key].release()
-                    raise e from e
-                self._lock[key].release()
-                return r
-            else:
-                raise ValueError(f"非法关键字{key}")
+                    return r
+                else:
+                    raise ValueError(f"非法关键字{key}")
 
-        return wrapper
+            return wrapper
+
+        return handle_wrapper

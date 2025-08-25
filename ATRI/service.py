@@ -77,11 +77,8 @@ class Service:
             type: ServiceType = ServiceType.OTHER
     ):
         """初始化一个服务"""
-
-        super().__init__()
         if not service:
-            return
-
+            raise ServiceRegisterError("未命名服务")
         if service in service_list or service == "master":
             raise ServiceRegisterError("服务重复注册或服务名违规")
         self.service = service
@@ -264,6 +261,10 @@ class Service:
             block: bool = True,
             **kwargs,
     ) -> Type[Matcher]:
+        if not cmd:
+            raise TypeError("cmd is required")
+        if not docs:
+            docs = '暂无描述'
         if not rule:
             rule = self._rule
         if not aliases:
@@ -309,6 +310,10 @@ class Service:
         return self.on_message(rule=regex(pattern, flags) & rule, **kwargs)
 
     def cmd_as_group(self, cmd: str, docs: str, **kwargs) -> Type[Matcher]:
+        if not cmd:
+            raise TypeError("cmd is required")
+        if not docs:
+            docs = '暂无描述'
         sub_cmd = (cmd,) if isinstance(cmd, str) else cmd
         _cmd = self._main_cmd + sub_cmd
 

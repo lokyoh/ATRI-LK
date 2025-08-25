@@ -14,10 +14,11 @@ class PluginConfig:
         self.path = CONFIG_DIR / f"{service}_config.json"
         if not os.path.exists(self.path):
             os.makedirs(os.path.dirname(self.path), exist_ok=True)
-            self.change_config(model())
+            self.change_config(self.model())
+        self._config = self.load_config()
         plugin_config[service] = self
 
-    def config(self):
+    def load_config(self):
         try:
             return self.model.read_from_file(self.path)
         except Exception as e:
@@ -26,8 +27,22 @@ class PluginConfig:
             log.error(f"加载配置文件错误:{str_traceback(e)}")
             return self.model()
 
-    def change_config(self, value: BaseModel):
+    def config(self):
+        return self._config
+
+    def change_config(self, value: BaseModel = None):
+        if value is None:
+            self._config.write_into_file(self.path)
+            return
         value.write_into_file(self.path)
+
+    def __enter__(self):
+        return self._config
+
+    def __exit__(self, exc_type, exc_val, exc_tb):
+        if exc_type is None:
+            self._config.write_into_file(self.path)
+        return False
 
     @classmethod
     def get(cls, service: str):

@@ -1,4 +1,3 @@
-import copy
 import json
 from enum import Enum
 from typing import Dict, Any
@@ -17,6 +16,7 @@ class ItemType(Enum):
     VEGETABLE = '蔬菜'
     FRUIT = '水果'
     FLOWER = '花'
+    FISH = '鱼'
     COIN = '货币'
     OTHER = '其他'
     ERROR = "未知物品"
@@ -36,16 +36,15 @@ class Item:
         self._price = item_price
         self._using_funcs = using_funcs
 
-    def use_item(self, user_id: str):
+    def use_item(self, user_data):
         """在背包使用指定物品"""
-        from .user import users
         func_message = MessageBuilder()
         try:
             for check in self._using_funcs.checks:
-                item_funcs.exec_check(check, user_id)
-            users.item_num_change(user_id, self._name, -1)
+                item_funcs.exec_check(check, user_data)
+            user_data.item_num_change(self._name, -1)
             for func in self._using_funcs.funcs:
-                func_message.text(item_funcs.exec_func(func, user_id))
+                func_message.text(item_funcs.exec_func(func, user_data))
         except ConditionNotMet as e:
             return func_message.text(f'{e.prompt}')
         return func_message
@@ -81,9 +80,11 @@ class Item:
         return self._type
 
     def get_use_funcs(self) -> ItemFuncs | None:
+        """获取该物品在使用时执行的方法"""
         return self._using_funcs
 
     def set_use_funcs(self, funcs: ItemFuncs):
+        """设置该物品在使用时执行的方法"""
         self._using_funcs = funcs
 
 
@@ -167,15 +168,32 @@ class ItemMeta:
     """物品数据"""
 
     def __init__(self, item_meta: dict[str: Any]):
-        item_meta: dict
         self.num: int = item_meta.pop("num", 0)
-        self.extra = copy.deepcopy(item_meta)
+        self.extra: dict = item_meta
 
-    def meta_to_dict(self) -> dict[str: int]:
+    def meta_to_dict(self) -> dict[str: Any]:
         """转换成字典"""
-        meta = copy.deepcopy(self.extra)
+        meta = self.extra
         meta["num"] = self.num
         return meta
+
+
+class ToolItemMeta(ItemMeta):
+    """为工具类设计的ItemMeta，通过ItemMeta转化获得"""
+
+    def __init__(self, meta: ItemMeta):
+        self.damage = meta.extra.pop("damage", 0)
+        super().__init__(meta.meta_to_dict())
+
+    def meta_to_dict(self) -> dict[str: Any]:
+        """转换成字典"""
+        meta = self.extra
+        meta["num"] = self.num
+        meta["damage"] = self.damage
+        return meta
+
+    def to_meta(self) -> ItemMeta:
+        return ItemMeta(self.meta_to_dict())
 
 
 class ItemStack:
@@ -209,9 +227,12 @@ class BackPack:
         for _type in ItemType:
             self._backpack[_type] = dict()
         for _name in bp_dict.keys():
-            _type = items.get_reg_item_type(_name)
             _meta = bp_dict[_name]
+            if _meta['num'] <= 0:
+                continue
+            _type = items.get_reg_item_type(_name)
             self._backpack[_type][_name] = ItemMeta(_meta)
+        self._modify = False
 
     def bp_has_item(self, item_name: str) -> bool:
         """背包中有指定物品"""
@@ -229,27 +250,31 @@ class BackPack:
 
     def set_item_with_stack(self, item_stack: ItemStack):
         """通过物品堆设置物品"""
+        self._modify = True
         _name = item_stack.get_name()
         _type = item_stack.get_type()
-        if item_stack.meta.num == 0:
+        if item_stack.meta.num <= 0:
             self.remove_item(_name)
         else:
             self._backpack[_type][_name] = item_stack.meta
 
     def set_item_with_meta(self, item_name: str, item_meta: dict[str: Any]):
         """通过物品数据设置物品"""
+        self._modify = True
         _type = items.get_reg_item_type(item_name)
-        if item_meta.get("num", 0) == 0:
+        if item_meta.get("num", 0) <= 0:
             self.remove_item(item_name)
         else:
             self._backpack[_type][item_name] = ItemMeta(item_meta)
 
     def set_item(self, item_name: str, num: int):
         """设置指定数量的无其余数据的物品"""
+        self._modify = True
         self.set_item_with_meta(item_name, {"num": num})
 
     def remove_item(self, item_name: str) -> bool:
         """移除背包中的指定物品"""
+        self._modify = True
         for _type in ItemType:
             if item_name in self._backpack[_type].keys():
                 del self._backpack[_type][item_name]
@@ -286,3 +311,6 @@ class BackPack:
                 item_list.append(ItemStack(_name, item_type, self._backpack[item_type][_name]))
             return item_list
         return None
+
+    def is_modify(self) -> bool:
+        return self._modify

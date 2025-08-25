@@ -1,3 +1,4 @@
+import asyncio
 from datetime import datetime
 
 from nonebot.adapters.onebot.v11 import Event, Message
@@ -10,13 +11,13 @@ from ATRI.log import log
 from ATRI.system.lkapi.ai import chat_manager
 from ATRI.system.lkapi.bot import db as lk_db, config as lk_config
 from ATRI.system.lkapi.bot.checker import IsLkUser
-from ATRI.system.lkapi.entity.user import users
+from ATRI.system.lkapi.entity.user import get_user_data, sign
 from ATRI.exceptions import str_traceback
 
 plugin = Service(
     "投喂",
     "向可爱的亚托莉投喂食物",
-    "0.4.1",
+    "0.4.2",
     Service.ServiceType.LKPLUGIN
 )
 
@@ -36,29 +37,30 @@ def chang_love_num(num: int):
 
 
 async def feed_func(user_id, food):
-    message = MessageBuilder().at(user_id)
-    if lk_config.configs.chat_switch and food:
-        try:
-            response = await chat_manager.generate_content(
-                f'{atri}用户"{users.get_user_name(user_id)}"(好感度:{users.get_love(user_id)})向你投喂了:{food}')
-            response = response.replace("\n", "")
-            message.append(response)
-        except Exception as e:
-            log.warning(f'获取评价失败:{str_traceback(e)}')
-    content = feed_db.select('DATE', f'ID={user_id}')
-    today = datetime.now().strftime("%Y-%m-%d")
-    if len(content) == 0:
-        feed_db.insert('ID, DATE', f"{user_id}, '{today}'")
-    else:
-        if content[0][0] == today:
-            return message.text('~今天已经投喂过了')
-        feed_db.update(f"DATE = '{today}'", f'ID={user_id}')
-    users.love_change(user_id, love_num, False)
-    message.text(f'~投喂食物成功，获得{love_num}点好感')
-    state, msg = users.sign(user_id)
-    if state:
-        message.text(f'~今天尚未签到，已自动签到：{msg}')
-    return message
+    with get_user_data(user_id) as user_data:
+        message = MessageBuilder().at(user_id)
+        if lk_config.configs.chat_switch and food:
+            try:
+                response = asyncio.run(chat_manager.generate_content(
+                    f'{atri}用户"{user_data.name}"(好感度:{user_data.love})向你投喂了:{food}'))
+                response = response.replace("\n", "")
+                message.append(response)
+            except Exception as e:
+                log.warning(f'获取评价失败:{str_traceback(e)}')
+        content = feed_db.select('DATE', f'ID={user_id}')
+        today = datetime.now().strftime("%Y-%m-%d")
+        if len(content) == 0:
+            feed_db.insert('ID, DATE', f"{user_id}, '{today}'")
+        else:
+            if content[0][0] == today:
+                return message.text('~今天已经投喂过了')
+            feed_db.update(f"DATE = '{today}'", f'ID={user_id}')
+        user_data.love_change(love_num, False)
+        message.text(f'~投喂食物成功，获得{love_num}点好感')
+        state, msg = sign(user_data)
+        if state:
+            message.text(f'~今天尚未签到，已自动签到：{msg}')
+        return message
 
 
 @feed.handle([IsLkUser, Cooldown(600, prompt="稍后再投喂吧")])

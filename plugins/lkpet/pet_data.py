@@ -1,14 +1,15 @@
 from threading import Lock
 
-from ATRI.system.lkbot.data.user import Users, users, lk_db
 from ATRI.system.lkapi.bot.events import user_info_event
+from ATRI.system.lkapi.bot import db as lk_db
+from ATRI.system.lkapi.entity.user import user_manager
 
 from .pet_chat import PetModel
 
 
 @user_info_event.handle("lkpet")
 def _(user_id: str, info: str):
-    return f'{info}\n宠物:{pet_manager.datas[user_id].name}'
+    return f'{info}\n宠物:{pet_manager.datas[user_id].name if user_id in pet_manager.datas else '无宠物'}'
 
 
 class PetData:
@@ -48,14 +49,14 @@ LOVE        INT DEFAULT 0
         for row in content:
             user_id = str(row[0])
             self.datas[user_id] = PetData(row, 0)
-            self.convos[user_id] = PetModel(users.get_user_name(user_id), row[1], row[2])
+            self.convos[user_id] = PetModel(user_manager.get_user_name(user_id), row[1], row[2])
             self.lock[user_id] = Lock()
 
     def new_pet(self, user_id, name, instruction):
         self.lock[user_id] = Lock()
         self.lock[user_id].acquire()
         self.datas[user_id] = PetData([user_id, name, instruction], 1)
-        self.convos[user_id] = PetModel(users.get_user_name(user_id), name, instruction)
+        self.convos[user_id] = PetModel(user_manager.get_user_name(user_id), name, instruction)
         self.sql.insert('ID, NAME, INSTRUCTION', (int(user_id), name, instruction))
         self.lock[user_id].release()
 
@@ -63,21 +64,21 @@ LOVE        INT DEFAULT 0
         self.lock[user_id].acquire()
         self.datas[user_id].name = pet_name
         self.convos[user_id].change_pet_name(pet_name)
-        self.sql.update((('NAME', 'ID'),(pet_name, user_id)), f"ID={user_id}")
+        self.sql.update((('NAME', 'ID'), (pet_name, user_id)), f"ID={user_id}")
         self.lock[user_id].release()
 
     def change_pet_inst(self, user_id, inst):
         self.lock[user_id].acquire()
         self.datas[user_id].instruction = inst
         self.convos[user_id].change_instruction(inst)
-        self.sql.update((('INSTRUCTION',),(inst,)), f"ID={user_id}")
+        self.sql.update((('INSTRUCTION',), (inst,)), f"ID={user_id}")
         self.lock[user_id].release()
 
 
 pet_manager = PetManager()
 
 
-@Users.user_name_changed_event.handle("lkpet")
+@user_manager.user_name_changed_event.handle("lkpet")
 def _(user_id, new_name):
     if user_id in pet_manager.convos:
         pet_manager.convos[user_id].change_user_name(new_name)

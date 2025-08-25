@@ -1,0 +1,38 @@
+greenalgae:
+  name: "绿藻"
+  description: "它黏黏的。"
+  type: "鱼"
+  price: 15
+  position:
+    - "river"
+    - "lake"
+  xp: 3
+  weight: 50
+seaweed:
+  name: "海草"
+  description: "它可以被用于烹饪。"
+  type: "鱼"
+  price: 20
+  position:
+    - "ocean"
+  xp: 3
+  weight: 50
+riverjelly:
+  name: "河凝胶"
+  description: "存在于淡水里的罕见凝胶。"
+  type: "鱼"
+  price: 125
+  position:
+    - "river"
+    - "lake"
+  xp: 3
+  weight: 10
+seajelly:
+  name: "海凝胶"
+  description: "存在于海里的罕见凝胶。"
+  type: "鱼"
+  price: 200
+  position:
+    - "ocean"
+  xp: 3
+  weight: 10

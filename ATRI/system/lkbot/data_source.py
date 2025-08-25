@@ -10,31 +10,32 @@ from .data.shop import shops
 class LKBot:
     @staticmethod
     def get_info(user_id):
-        user = users.get_user_data(user_id)
-        info = f'''用户 {user.name}:
+        with users.get_user_data(user_id) as user:
+            info = f'''用户 {user.name}:
 等级:{user.lvl} 升级还需要{user.get_lvl_exp() - user.left_exp}经验
 ATRI币:{user.money}
 好感:{user.love}'''
-        return user_info_event.notify(user_id, info)
+            return user_info_event.notify(user_id, info)
 
     @staticmethod
     def get_backpack_info(user_id):
         message_list = MessageGroup()
-        backpack = users.get_backpack(user_id).get_item_list()
-        resp = f"{lk_util.get_name(user_id)} 的背包:\n{'-' * 20}\n名称-类型-数量\n"
-        num = len(backpack)
-        i = 0
-        j = 1
-        for item in backpack:
-            item: ItemStack
-            if i == j * 20:
-                message_list.add_message(resp + f"{'-' * 20}\n页数:{j} 物品总数:{i}/{num}")
-                resp = ''
-                j += 1
-            i += 1
-            resp += f'{i}.{item.get_name()}-{item.get_type().value}-{item.meta.num}\n'
-        message_list.add_message(resp + f"{'-' * 20}\n页数:{j} 物品总数:{i}/{num}")
-        return message_list
+        with users.get_user_data(user_id) as user_data:
+            backpack = user_data.backpack.get_item_list()
+            resp = f"{lk_util.get_name(user_id)} 的背包:\n{'-' * 20}\n名称-类型-数量\n"
+            num = len(backpack)
+            i = 0
+            j = 1
+            for item in backpack:
+                item: ItemStack
+                if i == j * 20:
+                    message_list.add_message(resp + f"{'-' * 20}\n页数:{j} 物品总数:{i}/{num}")
+                    resp = ''
+                    j += 1
+                i += 1
+                resp += f'{i}.{item.get_name()}-{item.get_type().value}-{item.meta.num}\n'
+            message_list.add_message(resp + f"{'-' * 20}\n页数:{j} 物品总数:{i}/{num}")
+            return message_list
 
     @staticmethod
     def get_item_info(item_name):

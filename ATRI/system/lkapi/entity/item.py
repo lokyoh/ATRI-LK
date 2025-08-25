@@ -3,7 +3,8 @@ from ATRI.system.lkbot.data.item import (
     Item,
     ItemType,
     ItemMeta,
-    ItemStack
+    ItemStack,
+    ToolItemMeta
 )
 from ATRI.system.lkbot.data.item_func import (
     item_funcs,

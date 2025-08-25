@@ -2,6 +2,7 @@ import os
 import random
 import re
 from random import choice
+from pathlib import Path
 
 from nonebot.adapters.onebot.v11 import Bot
 from nonebot.adapters.onebot.v11.event import GroupMessageEvent, PokeNotifyEvent
@@ -19,22 +20,22 @@ from ATRI.system.lkapi.ai import chat_manager
 from ATRI.permission import MASTER
 from ATRI.message import rec_msg, img_msg
 from ATRI.system.htmlrender import md_to_pic
+from ATRI.message import MessageBuilder
 
 from .config import LKChatConfig
 
 plugin = Service(
     "聊天",
     "ATRI进行聊天处理的插件",
-    "0.4.0",
+    "0.4.1",
     Service.ServiceType.LKPLUGIN
 ).main_cmd("chat")
 config: LKChatConfig = plugin.add_plugin_config(LKChatConfig).config()
 
-from .data_source import pre_chat_event, get_random_atri, REPLY_MESSAGE, VOICE_PATTERN, IMG_PATTERN
+from .data_source import pre_chat_event, get_random_atri, REPLY_MESSAGE, VOICE_PATTERN, IMG_PATTERN, get_atri_memery
 from .ai_chat import ai_chat
 from .explanations import add_word
 from .user import get_user_info, save_user_info
-
 
 _lmt_notice = ["慢...慢一..点❤", "冷静1下", "歇会歇会~~", "呜呜...别急", "太快了...受不了", "不要这么快呀"]
 
@@ -52,10 +53,10 @@ async def _(event: GroupMessageEvent, matcher: Matcher, bot: Bot):
         for pattern_item in VOICE_PATTERN.keys():
             if re.match(pattern_item, text):
                 matcher.stop_propagation()
-                name = choice(VOICE_PATTERN[pattern_item])
-                res = AudioEditor.audio_to_base64(RECORD_DIR / "atri" / f"{name}.mp3")
+                file = choice(VOICE_PATTERN[pattern_item])
+                res = AudioEditor.audio_to_base64(RECORD_DIR / "atri" / file)
                 await on_talk.send(rec_msg(file=res))
-                await on_talk.send(name)
+                await on_talk.send(Path(file).stem)
                 return
         # 聊天模块
         if not configs.chat_switch:
@@ -74,7 +75,8 @@ async def _(event: GroupMessageEvent, matcher: Matcher, bot: Bot):
         for pattern, img in IMG_PATTERN:
             if re.search(pattern, text):
                 selected_img = img() if callable(img) else img
-                await on_talk.finish(img_msg(get_image_bytes(img_path / selected_img)))
+                if selected_img:
+                    await on_talk.finish(img_msg(get_image_bytes(img_path / selected_img)))
 
 
 change_model = plugin.cmd_as_group("切换模型", "切换机器人聊天所使用的语言模型默认为`gemini-main`", permission=MASTER)
@@ -117,10 +119,7 @@ async def _(event: GroupMessageEvent):
         mem = user_info.memery
         if len(mem) == 0:
             await show_mem.finish("暂时没有对你的记忆哦，快去与亚托莉多多交流吧")
-        md_text = "# 亚托莉对你的记忆\n\n"
-        md_text += "\n".join(f'- {i}:{item}' for i, item in enumerate(mem, 1))
-        md_text += "\n\n> 输入`chat.删除记忆 [标号]`来删除指定记忆,[标号]为数字,例如:`chat.删除记忆 1`"
-        await show_mem.finish(img_msg(await md_to_pic(md_text)))
+        await show_mem.finish(img_msg(await md_to_pic(get_atri_memery(mem))))
 
 
 del_mem = plugin.cmd_as_group("删除记忆", "删除亚托莉对你的记忆")
@@ -137,9 +136,12 @@ async def _(event: GroupMessageEvent):
         num = int(k[1])
         user_info.memery.pop(num - 1)
         save_user_info(user_id, user_info)
+        msg = MessageBuilder().text('删除成功')
+        if num - 1 > 0:
+            msg.image(await md_to_pic(get_atri_memery(user_info.memery)))
     except Exception:
         await del_mem.finish("输入错误")
-    await del_mem.finish("删除成功")
+    await del_mem.finish(msg)
 
 
 poke = plugin.on_notice("戳一戳", "处理戳一戳事件")

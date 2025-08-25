@@ -1,6 +1,9 @@
+import atexit
+
 from ATRI.utils.sqlite import DataBase
 
 atri_db = DataBase("atri.db")
+atexit.register(atri_db.disconnect)
 
 user_table = atri_db.get_table("USERDATA", '''
 ID      INTEGER PRIMARY KEY,

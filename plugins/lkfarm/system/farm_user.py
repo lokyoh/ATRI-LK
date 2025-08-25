@@ -1,5 +1,4 @@
 import json
-from copy import deepcopy
 from datetime import date, datetime, timedelta
 from random import randint
 
@@ -8,7 +7,7 @@ from ATRI.utils.limiter import LimitedQueue
 from ATRI.utils.lock import SingleLock
 from ATRI.utils.sqlite import DataBase
 from ATRI.system.lkapi.bot import db as lk_db
-from ATRI.system.lkapi.entity.user import users
+from ATRI.system.lkapi.entity.user import UserData
 from ATRI.system.lkapi.bot.events import daily_update_event
 
 from .crop import crop_data_list, CropData, Month
@@ -207,6 +206,7 @@ class UserFarmDataManager:
     def has_user(self, user_id) -> bool:
         if user_id in self._user_list:
             return True
+        self.new_farm_user(user_id)
         return False
 
     @_cache_lock.run
@@ -214,7 +214,7 @@ class UserFarmDataManager:
 
         @self._lock.run
         def _new_farm_user():
-            if self.has_user(user_id):
+            if user_id in self._user_list:
                 return False
             self._user_list.append(user_id)
             return True
@@ -254,7 +254,7 @@ class UserFarmDataManager:
     @_cache_lock.run
     def get_farm_data(self, user_id) -> UserFarmData:
         self._init_farm_data(user_id)
-        return deepcopy(self._farm_cache[user_id])
+        return self._farm_cache[user_id]
 
     @_cache_lock.run
     def endurance_change(self, user_id, num) -> bool:
@@ -298,7 +298,7 @@ class UserFarmDataManager:
         self._user_db.update(f"FIELD_{row}{line} = '{data}'", f"ID = {user_id}")
 
     @_cache_lock.run
-    def seeding(self, user_id, row: str, line: int, crop: str):
+    def seeding(self, user_id, row: str, line: int, crop: str, user_data: UserData):
         """请检查种子是否存在"""
         self._init_farm_data(user_id)
         data: FarmField = self._farm_cache[user_id].get_field(row, line)
@@ -311,7 +311,7 @@ class UserFarmDataManager:
         month = date.today().month
         if not crop_data_list[crop].growable(month):
             return False, f"{crop} 不能在{Month(month).to_season().value()}播种"
-        if not users.item_num_change(user_id, f"{crop}种子", -1):
+        if not user_data.item_num_change(f"{crop}种子", -1):
             return False, f"背包中没有 {crop}种子"
         data.crop = crop
         data.days = 0
@@ -335,7 +335,7 @@ class UserFarmDataManager:
         return True, None
 
     @_cache_lock.run
-    def harvesting(self, user_id, row: str, line: int):
+    def harvesting(self, user_id, row: str, line: int, user_data: UserData):
         self._init_farm_data(user_id)
         data: FarmField = self._farm_cache[user_id].get_field(row, line)
         if data.state == 0:
@@ -357,7 +357,7 @@ class UserFarmDataManager:
         self._field_change(user_id, row, line, json.dumps(data.to_field_dic(), ensure_ascii=False))
         harvest_list = crop_data.get_harvest_list()
         for item in harvest_list.keys():
-            users.item_num_change(user_id, item, harvest_list[item])
+            user_data.item_num_change(item, harvest_list[item])
         return True, None
 
     @_cache_lock.run

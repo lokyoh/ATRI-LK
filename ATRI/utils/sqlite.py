@@ -3,10 +3,76 @@ from sqlite3 import Connection, connect
 from ATRI.database.db import DB_DIR
 
 
+class Cursor:
+    def __init__(self, conn, table_name):
+        self.conn = conn
+        self.cursor = conn.cursor()
+        self.table_name = table_name
+
+    def insert(self, content, value):
+        if isinstance(content, str):
+            pass
+        elif isinstance(content, (tuple, list)):
+            content = ', '.join(content)
+        else:
+            raise TypeError
+        if isinstance(value, str):
+            self.cursor.execute(f"INSERT INTO {self.table_name} ({content}) VALUES ({value})")
+        elif isinstance(value, (tuple, list)):
+            placeholder = ', '.join(f'?' for _ in value)
+            self.cursor.execute(f"INSERT INTO {self.table_name} ({content}) VALUES ({placeholder})", value)
+        else:
+            raise TypeError
+
+    def update(self, content, req):
+        values = ()
+        if isinstance(req, str):
+            condition = req
+        elif isinstance(req, (tuple, list)):
+            condition = 'AND '.join(f'{c} = ?' for c in req[0])
+            values = req[1]
+        else:
+            raise TypeError
+        if isinstance(content, str):
+            pass
+        elif isinstance(content, (tuple, list)):
+            values = (*content[1], *values)
+            content = ', '.join(f'{c} = ?' for c in content[0])
+        else:
+            raise TypeError
+        if values:
+            self.cursor.execute(f"UPDATE {self.table_name} SET {content} WHERE {condition}", values)
+        else:
+            self.cursor.execute(f"UPDATE {self.table_name} SET {content} WHERE {condition}")
+
+    def delete(self, req):
+        if isinstance(req, str):
+            self.cursor.execute(f"DELETE FROM {self.table_name} WHERE {req}")
+        elif isinstance(req, (tuple, list)):
+            condition = req[0]
+            values = req[1]
+            self.cursor.execute(f"DELETE FROM {self.table_name} WHERE {', '.join(f'{c} = ?' for c in condition)}",
+                                values)
+        else:
+            raise TypeError
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, exc_type, exc_val, exc_tb):
+        if exc_type is None:
+            self.conn.commit()
+        self.cursor.close()
+        return False
+
+
 class DBTable:
     def __init__(self, connection: Connection, table_name):
         self._conn = connection
         self.table_name = table_name
+
+    def get_cursor(self):
+        return Cursor(self._conn, self.table_name)
 
     def select_all(self, content='*'):
         cursor = self._conn.cursor()
@@ -17,11 +83,11 @@ class DBTable:
         cursor.close()
         return content
 
-    def select(self, content, req):
+    def select(self, content: str, req: str | tuple | list):
         cursor = self._conn.cursor()
         if isinstance(req, str):
             result = cursor.execute(f"SELECT {content} FROM {self.table_name} WHERE {req}")
-        elif isinstance(req, tuple):
+        elif isinstance(req, (tuple, list)):
             condition = req[0]
             values = req[1]
             result = cursor.execute(
@@ -34,17 +100,17 @@ class DBTable:
         cursor.close()
         return content
 
-    def insert(self, content, value):
+    def insert(self, content: str | tuple | list, value: str | tuple | list):
         cursor = self._conn.cursor()
         if isinstance(content, str):
             pass
-        elif isinstance(content, tuple):
+        elif isinstance(content, (tuple, list)):
             content = ', '.join(content)
         else:
             raise TypeError
         if isinstance(value, str):
             cursor.execute(f"INSERT INTO {self.table_name} ({content}) VALUES ({value})")
-        elif isinstance(value, tuple):
+        elif isinstance(value, (tuple, list)):
             placeholder = ', '.join(f'?' for _ in value)
             cursor.execute(f"INSERT INTO {self.table_name} ({content}) VALUES ({placeholder})", value)
         else:
@@ -52,19 +118,19 @@ class DBTable:
         self._conn.commit()
         cursor.close()
 
-    def update(self, content, req):
+    def update(self, content: str | tuple | list, req: str | tuple | list):
         cursor = self._conn.cursor()
         values = ()
         if isinstance(req, str):
             condition = req
-        elif isinstance(req, tuple):
+        elif isinstance(req, (tuple, list)):
             condition = 'AND '.join(f'{c} = ?' for c in req[0])
             values = req[1]
         else:
             raise TypeError
         if isinstance(content, str):
             pass
-        elif isinstance(content, tuple):
+        elif isinstance(content, (tuple, list)):
             values = (*content[1], *values)
             content = ', '.join(f'{c} = ?' for c in content[0])
         else:
@@ -76,11 +142,11 @@ class DBTable:
         self._conn.commit()
         cursor.close()
 
-    def delete(self, req):
+    def delete(self, req: str | tuple | list):
         cursor = self._conn.cursor()
         if isinstance(req, str):
             cursor.execute(f"DELETE FROM {self.table_name} WHERE {req}")
-        elif isinstance(req, tuple):
+        elif isinstance(req, (tuple, list)):
             condition = req[0]
             values = req[1]
             cursor.execute(f"DELETE FROM {self.table_name} WHERE {', '.join(f'{c} = ?' for c in condition)}", values)

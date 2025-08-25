@@ -19,4 +19,4 @@ def get_user_info(user_id) -> User:
 
 
 def save_user_info(user_id, user_info: User):
-    user_table.update((('DATA',),(user_info.model_dump_json(),)), f"ID={user_id}")
+    user_table.update((('DATA',), (user_info.model_dump_json(),)), f"ID={user_id}")

@@ -1,7 +1,7 @@
 from random import choice
 
 from nonebot.adapters.onebot.v11 import Bot
-from nonebot.adapters.onebot.v11.event import GroupMessageEvent, Event
+from nonebot.adapters.onebot.v11.event import GroupMessageEvent, MessageEvent
 from nonebot.adapters.onebot.v11.helpers import Cooldown
 from nonebot.adapters.onebot.v11.message import Message
 from nonebot.matcher import Matcher
@@ -32,7 +32,7 @@ my_info = plugin.on_command(cmd="/我的信息", docs="查询自己的信息")
 
 
 @my_info.handle([IsLkUser])
-async def _(event: Event):
+async def _(event: MessageEvent):
     await my_info.finish(LKBot.get_info(event.get_user_id()))
 
 
@@ -40,7 +40,7 @@ my_backpack = plugin.on_command(cmd="/我的背包", docs="查看背包中的内
 
 
 @my_backpack.handle([IsLkUser])
-async def _(event: Event):
+async def _(event: MessageEvent):
     await LKBot.get_backpack_info(event.get_user_id()).send_message(my_backpack)
 
 
@@ -68,7 +68,7 @@ async def _(matcher: Matcher, args: Message = CommandArg()):
 
 
 @use_item.got("use_item_name", prompt="要使用的物品呢？速速")
-async def _(event: Event, item_name=ArgPlainText("use_item_name")):
+async def _(event: MessageEvent, item_name=ArgPlainText("use_item_name")):
     item_name = lk_util.clean_str(item_name)
     item_name, num = lk_util.extract_number(item_name)
     if not items.has_item(item_name):
@@ -92,7 +92,7 @@ async def _(matcher: Matcher, args: Message = CommandArg()):
 
 
 @recycle_item.got("recycle_item", prompt="要回收的物品呢？速速")
-async def _(event: Event, item_name=ArgPlainText("recycle_item")):
+async def _(event: MessageEvent, item_name=ArgPlainText("recycle_item")):
     item_name = lk_util.clean_str(item_name)
     item_name, num = lk_util.extract_number(item_name)
     if not items.has_item(item_name):
@@ -146,7 +146,7 @@ async def _(matcher: Matcher, args: Message = CommandArg()):
 
 @buy_item.got("buy_shop_name", prompt="要从那个商店买呢？速速")
 @buy_item.got("buy_item_name", prompt="要买那个商品呢？速速")
-async def _(event: Event, shop_name: str = ArgPlainText("buy_shop_name"),
+async def _(event: MessageEvent, shop_name: str = ArgPlainText("buy_shop_name"),
             item_name: str = ArgPlainText("buy_item_name")):
     if not shops.has_shop(shop_name):
         await buy_item.finish(f"找不到商店 {shop_name}")
@@ -169,11 +169,12 @@ async def _(matcher: Matcher, args: Message = CommandArg()):
 
 
 @change_name.got("user_new_name", "新名字呢？速速")
-async def _(event: Event, name: str = ArgPlainText("user_new_name")):
-    if lk_util.item_change(event.get_user_id(), "改名卡", -1):
-        result, msg = lk_util.user_change_name(event.get_user_id(), name)
+async def _(event: MessageEvent, name: str = ArgPlainText("user_new_name")):
+    user_id = event.get_user_id()
+    if lk_util.item_change(user_id, "改名卡", -1):
+        result, msg = lk_util.user_change_name(user_id, name)
         if not result:
-            lk_util.item_change(event.get_user_id(), "改名卡", 1)
+            lk_util.item_change(user_id, "改名卡", 1)
         await change_name.finish(msg)
     else:
         await change_name.finish("没有改名卡，请先购买")
@@ -190,7 +191,7 @@ async def _(matcher: Matcher, args: Message = CommandArg()):
 
 
 @bind.got("bind_id", "要绑定的名字呢？速速")
-async def _(event: Event, name: str = ArgPlainText("bind_id")):
+async def _(event: MessageEvent, name: str = ArgPlainText("bind_id")):
     await bind.finish(LKBot.bind(event.get_user_id(), name))
 
 
@@ -201,7 +202,7 @@ user_list = plugin_admin.on_command(cmd='/用户列表', docs='列出本群所�
 
 
 @user_list.handle()
-async def _(bot: Bot, event: Event):
+async def _(bot: Bot, event: MessageEvent):
     mg = await LKBot.get_group_user_list(bot, int(event.group_id))
     await mg.send_message(user_list)
 

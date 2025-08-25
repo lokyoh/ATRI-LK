@@ -27,16 +27,16 @@ class Shop:
         else:
             if not items.has_item(item_name):
                 log.error(f"{self._name} 在添加物品时出现错误:物品 {item_name} 不存在")
-                return
+                return self
         if price <= 0:
             log.error(f"{self._name} 在添加物品时出现错误:物品 {item_name} 的价格 {price} 非法")
-            return
+            return self
         if not (coin_type == "ATRI币" or items.has_item(coin_type)):
             log.error(f"{self._name} 在添加物品时出现错误:找不到物品 {item_name} 的货币类型 {coin_type}")
-            return
+            return self
         if limit < 0:
             log.error(f"{self._name} 在添加物品时出现错误:物品 {item_name} 的购买数量限制 {limit} 非法")
-            return
+            return self
         self._goods_list.append(item_name)
         self._goods_price.append(price)
         self._goods_coin_type.append(coin_type)

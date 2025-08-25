@@ -3,7 +3,7 @@ import yaml
 from pathlib import Path
 
 from ATRI import RES_DIR
-from ATRI.exceptions import InvalidConfigured, str_traceback
+from ATRI.exceptions import str_traceback
 from ATRI.log import log
 
 from .item import Item, ItemType, items

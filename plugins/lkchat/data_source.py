@@ -51,40 +51,54 @@ REPLY_MESSAGE = [
     f"喂(#`O′) 戳{lk_util.bot_name}干嘛！",
 ]
 VOICE_PATTERN = {
-    r".*萝卜子.*": ["萝卜子是对机器人的蔑称！"],
-    r".*(?:看看你|我看看).*": ["不可以看的哦"],
+    r".*萝卜子.*": [
+        "萝卜子是对机器人的蔑称！.opus",
+        "啊，不准说这个词！.opus"
+    ],
+    r".*(?:看看你|我看看).*": [
+        "摆……摆出这幅表情也没有用。不给你看，很害羞的.opus",
+        "不可以看.opus",
+        "不可以看的哦.opus",
+        "真是的～，不都说了不可以看了么。我要根据机器人保护法对你进行铁拳制裁！.opus"
+    ],
     r".*摸+.*[胸屁奶奈乃熊bB逼].*": [
-        "不要乱摸",
-        "这是性骚扰！根据机器人保护法要处以罚款。这下欠款又增加了"
+        "啊呜呜，不要来回来去地摸～～.opus",
+        "这是性骚扰！根据机器人保护法要处以罚款。这下欠款又增加了.opus"
     ],
+    r".*摸+.*[头脸].*": ["啊呜呜，不要来回来去地摸～～.opus"],
     r"不[要行好]?!?$": [
-        "为什么呢",
-        "为什么啊！？"
+        "为什么呢？.opus",
+        "为什么啊！？.opus",
+        "？　为什么呢？.opus"
     ],
-    r"安慰我!?$|我怕怕!?$": ["乖......已经没事了"],
+    r"安慰我!?$|我怕怕!?$": [
+        "乖……已经没事了.opus",
+        "乖乖乖.opus"
+    ],
     r"(?:一起|陪)?睡觉?吧?[!?？]?$": [
-        "今天一定要一起睡哦！", "可以哦",
-        "嗯哼哼！睡吧，就像平时一样安眠吧~",
-        "我懂我懂，想抱着我睡觉对吧。真拿你没办法啊~",
-        "我无论何时都是Yes", "来吧，来吧，来吧！",
-        "真是个小撒娇鬼呢"
+        "今天一定要一起睡哦！.opus",
+        "嗯哼哼～，睡吧♪ 就像平常一样安眠吧.opus",
+        "我懂我懂，想抱着我睡觉对吧。真拿你没办法呀～.opus",
+        "我无论何时都是YES！.opus",
+        "来吧，来吧，来吧！！.opus",
+        "真是个小撒娇鬼呢.opus"
     ],
-    r"(?:真是)?太好了!?$": ["就是嘛，太好了"],
-    r"为什么[?？]?$": ["我才不管。哼"],
-    r"你是谁?[\?？]?$": ["我是亚托莉（鞠躬）"],
+    r"(?:真是)?太好了!?$": ["太好了呢.opus"],
+    r"为什么[?？]?$": ["我才不管。哼.opus"],
+    r"你是谁?[\?？]?$": ["我叫亚托莉。（鞠躬）.opus"],
     r"早(?:上好|安)?!?$": [
-        "早上好",
-        "早上好.......脸好近呢"
+        "早上好.opus",
+        "早上好……脸好近呢.opus"
     ],
-    r"来?一?发?火箭拳!?$": ["火箭拳————————！！！！"],
-    r"(?:我要?)?膝枕!?$": ["膝枕…...只是膝枕的话，也不是不能给你做......"],
+    r"来?一?发?火箭拳!?$": ["火箭拳——————————！！！！.opus"],
+    r"(?:我要?)?膝枕!?$": ["膝枕……只是膝枕的话，也不是不能给你做…….opus"],
 }
 IMG_PATTERN = [
     (r"好不好|行不行|可以吗|要不要|[行好](?:吗[?？]?|[?？])",
      lambda: choice(["YES.png", choice(["NO.jpg", "NO1.jpg"])])),
     (r"啊这", "AZ.jpg"),
     (r"无情", "WQ.jpg"),
-    (r"^[?？]+$", "WH.jpg"),
+    (r"^[?？]+$", lambda: choice(["WH.jpg", None])),
     (r"^(?:[干做]得)?漂亮$", lambda: choice(["DY.gif", "DY1.gif"])),
     (r"我?明白了?", "MB.jpg"),
     (r"吃瓜", "CG.jpg"),
@@ -129,6 +143,7 @@ def get_random_atri() -> tuple[MessageSegment, str] | None:
     result = AudioEditor.audio_to_base64(RECORD_DIR / "atri" / voice)
     return rec_msg(file=result), re.sub('.mp3', '', voice)
 
+
 @pre_chat_event.handle("atri_birthday")
 def on_birthday(event: GroupMessageEvent) -> tuple[bool, str | None]:
     text = event.get_plaintext()
@@ -140,3 +155,10 @@ def on_birthday(event: GroupMessageEvent) -> tuple[bool, str | None]:
                 return True, choice(
                     ["哇~谢谢你。鞠躬", "啊、多谢", img_msg(get_image_bytes(IMG_DIR / "atri_" / "SR.gif"))])
     return False, None
+
+
+def get_atri_memery(mem):
+    md_text = "# 亚托莉对你的记忆\n\n"
+    md_text += "\n".join(f'- {i}:{item}' for i, item in enumerate(mem, 1))
+    md_text += "\n\n> 输入`chat.删除记忆 [标号]`来删除指定记忆,[标号]为数字,例如:`chat.删除记忆 1`"
+    return md_text

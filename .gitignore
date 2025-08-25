@@ -12,5 +12,6 @@ __pycache__/
 !/plugins/lkchat/
 !/plugins/lkfarm/
 !/plugins/lkpet/
+!/plugins/lkfishing/
 !/plugins/signin.py
 !/plugins/feed.py

@@ -1,8 +1,8 @@
 import inspect
 from datetime import datetime
+from pathlib import Path
 from random import choice
 import os
-import re
 
 from nonebot.adapters.onebot.v11 import MessageSegment, GroupMessageEvent
 from nonebot.exception import FinishedException
@@ -141,7 +141,7 @@ def get_random_atri() -> tuple[MessageSegment, str] | None:
         return None
     voice = choice(voice_list)
     result = AudioEditor.audio_to_base64(RECORD_DIR / "atri" / voice)
-    return rec_msg(file=result), re.sub('.mp3', '', voice)
+    return rec_msg(file=result), Path(voice).stem
 
 
 @pre_chat_event.handle("atri_birthday")

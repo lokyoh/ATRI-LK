@@ -9,5 +9,5 @@ price:
     seed_sell: 75
 growth:
     stage: [2, 3, 3, 3, 3]
-    lasting: 0
+    lasting: 4
 harvest_list: [["玉米"],[100]]

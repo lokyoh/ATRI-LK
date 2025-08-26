@@ -21,7 +21,7 @@ from .data_source import FishingController
 plugin = Service(
     "钓鱼",
     "ATRI的钓鱼插件",
-    "0.1.0",
+    "0.1.1",
     Service.ServiceType.LKPLUGIN
 ).main_cmd("/钓鱼")
 
@@ -78,7 +78,7 @@ async def _(event: MessageEvent):
         await through.finish(e.message)
 
 
-take = plugin.on_command('/收线', '/收线')
+take = plugin.on_command('/收线', '鱼上钩后收起鱼线')
 
 
 @take.handle([IsLkUser])
@@ -100,7 +100,7 @@ async def _(event: MessageEvent):
         await through.finish(e.message)
 
 
-goto = plugin.on_command('/前往', '/前往')
+goto = plugin.on_command('/前往', '前往不同的钓鱼地点.如:湖、河、海')
 
 
 @goto.handle([IsLkUser])
@@ -126,7 +126,7 @@ async def _(event: MessageEvent):
     await goto.finish(f'请输入地名')
 
 
-equip = plugin.on_command('/装备', '/装备')
+equip = plugin.on_command('/装备', '装备指定的鱼竿、鱼饵或鱼具')
 
 
 @equip.handle([IsLkUser])

@@ -27,9 +27,9 @@ from .config import LKChatConfig
 plugin = Service(
     "聊天",
     "ATRI进行聊天处理的插件",
-    "0.4.1",
+    "0.4.2",
     Service.ServiceType.LKPLUGIN
-).main_cmd("chat")
+).main_cmd("/聊天")
 config: LKChatConfig = plugin.add_plugin_config(LKChatConfig).config()
 
 from .data_source import pre_chat_event, get_random_atri, REPLY_MESSAGE, VOICE_PATTERN, IMG_PATTERN, get_atri_memery

@@ -15,14 +15,14 @@ from .config import LKFarmConfig
 plugin = Service(
     "农场",
     "ATRI的农场插件",
-    "0.1.6",
+    "0.1.7",
     Service.ServiceType.LKPLUGIN
-).main_cmd("/farm")
+).main_cmd("/农场")
 config = plugin.add_plugin_config(LKFarmConfig)
 
 from .data_source import farm_system, CheckFarmUser
 
-my_farm = plugin.on_command("我的农场", "查看自己的农场")
+my_farm = plugin.on_command("/我的农场", "查看自己的农场")
 
 
 @my_farm.handle([CheckFarmUser])

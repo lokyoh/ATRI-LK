@@ -112,7 +112,7 @@ class FarmSystem:
                 continue
             content = ""
             if field.crop != "":
-                url = f"{os.getcwd()}\\res\\lkfarm\\Crop"
+                url = f"{os.getcwd()}\\res\\data\\lkfarm\\Crop"
                 if field.crop in crop_data_list:
                     if crop_data_list[field.crop].can_harvest(field.days, field.harvest):
                         content += "***可收获***<br/>"

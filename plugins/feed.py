@@ -1,4 +1,3 @@
-import asyncio
 from datetime import datetime
 
 from nonebot.adapters.onebot.v11 import Event, Message
@@ -17,7 +16,7 @@ from ATRI.exceptions import str_traceback
 plugin = Service(
     "投喂",
     "向可爱的亚托莉投喂食物",
-    "0.4.2",
+    "0.4.3",
     Service.ServiceType.LKPLUGIN
 )
 
@@ -41,8 +40,8 @@ async def feed_func(user_id, food):
         message = MessageBuilder().at(user_id)
         if lk_config.configs.chat_switch and food:
             try:
-                response = asyncio.run(chat_manager.generate_content(
-                    f'{atri}用户"{user_data.name}"(好感度:{user_data.love})向你投喂了:{food}'))
+                response = await chat_manager.generate_content(
+                    f'{atri}用户"{user_data.name}"(好感度:{user_data.love})向你投喂了:{food}')
                 response = response.replace("\n", "")
                 message.append(response)
             except Exception as e:

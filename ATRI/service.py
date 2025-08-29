@@ -15,7 +15,7 @@ from nonebot.typing import (
     T_PermissionChecker,
 )
 from nonebot.rule import Rule, command, keyword, regex
-from nonebot.adapters import Bot, Event
+from nonebot.adapters import Event
 from nonebot.adapters.onebot.v11 import Message, PrivateMessageEvent, GroupMessageEvent
 
 from ATRI import service_list, driver
@@ -43,6 +43,8 @@ class ServiceConfig(BaseModel):
     enabled: bool = True
     disable_user: list = []
     disable_group: list = []
+    white_list_mode: bool = False
+    white_list: list = []
 
 
 class CommandInfo(BaseModel):
@@ -74,7 +76,7 @@ class Service:
             service: str,
             docs: str = "无介绍",
             version: str = str(),
-            type: ServiceType = ServiceType.OTHER
+            _type: ServiceType = ServiceType.OTHER
     ):
         """初始化一个服务"""
         if not service:
@@ -84,7 +86,7 @@ class Service:
         self.service = service
         self._docs = docs
         self._version = version
-        self._type = type
+        self._type = _type
         self._cmd_list = {}
         self._permission = None
         self._priority = 10
@@ -173,6 +175,8 @@ class Service:
             enabled=True,
             disable_user=list(),
             disable_group=list(),
+            white_list_mode=False,
+            white_list=list(),
         )
         try:
             data.write_into_file(path)
@@ -414,8 +418,11 @@ class ServiceTools:
         if user_id and user_id in auth_user:
             return False
         auth_group = data.disable_group
-        if group_id and group_id in auth_group:
-            return False
+        if group_id:
+            if group_id in auth_group:
+                return False
+            if data.white_list_mode and not group_id in data.white_list:
+                return False
         return True
 
     def service_controller(self, is_enabled: bool):
@@ -425,7 +432,7 @@ class ServiceTools:
 
 
 def is_in_service(service: str) -> Rule:
-    async def _is_in_service(bot: Bot, event: Event) -> bool:
+    async def _is_in_service(event: Event) -> bool:
         user_id = str()
         group_id = str()
         if isinstance(event, PrivateMessageEvent):

@@ -1,25 +1,4 @@
 import numpy as np
-import os
-from random import choice
-from datetime import datetime, date
-
-from nonebot.adapters.onebot.v11 import MessageEvent
-from nonebot.adapters.onebot.v11.helpers import Cooldown
-
-from ATRI.service import Service
-from ATRI.message import img_msg
-from ATRI.utils.img_editor import IMGEditor, get_image_bytes
-from ATRI.system.lkapi.bot import PLUGIN_DIR
-from ATRI.system.lkapi.bot.checker import IsLkUser
-from ATRI.system.lkapi.entity.user import sign
-from ATRI.system.lkapi.utils.picture import get_pic_from
-
-plugin = Service(
-    '运势',
-    '亚托莉的运势插件',
-    '0.1.0',
-    Service.ServiceType.LKPLUGIN
-)
 
 fortune = [
     {
@@ -285,61 +264,24 @@ fortune = [
 ]
 
 
-def select_id(max_id, peak_position, std_dev_factor):
+def get_probs(peak_position, std_dev_factor):
     """
     输入最大编号，输出选中编号
 
     参数:
-    max_id: 最大编号（0到max_id-1）
     peak_position: 峰值位置
     std_dev_factor: 标准差因子，越大分布越平坦
     """
-    ids = np.arange(1, max_id + 1)
-    mean = peak_position
-    std_dev = max(1, max_id * std_dev_factor)  # 确保至少为1
-
+    ids = np.arange(1, len(fortune) + 1)
+    std_dev = max(1, len(fortune) * std_dev_factor)  # 确保至少为1
     # 计算概率（使用较大的标准差）
-    probs = np.exp(-0.5 * ((ids - mean) / std_dev) ** 2)
-    probs = probs / probs.sum()
-
-    return np.random.choice(ids, p=probs)
-
-
-get_fortune = plugin.on_command('/今日运势', '今日运势', aliases={'/运势'})
+    _probs = np.exp(-0.5 * ((ids - peak_position) / std_dev) ** 2)
+    _probs = _probs / _probs.sum()
+    return _probs
 
 
-@get_fortune.handle([IsLkUser, Cooldown(60, prompt='今日运势已经发送了哦')])
-async def _(event: MessageEvent):
-    user_id = event.get_user_id()
-    state, msg = sign(user_id)
-    if state:
-        await get_fortune.send(f'今天尚未签到，已自动签到：{msg}')
-    await get_fortune.finish(await get_pic(user_id), at_sender=True)
+probs = get_probs(3.5, 0.3)
 
 
-async def get_pic(user_id):
-    """获取签到卡片"""
-    save_dir = os.path.join(PLUGIN_DIR, 'fortune')
-    save_path = os.path.join(save_dir, f"{user_id}.jpg")
-    if os.path.exists(save_path):
-        modification_time = os.path.getmtime(save_path)
-        modification_date = date.fromtimestamp(modification_time)
-        today_date = date.today()
-        if modification_date == today_date:
-            return img_msg(get_image_bytes(save_path))
-    image = await get_pic_from('local')
-    os.makedirs(save_dir, exist_ok=True)
-    f = fortune[select_id(len(fortune), 4, 0.27) - 1]
-    level = f['level']
-    (IMGEditor(image)
-     .resize(450, 800)
-     .add_rectangle(10, 350, 430, 440, 192, 10)
-     .add_text(30, 370, f'您的今日运势为:', 30)
-     .add_middle_text(225, 405, f["fortune"], 50)
-     .add_middle_text(225, 460, f'{'★' * level}{'☆' * (5 - level)}', 50)
-     .add_auto_text(30, 515, f'{choice(f["content"])}', 25, max_y=710, max_width=400, vertical_align='center')
-     .add_middle_text(225, 715, '仅供娱乐 相信科学 请勿迷信', 20)
-     .add_middle_text(225, 740, f'日期: {datetime.now().strftime("%Y年%m月%d日 %H:%M")}', 25)
-     .save_rgb(save_path)
-     )
-    return img_msg(get_image_bytes(save_path))
+def get_fortune():
+    return np.random.choice(fortune, p=probs)

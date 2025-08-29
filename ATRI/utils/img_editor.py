@@ -77,6 +77,83 @@ class IMGEditor:
         self.img.paste(circular_img, (x, y), circular_img)
         return self
 
+    def add_auto_text(self, x, y, text, font_size, color='black', font_path: str = font_yz, max_y: int = None,
+                      max_width: int = None, line_spacing: int = None, vertical_align: str = 'top') -> "IMGEditor":
+        """
+        添加带自动换行功能的文本
+
+        参数:
+        x, y: 文本起始坐标
+        text: 要绘制的文本
+        font_size: 字体大小
+        color: 文字颜色
+        font_path: 字体路径
+        max_y: 最大y坐标，文本将在y和max_y之间垂直居中
+        max_width: 最大行宽（像素），为None时不换行
+        line_spacing: 行间距，为None时默认为字体大小的1.2倍
+        """
+        draw = ImageDraw.Draw(self.img)
+        font = ImageFont.truetype(font_path, font_size)
+        # 计算行间距
+        if line_spacing is None:
+            line_spacing = int(font_size * 1.2)
+        # 处理文本换行
+        if max_width is None:
+            lines = [text]
+            total_height = font_size
+        else:
+            lines = self._wrap_text_by_chars(text, font, max_width, font_size)
+            total_height = len(lines) * line_spacing
+        # 计算垂直位置
+        if max_y is not None and max_y > y:
+            available_height = max_y - y
+            if vertical_align == 'top':
+                # 顶部对齐，保持原y坐标
+                current_y = y
+            elif vertical_align == 'center':
+                # 垂直居中
+                current_y = y + (available_height - total_height) // 2
+            elif vertical_align == 'bottom':
+                # 底部对齐
+                current_y = max_y - total_height
+            else:
+                current_y = y
+        else:
+            current_y = y
+        # 绘制多行文本
+        for line in lines:
+            draw.text((x, current_y), line, fill=color, font=font)
+            current_y += line_spacing
+        return self
+
+    @staticmethod
+    def _wrap_text_by_chars(text, font, max_width, font_size):
+        """按字符换行（适合中文）"""
+        lines = []
+        current_line = []
+        current_width = 0
+        for char in text:
+            if char == '\n':
+                if current_line:
+                    lines.append(''.join(current_line))
+                    current_line = []
+                    current_width = 0
+                continue
+            try:
+                char_width = font.getbbox(char)[2] - font.getbbox(char)[0]
+            except:
+                char_width = font_size
+            if current_width + char_width > max_width and current_line:
+                lines.append(''.join(current_line))
+                current_line = [char]
+                current_width = char_width
+            else:
+                current_line.append(char)
+                current_width += char_width
+        if current_line:
+            lines.append(''.join(current_line))
+        return lines
+
     def to_bytes(self) -> bytes:
         """获取图像的bytes形式"""
         bytes_io = BytesIO()

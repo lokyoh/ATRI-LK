@@ -16,7 +16,7 @@ from .data.user import users, UserData
 from .tools.daily_update import daily_update
 from .data.load_item import auto_load_items
 
-PLUGIN_VERSION = "0.10.0"
+PLUGIN_VERSION = "0.10.1"
 """lkbot插件版本"""
 PLUGIN_DIR = Path(".") / "data" / "plugins" / "lkbot"
 """lkbot插件数据路径"""

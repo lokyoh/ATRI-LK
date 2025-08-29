@@ -196,8 +196,7 @@ LOVEMULCOUNT    INTEGER DEFAULT 0
             log.info(f"用户数据表升级完成")
 
         self.sql = lk_db.get_table("USERINFO", table_content, 1, update_db)
-        content = self.sql.select_all(
-            "ID, NAME")
+        content = self.sql.select_all("ID, NAME")
         for row in content:
             self._ids[str(row[0])] = str(row[1])
             self._names.append(row[1])
@@ -217,7 +216,7 @@ LOVEMULCOUNT    INTEGER DEFAULT 0
 
     def add_user(self, user_id: str, name: str) -> bool:
         """添加用户"""
-        if not self.add_name_list(name):
+        if not self.add_name_list(user_id, name):
             return False
         self.user_lock.add_lock(user_id)
 
@@ -229,10 +228,11 @@ LOVEMULCOUNT    INTEGER DEFAULT 0
         return True
 
     @_name_lock.run
-    def add_name_list(self, name):
+    def add_name_list(self, uid, name):
         if name in self._names:
             return False
         self._names.append(name)
+        self._ids[uid] = name
         return True
 
     def change_name(self, user_id: str, name: str, new_name: str) -> bool:

@@ -1,5 +1,6 @@
 from ATRI.system.lkapi.ai import chat_manager
 from ATRI.log import log
+from ATRI.utils.limiter import RateLimiter
 
 from .atri import ATRI
 from .history import ChatHistory
@@ -14,8 +15,13 @@ atri = ATRI()
 class ChatModel:
     def __init__(self):
         self.history = {}
+        self.rater = {}
 
-    async def get_resp(self, bot, group_id, user_id) -> str:
+    async def get_resp(self, bot, group_id: int, user_id: str) -> str:
+        if group_id not in self.rater:
+            self.rater[group_id] = RateLimiter(15, 60)
+        if not self.rater[group_id].is_allowed():
+            return "歇会歇会~~"
         if group_id not in self.history:
             self.history[group_id] = ChatHistory()
         history: ChatHistory = self.history[group_id]

@@ -13,6 +13,7 @@ __conf = Config(__conf_path)
 conf = __conf.parse()
 service_list = {}
 RES_DIR = Path(".") / "res"
+DATA_DIR = Path(".") / "data"
 FONT_DIR = RES_DIR / "font"
 IMG_DIR = RES_DIR / "img"
 RECORD_DIR = RES_DIR / "record"

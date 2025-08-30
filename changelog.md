@@ -1,5 +1,12 @@
 > 此处仅为记录重大更新，修复 BUG/以及其它 请关注[`GitHub commits`](https://github.com/lokyoh/ATRI-LK/commits/main)
 
+- 新增:
+  - `运势`插件
+  - `ATRI`服务白名单
+  - 一张背景图片
+- 更新:
+  - `聊天`更新代码
+
 ## Aug 25, 2025
 
 > `lkbot`与用户数据有关的代码更新,新插件钓鱼。

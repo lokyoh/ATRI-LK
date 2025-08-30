@@ -2,38 +2,38 @@ import os
 import random
 import re
 from random import choice
-from pathlib import Path
 
-from nonebot.adapters.onebot.v11 import Bot
+from nonebot.adapters.onebot.v11 import Bot, MessageSegment
 from nonebot.adapters.onebot.v11.event import GroupMessageEvent, PokeNotifyEvent
 from nonebot.internal.params import ArgPlainText
 from nonebot.matcher import Matcher
 
-from ATRI import RECORD_DIR, IMG_DIR
-from ATRI.service import Service
+from ATRI import IMG_DIR
+from ATRI.exceptions import str_traceback
 from ATRI.log import log
-from ATRI.utils.img_editor import get_image_bytes
-from ATRI.system.lkapi.bot.config import configs
-from ATRI.system.lkapi.bot import util as lk_util
-from ATRI.system.lkapi.utils.audio import AudioEditor
-from ATRI.system.lkapi.ai import chat_manager
+from ATRI.message import img_msg, MessageBuilder
 from ATRI.permission import MASTER
-from ATRI.message import rec_msg, img_msg
-from ATRI.system.htmlrender import md_to_pic
-from ATRI.message import MessageBuilder
+from ATRI.service import Service
+from ATRI.utils.img_editor import get_image_bytes
+from ATRI.system.htmlrender import text_to_pic, md_to_pic
+from ATRI.system.lkapi.ai import chat_manager
+from ATRI.system.lkapi.bot import util as lk_util
+from ATRI.system.lkapi.bot.config import configs
+from ATRI.system.lkapi.utils.audio import AudioEditor
 
 from .config import LKChatConfig
 
 plugin = Service(
     "聊天",
     "ATRI进行聊天处理的插件",
-    "0.4.3",
+    "0.5.0",
     Service.ServiceType.LKPLUGIN
 ).main_cmd("/聊天")
 config: LKChatConfig = plugin.add_plugin_config(LKChatConfig).config()
 
-from .data_source import pre_chat_event, get_random_atri, REPLY_MESSAGE, VOICE_PATTERN, IMG_PATTERN, get_atri_memery
-from .ai_chat import ai_chat
+from .chat import chat_model
+from .data_source import pre_chat_event, get_random_atri, REPLY_MESSAGE, VOICE_PATTERN, get_atri_memery, \
+    match_atri_voice, match_atri_img
 from .explanations import add_word
 from .user import get_user_info, save_user_info
 
@@ -44,39 +44,50 @@ on_talk = plugin.on_message("机器人聊天", "和亚托莉愉快的聊天、�
 
 @on_talk.handle()
 async def _(event: GroupMessageEvent, matcher: Matcher, bot: Bot):
-    stop = await pre_chat_event.notify(matcher=matcher, event=event)
-    if stop:
-        return
+    await pre_chat_event.notify(matcher=matcher, event=event)
     text = event.get_message().extract_plain_text()
     if event.to_me:
-        # 语音匹配模块
-        for pattern_item in VOICE_PATTERN.keys():
-            if re.match(pattern_item, text):
-                matcher.stop_propagation()
-                file = choice(VOICE_PATTERN[pattern_item])
-                res = AudioEditor.audio_to_base64(RECORD_DIR / "atri" / file)
-                await on_talk.send(rec_msg(file=res))
-                await on_talk.send(Path(file).stem)
-                return
         # 聊天模块
         if not configs.chat_switch:
+            voice = match_atri_voice(text)
+            if voice:
+                await on_talk.send(voice[0])
+                await on_talk.finish(voice[1])
             return
         text = lk_util.get_trans_text(event.get_message())
         if text == "" or len(text) > 100:
             return
         sender_id = event.get_user_id()
         if not lk_util.is_valid_user(sender_id):
-            await on_talk.send(lk_util.bind_tip)
-            return
+            await on_talk.finish(lk_util.bind_tip)
         matcher.stop_propagation()
-        await on_talk.send(await ai_chat(text, sender_id, event.group_id, bot))
+        match_result = re.compile(r'语音(.+)').match(text)
+        group_id = event.group_id
+        if match_result:
+            text = match_result.group(1)
+        else:
+            voice, voice_name = match_atri_voice(text)
+            if voice:
+                await chat_model.add_history(group_id, sender_id, text)
+                await on_talk.send(voice[0])
+                await on_talk.finish(voice[1])
+        await chat_model.add_history(group_id, sender_id, text)
+        try:
+            response = await chat_model.get_resp(bot, group_id, sender_id)
+        except Exception as e:
+            log.warning(str_traceback(e))
+            await on_talk.finish(f"真是的，{lk_util.bot_name}被玩坏了，呜呜呜...")
+        if match_result:
+            record_file = AudioEditor.get_tts_file(response)
+            await on_talk.finish(MessageSegment.record(file=AudioEditor().audio_to_base64(record_file)))
+        else:
+            if len(response) < 1000:
+                await on_talk.finish(response)
+            await on_talk.finish(MessageSegment.image(await text_to_pic(response)))
     else:
-        img_path = IMG_DIR / "atri"
-        for pattern, img in IMG_PATTERN:
-            if re.search(pattern, text):
-                selected_img = img() if callable(img) else img
-                if selected_img:
-                    await on_talk.finish(img_msg(get_image_bytes(img_path / selected_img)))
+        img = match_atri_img(text)
+        if img:
+            await on_talk.finish(img)
 
 
 change_model = plugin.cmd_as_group("切换模型", "切换机器人聊天所使用的语言模型默认为`gemini-main`", permission=MASTER)
@@ -182,4 +193,4 @@ async def _():
     a_v = get_random_atri()
     if a_v:
         await atri_voice.send(a_v[0])
-        await atri_voice.send(a_v[1])
+        await atri_voice.finish(a_v[1])

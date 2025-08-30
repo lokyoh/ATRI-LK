@@ -3,9 +3,11 @@ from datetime import datetime
 from pathlib import Path
 from random import choice
 import os
+import re
 
 from nonebot.adapters.onebot.v11 import MessageSegment, GroupMessageEvent
 from nonebot.exception import FinishedException
+from nonebot.matcher import Matcher
 
 from ATRI import IMG_DIR, RECORD_DIR
 from ATRI.message import img_msg, rec_msg
@@ -109,27 +111,21 @@ IMG_PATTERN = [
 
 
 class PreChatEvent(DictEvent):
-    async def notify(self, matcher, event) -> bool:
+    async def notify(self, matcher: Matcher, event: GroupMessageEvent):
         """触发该事件"""
         for key in self.listeners:
             try:
                 func = self.listeners[key]
                 if inspect.iscoroutinefunction(func):
-                    stop, resp = await func(event=event)
+                    await func(matcher=matcher, event=event)
                 else:
-                    stop, resp = func(event=event)
-                if resp:
-                    await matcher.send(resp)
-                if stop:
-                    matcher.stop_propagation()
-                    return True
+                    func(matcher=matcher, event=event)
             except FinishedException as e:
                 raise e from e
             except Exception as e:
                 str_tb = str_traceback(e)
                 log.error(str_tb)
                 raise EventRuntimeError(f"事件{self.name}在执行{key}时出现错误", str_tb)
-        return False
 
 
 pre_chat_event = PreChatEvent("pre_chat")
@@ -145,16 +141,15 @@ def get_random_atri() -> tuple[MessageSegment, str] | None:
 
 
 @pre_chat_event.handle("atri_birthday")
-def on_birthday(event: GroupMessageEvent) -> tuple[bool, str | None]:
+async def on_birthday(matcher: Matcher, event: GroupMessageEvent):
     text = event.get_plaintext()
     date = datetime.now()
     if date.month == 8 and date.day == 28:
         a_b_p = ["生日", "生快", "birth", "Birth"]
         for a_b in a_b_p:
             if a_b in text:
-                return True, choice(
-                    ["哇~谢谢你。鞠躬", "啊、多谢", img_msg(get_image_bytes(IMG_DIR / "atri_" / "SR.gif"))])
-    return False, None
+                await matcher.finish(
+                    choice(["哇~谢谢你。鞠躬", "啊、多谢", img_msg(get_image_bytes(IMG_DIR / "atri_" / "SR.gif"))]))
 
 
 def get_atri_memery(mem):
@@ -162,3 +157,22 @@ def get_atri_memery(mem):
     md_text += "\n".join(f'- {i}:{item}' for i, item in enumerate(mem, 1))
     md_text += "\n\n> 输入`chat.删除记忆 [标号]`来删除指定记忆,[标号]为数字,例如:`chat.删除记忆 1`"
     return md_text
+
+
+def match_atri_voice(text):
+    for pattern_item in VOICE_PATTERN.keys():
+        if re.match(pattern_item, text):
+            file = choice(VOICE_PATTERN[pattern_item])
+            res = AudioEditor.audio_to_base64(RECORD_DIR / "atri" / file)
+            return rec_msg(file=res), Path(file).stem
+    return None
+
+
+def match_atri_img(text):
+    img_path = IMG_DIR / "atri"
+    for pattern, img in IMG_PATTERN:
+        if re.search(pattern, text):
+            selected_img = img() if callable(img) else img
+            if selected_img:
+                return img_msg(get_image_bytes(img_path / selected_img))
+    return None

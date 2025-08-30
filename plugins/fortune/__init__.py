@@ -7,8 +7,7 @@ from nonebot.adapters.onebot.v11.helpers import Cooldown
 
 from ATRI.message import img_msg
 from ATRI.utils.img_editor import IMGEditor, get_image_bytes
-from ATRI.system.lkapi.bot import PLUGIN_DIR
-from ATRI.system.lkapi.bot.checker import IsLkUser
+from ATRI.system.lkapi.bot import PLUGIN_DIR, util as lk_util
 from ATRI.system.lkapi.entity.user import sign
 from ATRI.system.lkapi.utils.picture import get_pic_from
 from ATRI.service import Service
@@ -25,12 +24,15 @@ plugin = Service(
 today_fortune = plugin.on_command('/今日运势', '今日运势', aliases={'/运势'})
 
 
-@today_fortune.handle([IsLkUser, Cooldown(60, prompt='今日运势已经发送了哦')])
+@today_fortune.handle([Cooldown(60, prompt='今日运势已经发送了哦')])
 async def _(event: MessageEvent):
     user_id = event.get_user_id()
-    state, msg = sign(user_id)
-    if state:
-        await today_fortune.send(f'今天尚未签到，已自动签到：{msg}')
+    if lk_util.is_valid_user(user_id):
+        state, msg = sign(user_id)
+        if state:
+            await today_fortune.send(f'今天尚未签到，已自动签到：{msg}')
+    else:
+        await today_fortune.send(f'{lk_util.bind_tip}才能够自动签到哦!', at_sender=user_id)
     await today_fortune.finish(await get_pic(user_id), at_sender=True)
 
 

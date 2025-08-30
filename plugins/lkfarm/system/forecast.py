@@ -10,22 +10,35 @@ from ..config import LKFarmConfig
 
 def get_weather(weather):
     if weather == 0:
-        return '晴', choice(['明天天气晴朗，风和日丽！', '全天都会风和日丽，万里无云。'])
+        return '晴'
     elif weather == 1:
-        return '雨', '明天全天有雨。'
+        return '雨'
     elif weather == 2:
-        return '雷雨', '好像有场风暴正在接近。预计将会有雷电。'
+        return '雷雨'
     elif weather == 3:
-        return '雪', choice(['都多穿点，各位，明天将会下雪！', '明天的降雪可能会达到几英尺。'])
-    return f'未知天气{weather}', f'未知天气{weather}'
+        return '雪'
+    return f'未知天气{weather}'
+
+
+def get_next_weather(weather):
+    if weather == 0:
+        return choice(['明天天气晴朗，风和日丽！', '全天都会风和日丽，万里无云。'])
+    elif weather == 1:
+        return '明天全天有雨。'
+    elif weather == 2:
+        return '好像有场风暴正在接近。预计将会有雷电。'
+    elif weather == 3:
+        return choice(['都多穿点，各位，明天将会下雪！', '明天的降雪可能会达到几英尺。'])
+    return f'未知天气{weather}'
 
 
 async def weather_forecast():
     _config: LKFarmConfig = config.config()
     weather = get_weather(user_farm_data.weather)
+    next_weather = get_next_weather(user_farm_data.next_weather)
     msg = (f'农场天气预报:\n'
-           f'今日:{weather[0]}\n'
-           f'明日:{weather[1]}')
+           f'今日:{weather}\n'
+           f'明日:{next_weather}')
     for bot in get_bots().values():
         if type(bot) is Bot:
             group_list = await bot.get_group_list()

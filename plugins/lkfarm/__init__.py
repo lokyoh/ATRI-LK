@@ -15,7 +15,7 @@ from .config import LKFarmConfig
 plugin = Service(
     "农场",
     "ATRI的农场插件",
-    "0.1.7",
+    "0.1.8",
     Service.ServiceType.LKPLUGIN
 ).main_cmd("/农场")
 config = plugin.add_plugin_config(LKFarmConfig)

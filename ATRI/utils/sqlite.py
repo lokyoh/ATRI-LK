@@ -56,6 +56,13 @@ class Cursor:
         else:
             raise TypeError
 
+    def execute(self, sql, args = None):
+        if args:
+            result = self.cursor.execute(sql, args)
+        else:
+            result = self.cursor.execute(sql)
+        return result
+
     def __enter__(self):
         return self
 

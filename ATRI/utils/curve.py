@@ -30,17 +30,19 @@ class LvlManager:
     # exp max = 2,147,483,647
     def to_lvl(self, exp: int):
         result = 0
-        for i in range(100):
-            lvl_exp = self.base_num * int((i + 1) ** self.multiple)
-            result += lvl_exp
+        i = 0
+        while True:
+            result += self.get_lvl_exp(i)
             if exp < result:
                 return i
+            i += 1
 
-    def get_left_exp(self, exp, lvl):
+    def get_left_exp(self, exp, lvl=None):
         result = 0
+        if lvl is None:
+            lvl = self.to_lvl(exp)
         for i in range(lvl):
-            lvl_exp = self.base_num * int((i + 1) ** self.multiple)
-            result += lvl_exp
+            result += self.get_lvl_exp(i)
         return exp - result
 
     def get_lvl_exp(self, lvl: int):

@@ -48,7 +48,7 @@ class MessageGroup:
     def __init__(self):
         self.message_list = []
 
-    def add_message(self, message: str | MessageSegment | Message):
+    def add_message(self, message: str | MessageSegment | Message | MessageBuilder):
         """向消息组添加消息"""
         self.message_list.append(message)
         return self
@@ -64,8 +64,20 @@ def img_msg(file: str | bytes | BytesIO | Path) -> MessageSegment:
     return MessageSegment.image(file)
 
 
+def img_msg_from_path(path: str | Path) -> MessageSegment:
+    with open(path, "rb") as image_file:
+        return img_msg(image_file.read())
+
+
 def rec_msg(file: str | bytes | BytesIO | Path) -> MessageSegment:
     return MessageSegment.record(file)
+
+
+def rec_msg_from_path(path: str | Path) -> MessageSegment:
+    with open(path, "rb") as audio_file:
+        audio_data = audio_file.read()
+    base64_encoded_audio = base64.b64encode(audio_data).decode('utf-8')
+    return rec_msg(f'base64://{base64_encoded_audio}')
 
 
 def file_msg(name: str, data: bytes):

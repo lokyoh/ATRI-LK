@@ -195,6 +195,22 @@ async def _(event: MessageEvent, name: str = ArgPlainText("bind_id")):
     await bind.finish(LKBot.bind(event.get_user_id(), name))
 
 
+rank = plugin.on_command("/排行", "查看排行")
+
+
+@rank.handle()
+async def _(matcher: Matcher, args: Message = CommandArg()):
+    name = args.extract_plain_text()
+    if name:
+        matcher.set_arg("rank_name", args)
+
+
+@rank.got("rank_name", "你要查看 经验 好感 ATRI币 中的哪个排行呢")
+async def _(name: str = ArgPlainText("rank_name")):
+    msg = await LKBot.get_rank(name)
+    await rank.finish(msg)
+
+
 plugin_admin = Service("群管").document("ATRI的综合性插件的群聊管理员指令部分").type(
     Service.ServiceType.LKPLUGIN).version(PLUGIN_VERSION).permission(ADMIN)
 

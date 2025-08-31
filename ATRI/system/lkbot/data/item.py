@@ -1,6 +1,7 @@
 import json
 from enum import Enum
 from typing import Dict, Any
+from typing import TypeVar
 
 from ATRI.log import log
 from ATRI.message import MessageBuilder
@@ -177,6 +178,10 @@ class ItemMeta:
         meta["num"] = self.num
         return meta
 
+    def to_meta(self) -> "ItemMeta":
+        """获取ItemMeta"""
+        return self
+
 
 class ToolItemMeta(ItemMeta):
     """为工具类设计的ItemMeta，通过ItemMeta转化获得"""
@@ -186,7 +191,6 @@ class ToolItemMeta(ItemMeta):
         super().__init__(meta.meta_to_dict())
 
     def meta_to_dict(self) -> dict[str: Any]:
-        """转换成字典"""
         meta = self.extra
         meta["num"] = self.num
         meta["damage"] = self.damage
@@ -196,10 +200,13 @@ class ToolItemMeta(ItemMeta):
         return ItemMeta(self.meta_to_dict())
 
 
+Meta = TypeVar('Meta', bound=ItemMeta)
+
+
 class ItemStack:
     """物品堆：物品的个性化，带有特殊信息。不要轻易构造该类，除非确保item_type符合item"""
 
-    def __init__(self, item_name: str, item_type: ItemType, item_meta: ItemMeta):
+    def __init__(self, item_name: str, item_type: ItemType, item_meta: Meta):
         self._name = item_name
         self._type = item_type
         self.meta = item_meta
@@ -213,6 +220,44 @@ class ItemStack:
         return self._type
 
 
+class ToolItemStack(ItemStack):
+    def __init__(self, item_stack: ItemStack, max_durable: int):
+        super().__init__(item_stack.get_name(), item_stack.get_type(), item_stack.meta)
+        self.meta = ToolItemMeta(self.meta)
+        self.max_durable = max_durable
+
+    def to_stack(self) -> ItemStack:
+        """转化成ItemStack"""
+        return ItemStack(self._name, self.get_type(), self.meta.to_meta())
+
+    def add_used_tool(self, damage: int) -> "ToolItemStack":
+        """添加一个受损值为 damage 的工具"""
+        self.meta.num += 1
+        self.meta.damage += damage
+        while self.meta.damage >= self.max_durable:
+            self.meta.num -= 1
+            self.meta.damage -= self.max_durable
+        if self.meta.num < 0:
+            self.meta.num = 0
+        return self
+
+    def get_used_tool(self) -> int | None:
+        """拿取一个工具，返回 None 时失败，返回 int 时成功且此值为此工具的受损值"""
+        while self.meta.damage >= self.max_durable:
+            self.meta.num -= 1
+            self.meta.damage -= self.max_durable
+        if self.meta.num < 1:
+            self.meta.num = 0
+            return None
+        self.meta.num -= 1
+        damage = self.meta.damage
+        self.meta.damage = 0
+        return damage
+
+
+Stack = TypeVar('Stack', bound=ItemStack)
+
+
 class BackPack:
     """背包：里面是通过ItemType分类的物品名称与ItemMeta的字典。以ItemStack形式获取信息。
     bp_dict结构:
@@ -223,7 +268,6 @@ class BackPack:
     def __init__(self, bp_dict: dict):
         global items
         self._backpack: Dict[ItemType: Dict[str: ItemMeta]] = dict()
-        self._wrong_item = {}
         for _type in ItemType:
             self._backpack[_type] = dict()
         for _name in bp_dict.keys():
@@ -235,10 +279,14 @@ class BackPack:
         self._modify = False
 
     def bp_has_item(self, item_name: str) -> bool:
-        """背包中有指定物品"""
+        """背包中是否有指定物品"""
         for _type in ItemType:
             if item_name in self._backpack[_type]:
-                return True
+                if self._backpack[_type][item_name].num > 0:
+                    return True
+                else:
+                    self.remove_item(item_name)
+                    break
         return False
 
     def get_item_stack(self, item_name: str) -> ItemStack:
@@ -248,7 +296,7 @@ class BackPack:
                 return ItemStack(item_name, _type, self._backpack[_type][item_name])
         return ItemStack(item_name, items.get_reg_item_type(item_name), ItemMeta({}))
 
-    def set_item_with_stack(self, item_stack: ItemStack):
+    def set_item_with_stack(self, item_stack: Stack):
         """通过物品堆设置物品"""
         self._modify = True
         _name = item_stack.get_name()
@@ -256,7 +304,7 @@ class BackPack:
         if item_stack.meta.num <= 0:
             self.remove_item(_name)
         else:
-            self._backpack[_type][_name] = item_stack.meta
+            self._backpack[_type][_name] = item_stack.meta.to_meta()
 
     def set_item_with_meta(self, item_name: str, item_meta: dict[str: Any]):
         """通过物品数据设置物品"""
@@ -287,8 +335,6 @@ class BackPack:
         for _type in ItemType:
             for _name in self._backpack[_type].keys():
                 bp_dict[_name] = self._backpack[_type][_name].meta_to_dict()
-        for wrong_item in self._wrong_item:
-            bp_dict[wrong_item] = self._wrong_item[wrong_item]
         return bp_dict
 
     def bp_to_str(self, ensure_ascii: bool = False) -> str:

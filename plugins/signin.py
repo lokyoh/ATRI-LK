@@ -43,8 +43,8 @@ async def _(event: Event):
         img_path = await get_pic(user_id, r18_mode=r18_mode)
         message.image(get_image_bytes(img_path))
         await sign_in.finish(message)
-    except FinishedException as e:
-        raise e from e
+    except FinishedException:
+        raise
     except Exception as e:
         if r18_mode:
             path = os.path.join(PLUGIN_DIR, 'sign_in', 'r18', f"{user_id}.jpg")

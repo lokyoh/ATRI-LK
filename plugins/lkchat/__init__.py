@@ -11,10 +11,9 @@ from nonebot.matcher import Matcher
 from ATRI import IMG_DIR
 from ATRI.exceptions import str_traceback
 from ATRI.log import log
-from ATRI.message import img_msg, MessageBuilder
+from ATRI.message import img_msg_from_path, img_msg, MessageBuilder
 from ATRI.permission import MASTER
 from ATRI.service import Service
-from ATRI.utils.img_editor import get_image_bytes
 from ATRI.system.htmlrender import text_to_pic, md_to_pic
 from ATRI.system.lkapi.ai import chat_manager
 from ATRI.system.lkapi.bot import util as lk_util
@@ -66,7 +65,7 @@ async def _(event: GroupMessageEvent, matcher: Matcher, bot: Bot):
         if match_result:
             text = match_result.group(1)
         else:
-            voice, voice_name = match_atri_voice(text)
+            voice = match_atri_voice(text)
             if voice:
                 await chat_model.add_history(group_id, sender_id, text)
                 await on_talk.send(voice[0])
@@ -172,7 +171,7 @@ async def _(event: PokeNotifyEvent, bot: Bot):
             if len(img_list) == 0:
                 return
             img = choice(img_list)
-            await poke.send(img_msg(get_image_bytes(IMG_DIR / "atri" / img)))
+            await poke.send(img_msg_from_path(IMG_DIR / "atri" / img))
         elif rand < 0.70:
             await poke.send(choice(REPLY_MESSAGE), at_sender=True)
         else:

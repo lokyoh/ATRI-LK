@@ -5,8 +5,8 @@ from datetime import datetime, date
 from nonebot.adapters.onebot.v11 import MessageEvent
 from nonebot.adapters.onebot.v11.helpers import Cooldown
 
-from ATRI.message import img_msg
-from ATRI.utils.img_editor import IMGEditor, get_image_bytes
+from ATRI.message import img_msg_from_path
+from ATRI.utils.img_editor import IMGEditor
 from ATRI.system.lkapi.bot import PLUGIN_DIR, util as lk_util
 from ATRI.system.lkapi.entity.user import sign
 from ATRI.system.lkapi.utils.picture import get_pic_from
@@ -45,7 +45,7 @@ async def get_pic(user_id):
         modification_date = date.fromtimestamp(modification_time)
         today_date = date.today()
         if modification_date == today_date:
-            return img_msg(get_image_bytes(save_path))
+            return img_msg_from_path(save_path)
     image = await get_pic_from('local')
     os.makedirs(save_dir, exist_ok=True)
     f = get_fortune()
@@ -60,4 +60,4 @@ async def get_pic(user_id):
      .add_middle_text(225, 740, f'日期: {datetime.now().strftime("%Y年%m月%d日 %H:%M")}', 25)
      .save_rgb(save_path)
      )
-    return img_msg(get_image_bytes(save_path))
+    return img_msg_from_path(save_path)

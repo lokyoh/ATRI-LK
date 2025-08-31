@@ -137,6 +137,17 @@ class BotManager:
             return result
         raise Exception("该功能只能在群聊中使用")
 
+    def toggle_service_white_list(self, service: str) -> bool:
+        serv = ServiceTools(service)
+        try:
+            data = serv.load_service_config()
+        except Exception as e:
+            error_msg = str(e)
+            raise Exception(error_msg)
+        data.white_list_mode = not data.white_list_mode
+        serv.save_service_config(data)
+        return data.white_list_mode
+
     def toggle_user_service(self, service: str, user_id: str) -> bool:
         serv = ServiceTools(service)
         try:
@@ -151,6 +162,22 @@ class BotManager:
         else:
             data.disable_user.append(user_id)
             result = False
+        serv.save_service_config(data)
+        return result
+
+    def toggle_group_service_white_list(self, service: str, group_id: str):
+        serv = ServiceTools(service)
+        try:
+            data = serv.load_service_config()
+        except Exception as e:
+            error_msg = str(e)
+            raise Exception(error_msg)
+        if group_id in data.white_list:
+            data.white_list.remove(group_id)
+            result = False
+        else:
+            data.white_list.append(group_id)
+            result = True
         serv.save_service_config(data)
         return result
 

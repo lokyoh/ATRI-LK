@@ -1,7 +1,7 @@
 import json
 
 from ATRI.utils.lock import GroupLock
-from ATRI.system.lkapi.entity.item import ToolItemMeta
+from ATRI.system.lkapi.entity.item import ToolItemStack
 from ATRI.system.lkapi.entity.user import get_user_data, BackPack
 
 from .fishing_rod import fishing_rod_dict
@@ -117,17 +117,10 @@ class FishingUser:
     def remove_rod(self, user_data):
         if self.fishing_rod and self.fishing_rod.durable > self.fishing_rod_damage:
             bp = user_data.backpack
-            stack = bp.get_item_stack(self.fishing_rod.name)
-            meta = ToolItemMeta(stack.meta)
-            meta.num += 1
-            meta.damage += self.fishing_rod_damage
-            while meta.damage >= self.fishing_rod.durable:
-                meta.num -= 1
-                meta.damage -= self.fishing_rod.durable
-            if meta.num < 0:
-                meta.num = 0
-            stack.meta = meta.to_meta()
-            bp.set_item_with_stack(stack)
+            bp.set_item_with_stack(
+                ToolItemStack(bp.get_item_stack(self.fishing_rod.name), self.fishing_rod.durable)
+                .add_used_tool(self.fishing_rod_damage)
+            )
             self.fishing_rod = None
             self.fishing_rod_damage = 0
 
@@ -140,17 +133,10 @@ class FishingUser:
     def remove_tackle(self, user_data):
         if self.fishing_tackle and self.fishing_tackle.durable > self.fishing_tackle_damage:
             bp = user_data.backpack
-            stack = bp.get_item_stack(self.fishing_tackle.name)
-            meta = ToolItemMeta(stack.meta)
-            meta.num += 1
-            meta.damage += self.fishing_tackle_damage
-            while meta.damage >= self.fishing_tackle.durable:
-                meta.num -= 1
-                meta.damage -= self.fishing_tackle.durable
-            if meta.num < 0:
-                meta.num = 0
-            stack.meta = meta.to_meta()
-            bp.set_item_with_stack(stack)
+            bp.set_item_with_stack(
+                ToolItemStack(bp.get_item_stack(self.fishing_tackle.name), self.fishing_tackle.durable)
+                .add_used_tool(self.fishing_tackle_damage)
+            )
             self.fishing_tackle = None
             self.fishing_tackle_damage = 0
 
@@ -161,21 +147,14 @@ class FishingUser:
         if not bp.bp_has_item(name):
             return False
         self.remove_rod(user_data)
-        self.fishing_rod = fishing_rod_dict[name]
-        stack = bp.get_item_stack(name)
-        meta = ToolItemMeta(stack.meta)
-        self.fishing_rod_damage = meta.damage
-        while self.fishing_rod_damage >= self.fishing_rod.durable:
-            self.fishing_rod_damage -= self.fishing_rod.durable
-            meta.num -= 1
-        if meta.num < 1:
-            meta.num = 0
-            self.fishing_rod = None
-            self.fishing_rod_damage = 0
-        meta.num -= 1
-        meta.damage = 0
-        stack.meta = meta.to_meta()
+        rod = fishing_rod_dict[name]
+        stack = ToolItemStack(bp.get_item_stack(name), rod.durable)
+        damage = stack.get_used_tool()
         bp.set_item_with_stack(stack)
+        if damage is None:
+            return False
+        self.fishing_rod = rod
+        self.fishing_rod_damage = damage
         return True
 
     def equip_bait(self, name, user_data) -> bool:
@@ -197,21 +176,12 @@ class FishingUser:
         if not bp.bp_has_item(name):
             return False
         self.remove_tackle(user_data)
-        self.fishing_tackle = fishing_tackle_dict[name]
-        stack = bp.get_item_stack(name)
-        meta = ToolItemMeta(stack.meta)
-        self.fishing_tackle_damage = meta.damage
-        while self.fishing_tackle_damage >= self.fishing_tackle.durable:
-            self.fishing_tackle_damage -= self.fishing_tackle.durable
-            meta.num -= 1
-        if meta.num < 0:
-            meta.num = 0
-            self.fishing_tackle = None
-            self.fishing_tackle_damage = 0
-        meta.num -= 1
-        meta.damage = 0
-        stack.meta = meta.to_meta()
+        tackle = fishing_tackle_dict[name]
+        stack = ToolItemStack(bp.get_item_stack(name), tackle.durable)
+        damage = stack.get_used_tool()
         bp.set_item_with_stack(stack)
+        self.fishing_tackle = fishing_tackle_dict[name]
+        self.fishing_tackle_damage = damage
         return True
 
     def add_fish(self, fish_data) -> list:

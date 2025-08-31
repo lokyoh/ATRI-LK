@@ -2,7 +2,7 @@ from ATRI.message import MessageGroup, img_msg
 from ATRI.system.htmlrender import md_to_pic
 
 from .util import lk_util, user_info_event
-from .data.user import users
+from .data.user import users, user_level_manager
 from .data.item import ItemStack, items
 from .data.shop import shops
 
@@ -146,3 +146,20 @@ ATRI币:{user.money}
             i += 1
         message.add_message(resp + f'用户总数:{i}/{num}')
         return message
+
+    @classmethod
+    async def get_rank(cls, rank_name: str):
+        if rank_name == '经验':
+            with users.sql.get_cursor() as cursor:
+                r = cursor.execute("SELECT NAME, EXP FROM USERINFO ORDER BY EXP DESC LIMIT 10")
+                return f"经验排行榜:\n{'\n'.join(f'{i:02d}:{d[0]} - {user_level_manager.to_lvl(d[1])}级{user_level_manager.get_left_exp(d[1])}经验' for i, d in enumerate(r, 1))}"
+        elif rank_name == '好感':
+            with users.sql.get_cursor() as cursor:
+                r = cursor.execute("SELECT NAME, LOVE FROM USERINFO ORDER BY LOVE DESC LIMIT 10")
+                return f"好感排行榜:\n{'\n'.join(f'{i:02d}:{d[0]} - {d[1]}好感' for i, d in enumerate(r, 1))}"
+        elif rank_name == 'ATRI币':
+            with users.sql.get_cursor() as cursor:
+                r = cursor.execute("SELECT NAME, MONEY FROM USERINFO ORDER BY MONEY DESC LIMIT 10")
+                return f"ATRI币排行榜:\n{'\n'.join(f'{i:02d}:{d[0]} - {d[1]}ATRI币' for i, d in enumerate(r, 1))}"
+        else:
+            return "没有指定的排行榜"

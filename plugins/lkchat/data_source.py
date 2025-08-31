@@ -10,12 +10,10 @@ from nonebot.exception import FinishedException
 from nonebot.matcher import Matcher
 
 from ATRI import IMG_DIR, RECORD_DIR
-from ATRI.message import img_msg, rec_msg
-from ATRI.utils.img_editor import get_image_bytes
+from ATRI.message import img_msg_from_path, rec_msg_from_path
 from ATRI.utils.event import DictEvent
 from ATRI.exceptions import str_traceback, EventRuntimeError
 from ATRI.log import log
-from ATRI.system.lkapi.utils.audio import AudioEditor
 from ATRI.system.lkapi.bot import util as lk_util
 
 REPLY_MESSAGE = [
@@ -120,8 +118,8 @@ class PreChatEvent(DictEvent):
                     await func(matcher=matcher, event=event)
                 else:
                     func(matcher=matcher, event=event)
-            except FinishedException as e:
-                raise e from e
+            except FinishedException:
+                raise
             except Exception as e:
                 str_tb = str_traceback(e)
                 log.error(str_tb)
@@ -136,8 +134,7 @@ def get_random_atri() -> tuple[MessageSegment, str] | None:
     if len(voice_list) == 0:
         return None
     voice = choice(voice_list)
-    result = AudioEditor.audio_to_base64(RECORD_DIR / "atri" / voice)
-    return rec_msg(file=result), Path(voice).stem
+    return rec_msg_from_path(RECORD_DIR / "atri" / voice), Path(voice).stem
 
 
 @pre_chat_event.handle("atri_birthday")
@@ -149,7 +146,7 @@ async def on_birthday(matcher: Matcher, event: GroupMessageEvent):
         for a_b in a_b_p:
             if a_b in text:
                 await matcher.finish(
-                    choice(["哇~谢谢你。鞠躬", "啊、多谢", img_msg(get_image_bytes(IMG_DIR / "atri_" / "SR.gif"))]))
+                    choice(["哇~谢谢你。鞠躬", "啊、多谢", img_msg_from_path(IMG_DIR / "atri_" / "SR.gif")]))
 
 
 def get_atri_memery(mem):
@@ -163,8 +160,7 @@ def match_atri_voice(text):
     for pattern_item in VOICE_PATTERN.keys():
         if re.match(pattern_item, text):
             file = choice(VOICE_PATTERN[pattern_item])
-            res = AudioEditor.audio_to_base64(RECORD_DIR / "atri" / file)
-            return rec_msg(file=res), Path(file).stem
+            return rec_msg_from_path(RECORD_DIR / "atri" / file), Path(file).stem
     return None
 
 
@@ -174,5 +170,5 @@ def match_atri_img(text):
         if re.search(pattern, text):
             selected_img = img() if callable(img) else img
             if selected_img:
-                return img_msg(get_image_bytes(img_path / selected_img))
+                return img_msg_from_path(img_path / selected_img)
     return None

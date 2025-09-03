@@ -22,7 +22,7 @@ from ATRI.system.lkapi.utils.picture import get_pic_from
 plugin = Service(
     "签到",
     "亚托莉的签到系统",
-    "0.1.3",
+    "0.1.4",
     Service.ServiceType.LKPLUGIN
 )
 
@@ -54,8 +54,8 @@ async def _(event: Event):
             os.remove(path)
         log.warning(f"签到发生错误:\n{str_traceback(e)}")
         message = MessageBuilder().at(user_id)
-        with get_user_data(user_id) as user_data:
-            message.text(f'签到成功,你已签到{user_data.signdays}天')
+        user_data = get_user_data(user_id)
+        message.text(f'签到成功,你已签到{user_data.signdays}天')
         await sign_in.finish(message)
 
 
@@ -74,32 +74,32 @@ async def get_pic(user_id, r18_mode: bool = False, src: str = 'lolicon'):
             return save_path
         else:
             log.debug(f"{user_id}签到日期变化:{modification_date}->{today_date}")
-    with get_user_data(user_id) as user_data:
-        if r18_mode:
-            my_random = IntToBoolRandom(80, 200)
-            if my_random.get_result(int(user_data.love / 100) + user_data.lvl):
-                src = 'lolicon_r18'
-            try:
-                image_content = await get_pic_from(src)
-                image = Image.open(BytesIO(image_content))
-            except Exception as e:
-                log.warning(f'获取图片失败:\n{str_traceback(e)}')
-                return await get_pic(user_id)
-        else:
-            src = 'local'
-            image = await get_pic_from(src)
-        os.makedirs(save_dir, exist_ok=True)
-        (IMGEditor(image)
-         .resize(450, 800)
-         .add_rectangle(10, 350, 430, 440, 192, 10)
-         .add_middle_text(225, 370, f'{user_data.name}', 50)
-         .add_text(30, 450, f'签到成功！--{src}', 35)
-         .add_right_text(420, 500, f'--你已签到{user_data.signdays}天', 25)
-         .add_text(30, 540, f'等级: {user_data.lvl}', 25)
-         .add_text(30, 590, f'经验: {user_data.left_exp} / {user_data.get_lvl_exp()}', 25)
-         .add_text(30, 640, f'ATRI币: {user_data.money}', 25)
-         .add_text(30, 690, f'好感: {user_data.love}', 25)
-         .add_text(30, 740, f'日期: {datetime.now().strftime("%Y年%m月%d日 %H:%M")}', 25)
-         .save_rgb(save_path)
-         )
-        return save_path
+    user_data = get_user_data(user_id)
+    if r18_mode:
+        my_random = IntToBoolRandom(80, 200)
+        if my_random.get_result(int(user_data.love / 100) + user_data.lvl):
+            src = 'lolicon_r18'
+        try:
+            image_content = await get_pic_from(src)
+            image = Image.open(BytesIO(image_content))
+        except Exception as e:
+            log.warning(f'获取图片失败:\n{str_traceback(e)}')
+            return await get_pic(user_id)
+    else:
+        src = 'local'
+        image = await get_pic_from(src)
+    os.makedirs(save_dir, exist_ok=True)
+    (IMGEditor(image)
+     .resize(450, 800)
+     .add_rectangle(10, 350, 430, 440, 192, 10)
+     .add_middle_text(225, 370, f'{user_data.name}', 50)
+     .add_text(30, 450, f'签到成功！--{src}', 35)
+     .add_right_text(420, 500, f'--你已签到{user_data.signdays}天', 25)
+     .add_text(30, 540, f'等级: {user_data.lvl}', 25)
+     .add_text(30, 590, f'经验: {user_data.left_exp} / {user_data.get_lvl_exp()}', 25)
+     .add_text(30, 640, f'ATRI币: {user_data.money}', 25)
+     .add_text(30, 690, f'好感: {user_data.love}', 25)
+     .add_text(30, 740, f'日期: {datetime.now().strftime("%Y年%m月%d日 %H:%M")}', 25)
+     .save_rgb(save_path)
+     )
+    return save_path

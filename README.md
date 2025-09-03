@@ -37,11 +37,10 @@
 - 广播
 - 更新
 - 插件商店
-- ~~webapi~~(开发中)
 - <details markdown='1'><summary>LKBOT插件(LK插件)</summary>
 
-    - [x] LK插件专属的用户系统Part.1
-    - [x] 物品商店系统Part.1
+    - [x] LK插件专属的用户系统
+    - [x] 物品商店系统
     - [x] 健康模式、尝鲜模式
 
 </details>
@@ -51,11 +50,10 @@
 > 勾上的即已大致完成，但仍需优化。未被勾选的是暂时未完成但已经加入。计划中表示最近会进行开发。划线的暂时不进行更新。
 
 - [x] 签到
-- [x] 投喂ATRI
-- [ ] ATRI运势
-- [x] lk功能
-    - [x] AI聊天
-    - [x] 图聊
+- [x] 投喂
+- [x] 运势
+- [x] 聊天
+    - [x] AI聊天包含记忆、词语解释
     - [x] 戳一戳ATRI
 - [ ] 宠物
     - [x] 新宠物
@@ -111,9 +109,6 @@
 - 每日发癫
 
 </details>
-
-更多资源文件请下载`release`中`YHN-LK0-004`版本附带的[
-`res.zip`](https://github.com/lokyoh/ATRI-LK/releases/download/YHN-LK0-004/res.zip)文件
 
 ## 🚀 开始部署 | Getting Started
 

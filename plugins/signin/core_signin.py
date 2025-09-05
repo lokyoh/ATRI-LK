@@ -1,62 +1,21 @@
 import os
-from random import choice
 from datetime import datetime, date
 from io import BytesIO
 from PIL import Image
 
-from nonebot.adapters.onebot.v11.event import GroupMessageEvent, Event
-from nonebot.adapters.onebot.v11.helpers import Cooldown
+from nonebot.adapters.onebot.v11.event import GroupMessageEvent
 from nonebot.exception import FinishedException
 
 from ATRI.exceptions import str_traceback
 from ATRI.log import log
-from ATRI.service import Service
 from ATRI.message import MessageBuilder
 from ATRI.utils.curve import IntToBoolRandom
-from ATRI.utils.img_editor import get_image_bytes, IMGEditor
+from ATRI.utils.img_editor import IMGEditor, get_image_bytes
 from ATRI.system.lkapi.bot import util as lk_util, PLUGIN_DIR
-from ATRI.system.lkapi.bot.checker import IsLkUser
-from ATRI.system.lkapi.entity.user import get_user_data, sign
 from ATRI.system.lkapi.utils.picture import get_pic_from
+from ATRI.system.lkapi.entity.user import get_user_data, sign
 
-plugin = Service(
-    "签到",
-    "亚托莉的签到系统",
-    "0.1.4",
-    Service.ServiceType.LKPLUGIN
-)
-
-_lmt_notice = ["慢...慢一..点❤", "冷静1下", "歇会歇会~~", "呜呜...别急", "太快了...受不了", "不要这么快呀"]
-
-sign_in = plugin.on_command(cmd='签到', docs="亚托莉的签到系统", aliases={"今日签到", "每日签到"})
-
-
-@sign_in.handle([IsLkUser, Cooldown(60, prompt=choice(_lmt_notice))])
-async def _(event: Event):
-    r18_mode = not lk_util.is_safe_mode_group(event.group_id) if type(event) is GroupMessageEvent else True
-    user_id = event.get_user_id()
-    try:
-        message = MessageBuilder().at(user_id)
-        _, msg = sign(user_id)
-        message.text(msg)
-        log.info(f'{user_id}签到 r18:{r18_mode}, {msg}')
-        img_path = await get_pic(user_id, r18_mode=r18_mode)
-        message.image(get_image_bytes(img_path))
-        await sign_in.finish(message)
-    except FinishedException:
-        raise
-    except Exception as e:
-        if r18_mode:
-            path = os.path.join(PLUGIN_DIR, 'sign_in', 'r18', f"{user_id}.jpg")
-        else:
-            path = os.path.join(PLUGIN_DIR, 'sign_in', f"{user_id}.jpg")
-        if os.path.exists(path):
-            os.remove(path)
-        log.warning(f"签到发生错误:\n{str_traceback(e)}")
-        message = MessageBuilder().at(user_id)
-        user_data = get_user_data(user_id)
-        message.text(f'签到成功,你已签到{user_data.signdays}天')
-        await sign_in.finish(message)
+from .data_source import signin, Signin
 
 
 async def get_pic(user_id, r18_mode: bool = False, src: str = 'lolicon'):
@@ -103,3 +62,36 @@ async def get_pic(user_id, r18_mode: bool = False, src: str = 'lolicon'):
      .save_rgb(save_path)
      )
     return save_path
+
+
+class CoreSignin(Signin):
+    @staticmethod
+    async def signin(event, matcher):
+        r18_mode = not lk_util.is_safe_mode_group(event.group_id) if type(event) is GroupMessageEvent else True
+        user_id = event.get_user_id()
+        msg = ''
+        try:
+            message = MessageBuilder().at(user_id)
+            _, msg = sign(user_id)
+            message.text(msg)
+            log.info(f'{user_id}签到 r18:{r18_mode}, {msg}')
+            img_path = await get_pic(user_id, r18_mode=r18_mode)
+            message.image(get_image_bytes(img_path))
+            await matcher.finish(message)
+        except FinishedException:
+            raise
+        except Exception as e:
+            if r18_mode:
+                path = os.path.join(PLUGIN_DIR, 'sign_in', 'r18', f"{user_id}.jpg")
+            else:
+                path = os.path.join(PLUGIN_DIR, 'sign_in', f"{user_id}.jpg")
+            if os.path.exists(path):
+                os.remove(path)
+            log.warning(f"签到发生错误:\n{str_traceback(e)}")
+            message = MessageBuilder().at(user_id)
+            user_data = get_user_data(user_id)
+            message.text(f'签到成功,你已签到{user_data.signdays}天{msg}')
+            await matcher.finish(message)
+
+
+signin.change_signin(CoreSignin)

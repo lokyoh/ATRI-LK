@@ -17,7 +17,7 @@ from .fortune_data import get_fortune
 plugin = Service(
     '运势',
     '亚托莉的运势插件',
-    '0.1.1',
+    '0.1.2',
     Service.ServiceType.LKPLUGIN
 )
 
@@ -30,10 +30,10 @@ async def _(event: MessageEvent):
     if lk_util.is_valid_user(user_id):
         state, msg = sign(user_id)
         if state:
-            await today_fortune.send(f'今天尚未签到，已自动签到：{msg}')
+            await today_fortune.send(f'今天尚未签到，已自动签到：{msg}', at_sender=user_id)
     else:
         await today_fortune.send(f'{lk_util.bind_tip}才能够自动签到哦!', at_sender=user_id)
-    await today_fortune.finish(await get_pic(user_id), at_sender=True)
+    await today_fortune.finish(await get_pic(user_id))
 
 
 async def get_pic(user_id):
@@ -53,11 +53,11 @@ async def get_pic(user_id):
      .resize(450, 800)
      .add_rectangle(10, 350, 430, 440, 192, 10)
      .add_text(30, 370, f'您的今日运势为:', 30)
-     .add_middle_text(225, 405, f["fortune"], 50)
-     .add_middle_text(225, 460, f'{'★' * f['level']}{'☆' * (5 - f['level'])}', 50)
-     .add_auto_text(30, 515, f'{choice(f["content"])}', 25, max_y=710, max_width=400, vertical_align='center')
-     .add_middle_text(225, 715, '仅供娱乐 相信科学 请勿迷信', 20)
-     .add_middle_text(225, 740, f'日期: {datetime.now().strftime("%Y年%m月%d日 %H:%M")}', 25)
+     .add_middle_text(225, 410, f["fortune"], 50)
+     .add_middle_text(225, 465, f'{'★' * f['level']}{'☆' * (5 - f['level'])}', 50)
+     .add_auto_text(30, 520, f'{choice(f["content"])}', 25, max_y=730, max_width=400, vertical_align='center')
+     .add_middle_text(225, 735, f'日期: {datetime.now().strftime("%Y年%m月%d日 %H:%M")}', 25)
+     .add_middle_text(225, 765, '仅供娱乐 相信科学 请勿迷信', 20)
      .save_rgb(save_path)
      )
     return img_msg_from_path(save_path)

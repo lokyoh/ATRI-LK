@@ -6,6 +6,9 @@ from ATRI import IMG_DIR
 from ATRI.utils import request
 
 
+img_sources = {}
+
+
 async def lolicon():
     """获取一张来自lolicon的图片"""
     resp = await request.get(
@@ -78,11 +81,10 @@ def local_image():
 
 async def get_pic_from(src):
     """获取一张来自指定图源的图片，默认本地"""
-    if src == 'lolicon':
-        return await lolicon()
-    elif src == 'loli':
-        return await loli()
-    elif src == 'lolicon_r18':
-        return await lolicon_r18()
-    else:
-        return local_image()
+    if src in img_sources:
+        return await img_sources[src]()
+    return local_image()
+
+img_sources["lolicon"] = lolicon
+img_sources["loli"] = loli
+img_sources["loli_r18"] = lolicon_r18

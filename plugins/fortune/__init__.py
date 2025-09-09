@@ -18,7 +18,7 @@ plugin = Service(
     '运势',
     '亚托莉的运势插件',
     '0.1.2',
-    Service.ServiceType.LKPLUGIN
+    Service.ServiceType.ENTERTAINMENT
 )
 
 today_fortune = plugin.on_command('/今日运势', '今日运势', aliases={'/运势'})
@@ -46,10 +46,9 @@ async def get_pic(user_id):
         today_date = date.today()
         if modification_date == today_date:
             return img_msg_from_path(save_path)
-    image = await get_pic_from('local')
     os.makedirs(save_dir, exist_ok=True)
     f = get_fortune()
-    (IMGEditor(image)
+    (IMGEditor(await get_pic_from('local'))
      .resize(450, 800)
      .add_rectangle(10, 350, 430, 440, 192, 10)
      .add_text(30, 370, f'您的今日运势为:', 30)

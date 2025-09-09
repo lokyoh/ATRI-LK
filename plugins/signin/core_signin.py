@@ -1,7 +1,5 @@
 import os
 from datetime import datetime, date
-from io import BytesIO
-from PIL import Image
 
 from nonebot.adapters.onebot.v11.event import GroupMessageEvent
 from nonebot.exception import FinishedException
@@ -39,8 +37,7 @@ async def get_pic(user_id, r18_mode: bool = False, src: str = 'lolicon'):
         if my_random.get_result(int(user_data.love / 100) + user_data.lvl):
             src = 'lolicon_r18'
         try:
-            image_content = await get_pic_from(src)
-            image = Image.open(BytesIO(image_content))
+            image = await get_pic_from(src)
         except Exception as e:
             log.warning(f'获取图片失败:\n{str_traceback(e)}')
             return await get_pic(user_id)

@@ -1,6 +1,5 @@
 import os
 import random
-from PIL import Image
 
 from ATRI import IMG_DIR
 from ATRI.utils import request
@@ -76,15 +75,16 @@ def local_image():
     """获取一张来自本地res/img/sbg的图片"""
     file = random.choice(os.listdir(IMG_DIR / "sbg"))
     img_url = IMG_DIR / "sbg" / file
-    return Image.open(img_url).convert("RGB")
+    with open(img_url, "rb") as f:
+        return f.read()
 
 
-async def get_pic_from(src):
+async def get_pic_from(src) -> bytes:
     """获取一张来自指定图源的图片，默认本地"""
     if src in img_sources:
         return await img_sources[src]()
     return local_image()
 
 img_sources["lolicon"] = lolicon
+img_sources["lolicon_r18"] = lolicon_r18
 img_sources["loli"] = loli
-img_sources["loli_r18"] = lolicon_r18

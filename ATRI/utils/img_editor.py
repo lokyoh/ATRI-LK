@@ -9,8 +9,11 @@ from ATRI import FONT_DIR, IMG_DIR
 class IMGEditor:
     font_yz = os.path.join(FONT_DIR, 'yz.ttf')
 
-    def __init__(self, image: Image):
-        self.img: Image = image
+    def __init__(self, image: bytes | Image.Image):
+        if type(image) is bytes:
+            self.img: Image = Image.open(BytesIO(image))
+        else:
+            self.img: Image = image
 
     def resize(self, target_width, target_height) -> "IMGEditor":
         width, height = self.img.size

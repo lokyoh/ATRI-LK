@@ -1,11 +1,13 @@
 import re
 from pathlib import Path
+from random import choice
 
 from nonebot.adapters.onebot.v11 import Message
 
 from ATRI import conf
-from ATRI.log import log
 from ATRI.exceptions import str_traceback, BotRuntimeError
+from ATRI.log import log
+from ATRI.permission import MASTER_LIST
 from ATRI.utils.event import DictEvent
 
 from .config import config
@@ -30,52 +32,42 @@ class BaseFunc:
     test_mode_tip = '此功能为测试功能，只能在测试模式群聊下使用'
 
     def __init__(self):
-        self.master_ids = list(conf.BotConfig.superusers)
         self.bot_names = list(conf.BotConfig.nickname)
-        self.bot_name = self.bot_names[0]
+        self.bot_name = choice(self.bot_names)
 
     @staticmethod
     def is_test_group(group_id: str | int) -> bool:
         """检查群聊是否是测试模式的群聊"""
         if type(group_id) is int:
             group_id = str(group_id)
-        if group_id in config.test_groups:
-            return True
-        return False
+        return group_id in config.test_groups
 
     @staticmethod
     def is_safe_mode_group(group_id: str | int) -> bool:
         """检查群聊是否是安全模式群聊"""
         if type(group_id) is int:
             group_id = str(group_id)
-        if group_id in config.r18_groups:
-            return False
-        return True
+        return not group_id in config.r18_groups
 
-    def is_master(self, user_id: str | int) -> bool:
+    @staticmethod
+    def is_master(user_id: str | int) -> bool:
         """检查用户是否为主人(超级用户)"""
         if type(user_id) is int:
             user_id = str(user_id)
-        if user_id in self.master_ids:
-            return True
-        return False
+        return user_id in MASTER_LIST
 
     @staticmethod
     def is_valid_user(user_id: str | int) -> bool:
         """检查用户是否为注册的有效用户"""
         if type(user_id) is int:
             user_id = str(user_id)
-        if users.has_user(user_id):
-            return True
-        return False
+        return users.has_user(user_id)
 
     def get_name(self, user_id: str | int) -> str | None:
         """获取用户的名字"""
         if type(user_id) is int:
             user_id = str(user_id)
-        if self.is_valid_user(user_id):
-            return users.get_user_name(user_id)
-        return None
+        return users.get_user_name(user_id) if self.is_valid_user(user_id) else None
 
     def buy_item_func(self, user_data: UserData, shop_name: str, item_name: str, num: int) -> str:
         """用户从商店购买物品,注意数据保护及保存"""
@@ -169,14 +161,14 @@ class BaseFunc:
 
     @staticmethod
     def extract_number(s: str) -> tuple[str, int]:
-        """从字符串中提取名称与数字,要求格式:物品*n,物品,全部物品"""
-        match = re.search(r'(.*?)\*(\d+)$', s)
+        """从字符串中提取名称与数字,要求格式:物品,物品*n,物品×n,全部物品"""
+        match = re.search(r'(.*?)[*×](\d+)$', s)
         if match:
             item_name = match.group(1)
             number = int(match.group(2))
             return item_name, number
-        if "全部" in s:
-            item_name = s.replace("全部", "")
+        if s.startswith('全部'):
+            item_name = s[2:]
             return item_name, -1
         return s, 1
 
@@ -191,20 +183,24 @@ class BaseFunc:
 
     def get_trans_text(self, o_message: Message) -> str:
         """
-        将消息中的@转换为lk用户名
+        将消息中各项转换为文本。
         :param o_message: 原始消息
         :return: 返回转换后的消息
         """
         text = ''
         for segment in o_message:
-            if segment.type == 'at' and self.is_valid_user(segment.data['qq']):
-                text = text + '[' + self.get_name(segment.data['qq']) + ']'
-            elif segment.type == 'text':
-                text = text + segment.data['text']
+            if segment.type == 'text':
+                text += segment.data['text']
+            elif segment.type == 'at' and self.is_valid_user(segment.data['qq']):
+                text += f'[@{self.get_name(segment.data['qq'])}]'
             elif segment.type == "face":
                 face_text = segment.data.get("raw", {}).get("faceText", '')
                 if face_text:
                     text += face_text
+            elif segment.type == "image":
+                summary = segment.data.get("summary", '')
+                if summary != '[动画表情]':
+                    text += summary
         return text
 
     def user_change_name(self, user_id, new_name, limit: int = 10) -> tuple[bool, str]:

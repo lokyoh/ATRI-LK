@@ -5,11 +5,10 @@ from nonebot.internal.params import ArgPlainText
 from nonebot.params import CommandArg
 
 from ATRI.service import Service
-from ATRI.permission import MASTER, ADMIN
 from ATRI.utils import request
 from ATRI.message import img_msg
 
-from .data_source import image_manager, GroupImageManager
+from .config import LKImgLibConfig
 
 plugin = Service(
     "图库",
@@ -18,7 +17,12 @@ plugin = Service(
     Service.ServiceType.LKPLUGIN
 ).main_cmd('/图库')
 
-global_tu_add = plugin.cmd_as_group('全局添加', '添加全局图库', permission=MASTER)
+plugin_config = plugin.add_plugin_config(LKImgLibConfig)
+
+from .data_source import image_manager, GroupImageManager
+from .permission import GLOBAL, GROUP
+
+global_tu_add = plugin.cmd_as_group('全局添加', '添加全局图库', permission=GLOBAL)
 
 
 @global_tu_add.handle()
@@ -52,7 +56,7 @@ async def _(event: MessageEvent, text: str = ArgPlainText("img_path")):
     await global_tu_add.finish(f"添加 {img_name} 进 {libname if libname else '默认'} 库成功")
 
 
-tu_add = plugin.cmd_as_group('添加', '添加本群图库', permission=ADMIN)
+tu_add = plugin.cmd_as_group('添加', '添加本群图库', permission=GROUP)
 
 
 @tu_add.handle()

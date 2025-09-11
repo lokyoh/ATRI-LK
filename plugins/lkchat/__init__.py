@@ -3,7 +3,7 @@ import random
 import re
 from random import choice
 
-from nonebot.adapters.onebot.v11 import Bot, MessageSegment, Message
+from nonebot.adapters.onebot.v11 import Bot, Message
 from nonebot.adapters.onebot.v11.event import GroupMessageEvent, PokeNotifyEvent
 from nonebot.internal.params import ArgPlainText
 from nonebot.matcher import Matcher
@@ -11,10 +11,10 @@ from nonebot.matcher import Matcher
 from ATRI import IMG_DIR
 from ATRI.exceptions import str_traceback
 from ATRI.log import log
-from ATRI.message import img_msg_from_path, img_msg, MessageBuilder
+from ATRI.message import img_msg_from_path, img_msg, MessageBuilder, rec_msg
 from ATRI.permission import MASTER
 from ATRI.service import Service
-from ATRI.system.htmlrender import text_to_pic, md_to_pic
+from ATRI.system.htmlrender import md_to_pic
 from ATRI.system.lkapi.ai import chat_manager
 from ATRI.system.lkapi.bot import util as lk_util
 from ATRI.system.lkapi.bot.config import configs
@@ -78,15 +78,20 @@ async def _(event: GroupMessageEvent, matcher: Matcher, bot: Bot):
             await on_talk.finish(f"真是的，{lk_util.bot_name}被玩坏了，呜呜呜...")
         if match_result:
             record_file = AudioEditor.get_tts_file(response[0])
-            await on_talk.finish(MessageSegment.record(file=AudioEditor().audio_to_base64(record_file)))
+            await on_talk.finish(rec_msg(file=AudioEditor().audio_to_base64(record_file)))
         else:
             if "\n\n" in response[0]:
-                await on_talk.finish(MessageSegment.image(await text_to_pic(response[0])))
+                await on_talk.finish(img_msg(await md_to_pic(response[0])))
             msg = Message()
             for m in response:
                 msg.append(m)
             await on_talk.finish(msg)
     else:
+        if configs.chat_switch:
+            group_id = event.group_id
+            sender_id = event.get_user_id()
+            t_text = lk_util.get_trans_text(event.get_message())
+            await chat_model.add_history(group_id, sender_id, t_text)
         img = match_atri_img(text)
         if img:
             await on_talk.finish(img)

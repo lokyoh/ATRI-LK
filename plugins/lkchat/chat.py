@@ -99,6 +99,8 @@ class ChatModel:
         return text
 
     async def get_resp(self, bot, group_id: int, user_id: str) -> list[str]:
+        group_id = int(group_id)
+        user_id = str(user_id)
         if group_id not in self.rater:
             self.rater[group_id] = RateLimiter(15, 60)
         if not self.rater[group_id].is_allowed():
@@ -107,42 +109,47 @@ class ChatModel:
         text = await self.get_agent(group_id, user_id, user_info, bot)
         resp = await chat_manager.generate_content_from(config.model, text, 'json', self.resp_schema)
         if type(resp) == dict:
-            love = resp.get('love', 0)
-            if love:
-                user_info.love = user_info.love + love
-            memery = resp.get('memery', None)
-            if memery:
-                user_info.memery.append(memery)
-                if len(user_info.memery) > 10:
-                    user_info.memery.pop(0)
-            del_mem = resp.get('del_mem', None)
-            if del_mem:
-                for i in del_mem:
-                    try:
-                        user_info.memery.pop(i)
-                    except Exception:
-                        log.warning(f"记忆删除失败->{i}")
-            save_user_info(user_id, user_info)
-            r_t = resp.get('content', "输出格式错误")
-            if 'content' in resp:
-                self.history[group_id].add_dialogue(r_t)
-            msg = [r_t]
-            if 'face_text' in resp:
-                msg.append(self.get_face(resp['face_text']))
-            return msg
+            return self.process_resp(resp, user_id, user_info, group_id)
         else:
             return [resp]
 
-    async def add_history(self, group_id, user_id, content):
+    def process_resp(self, resp: dict, user_id: str, user_info, group_id) -> list:
+        love = resp.get('love', 0)
+        if love:
+            user_info.love = user_info.love + love
+        memery = resp.get('memery', None)
+        if memery:
+            user_info.memery.append(memery)
+            if len(user_info.memery) > 10:
+                user_info.memery.pop(0)
+        del_mem = resp.get('del_mem', [])
+        if del_mem:
+            for i in del_mem:
+                try:
+                    user_info.memery.pop(i)
+                except Exception:
+                    log.warning(f"{user_id}记忆删除失败位置->{i}")
+        save_user_info(user_id, user_info)
+        r_t = resp.get('content', "输出格式错误")
+        if 'content' in resp:
+            self.history[group_id].add_dialogue(r_t)
+        msg = [r_t]
+        if 'face_text' in resp:
+            msg.append(self.get_face(resp['face_text']))
+        return msg
+
+    async def add_history(self, group_id: int, user_id: str, content: str):
+        group_id = int(group_id)
+        user_id = str(user_id)
         if group_id not in self.history:
             self.history[group_id] = ChatHistory()
         self.history[group_id].add_history(user_id, content)
 
     @staticmethod
-    def get_face(face_text):
+    def get_face(face_text: str):
         img_path = IMG_DIR / "atri"
         file = None
-        if face_text in ('开心', '高兴', '快乐', '喜悦', '愉快', '狂喜'):
+        if face_text in ('开心', '高兴', '快乐', '喜悦', '愉快',):
             file = 'KX.jpg'
         elif face_text in ('幸福',):
             file = 'SUKI.jpg'
@@ -151,13 +158,19 @@ class ChatModel:
         elif face_text in ('满意', '满足',):
             file = 'MY.png'
         elif face_text in ('疑问', '疑惑', '困惑', '怀疑',):
-            file = choice(('YW.jpg', 'WH.jpg',))
+            file = choice(('YW.png', 'WH.jpg',))
         elif face_text in ('迷茫', '发呆', '呆住',):
             file = 'DZ.jpg'
         elif face_text in ('沮丧', '失望',):
             file = 'SW.jpg'
         elif face_text in ('生气', '恼火', '愤怒',):
             file = choice(('SQ.jpg', 'QF.gif',))
+        elif face_text in ('好奇',):
+            file = 'HQ.jpg'
+        elif face_text in ('傲慢',):
+            file = 'AM.jpg'
+        elif face_text in ('思考',):
+            file = choice(('SK.gif', 'SK2.gif'))
         if file:
             return img_msg_from_path(img_path / file)
         else:

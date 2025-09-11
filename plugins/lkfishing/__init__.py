@@ -21,8 +21,8 @@ from .data_source import FishingController
 plugin = Service(
     "钓鱼",
     "ATRI的钓鱼插件",
-    "0.1.2",
-    Service.ServiceType.LKPLUGIN
+    "0.1.3",
+    Service.ServiceType.ENTERTAINMENT
 ).main_cmd("/钓鱼")
 
 player_info = plugin.cmd_as_group('我的信息', '查看自己的个人信息')

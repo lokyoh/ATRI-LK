@@ -149,7 +149,11 @@ async def _(bot: Bot, event, matcher: Matcher, exception: Optional[Exception]):
 
 
 def str_traceback(e) -> str:
-    """获取错误的追踪信息"""
+    """
+    获取错误的精简追踪信息。
+    :param e: 错误对象
+    :return: 精简后的错误信息文本
+    """
     return _str_traceback(traceback.format_exception(type(e), e, e.__traceback__))
 
 

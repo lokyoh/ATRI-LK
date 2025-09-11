@@ -16,7 +16,7 @@ plugin = Service(
     "农场",
     "ATRI的农场插件",
     "0.1.8",
-    Service.ServiceType.LKPLUGIN
+    Service.ServiceType.ENTERTAINMENT
 ).main_cmd("/农场")
 config = plugin.add_plugin_config(LKFarmConfig)
 

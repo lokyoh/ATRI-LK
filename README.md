@@ -9,9 +9,9 @@
 
 ## 📌 声明 | Declarations
 
-[原项目地址](https://github.com/Kyomotoi/ATRI)
-
 **一切开发旨在学习，请勿用于非法用途**
+
+[原项目地址](https://github.com/Kyomotoi/ATRI)
 
 本项目名称、灵感均来自 [ANIPLEX](https://aniplex-exe.com/) 发行的 [ATRI-My Dear Moments-](https://atri-mdm.com/).
 
@@ -37,17 +37,24 @@
 - 广播
 - 更新
 - 插件商店
-- <details markdown='1'><summary>LKBOT插件(LK插件)</summary>
-
-    - [x] LK插件专属的用户系统
-    - [x] 物品商店系统
-    - [x] 健康模式、尝鲜模式
 
 </details>
 
-<details markdown='1'><summary>LK插件附属</summary>
+<details markdown='1'><summary>LKBOT插件(LK插件)</summary>
 
-> 勾上的即已大致完成，但仍需优化。未被勾选的是暂时未完成但已经加入。计划中表示最近会进行开发。划线的暂时不进行更新。
+- [x] LK插件专属的用户系统
+- [x] 物品商店系统
+- [x] 健康模式、尝鲜模式
+- [x] 附属-图库
+
+</details>
+
+<details markdown='1'><summary>内置LK附属插件</summary>
+
+> 勾上的即已大致完成，但仍需优化。  
+> 未被勾选的是暂时未完成但已经加入。  
+> 计划中表示最近会进行开发。  
+> 划线的暂时不进行更新。
 
 - [x] 签到
 - [x] 投喂
@@ -62,19 +69,17 @@
     - [x] 新农场
     - [x] 锄地、浇水、种植、收获
     - [ ] 品质
-    - [ ] 肥料
+    - [ ] ~~肥料~~
     - [x] 天气
     - [ ] 幸运值
     - [ ] 耕种等级
 - [ ] 钓鱼
-  - [x] 钓鱼
-  - [x] 鱼竿,鱼饵
-  - [ ] 鱼具
-  - [x] 35种鱼,4种非鱼钓鱼战利品
-  - [x] 成就
+    - [x] 钓鱼
+    - [x] 鱼竿,鱼饵
+    - [ ] 鱼具
+    - [x] 35种鱼,4种非鱼钓鱼战利品
+    - [x] 成就
 - [ ] ~~探险~~
-
-</details>
 
 </details>
 
@@ -101,7 +106,7 @@
 
 - 组队系统
 - 每日新闻
-- coser
+- ~~coser~~
 - mc服务器查询
 - 棋类游戏
 - 钉宫语录
@@ -136,7 +141,7 @@
 
 [NoneBot](https://github.com/nonebot): [NoneBot2](https://github.com/nonebot/nonebot2)
 
-[JetBrains](https://www.jetbrains.com/?from=ATRI): 为本项目提供 [PyCharm](https://www.jetbrains.com/pycharm/?from=ATRI)
+[JetBrains](https://www.jetbrains.com): 为本项目提供 [PyCharm](https://www.jetbrains.com/pycharm)
 等 IDE 的授权<br>
 
 ## 📄 许可 | License

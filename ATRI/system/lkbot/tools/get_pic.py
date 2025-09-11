@@ -2,8 +2,17 @@ import os
 import random
 
 from ATRI import IMG_DIR
+from ATRI.log import log
 from ATRI.utils import request
 
+local_image_manager = None
+
+try:
+    from ATRI.system.lk_imglib import image_manager
+    local_image_manager = image_manager
+    log.info('启用全局图库内图片作为本地图源')
+except:
+    pass
 
 img_sources = {}
 
@@ -73,6 +82,8 @@ async def loli():
 
 def local_image():
     """获取一张来自本地res/img/sbg的图片"""
+    if local_image_manager:
+        return local_image_manager.get_random_image()
     file = random.choice(os.listdir(IMG_DIR / "sbg"))
     img_url = IMG_DIR / "sbg" / file
     with open(img_url, "rb") as f:

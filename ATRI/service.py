@@ -16,7 +16,7 @@ from nonebot.typing import (
 )
 from nonebot.rule import Rule, command, keyword, regex
 from nonebot.adapters import Event
-from nonebot.adapters.onebot.v11 import Message, PrivateMessageEvent, GroupMessageEvent
+from nonebot.adapters.onebot.v11 import Message
 
 from ATRI import service_list, driver
 from ATRI.log import log
@@ -55,7 +55,7 @@ class CommandInfo(BaseModel):
 
 class Service:
     """
-    服务统一注册管理系统
+    ATRI的服务。
     """
 
     driver_started = False
@@ -76,9 +76,15 @@ class Service:
             service: str,
             docs: str = "无介绍",
             version: str = str(),
-            _type: ServiceType = ServiceType.OTHER
+            type_: ServiceType = ServiceType.OTHER
     ):
-        """初始化一个服务"""
+        """
+        初始化一个服务。
+        :param service: 服务名
+        :param docs: 服务文档
+        :param version: 服务版本
+        :param type_: 服务类型
+        """
         if not service:
             raise ServiceRegisterError("未命名服务")
         if service in service_list or service == "master":
@@ -86,7 +92,7 @@ class Service:
         self.service = service
         self._docs = docs
         self._version = version
-        self._type = _type
+        self._type = type_
         self._cmd_list = {}
         self._permission = None
         self._priority = 10
@@ -101,59 +107,92 @@ class Service:
         service_list[service] = self
 
     def document(self, context: str) -> "Service":
-        """为服务添加说明"""
+        """
+        设置服务说明。
+        :param context: 服务说明
+        :return: 服务本身
+        """
         self._docs = context
         return self
 
-    def type(self, _type: ServiceType) -> "Service":
-        """为服务添加类型"""
-        self._type = _type
+    def type(self, type_: ServiceType) -> "Service":
+        """
+        设置服务类型。
+        :param type_: 服务类型
+        :return: 服务本身
+        """
+        self._type = type_
         return self
 
     def version(self, version: str) -> "Service":
-        """设置服务版本号"""
+        """
+        设置服务版本。
+        :param version: 服务版本
+        :return: 服务本身
+        """
         self._version = version
         return self
 
     def rule(self, rule: Optional[Union[Rule, T_RuleChecker]]) -> "Service":
-        """为服务添加触发判定"""
-
+        """
+        为服务添加触发判定。
+        :param rule: 触发判断
+        :return: 服务本身
+        """
         self._rule = self._rule & rule
         return self
 
     def permission(self, perm: Permission) -> "Service":
-        """为服务添加权限判定"""
-
+        """
+        为服务设置权限。
+        :param perm: 权限
+        :return: 服务本身
+        """
         self._permission = perm
         return self
 
     def handlers(self, hand: Optional[List[T_Handler]]) -> "Service":
-        """为服务设置处理函数"""
-
+        """
+        为服务设置处理函数。
+        :param hand: 处理函数列表
+        :return: 服务本身
+        """
         self._handlers = hand
         return self
 
     def temp(self, _is: bool) -> "Service":
-        """设置是否为一次性服务"""
-
+        """
+        设置是否为一次性服务。
+        :param _is: 是否为一次性服务
+        :return: 服务本身
+        """
         self._temp = _is
         return self
 
     def priority(self, level: int) -> "Service":
-        """为服务设置优先级等级"""
-
+        """
+        为服务设置优先级。
+        :param level: 优先级
+        :return: 服务本身
+        """
         self._priority = level
         return self
 
     def state(self, state: Optional[T_State]) -> "Service":
-        """为服务设置处理类型"""
-
+        """
+        为服务设置事件处理状态。
+        :param state: 事件处理状态
+        :return: 服务本身
+        """
         self._state = state
         return self
 
     def main_cmd(self, cmd: str) -> "Service":
-        """为服务命令设置前缀"""
-
+        """
+        为服务命令设置前缀。
+        :param cmd: 命令前缀
+        :return: 服务本身
+        """
         self._main_cmd = (cmd,)
         return self
 
@@ -328,12 +367,19 @@ class Service:
 
     @staticmethod
     async def send_to_master(message: Union[str, Message]):
+        """
+        发送消息给主人。
+        :param message: 消息
+        """
         bot = get_bot()
         for m in MASTER_LIST:
             await bot.send_private_msg(user_id=m, message=message)
 
     def get_info(self) -> ServiceInfo:
-        """获取该服务信息"""
+        """
+        获取该服务信息。
+        :return: ServiceInfo对象
+        """
         p = self._permission
         if p:
             p = p.name
@@ -363,53 +409,84 @@ class Service:
                 func()
 
     def conf(self) -> ServiceConfig:
+        """
+        获取服务的配置。
+        :return: ServiceConfig对象
+        """
         return ServiceTools(self.service).load_service_config()
 
     def plugin_config(self) -> PluginConfig:
+        """
+        获取服务的插件设置。
+        :return: PluginConfig对象
+        """
         return PluginConfig.get(self.service)
 
     def add_plugin_config(self, model: Type[BaseModel]) -> PluginConfig:
+        """
+        添加服务的插件设置。
+        :param model: 插件设置模型
+        :return: PluginConfig对象
+        """
         return PluginConfig(self.service, model)
 
 
 class ServiceTools:
-    """针对服务的工具类"""
+    """
+    针对服务的工具类。
+    """
 
     def __init__(self, service: str):
+        """
+        针对服务的工具类。
+        :param service: 服务名
+        """
         if not service in service_list:
             raise ServiceNotFoundError("找不到指定服务")
         self.service = service
 
     def load_service(self) -> ServiceInfo:
+        """
+        获取服务信息。
+        :return: ServiceInfo对象
+        """
         return service_list[self.service].get_info()
 
     def save_service_config(self, service_config: ServiceConfig):
+        """
+        保存修改后的服务配置。
+        :param service_config: 修改后的服务配置
+        """
         path = CONFIG_DIR / f"{self.service}.json"
-        if not path.is_file():
-            raise ReadFileError(
-                f"无法找到服务 {self.service} 对应的信息文件\n"
-                f"请删除此目录下的文件: data/config/{self.service}.json\n"
-                "接着重新启动"
-            )
-
         service_config.write_into_file(path)
 
     def load_service_config(self) -> ServiceConfig:
+        """
+        加载服务配置。
+        :return: ServiceConfig对象
+        """
         path = CONFIG_DIR / f"{self.service}.json"
         if not path.is_file():
             raise ReadFileError(
                 f"无法找到服务 {self.service} 对应的信息文件\n"
-                f"请删除此目录下的文件: data/config/{self.service}.json\n"
-                "接着重新启动"
+                f"请重新启动"
             )
-
         return ServiceConfig.read_from_file(path)
 
     def del_service(self):
+        """
+        删除服务配置。
+        """
         c_path = CONFIG_DIR / f"{self.service}.json"
         c_path.unlink()
 
-    def auth_service(self, user_id: str = str(), group_id: str = str()) -> bool:
+    def auth_service(self, user_id: str = None, group_id: str = None) -> bool:
+        """
+        当前服务对指定用户或群聊是否可用。
+        :param user_id: 用户id
+        :param group_id: 群聊id
+        :return: 服务是否可用
+        """
         data = self.load_service_config()
         auth_global = data.enabled
         if not auth_global:
@@ -426,6 +503,10 @@ class ServiceTools:
         return True
 
     def service_controller(self, is_enabled: bool):
+        """
+        启用或禁用服务。
+        :param is_enabled: 是否启用
+        """
         data = self.load_service_config()
         data.enabled = is_enabled
         self.save_service_config(data)
@@ -433,15 +514,9 @@ class ServiceTools:
 
 def is_in_service(service: str) -> Rule:
     async def _is_in_service(event: Event) -> bool:
-        user_id = str()
-        group_id = str()
-        if isinstance(event, PrivateMessageEvent):
-            user_id = event.get_user_id()
-        elif isinstance(event, GroupMessageEvent):
-            user_id = event.get_user_id()
-            group_id = str(event.group_id)
-        result = ServiceTools(service).auth_service(user_id, group_id)
-        return result
+        user_id = str(getattr(event, "user_id", None))
+        group_id = str(getattr(event, "group_id", None))
+        return ServiceTools(service).auth_service(user_id, group_id)
 
     return Rule(_is_in_service)
 

@@ -71,8 +71,8 @@ class FishingController:
                 del cls.player_fishing_data[user_id]
                 info.use_bait()
                 raise FishingException('🐟已经跑掉了...')
-            info.use_bait()
             fish_data = cls.gene_fish(info)
+            info.use_bait()
             with get_user_data(user_id) as user_data:
                 user_data.item_num_change(
                     f'{fish_data.fish.name}{f'-{fish_data.quality}' if fish_data.quality else ''}', 1)
@@ -85,26 +85,22 @@ class FishingController:
     def get_fish_weight(cls, position, weather):
         fish_list = []
         weight_list = []
-        all_weight = 0
         all_fish_list = cls.fish_area_data[position]
         for fish in all_fish_list:
             if fish.can_catch(weather):
                 fish_list.append(fish)
                 weight_list.append(fish.weight)
-                all_weight += fish.weight
-        return fish_list, weight_list, all_weight
+        return fish_list, weight_list
 
     @classmethod
     def gene_fish(cls, user_data: FishingUser) -> FishData:
         if user_data.position not in cls.fish_area_data:
             raise ValueError('地域错误')
-        fish_list, weight_list, all_weight = cls.get_fish_weight(user_data.position, user_farm_data.weather)
-        rand_int = random.randint(1, all_weight)
-        p = 0
-        while rand_int > weight_list[p]:
-            rand_int -= weight_list[p]
-            p += 1
-        fish_data = FishData(fish_list[p], user_data)
+        fish_list, weight_list = cls.get_fish_weight(user_data.position, user_farm_data.weather)
+        if len(fish_list) == 0:
+            raise FishingException('该地域此时没有任何鱼类!!!\n请反馈...')
+        fish = random.choices(fish_list, weights=weight_list)[0]
+        fish_data = FishData(fish, user_data)
         return fish_data
 
     @classmethod

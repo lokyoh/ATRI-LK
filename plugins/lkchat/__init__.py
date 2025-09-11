@@ -3,7 +3,7 @@ import random
 import re
 from random import choice
 
-from nonebot.adapters.onebot.v11 import Bot, MessageSegment
+from nonebot.adapters.onebot.v11 import Bot, MessageSegment, Message
 from nonebot.adapters.onebot.v11.event import GroupMessageEvent, PokeNotifyEvent
 from nonebot.internal.params import ArgPlainText
 from nonebot.matcher import Matcher
@@ -25,8 +25,8 @@ from .config import LKChatConfig
 plugin = Service(
     "聊天",
     "ATRI进行聊天处理的插件",
-    "0.5.0",
-    Service.ServiceType.LKPLUGIN
+    "0.6.0",
+    Service.ServiceType.ENTERTAINMENT
 ).main_cmd("/聊天")
 config: LKChatConfig = plugin.add_plugin_config(LKChatConfig).config()
 
@@ -77,12 +77,15 @@ async def _(event: GroupMessageEvent, matcher: Matcher, bot: Bot):
             log.warning(str_traceback(e))
             await on_talk.finish(f"真是的，{lk_util.bot_name}被玩坏了，呜呜呜...")
         if match_result:
-            record_file = AudioEditor.get_tts_file(response)
+            record_file = AudioEditor.get_tts_file(response[0])
             await on_talk.finish(MessageSegment.record(file=AudioEditor().audio_to_base64(record_file)))
         else:
-            if len(response) < 1000:
-                await on_talk.finish(response)
-            await on_talk.finish(MessageSegment.image(await text_to_pic(response)))
+            if "\n\n" in response[0]:
+                await on_talk.finish(MessageSegment.image(await text_to_pic(response[0])))
+            msg = Message()
+            for m in response:
+                msg.append(m)
+            await on_talk.finish(msg)
     else:
         img = match_atri_img(text)
         if img:

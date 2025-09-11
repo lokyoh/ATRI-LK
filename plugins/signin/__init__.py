@@ -15,7 +15,7 @@ plugin = Service(
     "签到",
     "亚托莉的签到系统",
     "0.2.0",
-    Service.ServiceType.LKPLUGIN
+    Service.ServiceType.ENTERTAINMENT
 )
 
 _lmt_notice = ["慢...慢一..点❤", "冷静1下", "歇会歇会~~", "呜呜...别急", "太快了...受不了", "不要这么快呀"]

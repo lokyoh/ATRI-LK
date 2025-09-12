@@ -54,8 +54,10 @@ async def _(event: GroupMessageEvent, matcher: Matcher, bot: Bot):
                 await on_talk.finish(voice[1])
             return
         text = lk_util.get_trans_text(event.get_message())
-        if text == "" or len(text) > 100:
-            return
+        if text == "":
+            await on_talk.finish('找我有什么事么?如果要查询我有什么功能的话就输入"/服务列表"吧,高性能的我随时为你服务哦。', at_sender=True)
+        if len(text) > 100:
+            await on_talk.finish('消息长度过长！', at_sender=True)
         sender_id = event.get_user_id()
         if not lk_util.is_valid_user(sender_id):
             await on_talk.finish(lk_util.bind_tip)

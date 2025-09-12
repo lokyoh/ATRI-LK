@@ -11,9 +11,31 @@ from .history import ChatHistory, Dialogue
 from .util import get_user_group, get_name
 from .user import get_user_info, save_user_info
 from .explanations import get_top_explanations
+
 from . import config
 
 atri = ATRI()
+
+atri_face = {
+    ('开心', '高兴', '快乐', '喜悦', '愉快',): ['KX.jpg', ],
+    ('幸福',): ['SUKI.jpg', ],
+    ('兴奋', '激动',): ['XF.png', ],
+    ('满意', '满足',): ['MY.png', ],
+    ('疑问', '疑惑', '困惑', '怀疑',): ['YW.png', 'WH.jpg', 'YW1.jpg', ],
+    ('迷茫', '发呆', '呆住',): ['DZ.jpg', ],
+    ('沮丧', '失落', '失望',): ['SW.jpg', 'SW1.jpg', 'TQ.png', ],
+    ('生气', '恼火', '愤怒',): ['SQ.jpg', 'QF.gif', 'SQ1.jpg', ],
+    ('好奇',): ['HQ.jpg', ],
+    ('傲慢',): ['AM.jpg', ],
+    ('思考',): ['SK.gif', 'SK2.gif', ],
+    ('晚安',): ['WA.jpg', ],
+    ('得意',): ['DY.gif', 'DY1.gif', ],
+    ('元气',): ['DT.jpg', ],
+    ('期待',): ['QD.jpg', ],
+    ('关心',): ['GX.jpg', ],
+    ('摸摸头',): ['MMT.png', ],
+    ('惊', '惊讶', '吃惊'): ['CJ.jpg', 'CJ1.jpg', 'CJ2.jpg', 'CJ.png', 'CJ1.png', ],
+}
 
 
 class ChatModel:
@@ -60,43 +82,44 @@ class ChatModel:
         self.history = {}
         self.rater = {}
 
-    async def get_agent(self, group_id, user_id, user_info, bot):
+    async def get_prompt(self, group_id, user_id, user_info, bot):
+        prompt = "在网络群聊环境中中扮演用户与其他用户进行聊天\n"
         # 角色设定
-        text = (f"#角色设定\n"
-                f"{atri.get_role_prompt()}\n")
+        prompt += (f"#角色设定\n"
+                   f"{atri.get_role_prompt()}\n")
         # 历史聊天记录
         if group_id not in self.history:
             self.history[group_id] = ChatHistory()
         history: ChatHistory = self.history[group_id]
-        text += f"#历史聊天记录\n"
+        prompt += f"#历史聊天记录\n"
         history_list = history.get_history()
         if history_list:
-            text += '\n'.join([
+            prompt += '\n'.join([
                 f"<{h.time}>{await get_name(bot, h.sender, group_id)}:{h.text}{f'\n你对此回复:{h.resp}' if type(h) == Dialogue else ''}"
                 for h in history_list])
         else:
-            text += '无聊天记录'
+            prompt += '无聊天记录'
         # 对话人信息
-        text += (f"\n#当前对话人的信息\n"
-                 f"{"Ta是你的主人" if get_user_group(user_id) == "主人" else 'TA只是你的陪聊对象不要称呼TA主人'}\n"
-                 f"好感度:{user_info.love}。正积极,负消极,最大1000,最小-1000,难增加,易减少\n")
-        if user_info.memery:
-            text += f"与用户的记忆:{user_info.memery}\n"
-        # 补充信息
-        text += f"#补充信息\n"
-        # 对话中词语解释
         lst_history = history.get_last_history()
+        prompt += (f"\n#当前对话人的信息\n"
+                   f"昵称:{await get_name(bot, lst_history.sender, group_id)}\n"
+                   f"{"Ta是你的主人" if get_user_group(user_id) == "主人" else 'TA只是你的陪聊对象不要称呼TA主人'}\n"
+                   f"你对Ta的好感度:{user_info.love}。正积极,负消极,最大1000,最小-1000,难增加,易减少\n")
+        if user_info.memery:
+            prompt += f"与Ta的记忆:{user_info.memery}\n"
+        # 对话提示信息
+        prompt += f"#对话提示信息\n"
+        # 对话中词语解释
         exp = get_top_explanations(lst_history.text)
         if exp:
-            text += "词语解释:\n"
-            text += "\n".join(exp)
-            text += "\n"
+            prompt += "词语解释:\n"
+            prompt += "\n".join(exp)
+            prompt += "\n"
         # 当前对话信息
-        text += (f"#当前对话信息\n"
-                 f"对话人:{await get_name(bot, lst_history.sender, group_id)}\n"
-                 f"时间:{lst_history.time}\n"
-                 f"内容:{lst_history.text}")
-        return text
+        prompt += (f"#当前对话\n"
+                   f"时间:{lst_history.time}\n"
+                   f"内容:{lst_history.text}")
+        return prompt
 
     async def get_resp(self, bot, group_id: int, user_id: str) -> list[str]:
         group_id = int(group_id)
@@ -106,7 +129,7 @@ class ChatModel:
         if not self.rater[group_id].is_allowed():
             return ["歇会歇会~~"]
         user_info = get_user_info(user_id)
-        text = await self.get_agent(group_id, user_id, user_info, bot)
+        text = await self.get_prompt(group_id, user_id, user_info, bot)
         resp = await chat_manager.generate_content_from(config.model, text, 'json', self.resp_schema)
         if type(resp) == dict:
             return self.process_resp(resp, user_id, user_info, group_id)
@@ -149,34 +172,22 @@ class ChatModel:
     def get_face(face_text: str):
         img_path = IMG_DIR / "atri"
         file = None
-        if face_text in ('开心', '高兴', '快乐', '喜悦', '愉快',):
-            file = 'KX.jpg'
-        elif face_text in ('幸福',):
-            file = 'SUKI.jpg'
-        elif face_text in ('兴奋', '激动',):
-            file = 'XF.png'
-        elif face_text in ('满意', '满足',):
-            file = 'MY.png'
-        elif face_text in ('疑问', '疑惑', '困惑', '怀疑',):
-            file = choice(('YW.png', 'WH.jpg',))
-        elif face_text in ('迷茫', '发呆', '呆住',):
-            file = 'DZ.jpg'
-        elif face_text in ('沮丧', '失望',):
-            file = 'SW.jpg'
-        elif face_text in ('生气', '恼火', '愤怒',):
-            file = choice(('SQ.jpg', 'QF.gif',))
-        elif face_text in ('好奇',):
-            file = 'HQ.jpg'
-        elif face_text in ('傲慢',):
-            file = 'AM.jpg'
-        elif face_text in ('思考',):
-            file = choice(('SK.gif', 'SK2.gif'))
+        for key, value in atri_face.items():
+            if face_text in key:
+                if len(value) != 0:
+                    file = choice(value)
         if file:
-            return img_msg_from_path(img_path / file)
+            if (img_path / file).exists():
+                log.debug(f'发送表情`{face_text}`')
+                return img_msg_from_path(img_path / file)
+            else:
+                log.error(f'缺失文件`{img_path / file}`')
+                return f'`{file}`文件缺失,请检查本地文件!'
         else:
             if (img_path / f'{face_text}.jpg').exists():
                 return img_msg_from_path(img_path / f'{face_text}.jpg')
-            return f'[{face_text}].jpg'
+            log.warning(f'没有`{face_text}`所对应的表情请,请等待更新或手动添加`{face_text}.jpg`至`{img_path}`目录下')
+            return f'[{face_text}.jpg]'
 
 
 chat_model = ChatModel()

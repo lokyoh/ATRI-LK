@@ -14,7 +14,6 @@ from ATRI.message import img_msg_from_path, rec_msg_from_path
 from ATRI.utils.event import DictEvent
 from ATRI.exceptions import str_traceback, EventRuntimeError
 from ATRI.log import log
-from ATRI.system.lkapi.bot import util as lk_util
 
 REPLY_MESSAGE = [
     "lsp你再戳？",
@@ -22,11 +21,11 @@ REPLY_MESSAGE = [
     "你再戳！",
     "？再戳试试？",
     "别戳了别戳了再戳就坏了555",
-    f"{lk_util.bot_name}爪巴爪巴，球球别再戳了",
+    "我爪巴爪巴，球球别再戳了",
     "你戳你🐎呢？！",
     "那...那里...那里不能戳...绝对...",
     "(。´・ω・)ん?",
-    f"有事恁叫{lk_util.bot_name}，别天天一个劲戳戳戳！",
+    "有事恁叫我，别天天一个劲戳戳戳！",
     "欸很烦欸！你戳🔨呢",
     "?",
     "再戳一下试试？",
@@ -34,21 +33,21 @@ REPLY_MESSAGE = [
     "正在关闭对您的所有服务...关闭成功",
     "啊呜，太舒服刚刚竟然睡着了。什么事？",
     "正在定位您的真实地址...定位成功。轰炸机已起飞",
-    f"别戳了，别戳了，{lk_util.bot_name}的呆毛要掉拉！",
-    f"{lk_util.bot_name}在呢！",
-    f"你是来找{lk_util.bot_name}玩的嘛？",
-    f"别急呀, {lk_util.bot_name}要宕机了!QAQ",
+    "别戳了，别戳了，我的呆毛要掉拉！",
+    "我在呢！",
+    "你是来找我玩的嘛？",
+    "别急呀, 我要宕机了!QAQ",
     "你好！Ov<",
     "别戳了，怕疼QwQ",
-    f"再戳，{lk_util.bot_name}就要咬你了嗷~",
+    "再戳，我就要咬你了嗷~",
     "恶龙咆哮，嗷呜~",
     "生气(╯▔皿▔)╯",
     "不要这样子啦（*/ w \\*）",
     "戳坏了",
     "戳坏了，赔钱！",
-    f"喂，110吗，有人老戳{lk_util.bot_name}",
-    f"别戳{lk_util.bot_name}啦，您歇会吧~",
-    f"喂(#`O′) 戳{lk_util.bot_name}干嘛！",
+    "喂，110吗，有人老戳我",
+    "别戳我啦，您歇会吧~",
+    "喂(#`O′) 戳我干嘛！",
 ]
 VOICE_PATTERN = {
     r".*萝卜子.*": [
@@ -152,7 +151,7 @@ async def on_birthday(matcher: Matcher, event: GroupMessageEvent):
 def get_atri_memery(mem):
     md_text = "# 亚托莉对你的记忆\n\n"
     md_text += "\n".join(f'- {i}:{item}' for i, item in enumerate(mem, 1))
-    md_text += "\n\n> 输入`chat.删除记忆 [标号]`来删除指定记忆,[标号]为数字,例如:`chat.删除记忆 1`"
+    md_text += "\n\n> 输入`/聊天.删除记忆 [标号]`来删除指定记忆,[标号]为数字,例如:`/聊天.删除记忆 1`"
     return md_text
 
 

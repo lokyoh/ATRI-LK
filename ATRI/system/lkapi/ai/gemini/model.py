@@ -55,7 +55,7 @@ class GeminiModel(BaseChat):
         if response.status_code == 200:
             data = response.json()
             text = data['candidates'][0]['content']['parts'][0]['text']
-            log.debug(f'生成成功:Token共使用{data['usageMetadata']['totalTokenCount']}')
+            log.debug(f'{self.model}生成成功:Token共使用{data['usageMetadata']['totalTokenCount']}')
             if r_type == 'json':
                 return json.loads(text)
             return text

@@ -9,6 +9,7 @@ from ATRI.utils import request
 from ATRI.message import img_msg
 
 from .config import LKImgLibConfig
+from .data_source import image_manager, GroupImageManager
 
 plugin = Service(
     "图库",
@@ -19,7 +20,6 @@ plugin = Service(
 
 plugin_config = plugin.add_plugin_config(LKImgLibConfig)
 
-from .data_source import image_manager, GroupImageManager
 from .permission import GLOBAL, GROUP
 
 global_tu_add = plugin.cmd_as_group('全局添加', '添加全局图库', permission=GLOBAL)

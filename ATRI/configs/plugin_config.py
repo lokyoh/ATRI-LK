@@ -1,13 +1,11 @@
-from pathlib import Path
 from typing import Type
 import os
 
+from ATRI.dir import CONFIG_DIR
 from ATRI.utils.model import BaseModel
 
 plugin_config = {}
 """插件设置数据"""
-CONFIG_DIR = Path(".") / "data" / "config"
-"""插件设置路径"""
 
 
 class PluginConfig:

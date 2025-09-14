@@ -17,29 +17,18 @@ from .data_source import MANAGE_DIR
 @run_preprocessor
 async def _(matcher: Matcher, event: MessageEvent):
     plugin_name = str(matcher.plugin_name)
-
     if not "nonebot_" in plugin_name:
         return
-
     serv = ServiceTools(plugin_name)
     try:
         serv.load_service_config()
     except Exception:
         raise IgnoredException(f"{plugin_name} limited")
-
     if not serv.auth_service():
         raise IgnoredException(f"{plugin_name} limited")
-
-    if isinstance(event, PrivateMessageEvent):
-        user_id = event.get_user_id()
-        result = serv.auth_service(user_id)
-    elif isinstance(event, GroupMessageEvent):
-        user_id = event.get_user_id()
-        group_id = str(event.group_id)
-        result = serv.auth_service(user_id, group_id)
-    else:
-        result = True
-
+    user_id = str(getattr(event, "user_id", None))
+    group_id = str(getattr(event, "group_id", None))
+    result = serv.auth_service(user_id, group_id)
     if not result:
         raise IgnoredException(f"{plugin_name} limited")
 

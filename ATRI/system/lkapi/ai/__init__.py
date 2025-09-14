@@ -23,7 +23,15 @@ class ChatManager:
     async def generate_content(self, text: str, r_type: str = 'text', data: dict = None) -> str | dict | None:
         """从默认的大语言模型生成内容"""
         if self.active_chat in self.chats:
-            return await self.chats[self.active_chat].generate_content(text, r_type, data)
+            resp = await self.chats[self.active_chat].generate_content(text, r_type, data)
+            from ATRI.log import log
+            log.debug(
+                f'model:{self.active_chat} '
+                f'type:{r_type} '
+                f'input:{text if len(text) <= 20 else f'{text[:10]}...'} '
+                f'output:{resp if len(resp) <= 20 else f'{resp[:10]}...'}'
+            )
+            return resp
         else:
             self.active_chat = default_chat
             from ATRI.system.lkbot.config import save_config
@@ -34,7 +42,15 @@ class ChatManager:
                                     data: dict = None) -> str | dict | None:
         """从指定的大语言模型生成内容"""
         if name in self.chats:
-            return await self.chats[name].generate_content(text, r_type, data)
+            resp = await self.chats[name].generate_content(text, r_type, data)
+            from ATRI.log import log
+            log.debug(
+                f'model:{name} '
+                f'type:{r_type} '
+                f'input:{text if len(text) <= 20 else f'{text[:10]}...'} '
+                f'output:{resp if len(resp) <= 20 else f'{resp[:10]}...'}'
+            )
+            return resp
         return "所选大语言模型不存在，请进行切换"
 
     def change_chat(self, name: str) -> bool:

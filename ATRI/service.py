@@ -19,15 +19,13 @@ from nonebot.adapters import Event
 from nonebot.adapters.onebot.v11 import Message
 
 from ATRI import service_list, driver
+from ATRI.dir import CONFIG_DIR, PLUGIN_DATA_DIR
 from ATRI.log import log
 from ATRI.permission import Permission, MASTER_LIST
 from ATRI.exceptions import ReadFileError, WriteFileError, ServiceNotFoundError, ServiceRegisterError
 from ATRI.utils.model import BaseModel
 from ATRI.utils.apscheduler import SchedulerController
 from ATRI.configs import PluginConfig
-
-CONFIG_DIR = Path(".") / "data" / "config"
-CONFIG_DIR.mkdir(parents=True, exist_ok=True)
 
 
 class ServiceInfo(BaseModel):
@@ -101,8 +99,8 @@ class Service:
         self._rule = is_in_service(service)
         self._handlers = None
         self._state = None
-        self._path = Path(".") / "data" / "plugins" / self.service
-        self._scheduler_jobs = None
+        self._path = PLUGIN_DATA_DIR / self.service
+        self._scheduler_manager = None
         self.__generate_service_conf()
         service_list[service] = self
 
@@ -394,9 +392,9 @@ class Service:
 
     def scheduler_jobs(self) -> SchedulerController:
         """该服务的计划任务控制器"""
-        if not self._scheduler_jobs:
-            self._scheduler_jobs = SchedulerController(self.service)
-        return self._scheduler_jobs
+        if not self._scheduler_manager:
+            self._scheduler_manager = SchedulerController(self.service)
+        return self._scheduler_manager
 
     def on_startup(self, func):
         """注册一个启动时执行的函数"""

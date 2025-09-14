@@ -1,13 +1,10 @@
-from pathlib import Path
 from tortoise import Tortoise
 
 from ATRI.log import log
+from ATRI.dir import DB_DIR
 
 # 临时的实现，寻求更好的方式！欢迎pr
 
-
-DB_DIR = Path(".") / "data" / "sql"
-DB_DIR.mkdir(parents=True, exist_ok=True)
 
 data = {}
 

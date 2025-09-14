@@ -17,6 +17,7 @@ from .data.shop import shops
 from .data.user import users, UserData
 from .tools.daily_update import daily_update
 from .data.load_item import auto_load_items
+from .tools.get_pic import set_local_image_func
 
 PLUGIN_VERSION = "0.10.2"
 """lkbot插件版本"""
@@ -291,6 +292,12 @@ def on_startup():
     log.success(f'物品方法注册成功:共注册{item_funcs.check_num()}个检测器，{item_funcs.func_num()}个物品方法')
     load_item_data()
     plugin.scheduler_jobs().add_job(daily_update, '每日更新任务', 'cron', hour=0, minute=0)
+    try:
+        from ATRI.system.lk_imglib.data_source import image_manager
+        set_local_image_func(lambda: image_manager.get_random_image())
+        log.info('启用全局图库内图片作为本地图源')
+    except:
+        pass
     init_finish_event.notify()
 
 

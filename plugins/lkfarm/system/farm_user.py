@@ -182,8 +182,8 @@ class UserFarmDataManager:
                 self.weather = content[0][1]
                 self.next_weather = content[0][2]
 
-        @daily_update_event.handle("lkfarm_farm_data")
-        def _():
+        @daily_update_event.handle()
+        def lkfarm_farm_data_daily_update():
             log.info("开始更新农场数据")
             db = DataBase("lkbot.db")
 

@@ -66,15 +66,15 @@ class CoreSignin(Signin):
     async def signin(event, matcher):
         r18_mode = not lk_util.is_safe_mode_group(event.group_id) if type(event) is GroupMessageEvent else True
         user_id = event.get_user_id()
-        msg = ''
         try:
-            message = MessageBuilder().at(user_id)
+            message = MessageBuilder().text('')
             _, msg = sign(user_id)
-            message.text(msg)
-            log.info(f'{user_id}签到 r18:{r18_mode}, {msg}')
+            for m in msg:
+                message.auto_append(m)
+            log.info(f'{user_id}签到 r18:{r18_mode}')
             img_path = await get_pic(user_id, r18_mode=r18_mode)
             message.image(get_image_bytes(img_path))
-            await matcher.finish(message)
+            await matcher.finish(message, at_sender=True)
         except FinishedException:
             raise
         except Exception as e:
@@ -85,10 +85,10 @@ class CoreSignin(Signin):
             if os.path.exists(path):
                 os.remove(path)
             log.warning(f"签到发生错误:\n{str_traceback(e)}")
-            message = MessageBuilder().at(user_id)
+            message = MessageBuilder()
             user_data = get_user_data(user_id)
-            message.text(f'签到成功,你已签到{user_data.signdays}天{msg}')
-            await matcher.finish(message)
+            message.text(f'签到成功,你已签到{user_data.signdays}天')
+            await matcher.finish(message, at_sender=True)
 
 
 signin.change_signin(CoreSignin)

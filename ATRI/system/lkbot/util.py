@@ -5,10 +5,9 @@ from random import choice
 from nonebot.adapters.onebot.v11 import Message
 
 from ATRI import conf
-from ATRI.exceptions import str_traceback, BotRuntimeError
 from ATRI.log import log
 from ATRI.permission import MASTER_LIST
-from ATRI.utils.event import DictEvent
+from ATRI.utils.event import BaseEvents, BaseEvent
 
 from .config import config
 from .data.item import items
@@ -19,7 +18,7 @@ from .tools.daily_update import daily_update
 from .data.load_item import auto_load_items
 from .tools.get_pic import set_local_image_func
 
-PLUGIN_VERSION = "0.10.2"
+PLUGIN_VERSION = "0.11.0"
 """lkbot插件版本"""
 PLUGIN_DIR = Path(".") / "data" / "plugins" / "lkbot"
 """lkbot插件数据路径"""
@@ -223,50 +222,35 @@ class BaseFunc:
         return False, "那个...此名称已经被使用了，换个名字吧"
 
 
-class SignInEvent(DictEvent):
-    def notify(self, user_data):
-        exceptions = {}
-        msg = "\n"
-        for key in self.listeners:
-            try:
-                r = self.listeners[key](user_data)
-                if r:
-                    msg += r
-            except Exception as e:
-                str_tb = str_traceback(e)
-                exceptions[key] = str_tb
-                log.warning(str_tb)
-        if exceptions:
-            formatted_str = "".join([f"\n{key}:{value}" for key, value in exceptions.items()])
-            raise BotRuntimeError(f"{self.name}在执行时出现错误:{formatted_str}")
-        return msg
+class SignInEvent(BaseEvent):
+    """
+    签到事件体。
+    """
+
+    def __init__(self, user_data: UserData):
+        super().__init__('签到事件')
+        self.user_data = user_data
 
 
-class UserInfoEvent(DictEvent):
-    def notify(self, user_id, info: str):
-        exceptions = {}
-        for key in self.listeners:
-            try:
-                info = self.listeners[key](user_id, info)
-            except Exception as e:
-                str_tb = str_traceback(e)
-                exceptions[key] = str_tb
-                log.warning(str_tb)
-        if exceptions:
-            formatted_str = "".join([f"\n{key}:{value}" for key, value in exceptions.items()])
-            raise BotRuntimeError(f"{self.name}在执行时出现错误:{formatted_str}")
-        return info
+class UserInfoEvent(BaseEvent):
+    """
+    获取玩家信息事件体。
+    """
+
+    def __init__(self, user_data: UserData):
+        super().__init__('获取玩家信息事件')
+        self.user_data = user_data
 
 
-item_loading_event = DictEvent("item_loading")
+item_loading_events = BaseEvents()
 """物品加载事件，在加载物品列表时触发"""
-sign_in_event = SignInEvent("sign_in")
+sign_in_events = BaseEvents()
 """签到事件，在用户签到时触发"""
-func_register_event = DictEvent("func_register")
+func_register_events = BaseEvents()
 """物品功能注册事件，在注册物品时触发"""
-init_finish_event = DictEvent("init_finish")
+init_finish_events = BaseEvents()
 """初始化完成事件，在该插件系统所有的数据加载完成后触发"""
-user_info_event = UserInfoEvent("user_info")
+user_info_events = BaseEvents()
 """获取玩家信息事件"""
 
 
@@ -274,13 +258,10 @@ def load_item_data():
     """加载物品与商店数据，可通过调用以实现随时加载数据"""
     items.items_clear()
     shops.shops_clear()
-
     # 从本地文件加载物品数据
     auto_load_items()
-
     # 可以在此事件为物品添加使用方法的添加
-    item_loading_event.notify()
-
+    item_loading_events.notify(BaseEvent('物品加载事件'))
     log.success(f'物品商店注册完成:共注册{len(items.get_item_list())}个物品，{len(shops.get_shop_names())}个商店')
 
 
@@ -288,7 +269,7 @@ def on_startup():
     """所有插件加载完毕后启动时的启动项"""
     from ATRI.system.lkbot import plugin
     register_core_func()
-    func_register_event.notify()
+    func_register_events.notify(BaseEvent('物品功能注册事件'))
     log.success(f'物品方法注册成功:共注册{item_funcs.check_num()}个检测器，{item_funcs.func_num()}个物品方法')
     load_item_data()
     plugin.scheduler_jobs().add_job(daily_update, '每日更新任务', 'cron', hour=0, minute=0)
@@ -298,7 +279,7 @@ def on_startup():
         log.info('启用全局图库内图片作为本地图源')
     except:
         pass
-    init_finish_event.notify()
+    init_finish_events.notify(BaseEvent('初始化完成事件'))
 
 
 lk_util = BaseFunc()

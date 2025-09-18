@@ -2,20 +2,20 @@ import os
 import time
 
 from ATRI import TEMP_DIR
-from ATRI.utils.event import DictEvent
+from ATRI.utils.event import BaseEvents, BaseEvent
 from ATRI.log import log
 
-daily_update_event = DictEvent("daily_update")
+daily_update_event = BaseEvents("daily_update")
 """每日数据更新事件"""
 
 
 def daily_update():
     log.info("开始每日更新")
-    daily_update_event.notify()
+    daily_update_event.notify(BaseEvent("每日数据更新"))
     log.success("每日更新完成")
 
 
-@daily_update_event.handle("clean_temp_files")
+@daily_update_event.handle()
 def clean_temp_files():
     now = time.time()
     cutoff = now - 24 * 3600

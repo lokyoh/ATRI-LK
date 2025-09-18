@@ -14,7 +14,7 @@ from .explanations import get_top_explanations
 
 from . import config
 
-atri = ATRI()
+role = ATRI()
 
 atri_face = {
     ('开心', '高兴', '快乐', '喜悦', '愉快', '哈哈',): ['KX.jpg', ],
@@ -26,11 +26,11 @@ atri_face = {
     ('沮丧', '失落', '失望',): ['SW.png', 'SW1.jpg', 'TQ.png', ],
     ('生气', '恼火', '愤怒',): ['SQ.jpg', 'QF.gif', 'SQ1.jpg', ],
     ('好奇',): ['HQ.jpg', ],
-    ('傲慢',): ['AM.jpg', ],
+    ('傲慢', '自信',): ['AM.jpg', ],
     ('思考',): ['SK.gif', 'SK2.gif', ],
     ('晚安',): ['WA.jpg', ],
     ('得意',): ['DY.gif', 'DY1.gif', ],
-    ('元气',): ['DT.jpg', ],
+    ('元气', '活力四射', '活力',): ['DT.jpg', ],
     ('期待',): ['QD.jpg', ],
     ('关心', '担心',): ['GX.jpg', ],
     ('摸摸头',): ['MMT.png', ],
@@ -38,6 +38,12 @@ atri_face = {
     ('可爱',): ['KA.jpg', ],
     ('哭笑',): ['X.png', ],
     ('星星眼',): ['XXY.png', ],
+    ('吐舌',): ['TS.jpg', ],
+    ('伤心',): ['SX.png', ],
+    ('流泪', '落泪',): ['K.png', ],
+    ('哭', '哭泣', '抽泣',): ['KQ.png', ],
+    ('大哭',): ['DK.png', ],
+    ('斜眼笑',): ['XYX.jpg', ],
 }
 
 
@@ -75,7 +81,7 @@ class ChatModel:
             },
             "face_text": {
                 "type": "string",
-                "description": "可选，当需要表达自己心情时填一个心情词来附带一个表情作为回复"
+                "description": "可选，当需要表达自己心情时，填写心情词后发送对应表情"
             }
         },
         "required": ["content"]
@@ -89,7 +95,7 @@ class ChatModel:
         prompt = "在网络群聊环境中中扮演用户与其他用户进行聊天\n"
         # 角色设定
         prompt += (f"#角色设定\n"
-                   f"{atri.get_role_prompt()}\n")
+                   f"{role.get_role_prompt()}\n")
         # 历史聊天记录
         if group_id not in self.history:
             self.history[group_id] = ChatHistory()
@@ -185,12 +191,12 @@ class ChatModel:
                 return img_msg_from_path(img_path / file)
             else:
                 log.error(f'缺失文件`{img_path / file}`')
-                return f'`{file}`文件缺失,请检查本地文件!'
+                return f'`{file}`表情文件缺失,请检查本地文件!'
         else:
             if (img_path / f'{face_text}.jpg').exists():
                 return img_msg_from_path(img_path / f'{face_text}.jpg')
             log.warning(f'没有`{face_text}`所对应的表情请,请等待更新或手动添加`{face_text}.jpg`至`{img_path}`目录下')
-            return f'[{face_text}.jpg]'
+            return f'[{face_text}]'
 
 
 chat_model = ChatModel()

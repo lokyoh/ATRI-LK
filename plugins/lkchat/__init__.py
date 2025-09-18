@@ -25,14 +25,14 @@ from .config import LKChatConfig
 plugin = Service(
     "聊天",
     "ATRI进行聊天处理的插件",
-    "0.6.0",
+    "0.7.0",
     Service.ServiceType.ENTERTAINMENT
 ).main_cmd("/聊天")
 config: LKChatConfig = plugin.add_plugin_config(LKChatConfig).config()
 
 from .chat import chat_model
 from .data_source import pre_chat_event, get_random_atri, REPLY_MESSAGE, VOICE_PATTERN, get_atri_memery, \
-    match_atri_voice, match_atri_img
+    match_atri_voice, match_atri_img, PreChatEvent
 from .explanations import add_word
 from .user import get_user_info, save_user_info
 
@@ -43,7 +43,7 @@ on_talk = plugin.on_message("机器人聊天", "和亚托莉愉快的聊天、�
 
 @on_talk.handle()
 async def _(event: GroupMessageEvent, matcher: Matcher, bot: Bot):
-    await pre_chat_event.notify(matcher=matcher, event=event)
+    pre_chat_event.notify(PreChatEvent(matcher, event))
     text = event.get_message().extract_plain_text()
     if event.to_me:
         # 聊天模块

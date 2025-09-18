@@ -284,7 +284,7 @@ class Helper:
         try:
             data = ServiceTools(service).load_service()
         except ServiceNotFoundError:
-            return "请检查是否输入错误..."
+            return "请检查是否输入错误.../帮助 (服务) (命令)"
 
         cmd_list: dict = data.cmd_list
         cmd_info = cmd_list.get(cmd, dict())

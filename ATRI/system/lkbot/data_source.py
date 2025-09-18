@@ -1,7 +1,7 @@
-from ATRI.message import MessageGroup, img_msg
+from ATRI.message import MessageGroup, img_msg, MessageBuilder
 from ATRI.system.htmlrender import md_to_pic
 
-from .util import lk_util, user_info_event
+from .util import lk_util, user_info_events, UserInfoEvent
 from .data.user import users, user_level_manager
 from .data.item import ItemStack, items
 from .data.shop import shops
@@ -11,11 +11,15 @@ class LKBot:
     @staticmethod
     def get_info(user_id):
         with users.get_user_data(user_id) as user:
-            info = f'''用户 {user.name}:
-等级:{user.lvl} 升级还需要{user.get_lvl_exp() - user.left_exp}经验
-ATRI币:{user.money}
-好感:{user.love}'''
-            return user_info_event.notify(user_id, info)
+            event = UserInfoEvent(user)
+            event.add_result(f'用户 {user.name}:', 5)
+            event.add_result(f'等级:{user.lvl} 升级还需要{user.get_lvl_exp() - user.left_exp}经验', 5)
+            event.add_result(f'ATRI币:{user.money}', 5)
+            event.add_result(f'好感:{user.love}', 5)
+            msg = MessageBuilder()
+            for r in user_info_events.notify(event).get_result():
+                msg.auto_append(r)
+            return msg
 
     @staticmethod
     def get_backpack_info(user_id):

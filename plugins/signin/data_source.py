@@ -7,13 +7,13 @@ class Signin:
     @staticmethod
     async def signin(event, matcher):
         user_id = event.get_user_id()
-        message = MessageBuilder().at(user_id)
+        message = MessageBuilder().text('')
         check, msg = sign(user_id)
         if check:
-            message.text(f'\n签到成功:{msg}')
-        else:
-            message.text(msg)
-        await matcher.finish(message)
+            message.text(f'\n签到成功:')
+        for m in msg:
+            message.auto_append(m)
+        await matcher.finish(message, at_sender=True)
 
 
 class SigninManager:

@@ -71,6 +71,13 @@ class MessageBuilder(Message):
         self.append(MessageSegment.text(text))
         return self
 
+    def auto_append(self, message: MessageSegment | str) -> "MessageBuilder":
+        if type(message) is str:
+            self.text(message)
+        else:
+            self.append(message)
+        return self
+
     def done(self) -> str:
         """
         转化为纯文本消息。

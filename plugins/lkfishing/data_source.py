@@ -3,17 +3,17 @@ import random
 import time
 import yaml
 
-from ATRI import RES_DIR
+from ATRI.dir import RES_DATA_DIR
 from ATRI.log import log
 from ATRI.exceptions import str_traceback
-from ATRI.system.lkapi.bot.events import item_loading_event
+from ATRI.system.lkapi.bot.events import item_loading_events
 from ATRI.system.lkapi.entity.item import items, Item, ItemType
 from ATRI.system.lkapi.entity.shop import shops, Shop
 from ATRI.system.lkapi.entity.user import get_user_data
 
 from plugins.lkfarm.system.farm_user import user_farm_data
 
-from .data.achievement import load_achievements
+from .data.achievement import load_achievements, achievements
 from .data.fish import FishData, Fish, FishingItem
 from .data.user import get_fish_user_data, FishingUser
 from .data.fishing_rod import fishing_rod_dict, FishingRod
@@ -21,7 +21,7 @@ from .data.bait import bait_dict, Bait
 from .data.fishing_tackle import fishing_tackle_dict, FishingTackle
 from .data.exception import FishingException
 
-DATA_PATH = RES_DIR / "data" / "lkfishing"
+DATA_PATH = RES_DATA_DIR / "lkfishing"
 
 
 class FishingController:
@@ -197,8 +197,14 @@ class FishingController:
                     log.error(f'trackle-{tackle_file}-{key}无效渔具配置:\n{str_traceback(e)}')
 
 
-@item_loading_event.handle('lkfishing')
-def load_data():
+@item_loading_events.handle()
+def lkfishing_item_loading():
+    FishingController.fish_area_data.clear()
+    fishing_rod_dict.clear()
+    bait_dict.clear()
+    FishingController.fishing_shop.clear_goods()
+    fishing_tackle_dict.clear()
+    achievements.clear()
     FishingController.load_fish_data()
     FishingController.load_fishing_rod_data()
     FishingController.load_bait_data()

@@ -1,4 +1,3 @@
-import os
 from random import choice
 
 from nonebot.adapters.onebot.v11.event import MessageEvent
@@ -14,7 +13,7 @@ from . import core_signin
 plugin = Service(
     "签到",
     "亚托莉的签到系统",
-    "0.2.0",
+    "0.2.1",
     Service.ServiceType.ENTERTAINMENT
 )
 

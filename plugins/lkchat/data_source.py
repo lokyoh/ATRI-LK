@@ -1,4 +1,3 @@
-import inspect
 from datetime import datetime
 from pathlib import Path
 from random import choice
@@ -6,14 +5,11 @@ import os
 import re
 
 from nonebot.adapters.onebot.v11 import MessageSegment, GroupMessageEvent
-from nonebot.exception import FinishedException
 from nonebot.matcher import Matcher
 
 from ATRI import IMG_DIR, RECORD_DIR
 from ATRI.message import img_msg_from_path, rec_msg_from_path
-from ATRI.utils.event import DictEvent
-from ATRI.exceptions import str_traceback, EventRuntimeError
-from ATRI.log import log
+from ATRI.utils.event import BaseEvents, BaseEvent
 
 REPLY_MESSAGE = [
     "lsp你再戳？",
@@ -107,25 +103,15 @@ IMG_PATTERN = [
 ]
 
 
-class PreChatEvent(DictEvent):
-    async def notify(self, matcher: Matcher, event: GroupMessageEvent):
-        """触发该事件"""
-        for key in self.listeners:
-            try:
-                func = self.listeners[key]
-                if inspect.iscoroutinefunction(func):
-                    await func(matcher=matcher, event=event)
-                else:
-                    func(matcher=matcher, event=event)
-            except FinishedException:
-                raise
-            except Exception as e:
-                str_tb = str_traceback(e)
-                log.error(str_tb)
-                raise EventRuntimeError(f"事件{self.name}在执行{key}时出现错误", str_tb)
+class PreChatEvent(BaseEvent):
+    def __init__(self, matcher: Matcher, event: GroupMessageEvent):
+        super().__init__('聊天预处理事件')
+        self.matcher: Matcher = matcher
+        self.message_event: GroupMessageEvent = event
 
 
-pre_chat_event = PreChatEvent("pre_chat")
+pre_chat_event = BaseEvents("pre_chat")
+"""聊天预处理事件,在处理聊天信息前触发"""
 
 
 def get_random_atri() -> tuple[MessageSegment, str] | None:
@@ -136,15 +122,15 @@ def get_random_atri() -> tuple[MessageSegment, str] | None:
     return rec_msg_from_path(RECORD_DIR / "atri" / voice), Path(voice).stem
 
 
-@pre_chat_event.handle("atri_birthday")
-async def on_birthday(matcher: Matcher, event: GroupMessageEvent):
-    text = event.get_plaintext()
+@pre_chat_event.handle(1)
+async def on_birthday(event: PreChatEvent):
+    text = event.message_event.get_plaintext()
     date = datetime.now()
     if date.month == 8 and date.day == 28:
         a_b_p = ["生日", "生快", "birth", "Birth"]
         for a_b in a_b_p:
             if a_b in text:
-                await matcher.finish(
+                await event.matcher.finish(
                     choice(["哇~谢谢你。鞠躬", "啊、多谢", img_msg_from_path(IMG_DIR / "atri_" / "SR.gif")]))
 
 

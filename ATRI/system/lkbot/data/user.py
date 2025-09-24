@@ -3,7 +3,7 @@ from datetime import datetime
 import json
 
 from ATRI.log import log
-from ATRI.utils.event import DictEvent
+from ATRI.utils.event import BaseEvents, BaseEvent
 from ATRI.utils.curve import LvlManager
 from ATRI.utils.sqlite import DataBase
 from ATRI.utils.lock import SingleLock, GroupLock
@@ -150,18 +150,22 @@ class UserData:
         return False
 
 
-class UserNameChangedEvent(DictEvent):
-    """用户名改变事件"""
+class UserNameChangedEvent(BaseEvent):
+    """
+    用户名改变事件体。
+    """
 
-    def notify(self, user_id: str, user_name: str):
-        super().notify(user_id, user_name)
+    def __init__(self, user_id: str, new_name: str):
+        super().__init__('用户名改变事件')
+        self.user_id: str = user_id
+        self.new_name: str = new_name
 
 
 class Users:
     """
     用户信息管理器
     """
-    user_name_changed_event = UserNameChangedEvent("user_name_changed")
+    user_name_changed_events = BaseEvents()
     """用户名改变事件"""
     _name_lock = SingleLock()
 
@@ -245,7 +249,7 @@ LOVEMULCOUNT    INTEGER DEFAULT 0
             user_data = self.get_user_data(user_id)
             user_data.name = new_name
             user_data.save_user_data()
-            self.user_name_changed_event.notify(user_id, new_name)
+            self.user_name_changed_events.notify(UserNameChangedEvent(user_id, new_name))
 
         _change_name()
         return True
@@ -258,27 +262,26 @@ LOVEMULCOUNT    INTEGER DEFAULT 0
         self._names.append(new_name)
         return True
 
-    def sign(self, user_id: str) -> tuple[bool, str]:
+    def sign(self, user_id: str) -> tuple[bool, list]:
         """签到"""
         with self.get_user_data(user_id) as user_data:
             r = self.sign_func(user_data)
         return r
 
     @staticmethod
-    def sign_func(user_data: UserData) -> tuple[bool, str]:
+    def sign_func(user_data: UserData) -> tuple[bool, list]:
         """签到"""
         today = datetime.now().strftime("%Y-%m-%d")
         if user_data.lastsign == today:
-            return False, "今日已签到"
+            return False, ["今日已签到"]
         else:
-            from ..util import sign_in_event
+            from ..util import sign_in_events, SignInEvent
             user_data.lastsign = today
             user_data.signdays += 1
             user_data.exp_change(3, True)
             user_data.money_change(10)
             user_data.love_change(1, True)
-            msg = f'{sign_in_event.notify(user_data)}'
-            return True, msg
+            return True, sign_in_events.notify(SignInEvent(user_data)).get_result()
 
     def get_user_name(self, user_id: str) -> str:
         """获取用户名，用户id错误会报错，lk_util.get_name为包装后的方法"""

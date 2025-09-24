@@ -1,20 +1,15 @@
-import inspect
 from datetime import datetime
 from pathlib import Path
 from random import choice
 import os
+import re
 
 from nonebot.adapters.onebot.v11 import MessageSegment, GroupMessageEvent
-from nonebot.exception import FinishedException
+from nonebot.matcher import Matcher
 
 from ATRI import IMG_DIR, RECORD_DIR
-from ATRI.message import img_msg, rec_msg
-from ATRI.utils.img_editor import get_image_bytes
-from ATRI.utils.event import DictEvent
-from ATRI.exceptions import str_traceback, EventRuntimeError
-from ATRI.log import log
-from ATRI.system.lkapi.utils.audio import AudioEditor
-from ATRI.system.lkapi.bot import util as lk_util
+from ATRI.message import img_msg_from_path, rec_msg_from_path
+from ATRI.utils.event import BaseEvents, BaseEvent
 
 REPLY_MESSAGE = [
     "lsp你再戳？",
@@ -22,11 +17,11 @@ REPLY_MESSAGE = [
     "你再戳！",
     "？再戳试试？",
     "别戳了别戳了再戳就坏了555",
-    f"{lk_util.bot_name}爪巴爪巴，球球别再戳了",
+    "我爪巴爪巴，球球别再戳了",
     "你戳你🐎呢？！",
     "那...那里...那里不能戳...绝对...",
     "(。´・ω・)ん?",
-    f"有事恁叫{lk_util.bot_name}，别天天一个劲戳戳戳！",
+    "有事恁叫我，别天天一个劲戳戳戳！",
     "欸很烦欸！你戳🔨呢",
     "?",
     "再戳一下试试？",
@@ -34,21 +29,21 @@ REPLY_MESSAGE = [
     "正在关闭对您的所有服务...关闭成功",
     "啊呜，太舒服刚刚竟然睡着了。什么事？",
     "正在定位您的真实地址...定位成功。轰炸机已起飞",
-    f"别戳了，别戳了，{lk_util.bot_name}的呆毛要掉拉！",
-    f"{lk_util.bot_name}在呢！",
-    f"你是来找{lk_util.bot_name}玩的嘛？",
-    f"别急呀, {lk_util.bot_name}要宕机了!QAQ",
+    "别戳了，别戳了，我的呆毛要掉拉！",
+    "我在呢！",
+    "你是来找我玩的嘛？",
+    "别急呀, 我要宕机了!QAQ",
     "你好！Ov<",
     "别戳了，怕疼QwQ",
-    f"再戳，{lk_util.bot_name}就要咬你了嗷~",
+    "再戳，我就要咬你了嗷~",
     "恶龙咆哮，嗷呜~",
     "生气(╯▔皿▔)╯",
     "不要这样子啦（*/ w \\*）",
     "戳坏了",
     "戳坏了，赔钱！",
-    f"喂，110吗，有人老戳{lk_util.bot_name}",
-    f"别戳{lk_util.bot_name}啦，您歇会吧~",
-    f"喂(#`O′) 戳{lk_util.bot_name}干嘛！",
+    "喂，110吗，有人老戳我",
+    "别戳我啦，您歇会吧~",
+    "喂(#`O′) 戳我干嘛！",
 ]
 VOICE_PATTERN = {
     r".*萝卜子.*": [
@@ -108,31 +103,15 @@ IMG_PATTERN = [
 ]
 
 
-class PreChatEvent(DictEvent):
-    async def notify(self, matcher, event) -> bool:
-        """触发该事件"""
-        for key in self.listeners:
-            try:
-                func = self.listeners[key]
-                if inspect.iscoroutinefunction(func):
-                    stop, resp = await func(event=event)
-                else:
-                    stop, resp = func(event=event)
-                if resp:
-                    await matcher.send(resp)
-                if stop:
-                    matcher.stop_propagation()
-                    return True
-            except FinishedException as e:
-                raise e from e
-            except Exception as e:
-                str_tb = str_traceback(e)
-                log.error(str_tb)
-                raise EventRuntimeError(f"事件{self.name}在执行{key}时出现错误", str_tb)
-        return False
+class PreChatEvent(BaseEvent):
+    def __init__(self, matcher: Matcher, event: GroupMessageEvent):
+        super().__init__('聊天预处理事件')
+        self.matcher: Matcher = matcher
+        self.message_event: GroupMessageEvent = event
 
 
-pre_chat_event = PreChatEvent("pre_chat")
+pre_chat_event = BaseEvents("pre_chat")
+"""聊天预处理事件,在处理聊天信息前触发"""
 
 
 def get_random_atri() -> tuple[MessageSegment, str] | None:
@@ -140,25 +119,41 @@ def get_random_atri() -> tuple[MessageSegment, str] | None:
     if len(voice_list) == 0:
         return None
     voice = choice(voice_list)
-    result = AudioEditor.audio_to_base64(RECORD_DIR / "atri" / voice)
-    return rec_msg(file=result), Path(voice).stem
+    return rec_msg_from_path(RECORD_DIR / "atri" / voice), Path(voice).stem
 
 
-@pre_chat_event.handle("atri_birthday")
-def on_birthday(event: GroupMessageEvent) -> tuple[bool, str | None]:
-    text = event.get_plaintext()
+@pre_chat_event.handle(1)
+async def on_birthday(event: PreChatEvent):
+    text = event.message_event.get_plaintext()
     date = datetime.now()
     if date.month == 8 and date.day == 28:
         a_b_p = ["生日", "生快", "birth", "Birth"]
         for a_b in a_b_p:
             if a_b in text:
-                return True, choice(
-                    ["哇~谢谢你。鞠躬", "啊、多谢", img_msg(get_image_bytes(IMG_DIR / "atri_" / "SR.gif"))])
-    return False, None
+                await event.matcher.finish(
+                    choice(["哇~谢谢你。鞠躬", "啊、多谢", img_msg_from_path(IMG_DIR / "atri_" / "SR.gif")]))
 
 
 def get_atri_memery(mem):
     md_text = "# 亚托莉对你的记忆\n\n"
     md_text += "\n".join(f'- {i}:{item}' for i, item in enumerate(mem, 1))
-    md_text += "\n\n> 输入`chat.删除记忆 [标号]`来删除指定记忆,[标号]为数字,例如:`chat.删除记忆 1`"
+    md_text += "\n\n> 输入`/聊天.删除记忆 [标号]`来删除指定记忆,[标号]为数字,例如:`/聊天.删除记忆 1`"
     return md_text
+
+
+def match_atri_voice(text):
+    for pattern_item in VOICE_PATTERN.keys():
+        if re.match(pattern_item, text):
+            file = choice(VOICE_PATTERN[pattern_item])
+            return rec_msg_from_path(RECORD_DIR / "atri" / file), Path(file).stem
+    return None
+
+
+def match_atri_img(text):
+    img_path = IMG_DIR / "atri"
+    for pattern, img in IMG_PATTERN:
+        if re.search(pattern, text):
+            selected_img = img() if callable(img) else img
+            if selected_img:
+                return img_msg_from_path(img_path / selected_img)
+    return None

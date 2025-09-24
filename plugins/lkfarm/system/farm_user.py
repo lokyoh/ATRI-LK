@@ -84,7 +84,7 @@ class UserFarmDataManager:
 
     def __init__(self):
         self._user_list = []
-        self._cache_list = LimitedQueue(8)
+        self._cache_list = LimitedQueue(10)
         self._farm_cache = {}
 
         def update_user_db(connection, version):
@@ -156,7 +156,7 @@ class UserFarmDataManager:
             self.next_weather = get_weather(_next_day.month, _next_day.day, _today_weather)
             self._db.update(f"DATE = '{date.today()}', WEATHER = {self.weather}, NEXT_WEATHER = {self.next_weather}",
                             f"DATE != '{date.today()}'")
-            self._cache_list = LimitedQueue(8)
+            self._cache_list = LimitedQueue(10)
             self._farm_cache = {}
 
         content = self._db.select_all()
@@ -182,8 +182,8 @@ class UserFarmDataManager:
                 self.weather = content[0][1]
                 self.next_weather = content[0][2]
 
-        @daily_update_event.handle("lkfarm_farm_data")
-        def _():
+        @daily_update_event.handle()
+        def lkfarm_farm_data_daily_update():
             log.info("开始更新农场数据")
             db = DataBase("lkbot.db")
 
@@ -196,7 +196,7 @@ class UserFarmDataManager:
                 db.get_exist_table("LKFARM").update(
                     f"DATE = '{date.today()}', WEATHER = {self.weather}, NEXT_WEATHER = {self.next_weather}",
                     f"DATE != '{date.today()}'")
-                self._cache_list = LimitedQueue(8)
+                self._cache_list = LimitedQueue(10)
                 self._farm_cache = {}
 
             daily_up_date()

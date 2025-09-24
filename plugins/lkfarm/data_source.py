@@ -9,7 +9,14 @@ from nonebot.internal.params import Depends
 from ATRI import RES_DIR
 from ATRI.system.htmlrender import md_to_pic
 from ATRI.system.lkapi.bot import util as lk_util
-from ATRI.system.lkapi.bot.events import item_loading_event, sign_in_event, daily_update_event, user_info_event
+from ATRI.system.lkapi.bot.events import (
+    item_loading_events,
+    sign_in_events,
+    SignInEvent,
+    daily_update_event,
+    user_info_events,
+    UserInfoEvent,
+)
 from ATRI.system.lkapi.entity.item import items, ItemType
 from ATRI.system.lkapi.entity.shop import shops
 from ATRI.log import log
@@ -26,14 +33,15 @@ plugin.scheduler_jobs().add_job(weather_forecast, "农场天气预报", 'cron', 
 FARM_RES_PATH = RES_DIR / 'data' / "lkfarm"
 
 
-@item_loading_event.handle("lkfarm")
-def _():
+@item_loading_events.handle()
+def lkfarm_item_loading():
+    seed_shop.clear_goods()
     load_crop_data('Core', FARM_RES_PATH / "Crop")
     shops.register(seed_shop)
 
 
-@daily_update_event.handle("lkfarm_seed_shop")
-def _():
+@daily_update_event.handle()
+def lkfarm_seed_shop_daily_update():
     month = date.today().month
     if date.today().day == 1 and month % 3 == 0:
         log.info("开始更新种子商店")
@@ -48,8 +56,8 @@ def _():
         log.success(f"种子商店更新完成，共{len(seed_shop.get_goods_list())}种子上架")
 
 
-@sign_in_event.handle("lkfarm")
-def _(user_data):
+@sign_in_events.handle()
+def lkfarm_sign_in(event: SignInEvent):
     season = Month(date.today().month).to_season()
     item = ""
     if season == Season.SPRING:
@@ -61,17 +69,18 @@ def _(user_data):
     elif season == Season.WINTER:
         item = "霜瓜种子"
     if items.has_item(item):
-        lk_util.item_change_func(user_data, item, 1)
-        return f"获得1个{item}。"
+        lk_util.item_change_func(event.user_data, item, 1)
+        event.add_result(f"获得1个{item}。")
     else:
-        return f"{item}没有注册进物品。"
+        log.error(f"{item}没有注册进物品。")
+        event.add_result(f"{item}没有注册进物品。")
 
 
-@user_info_event.handle("lkfarm")
-def _(user_id, info):
+@user_info_events.handle()
+def lkfarm_user_info(event: UserInfoEvent):
+    user_id = str(event.user_data.id)
     user_farm_data.has_user(user_id)
-    info += f'\n体力:{user_farm_data.get_farm_data(user_id).endurance}'
-    return info
+    event.add_result(f'体力:{user_farm_data.get_farm_data(user_id).endurance}')
 
 
 class FarmSystem:

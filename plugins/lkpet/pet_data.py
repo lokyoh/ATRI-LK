@@ -1,15 +1,16 @@
 from threading import Lock
 
-from ATRI.system.lkapi.bot.events import user_info_event
+from ATRI.system.lkapi.bot.events import user_info_events, UserInfoEvent
 from ATRI.system.lkapi.bot import db as lk_db
-from ATRI.system.lkapi.entity.user import user_manager
+from ATRI.system.lkapi.entity.user import user_manager, UserNameChangedEvent
 
 from .pet_chat import PetModel
 
 
-@user_info_event.handle("lkpet")
-def _(user_id: str, info: str):
-    return f'{info}\n宠物:{pet_manager.datas[user_id].name if user_id in pet_manager.datas else '无宠物'}'
+@user_info_events.handle()
+def lkpet_user_info(event: UserInfoEvent):
+    user_id = str(event.user_data.id)
+    event.add_result(f'宠物:{pet_manager.datas[user_id].name if user_id in pet_manager.datas else '无宠物'}', 20)
 
 
 class PetData:
@@ -78,7 +79,7 @@ LOVE        INT DEFAULT 0
 pet_manager = PetManager()
 
 
-@user_manager.user_name_changed_event.handle("lkpet")
-def _(user_id, new_name):
-    if user_id in pet_manager.convos:
-        pet_manager.convos[user_id].change_user_name(new_name)
+@user_manager.user_name_changed_events.handle()
+def lkpet_user_name_changed(event: UserNameChangedEvent):
+    if event.user_id in pet_manager.convos:
+        pet_manager.convos[event.user_id].change_user_name(event.new_name)

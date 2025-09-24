@@ -3,17 +3,17 @@ import random
 import time
 import yaml
 
-from ATRI import RES_DIR
+from ATRI.dir import RES_DATA_DIR
 from ATRI.log import log
 from ATRI.exceptions import str_traceback
-from ATRI.system.lkapi.bot.events import item_loading_event
+from ATRI.system.lkapi.bot.events import item_loading_events
 from ATRI.system.lkapi.entity.item import items, Item, ItemType
 from ATRI.system.lkapi.entity.shop import shops, Shop
 from ATRI.system.lkapi.entity.user import get_user_data
 
 from plugins.lkfarm.system.farm_user import user_farm_data
 
-from .data.achievement import load_achievements
+from .data.achievement import load_achievements, achievements
 from .data.fish import FishData, Fish, FishingItem
 from .data.user import get_fish_user_data, FishingUser
 from .data.fishing_rod import fishing_rod_dict, FishingRod
@@ -21,7 +21,7 @@ from .data.bait import bait_dict, Bait
 from .data.fishing_tackle import fishing_tackle_dict, FishingTackle
 from .data.exception import FishingException
 
-DATA_PATH = RES_DIR / "data" / "lkfishing"
+DATA_PATH = RES_DATA_DIR / "lkfishing"
 
 
 class FishingController:
@@ -71,8 +71,8 @@ class FishingController:
                 del cls.player_fishing_data[user_id]
                 info.use_bait()
                 raise FishingException('🐟已经跑掉了...')
-            info.use_bait()
             fish_data = cls.gene_fish(info)
+            info.use_bait()
             with get_user_data(user_id) as user_data:
                 user_data.item_num_change(
                     f'{fish_data.fish.name}{f'-{fish_data.quality}' if fish_data.quality else ''}', 1)
@@ -85,26 +85,22 @@ class FishingController:
     def get_fish_weight(cls, position, weather):
         fish_list = []
         weight_list = []
-        all_weight = 0
         all_fish_list = cls.fish_area_data[position]
         for fish in all_fish_list:
             if fish.can_catch(weather):
                 fish_list.append(fish)
                 weight_list.append(fish.weight)
-                all_weight += fish.weight
-        return fish_list, weight_list, all_weight
+        return fish_list, weight_list
 
     @classmethod
     def gene_fish(cls, user_data: FishingUser) -> FishData:
         if user_data.position not in cls.fish_area_data:
             raise ValueError('地域错误')
-        fish_list, weight_list, all_weight = cls.get_fish_weight(user_data.position, user_farm_data.weather)
-        rand_int = random.randint(1, all_weight)
-        p = 0
-        while rand_int > weight_list[p]:
-            rand_int -= weight_list[p]
-            p += 1
-        fish_data = FishData(fish_list[p], user_data)
+        fish_list, weight_list = cls.get_fish_weight(user_data.position, user_farm_data.weather)
+        if len(fish_list) == 0:
+            raise FishingException('该地域此时没有任何鱼类!!!\n请反馈...')
+        fish = random.choices(fish_list, weights=weight_list)[0]
+        fish_data = FishData(fish, user_data)
         return fish_data
 
     @classmethod
@@ -201,8 +197,14 @@ class FishingController:
                     log.error(f'trackle-{tackle_file}-{key}无效渔具配置:\n{str_traceback(e)}')
 
 
-@item_loading_event.handle('lkfishing')
-def load_data():
+@item_loading_events.handle()
+def lkfishing_item_loading():
+    FishingController.fish_area_data.clear()
+    fishing_rod_dict.clear()
+    bait_dict.clear()
+    FishingController.fishing_shop.clear_goods()
+    fishing_tackle_dict.clear()
+    achievements.clear()
     FishingController.load_fish_data()
     FishingController.load_fishing_rod_data()
     FishingController.load_bait_data()

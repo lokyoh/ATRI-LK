@@ -1,25 +1,20 @@
-from pathlib import Path
-
 import nonebot
 from nonebot.adapters.onebot.v11 import Adapter
 
 from .configs import Config
+from .dir import *
 
-__version__ = "YHN-LK0-016"
-__sub_version__ = "Patch5"
+__version__ = "YHN-LK0-017"
+"""版本号"""
+__sub_version__ = "Release"
+"""次版本号"""
 __conf_path = Path(".") / "config.yml"
 __conf = Config(__conf_path)
 
 conf = __conf.parse()
+"""机器人设置"""
 service_list = {}
-RES_DIR = Path(".") / "res"
-FONT_DIR = RES_DIR / "font"
-IMG_DIR = RES_DIR / "img"
-RECORD_DIR = RES_DIR / "record"
-TEXT_DIR = RES_DIR / "text"
-HTML_DIR = RES_DIR / "html"
-TEMP_DIR = Path(".") / "data" / "temp"
-TEMP_DIR.mkdir(parents=True, exist_ok=True)
+"""服务数据"""
 
 
 def asgi():

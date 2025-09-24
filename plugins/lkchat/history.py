@@ -23,19 +23,15 @@ class Dialogue:
 class ChatHistory:
     def __init__(self):
         self.history = LimitedQueue(config.max_history)
-        self.dialogues = LimitedQueue(config.max_dialogue)
 
     def add_history(self, user_id, text):
         self.history.add(History(user_id, text))
 
     def add_dialogue(self, text):
-        self.dialogues.add(Dialogue(self.history.pop(), text))
+        self.history.add(Dialogue(self.history.pop(), text))
 
     def get_history(self):
         return self.history.get_data()[:-1]
-
-    def get_dialogues(self):
-        return self.dialogues.get_data()
 
     def get_last_history(self):
         return self.history.get_data()[-1]

@@ -1,10 +1,13 @@
 from ATRI.system.lkbot.data.item import (
     items,
     Item,
+    Meta,
+    Stack,
     ItemType,
     ItemMeta,
     ItemStack,
-    ToolItemMeta
+    ToolItemMeta,
+    ToolItemStack
 )
 from ATRI.system.lkbot.data.item_func import (
     item_funcs,

@@ -16,7 +16,7 @@ from ATRI.exceptions import str_traceback
 plugin = Service(
     "投喂",
     "向可爱的亚托莉投喂食物",
-    "0.4.3",
+    "0.4.4",
     Service.ServiceType.LKPLUGIN
 )
 
@@ -37,7 +37,7 @@ def chang_love_num(num: int):
 
 async def feed_func(user_id, food):
     with get_user_data(user_id) as user_data:
-        message = MessageBuilder().at(user_id)
+        message = MessageBuilder().text('')
         if lk_config.configs.chat_switch and food:
             try:
                 response = await chat_manager.generate_content(
@@ -58,7 +58,9 @@ async def feed_func(user_id, food):
         message.text(f'~投喂食物成功，获得{love_num}点好感')
         state, msg = sign(user_data)
         if state:
-            message.text(f'~今天尚未签到，已自动签到：{msg}')
+            message.text(f'~今天尚未签到，已自动签到：')
+            for m in msg:
+                message.auto_append(m)
         return message
 
 
@@ -66,4 +68,4 @@ async def feed_func(user_id, food):
 async def _(event: Event, args: Message = CommandArg()):
     user_id = event.get_user_id()
     food = args.extract_plain_text()
-    await feed.finish(await feed_func(user_id, food))
+    await feed.finish(await feed_func(user_id, food), at_sender=True)

@@ -97,8 +97,8 @@ async def _(args: Message = CommandArg()):
         await add.finish(f"{plugin_name}安装成功,部分功能需重启才生效(暂时关闭自动加载到下一版本)")
     except PluginError as e:
         await add.finish(e.prompt)
-    except Exception as e:
-        raise e from e
+    except Exception:
+        raise
 
 
 remove = plugin.on_command("/移除插件", "移除指定插件")
@@ -118,8 +118,8 @@ async def _(args: Message = CommandArg()):
         await remove.finish(f"{plugin_name}移除成功，请重启生效")
     except PluginError as e:
         await remove.finish(e.prompt)
-    except Exception as e:
-        raise e from e
+    except Exception:
+        raise
 
 
 update = plugin.on_command("/更新插件", "更新指定插件")
@@ -146,8 +146,8 @@ async def _(args: Message = CommandArg()):
         await update.finish(f"{plugin_name}-{version}安装成功，请重启以启用新版插件")
     except PluginError as e:
         await update.finish(e.prompt)
-    except Exception as e:
-        raise e from e
+    except Exception:
+        raise
 
 
 check_update = plugin.on_command("/检查插件更新", "检查所有的插件的更新")

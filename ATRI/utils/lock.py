@@ -23,9 +23,9 @@ class SingleLock:
             self._lock.acquire()
             try:
                 r = func(*args, **kwargs)
-            except Exception as e:
+            except Exception:
                 self._lock.release()
-                raise e from e
+                raise
             self._lock.release()
             return r
 
@@ -51,9 +51,9 @@ class GroupLock:
             self._lock[key].acquire()
             try:
                 r = func()
-            except Exception as e:
+            except Exception:
                 self._lock[key].release()
-                raise e from e
+                raise
             self._lock[key].release()
             return r
         else:
@@ -76,9 +76,9 @@ class GroupLock:
                     self._lock[key].acquire()
                     try:
                         r = func(*args, **kwargs)
-                    except Exception as e:
+                    except Exception:
                         self._lock[key].release()
-                        raise e from e
+                        raise
                     self._lock[key].release()
                     return r
                 else:

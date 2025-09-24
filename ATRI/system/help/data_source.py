@@ -9,9 +9,9 @@ from jinja2 import Environment, FileSystemLoader
 from nonebot.adapters.onebot.v11 import MessageSegment, GroupMessageEvent
 
 from ATRI import __version__, conf, IMG_DIR, service_list, __sub_version__, RES_DIR
-from ATRI.message import MessageBuilder, img_msg
+from ATRI.message import MessageBuilder, img_msg, img_msg_from_path
 from ATRI.service import ServiceTools, Service
-from ATRI.utils.img_editor import IMGEditor, get_image_bytes
+from ATRI.utils.img_editor import IMGEditor
 from ATRI.exceptions import ServiceNotFoundError
 from ATRI.log import log
 from ATRI.permission import MASTER_LIST
@@ -120,7 +120,7 @@ class Helper:
         refresh = cls.get_typed_services()
         if not SERVICES_IMG_PATH.exists() or refresh:
             cls.get_services_img()
-        return img_msg(get_image_bytes(SERVICES_IMG_PATH))
+        return img_msg_from_path(SERVICES_IMG_PATH)
 
     @classmethod
     def get_services_img(cls):
@@ -245,8 +245,7 @@ class Helper:
             data = json.load(open(json_path))
             if data.get('length', 0) == length:
                 if data.get('services', []) == simp_s:
-                    return img_msg(get_image_bytes(img_path))
-
+                    return img_msg_from_path(img_path)
         log.info(f'开始为{f'{group_id}中的{user_id}' if group_id else f'{user_id}'}生成新的帮助')
         json.dump({'length': length, 'services': simp_s}, open(json_path, 'w'), indent=4, ensure_ascii=False)
         env = Environment(loader=FileSystemLoader(RES_DIR / 'html' / 'help'))
@@ -285,7 +284,7 @@ class Helper:
         try:
             data = ServiceTools(service).load_service()
         except ServiceNotFoundError:
-            return "请检查是否输入错误..."
+            return "请检查是否输入错误.../帮助 (服务) (命令)"
 
         cmd_list: dict = data.cmd_list
         cmd_info = cmd_list.get(cmd, dict())

@@ -9,6 +9,7 @@ class Config(BaseModel):
     r18_groups: list[str] 非健康模式群聊
     chat_switch: bool 聊天开关
     api_key: str 谷歌AI的api_key
+    active_chat: str: 激活的模型
     """
     test_groups: list[str] = []
     r18_groups: list[str] = []
@@ -24,10 +25,9 @@ config: Config = _config_manage.config()
 
 def load_config():
     """加载lkbot插件配置"""
-    global config
-    config = _config_manage.config()
+    _config_manage.load_config()
 
 
 def save_config():
     """保存lkbot插件设置"""
-    _config_manage.change_config(config)
+    _config_manage.change_config()

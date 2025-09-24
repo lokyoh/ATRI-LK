@@ -83,10 +83,10 @@ class Shop:
 
     def clear_goods(self):
         """清空商店"""
-        self._goods_list = []
-        self._goods_price = []
-        self._goods_coin_type = []
-        self._goods_limit = []
+        self._goods_list.clear()
+        self._goods_price.clear()
+        self._goods_coin_type.clear()
+        self._goods_limit.clear()
 
     def get_shop_info(self) -> str:
         """获取商店简介"""
@@ -127,8 +127,8 @@ class ShopRegister:
 
     def shops_clear(self):
         """清空注册的商店"""
-        self._shop_names = []
-        self._shop_list = []
+        self._shop_names.clear()
+        self._shop_list.clear()
 
 
 shops = ShopRegister()

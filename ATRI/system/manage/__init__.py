@@ -66,7 +66,7 @@ def handle_command(
 
 
 plugin = Service("管理").document("控制 ATRI 的各项服务").type(Service.ServiceType.SYSTEM).permission(MASTER).version(
-    "1.0.5")
+    "1.0.6")
 
 block_user = plugin.on_command("封禁用户", "阻止目标用户使用 ATRI")
 handle_command(block_user, BotManager().block_user, "用户 {} 危！")
@@ -92,6 +92,13 @@ handle_command(
     toggle_group_service,
     BotManager().toggle_group_service,
     "服务 {} 已针对本群",
+)
+
+toggle_service_white_list = plugin.on_command("/白名单", "禁用/启用某一服务的白名单")
+handle_command(
+    toggle_service_white_list,
+    BotManager().toggle_service_white_list,
+    "服务 {} 白名单已"
 )
 
 track_error = plugin.on_command("/追踪", "根据ID获取对应报错信息", aliases={"/track"})
@@ -131,6 +138,20 @@ async def _(event: MessageEvent):
         f"已{'允许' if result else '禁止'}用户 {target_user} 使用 {target_service}"
     )
 
+toggle_group_service_white_list = plugin.on_regex(r"(.*)白名单(添加|移除)群(.*)", "在某一服务的白名单中移除/添加某群")
+
+
+@toggle_group_service_white_list.handle()
+async def _(event: MessageEvent):
+    msg = str(event.get_message()).strip()
+    reg = re.findall("(.*)白名单(添加|移除)群(.*)", msg)[0]
+    target_service = reg[0]
+    target_group = reg[2]
+    try:
+        result = BotManager().toggle_group_service_white_list(target_service, target_group)
+    except Exception as e:
+        await toggle_group_service_white_list.finish(f"操作失败，原因：{str(e)}")
+    await toggle_user_service.finish(f"{target_service} 的白名单已{'添加' if result else '移除'}群 {target_group}")
 
 friend_req = plugin.on_request("好友申请", "好友申请检测")
 

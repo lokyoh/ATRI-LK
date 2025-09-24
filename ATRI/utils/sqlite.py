@@ -56,6 +56,13 @@ class Cursor:
         else:
             raise TypeError
 
+    def execute(self, sql, args = None):
+        if args:
+            result = self.cursor.execute(sql, args)
+        else:
+            result = self.cursor.execute(sql)
+        return result
+
     def __enter__(self):
         return self
 
@@ -165,7 +172,7 @@ class DataBase:
         self._connection.commit()
         cursor.close()
 
-    def get_table(self, table_name: str, table_content: str, table_version: int, update_dp) -> DBTable:
+    def get_table(self, table_name: str, table_content: str, table_version: int, update_dp = None) -> DBTable:
         if table_name in self._table_list:
             raise ValueError(f"表 {table_name} 已经存在")
         self._table_list.append(table_name)

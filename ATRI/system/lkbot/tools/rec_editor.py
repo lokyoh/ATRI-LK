@@ -12,8 +12,8 @@ class RECEditor:
     def get_tts_file(text: str) -> str:
         """获取来自edge_tts的文本转语音，需要大陆外网络"""
         spath = "output_" + ''.join(random.choice(string.ascii_letters + string.digits) for _ in range(5)) + ".mp3"
-        tts = edge_tts.Communicate(text=re.sub('[³_*]', '', text), voice='zh-CN-XiaoyiNeural', rate='+0%',
-                                   volume='+0%')
+        tts = edge_tts.Communicate(text=re.sub('[³_*]', '', text), voice='zh-CN-XiaoyiNeural', rate='-10%',
+                                   pitch='+30Hz', volume='+0%')
         tts.save_sync(f'{TEMP_DIR}/{spath}')
         return f'{TEMP_DIR}/{spath}'
 

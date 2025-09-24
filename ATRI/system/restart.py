@@ -9,10 +9,10 @@ from ATRI.service import Service
 from ATRI.permission import MASTER
 
 plugin = Service(
-    service="重启",
-    docs="重新启动ATRI",
-    type=Service.ServiceType.SYSTEM,
-    version="0.2.0"
+    "重启",
+    "重新启动ATRI",
+    "0.2.0",
+    Service.ServiceType.SYSTEM
 ).permission(MASTER)
 
 PLUGIN_DIR = Path(".") / "data" / "plugins" / "restart"

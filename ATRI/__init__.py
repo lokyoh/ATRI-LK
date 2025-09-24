@@ -6,7 +6,7 @@ from .dir import *
 
 __version__ = "YHN-LK0-017"
 """版本号"""
-__sub_version__ = "Pre2"
+__sub_version__ = "Release"
 """次版本号"""
 __conf_path = Path(".") / "config.yml"
 __conf = Config(__conf_path)

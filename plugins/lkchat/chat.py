@@ -19,7 +19,7 @@ role = ATRI()
 atri_face = {
     ('开心', '高兴', '快乐', '喜悦', '愉快', '哈哈',): ['KX.jpg', ],
     ('幸福',): ['SUKI.jpg', ],
-    ('兴奋', '激动',): ['XF.png', ],
+    ('兴奋', '激动', '欢呼',): ['XF.png', ],
     ('满意', '满足',): ['MY.png', ],
     ('疑问', '疑惑', '困惑', '怀疑',): ['YW.png', 'WH.jpg', 'YW1.jpg', ],
     ('迷茫', '发呆', '呆住',): ['DZ.jpg', ],
@@ -32,18 +32,21 @@ atri_face = {
     ('得意',): ['DY.gif', 'DY1.gif', ],
     ('元气', '活力四射', '活力',): ['DT.jpg', ],
     ('期待',): ['QD.jpg', ],
-    ('关心', '担心',): ['GX.jpg', ],
-    ('摸摸头',): ['MMT.png', ],
-    ('惊', '惊讶', '吃惊', '吓', '惊吓'): ['CJ.jpg', 'CJ1.jpg', 'CJ2.jpg', 'CJ.png', 'CJ1.png', ],
+    ('关心', '担心',): ['GX.png', ],
+    ('摸摸头', '抱抱', '摸摸', '摸', '拥抱'): ['MMT.png', ],
+    ('惊', '惊讶', '吃惊', '吓', '惊吓', '震惊',): ['CJ.jpg', 'CJ1.jpg', 'CJ2.jpg', 'CJ.png', 'CJ1.png', ],
     ('可爱',): ['KA.jpg', ],
     ('哭笑',): ['X.png', ],
     ('星星眼',): ['XXY.png', ],
     ('吐舌',): ['TS.jpg', ],
-    ('伤心',): ['SX.png', ],
+    ('伤心', '悲伤', '悲',): ['SX.png', ],
     ('流泪', '落泪',): ['K.png', ],
     ('哭', '哭泣', '抽泣',): ['KQ.png', ],
     ('大哭',): ['DK.png', ],
     ('斜眼笑',): ['XYX.jpg', ],
+    ('害羞', '羞', '羞耻', '羞涩',): ['HX.gif', ],
+    ('羡慕',): ['XM.jpg', 'XM1.jpg',],
+    ('流口水', '馋', '嘴馋',): ['LKS.png', ],
 }
 
 
@@ -104,28 +107,28 @@ class ChatModel:
         history_list = history.get_history()
         if history_list:
             prompt += '\n'.join([
-                f"<{h.time}>{await get_name(bot, h.sender, group_id)}:{h.text}{f'\n你对此回复:{h.resp}' if type(h) == Dialogue else ''}"
+                f"<{h.time}>{await get_name(bot, h.sender, group_id)}:{h.text}{f'\n你的回复:{h.resp}' if type(h) == Dialogue else ''}"
                 for h in history_list])
         else:
             prompt += '无聊天记录'
         # 对话人信息
         lst_history = history.get_last_history()
-        prompt += (f"\n#当前对话人的信息\n"
-                   f"昵称:{await get_name(bot, lst_history.sender, group_id)}\n"
-                   f"{"Ta是你的主人" if get_user_group(user_id) == "主人" else 'TA只是你的陪聊对象不要称呼TA主人'}\n"
+        prompt += (f"\n#当前对话人信息\n"
+                   f"{"Ta是你的主人" if get_user_group(user_id) == "主人" else 'TA只是你的陪聊对象不要称呼Ta主人'}\n"
                    f"你对Ta的好感度:{user_info.love}。正积极,负消极,最大1000,最小-1000,难增加,易减少\n")
         if user_info.memery:
-            prompt += f"与Ta的记忆:{user_info.memery}\n"
+            prompt += f"你与Ta的记忆:{user_info.memery}\n"
         # 对话提示信息
         prompt += f"#对话提示信息\n"
         # 对话中词语解释
         exp = get_top_explanations(lst_history.text)
         if exp:
-            prompt += "词语解释:\n"
+            prompt += "#词语解释:\n"
             prompt += "\n".join(exp)
             prompt += "\n"
         # 当前对话信息
         prompt += (f"#当前对话\n"
+                   f"昵称:{await get_name(bot, lst_history.sender, group_id)}\n"
                    f"时间:{lst_history.time}\n"
                    f"内容:{lst_history.text}")
         return prompt

@@ -1,7 +1,6 @@
 import os
 from datetime import datetime, date
 
-from nonebot.adapters.onebot.v11.event import GroupMessageEvent
 from nonebot.exception import FinishedException
 
 from ATRI.exceptions import str_traceback
@@ -9,19 +8,21 @@ from ATRI.log import log
 from ATRI.message import MessageBuilder
 from ATRI.utils.curve import IntToBoolRandom
 from ATRI.utils.img_editor import IMGEditor, get_image_bytes
-from ATRI.system.lkapi.bot import util as lk_util, PLUGIN_DIR
-from ATRI.system.lkapi.utils.picture import get_pic_from
+from ATRI.system.lkapi.bot import PLUGIN_DIR
+from ATRI.system.lkapi.utils.picture import get_pic_from, has_source
 from ATRI.system.lkapi.entity.user import get_user_data, sign
 
+from . import config
+from .config import SignInConfig
 from .data_source import signin, Signin
 
+_config: SignInConfig = config.config()
 
-async def get_pic(user_id, r18_mode: bool = False, src: str = 'lolicon'):
+
+async def get_pic(user_id, group_id):
     """获取签到卡片"""
-    if r18_mode:
-        save_dir = os.path.join(PLUGIN_DIR, 'sign_in', 'r18')
-    else:
-        save_dir = os.path.join(PLUGIN_DIR, 'sign_in')
+    src = _config.base_source
+    save_dir = os.path.join(PLUGIN_DIR, 'sign_in')
     save_path = os.path.join(save_dir, f"{user_id}.jpg")
     if os.path.exists(save_path):
         modification_time = os.path.getmtime(save_path)
@@ -32,18 +33,16 @@ async def get_pic(user_id, r18_mode: bool = False, src: str = 'lolicon'):
         else:
             log.debug(f"{user_id}签到日期变化:{modification_date}->{today_date}")
     user_data = get_user_data(user_id)
-    if r18_mode:
-        my_random = IntToBoolRandom(80, 200)
-        if my_random.get_result(int(user_data.love / 100) + user_data.lvl):
-            src = 'lolicon_r18'
-        try:
-            image = await get_pic_from(src)
-        except Exception as e:
-            log.warning(f'获取图片失败:\n{str_traceback(e)}')
-            return await get_pic(user_id)
-    else:
-        src = 'local'
-        image = await get_pic_from(src)
+    my_random = IntToBoolRandom(80, 200)
+    if my_random.get_result(int(user_data.love / 100) + user_data.lvl):
+        src = _config.unique_source
+    try:
+        if not has_source(src):
+            log.warning(f'{src}图片源不存在')
+        image = await get_pic_from(src, group_id)
+    except Exception as e:
+        log.warning(f'获取图片失败:\n{str_traceback(e)}')
+        return await get_pic(user_id, group_id)
     os.makedirs(save_dir, exist_ok=True)
     (IMGEditor(image)
      .resize(450, 800)
@@ -64,24 +63,21 @@ async def get_pic(user_id, r18_mode: bool = False, src: str = 'lolicon'):
 class CoreSignin(Signin):
     @staticmethod
     async def signin(event, matcher):
-        r18_mode = not lk_util.is_safe_mode_group(event.group_id) if type(event) is GroupMessageEvent else True
         user_id = event.get_user_id()
+        group_id = str(getattr(event, 'group_id', None))
         try:
             message = MessageBuilder().text('')
             _, msg = sign(user_id)
             for m in msg:
                 message.auto_append(m)
-            log.info(f'{user_id}签到 r18:{r18_mode}')
-            img_path = await get_pic(user_id, r18_mode=r18_mode)
+            log.info(f'{user_id}签到')
+            img_path = await get_pic(user_id, group_id)
             message.image(get_image_bytes(img_path))
             await matcher.finish(message, at_sender=True)
         except FinishedException:
             raise
         except Exception as e:
-            if r18_mode:
-                path = os.path.join(PLUGIN_DIR, 'sign_in', 'r18', f"{user_id}.jpg")
-            else:
-                path = os.path.join(PLUGIN_DIR, 'sign_in', f"{user_id}.jpg")
+            path = os.path.join(PLUGIN_DIR, 'sign_in', f"{user_id}.jpg")
             if os.path.exists(path):
                 os.remove(path)
             log.warning(f"签到发生错误:\n{str_traceback(e)}")

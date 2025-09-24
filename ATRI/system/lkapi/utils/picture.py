@@ -3,5 +3,6 @@ from ATRI.system.lkbot.tools.get_pic import (
     lolicon as from_lolicon,
     lolicon_r18 as from_lolicon_r18,
     loli as from_loli,
-    local_image as from_local_image
+    local_image as from_local_image,
+    has_source
 )

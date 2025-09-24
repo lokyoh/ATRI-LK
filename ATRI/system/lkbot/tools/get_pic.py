@@ -70,7 +70,7 @@ async def loli():
     return resp.content
 
 
-def local_image_func():
+def local_image_func(group_id: str = None):
     """获取一张来自本地res/img/sbg的图片"""
     file = random.choice(os.listdir(IMG_DIR / "sbg"))
     img_url = IMG_DIR / "sbg" / file
@@ -78,21 +78,46 @@ def local_image_func():
         return f.read()
 
 
-local_image = local_image_func
+_local_image = local_image_func
 
 
 def set_local_image_func(func):
-    global local_image
-    local_image = func
+    global _local_image
+    _local_image = func
 
 
-async def get_pic_from(src) -> bytes:
-    """获取一张来自指定图源的图片，默认本地"""
+def local_image(group_id: str = None):
+    """
+    本地背景图片获取。
+    :param group_id: 群聊id
+    :return: 图片数据
+    """
+    return _local_image(group_id)
+
+
+async def get_pic_from(src, group_id: str = None) -> bytes:
+    """
+    获取一张来自指定图源的图片，默认本地。
+    :param src: 图片源
+    :param group_id: 群聊id
+    :return: 图片数据
+    """
     if src in img_sources:
         return await img_sources[src]()
-    return local_image()
+    return local_image(group_id)
 
 
 img_sources["lolicon"] = lolicon
 img_sources["lolicon_r18"] = lolicon_r18
 img_sources["loli"] = loli
+
+
+def has_source(src: str) -> bool:
+    """
+    是否含有指定图片源。
+    :param src: 图片源
+    :return: 是否含有
+    """
+    if src == 'local':
+        return True
+    return src in img_sources

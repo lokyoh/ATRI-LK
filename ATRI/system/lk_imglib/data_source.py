@@ -137,8 +137,19 @@ class ImageManager:
             info[libname] = self.get_image_num(libname)
         return info
 
+    def get_lib_path(self, libname):
+        """
+        获取图库路径。
+        :param libname: 图库名
+        :return: 图库路径
+        """
+        if libname not in self.imagelib:
+            self.new_lib(libname)
+        return self.imagelib[libname]
+
 
 image_manager = ImageManager()
+"""全局图库管理器"""
 
 
 class GroupImageManager(ImageManager):
@@ -172,3 +183,35 @@ class GroupImageManager(ImageManager):
         path = random.choice(paths)
         with open(path, "rb") as f:
             return f.read()
+
+    def get_background_image(self):
+        """
+        从全局图库与群聊图库内获取随机背景图片。
+        :return: 随机图片数据
+        """
+        paths = []
+        lib_paths = [
+            image_manager.get_lib_path('sbg'),
+            image_manager.get_lib_path('背景'),
+            self.get_lib_path('背景')
+        ]
+        for path in lib_paths:
+            files = os.listdir(path)
+            for file in files:
+                if (path / file).is_file():
+                    paths.append(path / file)
+        path = random.choice(paths)
+        with open(path, "rb") as f:
+            return f.read()
+
+
+def get_background(group_id: str):
+    """
+    获取随机背景图片。
+    :param group_id: 群聊id
+    :return: 图片数据
+    """
+    if group_id:
+        return GroupImageManager(group_id).get_background_image()
+    else:
+        return image_manager.get_random_image()

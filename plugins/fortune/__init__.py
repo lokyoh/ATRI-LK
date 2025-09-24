@@ -27,17 +27,17 @@ today_fortune = plugin.on_command('今日运势', '今日运势', aliases={'运�
 @today_fortune.handle([Cooldown(60, prompt='今日运势已经发送了哦')])
 async def _(event: MessageEvent):
     user_id = event.get_user_id()
+    message = MessageBuilder().text('')
     if lk_util.is_valid_user(user_id):
         state, msg = sign(user_id)
         if state:
-            message = MessageBuilder().text('')
             message.text(f'今天尚未签到，已自动签到：')
             for m in msg:
                 message.auto_append(m)
-            await today_fortune.send(message, at_sender=user_id)
     else:
-        await today_fortune.send(f'{lk_util.bind_tip}才能够自动签到哦!', at_sender=user_id)
-    await today_fortune.finish(await get_pic(user_id))
+        message.text(f'{lk_util.bind_tip}才能够自动签到哦!')
+    message.auto_append(await get_pic(user_id))
+    await today_fortune.finish(message, at_sender=user_id)
 
 
 async def get_pic(user_id):

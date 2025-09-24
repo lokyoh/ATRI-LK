@@ -274,8 +274,8 @@ def on_startup():
     load_item_data()
     plugin.scheduler_jobs().add_job(daily_update, '每日更新任务', 'cron', hour=0, minute=0)
     try:
-        from ATRI.system.lk_imglib.data_source import image_manager
-        set_local_image_func(lambda: image_manager.get_random_image())
+        from ATRI.system.lk_imglib.data_source import get_background
+        set_local_image_func(get_background)
         log.info('启用全局图库内图片作为本地图源')
     except:
         pass

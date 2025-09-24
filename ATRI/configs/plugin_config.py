@@ -26,15 +26,17 @@ class PluginConfig:
     def load_config(self):
         """
         从磁盘上获取插件设置。
-        :return: 重新加载的插件设置
+        :return: 重新加载后的插件设置
         """
         try:
-            return self.model.read_from_file(self.path)
+            config = self.model.read_from_file(self.path)
         except Exception as e:
             from ATRI.log import log
             from ATRI.exceptions import str_traceback
             log.error(f"加载配置文件错误:{str_traceback(e)}")
-            return self.model()
+            config =  self.model()
+        self._config = config
+        return self._config
 
     def config(self):
         """
@@ -50,8 +52,8 @@ class PluginConfig:
         """
         if value is None:
             self._config.write_into_file(self.path)
-            return
-        value.write_into_file(self.path)
+        else:
+            value.write_into_file(self.path)
 
     def __enter__(self):
         return self._config

@@ -87,7 +87,7 @@ async def _(event: GroupMessageEvent, matcher: Matcher, bot: Bot):
             msg = Message()
             for m in response:
                 msg.append(m)
-            await on_talk.finish(msg)
+            await on_talk.finish(msg, at_sender=True)
     else:
         if configs.chat_switch:
             group_id = event.group_id

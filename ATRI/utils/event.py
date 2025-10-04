@@ -70,9 +70,10 @@ class InnerListener(BaseListener):
         if inspect.iscoroutinefunction(self.func):
             loop = asyncio.get_running_loop()
             if param == 0:
-                asyncio.run_coroutine_threadsafe(self.func(), loop)
+                future =  asyncio.run_coroutine_threadsafe(self.func(), loop)
             else:
-                asyncio.run_coroutine_threadsafe(self.func(event), loop)
+                future = asyncio.run_coroutine_threadsafe(self.func(event), loop)
+            future.result()
         else:
             if param == 0:
                 self.func()

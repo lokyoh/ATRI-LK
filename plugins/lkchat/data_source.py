@@ -9,7 +9,7 @@ from nonebot.matcher import Matcher
 
 from ATRI import IMG_DIR, RECORD_DIR
 from ATRI.message import img_msg_from_path, rec_msg_from_path
-from ATRI.utils.event import BaseEvents, BaseEvent
+from ATRI.utils.event import AsyncBaseEvents, BaseEvent
 
 REPLY_MESSAGE = [
     "lsp你再戳？",
@@ -110,7 +110,7 @@ class PreChatEvent(BaseEvent):
         self.message_event: GroupMessageEvent = event
 
 
-pre_chat_event = BaseEvents("pre_chat")
+pre_chat_event = AsyncBaseEvents("pre_chat")
 """聊天预处理事件,在处理聊天信息前触发"""
 
 

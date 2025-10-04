@@ -43,7 +43,7 @@ on_talk = plugin.on_message("机器人聊天", "和亚托莉愉快的聊天、�
 
 @on_talk.handle()
 async def _(event: GroupMessageEvent, matcher: Matcher, bot: Bot):
-    pre_chat_event.notify(PreChatEvent(matcher, event))
+    await pre_chat_event.notify(PreChatEvent(matcher, event))
     text = event.get_message().extract_plain_text()
     if event.to_me:
         # 聊天模块

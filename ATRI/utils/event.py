@@ -1,5 +1,4 @@
-import asyncio
-import inspect
+from nonebot.exception import FinishedException
 
 from ATRI.log import log
 from ATRI.exceptions import str_traceback, EventRuntimeError
@@ -54,31 +53,24 @@ class InnerListener(BaseListener):
     """
     内置监听器,将方法转为监听器。
     """
+
     def __init__(self, func):
         super().__init__(func.__name__)
         self.func = func
-
-    def notify(self, event: BaseEvent):
         if hasattr(self.func, '__code__'):
             code = self.func.__code__
-            param = code.co_argcount
+            self.param = code.co_argcount
         elif hasattr(self.func, '__func__'):
             code = self.func.__func__.__code__
-            param = code.co_argcount
+            self.param = code.co_argcount
         else:
             raise AttributeError
-        if inspect.iscoroutinefunction(self.func):
-            loop = asyncio.get_running_loop()
-            if param == 0:
-                future =  asyncio.run_coroutine_threadsafe(self.func(), loop)
-            else:
-                future = asyncio.run_coroutine_threadsafe(self.func(event), loop)
-            future.result()
+
+    def notify(self, event: BaseEvent):
+        if self.param == 0:
+            self.func()
         else:
-            if param == 0:
-                self.func()
-            else:
-                self.func(event)
+            self.func(event)
 
 
 class BaseEvents:
@@ -149,6 +141,82 @@ class BaseEvents:
             if func.__name__ == '_':
                 raise ValueError('请不要使用`_`作为函数名')
             self.subscribe(InnerListener(func), priority)
+            return func
+
+        return wrapper
+
+
+class AsyncInnerListener(BaseListener):
+    """
+    内置监听器,将方法转为监听器。
+    """
+
+    def __init__(self, func):
+        super().__init__(func.__name__)
+        self.func = func
+        if hasattr(self.func, '__code__'):
+            code = self.func.__code__
+            self.param = code.co_argcount
+        elif hasattr(self.func, '__func__'):
+            code = self.func.__func__.__code__
+            self.param = code.co_argcount
+        else:
+            raise AttributeError
+
+    async def notify(self, event: BaseEvent):
+        if self.param == 0:
+            await self.func()
+        else:
+            await self.func(event)
+
+
+class AsyncBaseEvents(BaseEvents):
+    """
+    一个基础事件。
+    """
+
+    def __init__(self, stop_when_error=False):
+        super().__init__(stop_when_error)
+
+    async def notify(self, event: BaseEvent) -> BaseEvent:
+        """
+        触发该事件。
+        :param event: 事件体
+        """
+        exceptions = {}
+        for values in self.listeners.values():
+            break_sign = False
+            for listener in values:
+                try:
+                    await listener.notify(event)
+                except FinishedException:
+                    pass
+                except Exception as e:
+                    event.error = True
+                    event.error_listeners.append(listener.listener_name)
+                    tb = str_traceback(e)
+                    exceptions[listener.listener_name] = tb
+                    log.error(tb)
+                    if self.stop_when_error:
+                        break_sign = True
+                        break
+            if break_sign:
+                break
+        if event.error:
+            formatted_str = "\n".join([f"\n{key}:{value}" for key, value in exceptions.items()])
+            key_str = ",".join([key for key in exceptions])
+            raise EventRuntimeError(f"事件{event.event_name}在执行{key_str}时出现错误", formatted_str)
+        return event
+
+    def handle(self, priority: int = 10):
+        """
+        装饰一个函数来响应事件。
+        """
+
+        def wrapper(func):
+            if func.__name__ == '_':
+                raise ValueError('请不要使用`_`作为函数名')
+            self.subscribe(AsyncInnerListener(func), priority)
             return func
 
         return wrapper

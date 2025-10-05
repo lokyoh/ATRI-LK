@@ -1,3 +1,5 @@
+import inspect
+
 from nonebot.exception import FinishedException
 
 from ATRI.log import log
@@ -140,28 +142,21 @@ class BaseEvents:
         def wrapper(func):
             if func.__name__ == '_':
                 raise ValueError('请不要使用`_`作为函数名')
+            if inspect.iscoroutinefunction(func):
+                raise ValueError('不支持异步方法')
             self.subscribe(InnerListener(func), priority)
             return func
 
         return wrapper
 
 
-class AsyncInnerListener(BaseListener):
+class AsyncInnerListener(InnerListener):
     """
     内置监听器,将方法转为监听器。
     """
 
     def __init__(self, func):
-        super().__init__(func.__name__)
-        self.func = func
-        if hasattr(self.func, '__code__'):
-            code = self.func.__code__
-            self.param = code.co_argcount
-        elif hasattr(self.func, '__func__'):
-            code = self.func.__func__.__code__
-            self.param = code.co_argcount
-        else:
-            raise AttributeError
+        super().__init__(func)
 
     async def notify(self, event: BaseEvent):
         if self.param == 0:
@@ -188,9 +183,12 @@ class AsyncBaseEvents(BaseEvents):
             break_sign = False
             for listener in values:
                 try:
-                    await listener.notify(event)
+                    if inspect.iscoroutinefunction(listener.notify):
+                        await listener.notify(event)
+                    else:
+                        listener.notify(event)
                 except FinishedException:
-                    pass
+                    raise
                 except Exception as e:
                     event.error = True
                     event.error_listeners.append(listener.listener_name)
@@ -216,7 +214,10 @@ class AsyncBaseEvents(BaseEvents):
         def wrapper(func):
             if func.__name__ == '_':
                 raise ValueError('请不要使用`_`作为函数名')
-            self.subscribe(AsyncInnerListener(func), priority)
+            if inspect.iscoroutinefunction(func):
+                self.subscribe(AsyncInnerListener(func), priority)
+            else:
+                self.subscribe(InnerListener(func), priority)
             return func
 
         return wrapper

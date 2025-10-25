@@ -113,6 +113,47 @@ class MessageGroup:
             sleep(1)
 
 
+class PageMessage:
+    """
+    分页消息。
+    """
+    def __init__(self,
+                 item_list: list,
+                 header: str = f"标题\n{'-' * 20}\n",
+                 footer: str = f"{'-' * 20}\n页数:{{page}} 共:{{i}}/{{num}}",
+                 content: str = "{i:02d}.{item}",
+                 page_num: int = 20
+                 ):
+        """
+        分页消息。
+        :param item_list: 需要分页的对象
+        :param header: 分页标题
+        :param footer: 页脚:其中page为当前页数,i为当前页总项目数,num为总项目数
+        :param content: 每条的输出模板:其中i为编号,item为内容
+        :param page_num: 每页大小
+        """
+        self._ml = MessageGroup()
+        num = len(item_list)
+        temp_msg = header
+        i = 0
+        page = 1
+        for item in item_list:
+            if i == page * page_num:
+                self._ml.add_message(temp_msg + footer.format(page=page, i=i, num=num))
+                temp_msg = ''
+                page += 1
+            i += 1
+            temp_msg += content.format(i=i, item=item) + '\n'
+        self._ml.add_message(temp_msg + footer.format(page=page, i=i, num=num))
+
+    async def send_message(self, matcher: Type[Matcher]):
+        """
+        使用指定匹配器逐条发送消息。
+        :param matcher: 匹配器
+        """
+        await self._ml.send_message(matcher)
+
+
 def img_msg(file: str | bytes | BytesIO | Path) -> MessageSegment:
     """
     图片数据转图片消息。

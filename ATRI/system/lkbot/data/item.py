@@ -219,6 +219,9 @@ class ItemStack:
         """获取物品种类"""
         return self._type
 
+    def __str__(self):
+        return f"{self.get_name()} - {self.get_type().value} - {self.meta.num}"
+
 
 class ToolItemStack(ItemStack):
     def __init__(self, item_stack: ItemStack, max_durable: int):

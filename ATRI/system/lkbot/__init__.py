@@ -299,8 +299,8 @@ all_user_list = plugin_master.on_command(cmd='/所有用户', docs='列出所有
 
 @all_user_list.handle()
 async def _():
-    mg = await LKBot.get_user_list()
-    mg.send_message(all_user_list)
+    mg = LKBot.get_user_list()
+    await mg.send_message(all_user_list)
 
 
 plugin.on_startup(on_startup)

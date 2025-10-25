@@ -18,7 +18,7 @@ from .tools.daily_update import daily_update
 from .data.load_item import auto_load_items
 from .tools.get_pic import set_local_image_func
 
-PLUGIN_VERSION = "0.11.0"
+PLUGIN_VERSION = "0.11.1"
 """lkbot插件版本"""
 PLUGIN_DIR = Path(".") / "data" / "plugins" / "lkbot"
 """lkbot插件数据路径"""

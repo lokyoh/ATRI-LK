@@ -1,9 +1,9 @@
-from ATRI.message import MessageGroup, img_msg, MessageBuilder
+from ATRI.message import MessageGroup, img_msg, MessageBuilder, PageMessage
 from ATRI.system.htmlrender import md_to_pic
 
 from .util import lk_util, user_info_events, UserInfoEvent
 from .data.user import users, user_level_manager
-from .data.item import ItemStack, items
+from .data.item import items
 from .data.shop import shops
 
 
@@ -23,22 +23,13 @@ class LKBot:
 
     @staticmethod
     def get_backpack_info(user_id):
-        message_list = MessageGroup()
         with users.get_user_data(user_id) as user_data:
             backpack = user_data.backpack.get_item_list()
-            resp = f"{lk_util.get_name(user_id)} 的背包:\n{'-' * 20}\n名称-类型-数量\n"
-            num = len(backpack)
-            i = 0
-            j = 1
-            for item in backpack:
-                item: ItemStack
-                if i == j * 20:
-                    message_list.add_message(resp + f"{'-' * 20}\n页数:{j} 物品总数:{i}/{num}")
-                    resp = ''
-                    j += 1
-                i += 1
-                resp += f'{i}.{item.get_name()}-{item.get_type().value}-{item.meta.num}\n'
-            message_list.add_message(resp + f"{'-' * 20}\n页数:{j} 物品总数:{i}/{num}")
+            message_list = PageMessage(
+                backpack,
+                header=f"{lk_util.get_name(user_id)} 的背包:\n{'-' * 20}\n名称 - 类型 - 数量\n",
+                footer=f"{'-' * 20}\n页数:{{page}} 物品总数:{{i}}/{{num}}",
+            )
             return message_list
 
     @staticmethod
@@ -67,21 +58,13 @@ class LKBot:
 
     @staticmethod
     def get_shop_list():
-        message = MessageGroup()
         shop_l = shops.get_shop_names()
-        num = len(shop_l)
-        resp = f"商店列表:\n{'-' * 20}\n"
-        i = 0
-        j = 1
-        for shop in shop_l:
-            if i == j * 20:
-                message.add_message(resp + f"{'-' * 20}\n页数:{j} 商店总数:{i}/{num}")
-                resp = ''
-                j += 1
-            i += 1
-            resp += f'{i}.{shop}\n'
-        message.add_message(resp + f"{'-' * 20}\n页数:{j} 商店总数:{i}/{num}")
-        return message
+        message_list = PageMessage(
+            shop_l,
+            header=f"商店列表:\n{'-' * 20}\n",
+            footer=f"{'-' * 20}\n页数:{{page}} 商店总数:{{i}}/{{num}}"
+        )
+        return message_list
 
     @staticmethod
     async def get_goods_list(shop_name):
@@ -112,44 +95,31 @@ class LKBot:
 
     @staticmethod
     async def get_group_user_list(bot, group_id):
-        message = MessageGroup()
         member_list = await bot.get_group_member_list(group_id=group_id)
         members = []
         for member in member_list:
             user_id = str(member['user_id'])
             if lk_util.is_valid_user(user_id):
-                members.append(user_id)
-        num = len(members)
-        resp = '本群用户列表:\n'
-        i = 0
-        j = 0
-        while i < num:
-            for i in range(20 + j * 20):
-                if i == num:
-                    break
-                resp += f'{i + 1}.{lk_util.get_name(members[i])}:{members[i]}\n'
-            message.add_message(resp + f'用户总数:{i}/{num}')
-            j += 1
-            resp = ''
-        return message
+                members.append(f"{lk_util.get_name(user_id)}:{user_id}")
+        message_list = PageMessage(
+            members,
+            header="本群用户列表:\n",
+            footer=f"页数:{{page}} 用户总数:{{i}}/{{num}}"
+        )
+        return message_list
 
     @staticmethod
-    async def get_user_list():
-        message = MessageGroup()
-        resp = '所有用户列表:\n'
-        i = 0
-        j = 0
+    def get_user_list():
         id_list = users.get_id_list()
-        num = len(id_list)
+        members = []
         for user_id in id_list:
-            if i > 20 * (j + 1):
-                message.add_message(resp + f'用户总数:{i}/{num}')
-                j += 1
-                resp = ''
-            resp += f'{i + 1}.{lk_util.get_name(user_id)}:{user_id}\n'
-            i += 1
-        message.add_message(resp + f'用户总数:{i}/{num}')
-        return message
+            members.append(f"{lk_util.get_name(user_id)}:{user_id}")
+        message_list = PageMessage(
+            members,
+            header="所有用户列表:\n",
+            footer=f"页数:{{page}} 用户总数:{{i}}/{{num}}"
+        )
+        return message_list
 
     @classmethod
     async def get_rank(cls, rank_name: str):

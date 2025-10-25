@@ -11,7 +11,7 @@
   - `用户`新添排行功能
   - `图库`插件
   - `ATRI`服务白名单
-  - `ATRI.message`新增两个方法
+  - `ATRI.message`新增两个方法,新增分页消息
   - 一张背景图片
 - 更新:
   - `ATRI`更新了`curve`与`sqlite`工具

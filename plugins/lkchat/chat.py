@@ -23,7 +23,7 @@ atri_face = {
     ('满意', '满足',): ['MY.png', ],
     ('疑问', '疑惑', '困惑', '怀疑',): ['YW.png', 'WH.jpg', 'YW1.jpg', ],
     ('迷茫', '发呆', '呆住',): ['DZ.jpg', ],
-    ('沮丧', '失落', '失望',): ['SW.png', 'SW1.jpg', 'TQ.png', ],
+    ('沮丧', '失落', '失望', '撇嘴',): ['SW.png', 'SW1.jpg', 'TQ.png', ],
     ('生气', '恼火', '愤怒',): ['SQ.jpg', 'QF.gif', 'SQ1.jpg', ],
     ('好奇',): ['HQ.jpg', ],
     ('傲慢', '自信',): ['AM.jpg', ],
@@ -31,7 +31,7 @@ atri_face = {
     ('晚安',): ['WA.jpg', ],
     ('得意',): ['DY.gif', 'DY1.gif', ],
     ('元气', '活力四射', '活力',): ['DT.jpg', ],
-    ('期待',): ['QD.jpg', ],
+    ('期待', '撒娇',): ['QD.jpg', ],
     ('关心', '担心', '心疼',): ['GX.png', ],
     ('摸摸头', '抱抱', '摸摸', '摸', '拥抱', '摸头', '安慰',): ['MMT.png', ],
     ('惊', '惊讶', '吃惊', '吓', '惊吓', '震惊',): ['CJ.jpg', 'CJ1.jpg', 'CJ2.jpg', 'CJ.png', 'CJ1.png', ],
@@ -39,15 +39,17 @@ atri_face = {
     ('哭笑',): ['X.png', ],
     ('星星眼',): ['XXY.png', ],
     ('吐舌',): ['TS.jpg', ],
-    ('伤心', '悲伤', '悲', '难过',): ['SX.png', ],
+    ('伤心', '悲伤', '悲', '难过', '低落',): ['SX.png', ],
     ('流泪', '落泪',): ['K.png', ],
     ('哭', '哭泣', '抽泣',): ['KQ.png', ],
     ('大哭',): ['DK.png', ],
     ('斜眼笑',): ['XYX.jpg', ],
-    ('害羞', '羞', '羞耻', '羞涩',): ['HX.gif', ],
-    ('羡慕',): ['XM.jpg', 'XM1.jpg', ],
+    ('害羞', '羞', '羞耻', '羞涩', '脸红',): ['HX.gif', ],
+    ('羡慕',): ['XM.jpg', ],
     ('流口水', '馋', '嘴馋',): ['LKS.png', ],
     ('害怕', '恐惧',): ['HP.jpg', 'HP1.jpg', ],
+    ('可怜',): ['KL.jpg', 'KL1.jpg', ],
+    ('撒娇',): ['.jpg', ],
 }
 
 
@@ -96,7 +98,7 @@ class ChatModel:
         self.rater = {}
 
     async def get_prompt(self, group_id, user_id, user_info, bot):
-        prompt = "在网络群聊环境中中扮演用户与其他用户进行聊天\n"
+        prompt = "在网络群聊场景中以指定身份与其他用户进行聊天\n"
         # 角色设定
         prompt += (f"#角色设定\n"
                    f"{role.get_role_prompt()}\n")
@@ -115,7 +117,7 @@ class ChatModel:
         # 对话人信息
         lst_history = history.get_last_history()
         prompt += (f"\n#当前对话人信息\n"
-                   f"{"Ta是你的主人" if get_user_group(user_id) == "主人" else 'TA只是你的陪聊对象不要称呼Ta主人'}\n"
+                   f"{"Ta是你的主人" if get_user_group(user_id) == "主人" else 'TA只是普通用户不要称呼Ta主人'}\n"
                    f"你对Ta的好感度:{user_info.love}。正积极,负消极,最大1000,最小-1000,难增加,易减少\n")
         if user_info.memery:
             prompt += f"你与Ta的记忆:{user_info.memery}\n"

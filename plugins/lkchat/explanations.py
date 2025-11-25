@@ -1,5 +1,6 @@
-from .database import word_table
 import jieba
+
+from .database import word_table
 
 word_dict = {}
 

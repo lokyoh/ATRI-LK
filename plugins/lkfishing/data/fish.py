@@ -72,17 +72,15 @@ class FishData:
                 rand_q += random.randint(0, f_t.quality)
             rand_q += random.randint(1, int(fish.difficulty * 1.1))
             per = 0.25
-            if rand_q <= fish.difficulty:
-                pass
-            elif rand_q <= fish.difficulty * 2:
-                self.quality = '银'
-                per = 0.5
-            elif rand_q <= fish.difficulty * 3:
-                self.quality = '金'
-                per = 0.75
-            else:
+            if rand_q > fish.difficulty * 3:
                 self.quality = '铱'
                 per = 1
+            elif rand_q > fish.difficulty * 2:
+                self.quality = '金'
+                per = 0.75
+            elif rand_q > fish.difficulty:
+                self.quality = '银'
+                per = 0.5
             self.length = random.randint(self.fish.size['min'],
                                          self.fish.size['min'] + int((fish.size['max'] - self.fish.size['min']) * per))
         else:

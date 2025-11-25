@@ -79,6 +79,7 @@ class UserData:
             self.left_exp -= lvl_exp
             self.lvl += 1
             lvl_exp = self.get_lvl_exp()
+        log.debug(f"用户{self.id}经验变化{exp},现值{self.exp}")
         return True
 
     def love_change(self, num: int, mult: bool) -> bool:
@@ -91,6 +92,7 @@ class UserData:
                 self.love_mul_count -= 1
                 num = int(num * self.love_mul / 100)
         self.love += num
+        log.debug(f"用户{self.id}好感变化{num},现值{self.love}")
         return True
 
     def money_change(self, num: int) -> bool:
@@ -100,6 +102,7 @@ class UserData:
             money += num
             if money >= 0:
                 self.money = money
+                log.debug(f"用户{self.id}ATRI币变化{num},现值{self.money}")
                 return True
             return False
         return False
@@ -112,6 +115,7 @@ class UserData:
             return False
         item_stack.meta.num = num
         self.backpack.set_item_with_stack(item_stack)
+        log.debug(f"用户{self.id}的物品`{item_name}`数量变化{num},现值{num}")
         return True
 
     def exp_mul_change(self, exp_mul: int, times: int):
@@ -120,6 +124,7 @@ class UserData:
                 return False
         self.exp_mul = exp_mul
         self.exp_mul_count += times
+        log.debug(f"用户{self.id}经验倍率次数变化{times},现值{self.exp_mul}*{self.exp_mul_count}")
         return True
 
     def love_mul_change(self, love_mul: int, times: int):
@@ -128,6 +133,7 @@ class UserData:
                 return False
         self.love_mul = love_mul
         self.love_mul_count += times
+        log.debug(f"用户{self.id}好感倍率次数变化{times},现值{self.love_mul}*{self.love_mul_count}")
         return True
 
     def save_user_data(self):
@@ -145,6 +151,7 @@ class UserData:
 
     def __exit__(self, exc_type, exc_val, exc_tb):
         if exc_type is None and (self._modify or self.backpack.is_modify()):
+            log.debug(f'保存用户{self.id}的信息')
             self.save_user_data()
         users.user_lock[self.id].release()
         return False
@@ -229,6 +236,7 @@ LOVEMULCOUNT    INTEGER DEFAULT 0
             self.add_user_data(user_id, name)
 
         _add_user()
+        log.debug(f'新增用户{user_id}:{name}')
         return True
 
     @_name_lock.run

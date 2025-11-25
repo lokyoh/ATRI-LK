@@ -99,7 +99,7 @@ IMG_PATTERN = [
     (r"吃瓜", "CG.jpg"),
     (r"加油", "JY.jpg"),
     (r"^不对", "BD.jpg"),
-    (r"看看你|我看看", "BYK.jpg"),
+    (r"看(看|(一下))(你的?)?$", "BYK.jpg"),
 ]
 
 

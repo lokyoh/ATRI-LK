@@ -3,7 +3,7 @@ from random import choice
 from nonebot import get_bots
 from nonebot.adapters.onebot.v11.bot import Bot
 
-from .farm_user import user_farm_data
+from .farm_user import user_farm_datas
 from .. import config
 from ..config import LKFarmConfig
 
@@ -34,8 +34,8 @@ def get_next_weather(weather):
 
 async def weather_forecast():
     _config: LKFarmConfig = config.config()
-    weather = get_weather(user_farm_data.weather)
-    next_weather = get_next_weather(user_farm_data.next_weather)
+    weather = get_weather(user_farm_datas.weather)
+    next_weather = get_next_weather(user_farm_datas.next_weather)
     msg = (f'农场天气预报:\n'
            f'今日:{weather}\n'
            f'明日:{next_weather}')

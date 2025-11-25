@@ -120,25 +120,42 @@ class CropData:
             return False
         return True
 
-    def get_harvest_list(self) -> dict:
+    def get_harvest_list(self, level: int = 0) -> dict:
         harvest_list = {}
         for i in range(len(self._harvest_list[0])):
             item = self._harvest_list[0][i]
             match_plus = re.match(r"(.*)\+$", item)
             if match_plus:
                 item = match_plus[1]
-                while randint(0, 100) <= self._harvest_list[1][i]:
-                    if item in harvest_list:
-                        harvest_list[item] += 1
-                    else:
-                        harvest_list[item] = 1
-                continue
-            if randint(0, 100) <= self._harvest_list[1][i]:
-                if item in harvest_list:
-                    harvest_list[item] += 1
-                else:
-                    harvest_list[item] = 1
+                while randint(1, 100) <= self._harvest_list[1][i]:
+                    self._add_item_in_list(item, harvest_list, level)
+            else:
+                if randint(1, 100) <= self._harvest_list[1][i]:
+                    self._add_item_in_list(item, harvest_list, level)
         return harvest_list
+
+    @staticmethod
+    def _add_item_in_list(item, harvest_list, level):
+        quality = ''
+        if items.has_item(f'{item}-银'):
+            r_q = randint(1, 110)
+            r_q += randint(0, level * 6)
+            if r_q > 300:
+                quality = '铱'
+            elif r_q > 200:
+                quality = '金'
+            elif r_q > 100:
+                quality = '银'
+        if quality and items.has_item(f'{item}-{quality}'):
+            t_item = f'{item}-{quality}'
+        else:
+            if quality:
+                log.warning(f'{item}缺失品质{quality}')
+            t_item = item
+        if t_item in harvest_list:
+            harvest_list[t_item] += 1
+        else:
+            harvest_list[t_item] = 1
 
     def get_stage(self, days, harvest) -> int:
         if not harvest:

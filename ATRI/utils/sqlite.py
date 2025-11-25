@@ -9,28 +9,37 @@ class Cursor:
         self.cursor = conn.cursor()
         self.table_name = table_name
 
-    def insert(self, content, value):
-        if isinstance(content, str):
-            pass
-        elif isinstance(content, (tuple, list)):
-            content = ', '.join(content)
+    def insert(self, content: str | tuple | list | dict, value: str | tuple | list | None = None):
+        if isinstance(content, dict):
+            contents = ', '.join(content.keys())
+            values = tuple(content.values())
+            placeholder = ', '.join(f'?' for _ in values)
+            self.cursor.execute(f"INSERT INTO {self.table_name} ({contents}) VALUES ({placeholder})", values)
         else:
-            raise TypeError
-        if isinstance(value, str):
-            self.cursor.execute(f"INSERT INTO {self.table_name} ({content}) VALUES ({value})")
-        elif isinstance(value, (tuple, list)):
-            placeholder = ', '.join(f'?' for _ in value)
-            self.cursor.execute(f"INSERT INTO {self.table_name} ({content}) VALUES ({placeholder})", value)
-        else:
-            raise TypeError
+            if isinstance(content, str):
+                pass
+            elif isinstance(content, (tuple, list)):
+                content = ', '.join(content)
+            else:
+                raise TypeError
+            if isinstance(value, str):
+                self.cursor.execute(f"INSERT INTO {self.table_name} ({content}) VALUES ({value})")
+            elif isinstance(value, (tuple, list)):
+                placeholder = ', '.join(f'?' for _ in value)
+                self.cursor.execute(f"INSERT INTO {self.table_name} ({content}) VALUES ({placeholder})", value)
+            else:
+                raise TypeError
 
-    def update(self, content, req):
+    def update(self, content: str | tuple | list | dict, req: str | tuple | list | dict):
         values = ()
         if isinstance(req, str):
             condition = req
         elif isinstance(req, (tuple, list)):
             condition = 'AND '.join(f'{c} = ?' for c in req[0])
             values = req[1]
+        elif isinstance(req, dict):
+            condition = 'AND '.join(f'{c} = ?' for c in req.keys())
+            values = tuple(req.values())
         else:
             raise TypeError
         if isinstance(content, str):
@@ -38,6 +47,9 @@ class Cursor:
         elif isinstance(content, (tuple, list)):
             values = (*content[1], *values)
             content = ', '.join(f'{c} = ?' for c in content[0])
+        elif isinstance(content, dict):
+            values = (*content.values(), *values)
+            content = ', '.join(f'{c} = ?' for c in content.keys())
         else:
             raise TypeError
         if values:
@@ -45,18 +57,22 @@ class Cursor:
         else:
             self.cursor.execute(f"UPDATE {self.table_name} SET {content} WHERE {condition}")
 
-    def delete(self, req):
+    def delete(self, req: str | tuple | list | dict):
         if isinstance(req, str):
             self.cursor.execute(f"DELETE FROM {self.table_name} WHERE {req}")
-        elif isinstance(req, (tuple, list)):
-            condition = req[0]
-            values = req[1]
+        elif isinstance(req, (tuple, list, dict)):
+            if isinstance(req, dict):
+                condition = req.keys()
+                values = tuple(req.values())
+            else:
+                condition = req[0]
+                values = req[1]
             self.cursor.execute(f"DELETE FROM {self.table_name} WHERE {', '.join(f'{c} = ?' for c in condition)}",
                                 values)
         else:
             raise TypeError
 
-    def execute(self, sql, args = None):
+    def execute(self, sql, args=None):
         if args:
             result = self.cursor.execute(sql, args)
         else:
@@ -90,15 +106,19 @@ class DBTable:
         cursor.close()
         return content
 
-    def select(self, content: str, req: str | tuple | list):
+    def select(self, content: str, req: str | tuple | list | dict):
         cursor = self._conn.cursor()
         if isinstance(req, str):
             result = cursor.execute(f"SELECT {content} FROM {self.table_name} WHERE {req}")
-        elif isinstance(req, (tuple, list)):
-            condition = req[0]
-            values = req[1]
+        elif isinstance(req, (tuple, list, dict)):
+            if isinstance(req, dict):
+                condition = req.keys()
+                values = tuple(req.values())
+            else:
+                condition = req[0]
+                values = req[1]
             result = cursor.execute(
-                f"SELECT {content} FROM {self.table_name} WHERE {'AND '.join(f'{c} = ?' for c in condition)}", values)
+                f"SELECT {content} FROM {self.table_name} WHERE {' AND '.join(f'{c} = ?' for c in condition)}", values)
         else:
             raise TypeError
         content = []
@@ -107,60 +127,17 @@ class DBTable:
         cursor.close()
         return content
 
-    def insert(self, content: str | tuple | list, value: str | tuple | list):
-        cursor = self._conn.cursor()
-        if isinstance(content, str):
-            pass
-        elif isinstance(content, (tuple, list)):
-            content = ', '.join(content)
-        else:
-            raise TypeError
-        if isinstance(value, str):
-            cursor.execute(f"INSERT INTO {self.table_name} ({content}) VALUES ({value})")
-        elif isinstance(value, (tuple, list)):
-            placeholder = ', '.join(f'?' for _ in value)
-            cursor.execute(f"INSERT INTO {self.table_name} ({content}) VALUES ({placeholder})", value)
-        else:
-            raise TypeError
-        self._conn.commit()
-        cursor.close()
+    def insert(self, content: str | tuple | list | dict, value: str | tuple | list | None = None):
+        with self.get_cursor() as cursor:
+            cursor.insert(content, value)
 
-    def update(self, content: str | tuple | list, req: str | tuple | list):
-        cursor = self._conn.cursor()
-        values = ()
-        if isinstance(req, str):
-            condition = req
-        elif isinstance(req, (tuple, list)):
-            condition = 'AND '.join(f'{c} = ?' for c in req[0])
-            values = req[1]
-        else:
-            raise TypeError
-        if isinstance(content, str):
-            pass
-        elif isinstance(content, (tuple, list)):
-            values = (*content[1], *values)
-            content = ', '.join(f'{c} = ?' for c in content[0])
-        else:
-            raise TypeError
-        if values:
-            cursor.execute(f"UPDATE {self.table_name} SET {content} WHERE {condition}", values)
-        else:
-            cursor.execute(f"UPDATE {self.table_name} SET {content} WHERE {condition}")
-        self._conn.commit()
-        cursor.close()
+    def update(self, content: str | tuple | list | dict, req: str | tuple | list | dict):
+        with self.get_cursor() as cursor:
+            cursor.update(content, req)
 
-    def delete(self, req: str | tuple | list):
-        cursor = self._conn.cursor()
-        if isinstance(req, str):
-            cursor.execute(f"DELETE FROM {self.table_name} WHERE {req}")
-        elif isinstance(req, (tuple, list)):
-            condition = req[0]
-            values = req[1]
-            cursor.execute(f"DELETE FROM {self.table_name} WHERE {', '.join(f'{c} = ?' for c in condition)}", values)
-        else:
-            raise TypeError
-        self._conn.commit()
-        cursor.close()
+    def delete(self, req: str | tuple | list | dict):
+        with self.get_cursor() as cursor:
+            cursor.delete(req)
 
 
 class DataBase:
@@ -172,7 +149,7 @@ class DataBase:
         self._connection.commit()
         cursor.close()
 
-    def get_table(self, table_name: str, table_content: str, table_version: int, update_dp = None) -> DBTable:
+    def get_table(self, table_name: str, table_content: str, table_version: int, update_dp=None) -> DBTable:
         if table_name in self._table_list:
             raise ValueError(f"表 {table_name} 已经存在")
         self._table_list.append(table_name)

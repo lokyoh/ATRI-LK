@@ -2,7 +2,7 @@ from random import randint
 
 
 def get_w_r(num: int):
-    return randint(0, 999) < num
+    return randint(1, 1000) < num
 
 
 def get_weather(month: int, day: int, weather: int):

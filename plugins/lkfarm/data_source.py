@@ -22,8 +22,10 @@ from ATRI.system.lkapi.entity.user import UserData
 from ATRI.utils.sqlite import DataBase
 from ATRI.log import log
 
-from .system.crop import load_crop_data, seed_shop, crop_data_list, CropData, Month, Season
+from .system.crop import load_crop_data, crop_data_list, CropData, Month, Season
+from .system.farm_shop import farm_shop, get_farm_shop_info
 from .system.farm_user import user_farm_datas, UserFarmData, get_user_farm_data
+from .system.fertilizer import load_fertilizer_data, fertilizer_datas, add_fertilizer_to_shop
 from .system.forecast import weather_forecast
 from .system.weather import get_weather
 from . import config, plugin
@@ -37,9 +39,11 @@ FARM_RES_PATH = RES_DIR / 'data' / "lkfarm"
 
 @item_loading_events.handle()
 def lkfarm_item_loading():
-    seed_shop.clear_goods()
+    farm_shop.clear_goods()
+    load_fertilizer_data('Core', fertilizer_datas)
+    add_fertilizer_to_shop()
     load_crop_data('Core', FARM_RES_PATH / "Crop")
-    shops.register(seed_shop)
+    shops.register(farm_shop)
 
 
 @daily_update_event.handle()
@@ -61,15 +65,14 @@ def lkfarm_farm_daily_update():
     month = date.today().month
     if date.today().day == 1 and month % 3 == 0:
         log.info("开始更新种子商店")
-        seed_shop.clear_goods()
+        farm_shop.clear_goods()
+        add_fertilizer_to_shop()
         for name in crop_data_list:
             crop_data: CropData = crop_data_list[name]
             if crop_data.growable(month) and crop_data.get_seed_price() != 0:
-                seed_shop.add_goods(name if crop_data.crop_is_seed() else f"{name}种子",
-                                    crop_data.get_seed_price())
-        seed_shop.set_shop_info(
-            f"这是亚托莉小店售卖种子的地方,现在正在出售`{Month(month).to_season().value}`的种子,快来看看吧。")
-        log.success(f"种子商店更新完成，共{len(seed_shop.get_goods_list())}种子上架")
+                farm_shop.add_goods(name if crop_data.crop_is_seed() else f"{name}种子", crop_data.get_seed_price())
+        farm_shop.set_shop_info(get_farm_shop_info())
+        log.success(f"种子商店更新完成，共{len(farm_shop.get_goods_list())}种子上架")
     log.success("农场数据更新成功")
 
 
@@ -214,6 +217,18 @@ class FarmSystem:
         return m
 
     @staticmethod
+    def fertilization(f_user_data: UserFarmData, location, fertilizer, user_data):
+        row = location[0]
+        line = int(location[1])
+        item = items.get_item_by_name(fertilizer)
+        if item is None:
+            return f"没有物品 {fertilizer} 的物品数据"
+        r, m = f_user_data.fertilization(row, line, fertilizer, user_data)
+        if r:
+            return None
+        return m
+
+    @staticmethod
     def easy_operation(f_user_data: UserFarmData, user_data: UserData):
         for i, field in enumerate(f_user_data.fields):
             row = chr(ord('A') + int(i / 8))
@@ -223,8 +238,7 @@ class FarmSystem:
             if field.state == 1 and field.water == 0:
                 f_user_data.watering(row, line)
             if field.state == 1 and field.crop in crop_data_list:
-                crop_data: CropData = crop_data_list[field.crop]
-                if crop_data.can_harvest(field.days, field.harvest):
+                if field.crop_can_harvest():
                     f_user_data.harvesting(row, line, user_data)
 
 

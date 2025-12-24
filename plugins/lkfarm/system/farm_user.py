@@ -7,10 +7,12 @@ from ATRI.log import log
 from ATRI.utils.lock import GroupLock
 from ATRI.system.lkapi.entity.user import UserData
 
-from .crop import crop_data_list, CropData, Month
+from .crop import crop_data_list, CropData
 from .datebase import farm_table, user_table
 from .farm_field import FarmField
 from .weather import get_weather
+from .fertilizer import fertilizer_data_list
+from .season import Month
 
 
 class UserFarmData:
@@ -105,7 +107,7 @@ class UserFarmData:
         if not data.crop_can_harvest():
             return False, f"不可收获"
         crop_data: CropData = crop_data_list[data.crop]
-        data.harvesting(user_data, crop_data)
+        data.harvesting(user_data, crop_data, self)
         self.exp_change(crop_data.get_harvest_exp())
         log.debug(f"{self.id}收获了{row}{line}位置的农作物{crop_data.get_crop_name()}")
         return True, None
@@ -120,6 +122,20 @@ class UserFarmData:
         log.debug(f"{self.id}在{row}{line}位置锄地")
         return True, None
 
+    def fertilization(self, row: str, line: int, fertilizer: str, user_data: UserData) -> tuple[bool, str | None]:
+        data: FarmField = self.get_field(row, line)
+        if data.state == 0:
+            return False, f"请先锄地"
+        if data.crop != "" or data.state == 0:
+            return False, f"已经种植作物不能再施肥了"
+        if not fertilizer in fertilizer_data_list:
+            return False, f"{fertilizer} 的肥料数据未找到"
+        if not user_data.item_num_change(fertilizer, -1):
+            return False, f"背包中没有 {fertilizer}"
+        data.fertilization(fertilizer)
+        log.debug(f"{self.id}在{row}{line}位置使用{fertilizer}")
+        return True, None
+
     def update(self, user_date, weather):
         day = datetime.strptime(user_date, '%Y-%m-%d').date()
         if day == date.today():
@@ -129,10 +145,13 @@ class UserFarmData:
         self.lucky = randint(-100, 100)
         user_table.update(f"DATE = '{date.today()}', ENDURANCE = {self.endurance}, LUCKY = {self.lucky}",
                           f"ID = {self.id}")
+        is_cross_seasonal = False
+        if Month(date.today().month).to_season() != Month(day.month).to_season():
+            is_cross_seasonal = True
         for i in range(len(self.fields)):
-            if not self.fields[i].is_out_season():
+            if not self.fields[i].is_out_season(is_cross_seasonal):
                 rainy = False
-                if weather == 1 or weather == 2 or weather == 3:
+                if 1<= weather <= 3:
                     rainy = True
                 self.fields[i].water_change(rainy)
         self.save_user_data()

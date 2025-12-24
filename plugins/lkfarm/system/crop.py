@@ -8,56 +8,10 @@ import yaml
 
 from ATRI.log import log
 from ATRI.system.lkapi.entity.item import items, Item, ItemType
-from ATRI.system.lkapi.entity.shop import Shop
 from ATRI.exceptions import str_traceback
 
-
-class Season(Enum):
-    """春3-5，夏6-8，秋9-11，冬12-2"""
-    SPRING = "春季"
-    SUMNER = "夏季"
-    AUTUMN = "秋季"
-    WINTER = "冬季"
-    SPRSUM = "春夏两季"
-    SUMAUT = "夏秋两季"
-    SPSUAU = "春夏秋三季"
-    ALL = "全季"
-
-    def get_seasons(self):
-        if self == Season.SPRSUM:
-            return [Season.SPRING, Season.SUMNER]
-        if self == Season.SUMAUT:
-            return [Season.SUMNER, Season.AUTUMN]
-        if self == Season.SPSUAU:
-            return [Season.SPRING, Season.SUMNER, Season.AUTUMN]
-        if self == Season.ALL:
-            return [Season.SPRING, Season.SUMNER, Season.AUTUMN, Season.WINTER]
-        return [self]
-
-
-class Month(Enum):
-    JANUARY = 1
-    FEBRUARY = 2
-    MARCH = 3
-    APRIL = 4
-    MAY = 5
-    JUNE = 6
-    JULY = 7
-    AUGUST = 8
-    SEPTEMBER = 9
-    OCTOBER = 10
-    NOVEMBER = 11
-    DECEMBER = 12
-
-    def to_season(self) -> Season:
-        if 3 <= self.value <= 5:
-            return Season.SPRING
-        elif 6 <= self.value <= 8:
-            return Season.SUMNER
-        elif 9 <= self.value <= 11:
-            return Season.AUTUMN
-        else:
-            return Season.WINTER
+from .farm_shop import farm_shop
+from .season import Season, Month
 
 
 class CropType(Enum):
@@ -105,84 +59,43 @@ class CropData:
             days += day
         return days
 
-    def can_harvest(self, days: int, harvest: bool) -> bool:
-        if harvest:
-            if days >= self._lasting:
-                return True
-            return False
-        else:
-            if days >= self.get_growth_days():
-                return True
-            return False
-
     def is_lasting(self) -> bool:
         if self._lasting == 0:
             return False
         return True
 
-    def get_harvest_list(self, level: int = 0) -> dict:
-        harvest_list = {}
+    def get_harvest_list(self) -> list:
+        harvest_list = []
         for i in range(len(self._harvest_list[0])):
             item = self._harvest_list[0][i]
             match_plus = re.match(r"(.*)\+$", item)
             if match_plus:
                 item = match_plus[1]
                 while randint(1, 100) <= self._harvest_list[1][i]:
-                    self._add_item_in_list(item, harvest_list, level)
+                    harvest_list.append(item)
             else:
                 if randint(1, 100) <= self._harvest_list[1][i]:
-                    self._add_item_in_list(item, harvest_list, level)
+                    harvest_list.append(item)
         return harvest_list
 
-    @staticmethod
-    def _add_item_in_list(item, harvest_list, level):
-        quality = ''
-        if items.has_item(f'{item}-银'):
-            r_q = randint(1, 110)
-            r_q += randint(0, level * 6)
-            if r_q > 300:
-                quality = '铱'
-            elif r_q > 200:
-                quality = '金'
-            elif r_q > 100:
-                quality = '银'
-        if quality and items.has_item(f'{item}-{quality}'):
-            t_item = f'{item}-{quality}'
-        else:
-            if quality:
-                log.warning(f'{item}缺失品质{quality}')
-            t_item = item
-        if t_item in harvest_list:
-            harvest_list[t_item] += 1
-        else:
-            harvest_list[t_item] = 1
+    def get_growth_stage(self):
+        return self._growth_stage
 
-    def get_stage(self, days, harvest) -> int:
-        if not harvest:
-            stage_day = 0
-            for i in range(len(self._growth_stage)):
-                stage_day += self._growth_stage[i]
-                if days < stage_day:
-                    return i + 1
-            return len(self._growth_stage) + 1
-        else:
-            if days < self._lasting:
-                return len(self._growth_stage) + 2
-            return len(self._growth_stage) + 1
+    def get_lasting(self):
+        return self._lasting
 
     def get_harvest_exp(self) -> int:
         return self._exp
 
 
-seed_shop = Shop("种子商店",
-                 f"这是亚托莉小店售卖种子的地方,现在正在出售{Month(date.today().month).to_season().value}的种子,快来看看吧。")
-
-crop_data_list = {}
+crop_data_list: dict[str, CropData] = {}
 
 
 def load_crop_data(loader_name: str, path: Path):
     global crop_data_list
     crop_dirs = os.listdir(path)
+    crop_count = 0
+    shop_count = 0
     for crop_dir in crop_dirs:
         try:
             conf = yaml.safe_load((path / crop_dir / "data.yml").read_bytes())
@@ -209,9 +122,11 @@ def load_crop_data(loader_name: str, path: Path):
                 crop4 = Item(f"{crop_name}-铱", _type, crop_intro, crop_price * 2)
                 items.register(seed).register(crop).register(crop2).register(crop3).register(crop4)
             if crop_data.growable(date.today().month) and crop_data.get_seed_price() != 0:
-                seed_shop.add_goods(seed, crop_data.get_seed_price())
+                farm_shop.add_goods(seed, crop_data.get_seed_price())
+                shop_count += 1
             crop_data_list[crop_name] = crop_data
+            crop_count += 1
         except Exception as e:
             log.error(f"加载作物失败:\n{str_traceback(e)}")
-    log.success(f"{loader_name}共加载{len(crop_data_list)}种作物")
-    log.success(f"{loader_name}共有{len(seed_shop.get_goods_list())}种作物上架商店")
+    log.success(f"{loader_name}共加载{crop_count}种作物")
+    log.success(f"{loader_name}共有{shop_count}种作物上架商店")

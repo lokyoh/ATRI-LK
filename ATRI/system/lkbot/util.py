@@ -258,8 +258,10 @@ def load_item_data():
     """加载物品与商店数据，可通过调用以实现随时加载数据"""
     items.items_clear()
     shops.shops_clear()
+    log.debug(f"register item from file")
     # 从本地文件加载物品数据
     auto_load_items()
+    log.debug(f"register item from code")
     # 可以在此事件为物品添加使用方法的添加
     item_loading_events.notify(BaseEvent('物品加载事件'))
     log.success(f'物品商店注册完成:共注册{len(items.get_item_list())}个物品，{len(shops.get_shop_names())}个商店')
@@ -268,10 +270,13 @@ def load_item_data():
 def on_startup():
     """所有插件加载完毕后启动时的启动项"""
     from ATRI.system.lkbot import plugin
+    log.debug(f"register core item function")
     register_core_func()
+    log.debug(f"register other item function")
     func_register_events.notify(BaseEvent('物品功能注册事件'))
     log.success(f'物品方法注册成功:共注册{item_funcs.check_num()}个检测器，{item_funcs.func_num()}个物品方法')
     load_item_data()
+    log.debug(f"add daily update job")
     plugin.scheduler_jobs().add_job(daily_update, '每日更新任务', 'cron', hour=0, minute=0)
     try:
         from ATRI.system.lk_imglib.data_source import get_background
@@ -280,6 +285,7 @@ def on_startup():
     except:
         pass
     init_finish_events.notify(BaseEvent('初始化完成事件'))
+    log.debug(f"init finish")
 
 
 lk_util = BaseFunc()

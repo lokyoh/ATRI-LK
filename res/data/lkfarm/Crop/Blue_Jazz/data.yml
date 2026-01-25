@@ -9,5 +9,4 @@ price:
     seed_sell: 15
 growth:
     stage: [1, 2, 2, 2]
-    lasting: 0
 harvest_list: [["蓝爵"],[100]]

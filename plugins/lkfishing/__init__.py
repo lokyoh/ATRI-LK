@@ -8,6 +8,7 @@ from ATRI.service import Service
 from ATRI.message import img_msg
 from ATRI.system.lkapi.bot.checker import IsLkUser
 from ATRI.system.lkapi.bot import util as lk_util
+from ATRI.system.lkapi.entity.item import items
 from ATRI.system.lkapi.entity.user import get_user_data
 from ATRI.system.htmlrender import md_to_pic
 
@@ -17,11 +18,12 @@ from .data.fishing_rod import FishingRod, fishing_rod_dict
 from .data.user import get_fish_user_data
 from .data.achievement import achievements
 from .data_source import FishingController
+from .data.fish import FishData
 
 plugin = Service(
     "钓鱼",
     "ATRI的钓鱼插件",
-    "0.2.1",
+    "0.3.0",
     Service.ServiceType.ENTERTAINMENT
 ).main_cmd("/钓鱼")
 
@@ -87,15 +89,22 @@ async def _(event: MessageEvent):
     try:
         fish, msg = FishingController.take_up(user_id)
         if msg:
-            await take.send(f'获得成就:\n{'\n'.join(f'{m}' for m in msg)}')
-        await take.finish(
-            f'{lk_util.get_name(user_id)}钓到了[{fish.fish.name}{f'-{fish.quality}' if fish.quality else ''}]!\n'
-            f'介绍:{fish.fish.description}\n'
-            f'{
-            f'长度:{fish.length}cm{' 最大长度!!!' if fish.length == fish.fish.size['max'] else ''}\n'
-            if fish.length else ''
-            }'
-        )
+            await take.send(f'{lk_util.get_name(user_id)}获得成就:\n{'\n'.join(f'{m}' for m in msg)}')
+        item_tips = [f'{lk_util.get_name(user_id)}钓到了']
+        for item, num in fish.items():
+            if isinstance(item, FishData):
+                item_tips.append(
+                    f'''[{item.fish.name}{f'-{item.quality}' if item.quality else ''}] * {num}!
+介绍:{item.fish.description}
+{f'长度:{item.length}cm{' 最大长度!!!' if item.length == item.fish.size['max'] else ''}' if item.length else ''}'''
+                )
+            else:
+                item_tips.append(f'[{item}] * {num}!\n介绍:{items.get_item_by_name(item).get_item_info()}')
+        fish_tip = f'\n{'-'*10}\n'.join(item_tips)
+        if len(fish_tip) <= 500:
+            await take.finish(fish_tip)
+        else:
+            await take.finish(img_msg(await md_to_pic(fish_tip)))
     except FishingException as e:
         await through.finish(e.message)
 

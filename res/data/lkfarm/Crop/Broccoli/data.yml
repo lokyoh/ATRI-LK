@@ -9,5 +9,4 @@ price:
     seed_sell: 40
 growth:
     stage: [2, 2, 2, 2]
-    lasting: 0
 harvest_list: [["西蓝花"],[100]]

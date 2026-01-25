@@ -9,5 +9,4 @@ price:
     seed_sell: 30
 growth:
     stage: [1, 3, 3, 3]
-    lasting: 0
 harvest_list: [["山药"],[100]]

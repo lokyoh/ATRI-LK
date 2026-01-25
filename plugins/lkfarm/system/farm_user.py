@@ -136,6 +136,19 @@ class UserFarmData:
         log.debug(f"{self.id}在{row}{line}位置使用{fertilizer}")
         return True, None
 
+    def c_remove(self, row, line):
+        data: FarmField = self.get_field(row, line)
+        if data.state == 0:
+            return False, f"请先锄地"
+        if data.crop is None:
+            return False, f"没有作物"
+        if not self.endurance_change(-20):
+            return False, "体力不足"
+        crop = data.crop
+        data.c_remove()
+        log.debug(f"{self.id}铲除{row}{line}位置的作物{crop}")
+        return True, None
+
     def update(self, user_date, weather):
         day = datetime.strptime(user_date, '%Y-%m-%d').date()
         if day == date.today():
@@ -151,7 +164,7 @@ class UserFarmData:
         for i in range(len(self.fields)):
             if not self.fields[i].is_out_season(is_cross_seasonal):
                 rainy = False
-                if 1<= weather <= 3:
+                if 1 <= weather <= 3:
                     rainy = True
                 self.fields[i].water_change(rainy)
         self.save_user_data()

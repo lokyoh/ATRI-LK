@@ -177,7 +177,6 @@ class Helper:
 
     @classmethod
     def get_text_list(cls, event=None):
-        log.info("发送服务列表图片失败，使用用文字方式发送")
         services_info = ""
         for _type in Service.ServiceType:
             if _type == Service.ServiceType.HIDDEN:

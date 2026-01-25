@@ -9,5 +9,4 @@ price:
     seed_sell: 40
 growth:
     stage: [1, 2, 4, 4, 1]
-    lasting: 0
 harvest_list: [["花椰菜"],[100]]

@@ -9,5 +9,4 @@ price:
     seed_sell: 35
 growth:
     stage: [1, 2, 2, 2]
-    lasting: 0
 harvest_list: [["苋菜"],[100]]

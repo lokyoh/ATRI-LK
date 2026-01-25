@@ -14,12 +14,13 @@ from ATRI.system.lkapi.entity.user import get_user_data
 from plugins.lkfarm.system.farm_user import user_farm_datas, get_user_farm_data
 
 from .data.achievement import load_achievements, achievements
-from .data.fish import FishData, Fish, FishingItem
-from .data.user import get_fish_user_data, FishingUser
-from .data.fishing_rod import fishing_rod_dict, FishingRod
 from .data.bait import bait_dict, Bait
-from .data.fishing_tackle import fishing_tackle_dict, FishingTackle
 from .data.exception import FishingException
+from .data.fish import FishData, Fish, FishingItem
+from .data.fishing_rod import fishing_rod_dict, FishingRod
+from .data.fishing_tackle import fishing_tackle_dict, FishingTackle
+from .data.treasure import treasure_manager
+from .data.user import get_fish_user_data, FishingUser
 
 DATA_PATH = RES_DATA_DIR / "lkfishing"
 
@@ -42,8 +43,8 @@ class FishingController:
         fishing_rod = info.get_fishing_rod()
         wait_time = random.randint(10, 30) - bait.time - fishing_rod.time
         fishing_tackle = info.get_fishing_tackle()
-        if fishing_tackle is not None:
-            wait_time -= fishing_tackle.time
+        if fishing_tackle:
+            wait_time -= fishing_tackle.waiting_time
         if wait_time < 1:
             wait_time = 1
         with get_user_farm_data(user_id) as user_farm_data:
@@ -68,17 +69,28 @@ class FishingController:
                 del cls.player_fishing_data[user_id]
                 raise FishingException('🐟还没有上钩呢...请重新钓鱼吧')
             now = time.time()
-            if now - cls.player_fishing_data[user_id] > 15.:
+            max_wait_time = 15.
+            if trackle := info.get_fishing_tackle():
+                max_wait_time += trackle.reaction_time
+            if now - cls.player_fishing_data[user_id] > max_wait_time:
                 del cls.player_fishing_data[user_id]
                 info.use_bait()
+                info.increase_tackle_damage()
                 raise FishingException('🐟已经跑掉了...')
             fish_data = cls.gene_fish(info)
+            t_l = cls.gene_treasure(info)
             info.use_bait()
             with get_user_data(user_id) as user_data:
-                user_data.item_num_change(
-                    f'{fish_data.fish.name}{f'-{fish_data.quality}' if fish_data.quality else ''}', 1)
-            info.add_xp(fish_data.fish.xp)
-            achis = info.add_fish(fish_data)
+                for _fish, _num in fish_data.items():
+                    user_data.item_num_change(f'{_fish.fish.name}{f'-{_fish.quality}' if _fish.quality else ''}', _num)
+                    info.add_xp(_fish.fish.xp)
+                    achis = info.add_fish(_fish)
+                if t_l:
+                    for _item, _num in t_l.items():
+                        user_data.item_num_change(_item, _num)
+                        fish_data[_item] = _num
+            if info.get_fishing_tackle():
+                info.increase_tackle_damage()
             del cls.player_fishing_data[user_id]
             return fish_data, achis
 
@@ -108,17 +120,29 @@ class FishingController:
         return item_list, item_weight_list
 
     @classmethod
-    def gene_fish(cls, user_data: FishingUser) -> FishData:
+    def gene_fish(cls, user_data: FishingUser) -> dict:
         fish_list, weight_list = cls.get_fish_weight(user_data.position, user_farm_datas.weather)
         item_list, item_weight_list = cls.get_fish_item_weight(user_data.position, user_farm_datas.weather)
         if len(fish_list) == 0 and len(item_list) == 0:
             raise FishingException('该地域此时没有任何鱼类!!!\n请反馈...')
-        if (len(item_list) != 0 and random.random() < 0.1) or len(fish_list) == 0:
+        fishi_chance = .1
+        if tackle := user_data.get_fishing_tackle():
+            fishi_chance += tackle.fishi_chance
+        if (len(item_list) != 0 and random.random() < fishi_chance) or len(fish_list) == 0:
             fish = random.choices(item_list, weights=item_weight_list)[0]
         else:
             fish = random.choices(fish_list, weights=weight_list)[0]
-        fish_data = FishData(fish, user_data)
-        return fish_data
+        return {FishData(fish, user_data): 1}
+
+    @classmethod
+    def gene_treasure(cls, user_data: FishingUser) -> dict | None:
+        treasure_chance = 100
+        tackle = user_data.get_fishing_tackle()
+        if tackle:
+            treasure_chance += tackle.treasure_chance
+        if random.randint(1, 10000) <= treasure_chance:
+            return treasure_manager.gene_treasure()
+        return None
 
     @classmethod
     def load_fish_data(cls):
@@ -213,12 +237,27 @@ class FishingController:
                 except Exception as e:
                     log.error(f'trackle-{tackle_file}-{key}无效渔具配置:\n{str_traceback(e)}')
 
+    @classmethod
+    def load_treasure_data(cls):
+        treasure_path = DATA_PATH / "treasure"
+        treasure_files = os.listdir(treasure_path)
+        for treasure_file in treasure_files:
+            treasure_data = yaml.safe_load((treasure_path / treasure_file).read_bytes())
+            if treasure_data is None:
+                continue
+            for key in treasure_data:
+                try:
+                    treasure_manager.add_dict_loot(key, treasure_data[key])
+                except Exception as e:
+                    log.error(f'treasure-{treasure_file}-{key}无效宝藏配置:\n{str_traceback(e)}')
+
 
 @item_loading_events.handle()
 def loading_lkfishing_data():
     FishingController.fish_area_data.clear()
     fishing_rod_dict.clear()
     bait_dict.clear()
+    treasure_manager.clear()
     FishingController.fishing_shop.clear_goods()
     fishing_tackle_dict.clear()
     achievements.clear()
@@ -226,6 +265,7 @@ def loading_lkfishing_data():
     FishingController.load_fishing_rod_data()
     FishingController.load_bait_data()
     FishingController.load_fishing_tackle_data()
+    FishingController.load_treasure_data()
     shops.register(FishingController.fishing_shop)
     load_achievements()
     log.success(f'lkfishing数据加载完成')

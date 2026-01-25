@@ -2,9 +2,9 @@ name: "蓝莓"
 intro: "一种据说拥有多种益处的浆果。蓝莓拥有最高浓度的营养。"
 season: "夏季"
 type: "水果"
-exp: 10
+exp: 23
 price:
-    crop: 50
+    crop: 115
     seed: 80
     seed_sell: 40
 growth:

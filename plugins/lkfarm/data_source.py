@@ -1,11 +1,13 @@
+import os
 import re
-from datetime import date, timedelta
+import zlib
+from datetime import date, timedelta, datetime
 
 from nonebot.adapters.onebot.v11 import Event
 from nonebot.internal.matcher import Matcher
 from nonebot.internal.params import Depends
 
-from ATRI import RES_DIR
+from ATRI.dir import RES_DIR, TEMP_DIR
 from ATRI.system.htmlrender import md_to_pic
 from ATRI.system.lkapi.bot import util as lk_util
 from ATRI.system.lkapi.bot.events import (
@@ -25,7 +27,7 @@ from ATRI.log import log
 from .system.crop import load_crop_data, crop_data_list, CropData, Month, Season
 from .system.farm_shop import farm_shop, get_farm_shop_info
 from .system.farm_user import user_farm_datas, UserFarmData, get_user_farm_data
-from .system.fertilizer import load_fertilizer_data, fertilizer_datas, add_fertilizer_to_shop
+from .system.fertilizer import load_fertilizer_data, add_fertilizer_to_shop
 from .system.forecast import weather_forecast
 from .system.weather import get_weather
 from . import config, plugin
@@ -35,12 +37,13 @@ _config = config.config()
 plugin.scheduler_jobs().add_job(weather_forecast, "农场天气预报", 'cron', hour=_config.hour, minute=_config.minute)
 
 FARM_RES_PATH = RES_DIR / 'data' / "lkfarm"
+FARM_TEMP_PATH = TEMP_DIR / 'farm'
 
 
 @item_loading_events.handle()
 def lkfarm_item_loading():
     farm_shop.clear_goods()
-    load_fertilizer_data('Core', fertilizer_datas)
+    load_fertilizer_data()
     add_fertilizer_to_shop()
     load_crop_data('Core', FARM_RES_PATH / "Crop")
     shops.register(farm_shop)
@@ -82,7 +85,7 @@ def lkfarm_sign_in(event: SignInEvent):
     item = ""
     if season == Season.SPRING:
         item = "胡萝卜种子"
-    elif season == Season.SUMNER:
+    elif season == Season.SUMMER:
         item = "金皮西葫芦种子"
     elif season == Season.AUTUMN:
         item = "西蓝花种子"
@@ -137,18 +140,33 @@ class FarmSystem:
         for field in user_data.fields:
             fields.append(field.to_md())
         level, level_exp = user_data.get_level_exp()
-        return await md_to_pic(
-            self._FARM_MODEL.format(
-                today_date=date.today(),
-                weather=self.WEATHER[user_farm_datas.weather],
-                next_weather=self.WEATHER[user_farm_datas.next_weather],
-                endur=user_data.endurance,
-                field=fields,
-                name=lk_util.get_name(user_id),
-                level=level,
-                exp=level_exp,
-            )
+        farm_md = self._FARM_MODEL.format(
+            today_date=date.today(),
+            weather=self.WEATHER[user_farm_datas.weather],
+            next_weather=self.WEATHER[user_farm_datas.next_weather],
+            endur=user_data.endurance,
+            field=fields,
+            name=lk_util.get_name(user_id),
+            level=level,
+            exp=level_exp,
         )
+        f_hash = format(zlib.crc32(farm_md.encode()) & 0xFFFFFFFF, '08x')
+        f_path_hash = FARM_TEMP_PATH / f'{user_id}.hash'
+        f_path_img = FARM_TEMP_PATH / f'{user_id}.png'
+        if f_path_img.exists() and date.fromtimestamp(os.path.getmtime(f_path_img)) == datetime.now().date():
+            if f_path_hash.exists():
+                with open(f_path_hash, 'r') as f:
+                    old_hash = f.read()
+                if old_hash == f_hash:
+                    with open(f_path_img, 'rb') as f:
+                        return f.read()
+        FARM_TEMP_PATH.mkdir(parents=True, exist_ok=True)
+        with open(f_path_hash, 'w') as f:
+            f.write(f_hash)
+        f_bytes = await md_to_pic(farm_md)
+        with open(f_path_img, 'wb') as f:
+            f.write(f_bytes)
+        return f_bytes
 
     @staticmethod
     def get_positions(text) -> list:
@@ -226,6 +244,15 @@ class FarmSystem:
         r, m = f_user_data.fertilization(row, line, fertilizer, user_data)
         if r:
             return None
+        return m
+
+    @staticmethod
+    def c_remove(f_user_data: UserFarmData, location):
+        row = location[0]
+        line = int(location[1])
+        r, m = f_user_data.c_remove(row, line)
+        if r:
+            m = None
         return m
 
     @staticmethod

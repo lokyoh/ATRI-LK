@@ -24,7 +24,7 @@ class ItemType(Enum):
 
 
 class Item:
-    """定义物品及其基本数据，注意默认方法无物品消耗，请自行添加"""
+    """物品的基本数据定义"""
 
     def __init__(self, item_name: str, item_type: ItemType = ItemType.OTHER, item_info='', item_price=0,
                  using_funcs: ItemFuncs = None):
@@ -104,10 +104,10 @@ class ItemRegister:
         item_name = item.get_item_name()
         if item_name is None or item_name == '':
             log.error(f"物品注册失败:{item_name} 不是有效物品名称")
-            return
+            return self
         if item_name in self._item_list:
             log.error(f"物品注册失败:物品名称 {item_name} 重复使用")
-            return
+            return self
         self._item_list.append(item_name)
         self._item_dic[item_name] = item
         self._item_type_dic[item.get_item_type().value].append(item_name)

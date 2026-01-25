@@ -1,8 +1,6 @@
 import datetime
 import random
 
-from .user import FishingUser
-
 
 class FishingItem:
     def __init__(self, item_data):
@@ -60,7 +58,7 @@ class Fish(FishingItem):
 
 
 class FishData:
-    def __init__(self, fish: FishingItem | Fish, user_data: FishingUser):
+    def __init__(self, fish: FishingItem | Fish, user_data):
         self.fish = fish
         self.quality = None
         if type(fish) == Fish:
@@ -69,7 +67,7 @@ class FishData:
             rand_q += random.randint(0, user_data.get_bait().quality)
             f_t = user_data.get_fishing_tackle()
             if f_t:
-                rand_q += random.randint(0, f_t.quality)
+                rand_q += random.randint(0, f_t.fishi_quality)
             rand_q += random.randint(1, int(fish.difficulty * 1.1))
             per = 0.25
             if rand_q > fish.difficulty * 3:

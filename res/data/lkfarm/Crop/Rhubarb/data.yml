@@ -9,5 +9,4 @@ price:
     seed_sell: 50
 growth:
     stage: [2, 2, 2, 3, 4]
-    lasting: 0
 harvest_list: [["大黄"],[100]]

@@ -4,12 +4,11 @@ from ATRI.utils.lock import GroupLock
 from ATRI.system.lkapi.entity.item import ToolItemStack
 from ATRI.system.lkapi.entity.user import get_user_data, BackPack
 
-from .fishing_rod import fishing_rod_dict
-from .bait import bait_dict
-from .fishing_tackle import fishing_tackle_dict
-from .exception import NoFishingRod, NoBait, FishingException
 from .achievement import check_achievement
-
+from .bait import bait_dict, Bait
+from .exception import NoFishingRod, NoBait, FishingException
+from .fishing_rod import fishing_rod_dict, FishingRod
+from .fishing_tackle import fishing_tackle_dict, FishingTackle
 from ..database import fishing_table, User, AchievementData
 
 fishing_user_lock = GroupLock()
@@ -69,22 +68,24 @@ class FishingUser:
             f'{self.fishing_tackle.name} [{self.fishing_tackle.durable - self.fishing_tackle_damage}/{self.fishing_tackle.durable}]'}'
         )
 
-    def get_fishing_rod(self):
+    def get_fishing_rod(self) -> FishingRod | None:
         if self.fishing_rod is None or self.fishing_rod.durable <= self.fishing_rod_damage:
             self.fishing_rod = None
             self.fishing_rod_damage = 0
             raise NoFishingRod()
         return self.fishing_rod
 
-    def get_bait(self):
+    def get_bait(self) -> Bait | None:
         if self.bait is None or self.bait_num <= 0:
             self.bait = None
             self.bait_num = 0
             raise NoBait()
         return self.bait
 
-    def get_fishing_tackle(self):
-        if self.fishing_tackle is None or self.fishing_tackle.durable <= self.fishing_tackle_damage:
+    def get_fishing_tackle(self) -> FishingTackle | None:
+        if self.fishing_tackle is None:
+            return None
+        if self.fishing_tackle.durable <= self.fishing_tackle_damage:
             self.fishing_tackle = None
             self.fishing_tackle_damage = 0
             return None

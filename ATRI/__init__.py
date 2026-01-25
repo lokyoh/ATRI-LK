@@ -4,7 +4,7 @@ from nonebot.adapters.onebot.v11 import Adapter
 from .configs import Config
 from .dir import *
 
-__version__ = "YHN-LK0-019"
+__version__ = "YHN-LK0-020"
 """版本号"""
 __sub_version__ = "Release"
 """次版本号"""

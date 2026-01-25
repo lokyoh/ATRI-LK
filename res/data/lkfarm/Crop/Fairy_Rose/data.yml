@@ -9,5 +9,4 @@ price:
     seed_sell: 100
 growth:
     stage: [1, 4, 4, 3]
-    lasting: 0
 harvest_list: [["玫瑰仙子"],[100]]

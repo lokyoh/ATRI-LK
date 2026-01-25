@@ -9,5 +9,4 @@ price:
     seed_sell: 10
 growth:
     stage: [1, 1, 2, 2]
-    lasting: 0
 harvest_list: [["甜菜"],[100]]

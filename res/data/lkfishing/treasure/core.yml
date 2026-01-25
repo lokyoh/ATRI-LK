@@ -1,0 +1,12 @@
+primary_bait:
+  items: "初级鱼饵"
+  nums: 1
+  chance: 100
+middle_bait:
+  items: "中级鱼饵"
+  nums: 1
+  chance: 5
+advanced_bait:
+  items: "高级鱼饵"
+  nums: 1
+  chance: 1

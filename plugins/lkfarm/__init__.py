@@ -13,7 +13,7 @@ from .config import LKFarmConfig
 plugin = Service(
     "农场",
     "ATRI的农场插件",
-    "0.3.0",
+    "0.4.0",
     Service.ServiceType.ENTERTAINMENT
 ).main_cmd("/农场")
 config = plugin.add_plugin_config(LKFarmConfig)
@@ -188,6 +188,35 @@ async def _(event: GroupMessageEvent, arg: Message = CommandArg()):
                 resp += m
         await fertilization.finish(resp)
     await fertilization.finish("未识别出有效位置")
+
+
+c_remove = plugin.cmd_as_group("铲除", "移除田地上的作物\n使用方法:/农场.铲除 要选择的所有位置")
+
+
+@c_remove.handle([CheckFarmUser])
+async def _(event: GroupMessageEvent, arg: Message = CommandArg()):
+    location = arg.extract_plain_text().upper()
+    p_list = farm_system.get_positions(location)
+    if len(p_list) > 0:
+        resp = "开始操作:"
+        r_l = {}
+        with get_user_farm_data(event.user_id) as f_user_data:
+            for p in p_list:
+                r = farm_system.c_remove(f_user_data, p)
+                if r:
+                    if r not in r_l.keys():
+                        r_l[r] = []
+                    r_l[r].append(p)
+        if r_l == {}:
+            resp += "\n铲除成功"
+        else:
+            for m in r_l.keys():
+                resp += "\n"
+                for p in r_l[m]:
+                    resp += f'{p[0]}{p[1]} '
+                resp += m
+        await c_remove.finish(resp)
+    await c_remove.finish("未识别出有效位置")
 
 
 weather_forecast = plugin.cmd_as_group("天气预报订阅", "订阅或关闭本群的天气预报的订阅", permission=ADMIN)

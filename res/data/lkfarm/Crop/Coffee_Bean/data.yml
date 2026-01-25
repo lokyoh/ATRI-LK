@@ -2,11 +2,10 @@ name: "咖啡豆"
 intro: "每棵植株每次能产4颗咖啡豆，小概率产生更多。"
 season: "春夏两季"
 type: "种子"
-exp: 4
+exp: 16
 price:
-    crop: 15
+    crop: 60
     seed: 0
 growth:
     stage: [1, 2, 2, 3, 2]
-    lasting: 2
 harvest_list: [["咖啡豆","咖啡豆","咖啡豆","咖啡豆","咖啡豆"],[100,100,100,100,1]]

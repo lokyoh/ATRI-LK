@@ -2,12 +2,11 @@ name: "草莓"
 intro: "香甜多汁的红色浆果。"
 season: "春季"
 type: "水果"
-exp: 18
+exp: 39
 price:
-    crop: 120
+    crop: 260
     seed: 100
     seed_sell: 50
 growth:
     stage: [1, 1, 2, 2, 2]
-    lasting: 4
 harvest_list: [["草莓","草莓+"],[100, 20]]

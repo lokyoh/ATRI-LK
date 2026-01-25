@@ -9,5 +9,4 @@ price:
     seed_sell: 5
 growth:
     stage: [1, 1, 1, 1]
-    lasting: 0
 harvest_list: [["小麦"],[100]]

@@ -9,5 +9,4 @@ price:
     seed_sell: 25
 growth:
     stage: [1, 2, 3, 2]
-    lasting: 0
 harvest_list: [["夏季亮片"],[100]]

@@ -33,7 +33,6 @@ class CropData:
         self._type = CropType(data["type"])
         self._seed_price = data["price"].get("seed", 0)
         self._growth_stage = data["growth"]["stage"]
-        self._lasting = data["growth"].get("lasting", 0)
         self._harvest_list = data["harvest_list"]
         self._exp = data["exp"]
 
@@ -59,30 +58,23 @@ class CropData:
             days += day
         return days
 
-    def is_lasting(self) -> bool:
-        if self._lasting == 0:
-            return False
-        return True
-
     def get_harvest_list(self) -> list:
         harvest_list = []
         for i in range(len(self._harvest_list[0])):
             item = self._harvest_list[0][i]
+            chance = self._harvest_list[1][i]
             match_plus = re.match(r"(.*)\+$", item)
             if match_plus:
                 item = match_plus[1]
-                while randint(1, 100) <= self._harvest_list[1][i]:
+                while randint(1, 100) <= chance:
                     harvest_list.append(item)
             else:
-                if randint(1, 100) <= self._harvest_list[1][i]:
+                if randint(1, 100) <= chance:
                     harvest_list.append(item)
         return harvest_list
 
     def get_growth_stage(self):
         return self._growth_stage
-
-    def get_lasting(self):
-        return self._lasting
 
     def get_harvest_exp(self) -> int:
         return self._exp
@@ -104,8 +96,7 @@ def load_crop_data(loader_name: str, path: Path):
             crop_intro = conf.get("intro", "无介绍")
             crop_price = conf["price"]["crop"]
             days = crop_data.get_growth_days()
-            lasting = conf['growth'].get('lasting', 0)
-            seed_intro = f"{Season(conf['season']).value}种植，{days}天后收获{'' if lasting == 0 else f',之后每{lasting}天收获一次'}。"
+            seed_intro = f"{Season(conf['season']).value}种植，{days}天后收获。"
             if crop_data.crop_is_seed():
                 seed = Item(f"{crop_name}", ItemType.SEED, crop_intro, crop_price)
                 seed2 = Item(f"{crop_name}-银", ItemType.SEED, crop_intro, int(crop_price * 1.25))

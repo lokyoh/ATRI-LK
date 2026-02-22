@@ -9,9 +9,9 @@ __version__ = "YHN-LK0-020"
 __sub_version__ = "Release"
 """次版本号"""
 __conf_path = Path(".") / "config.yml"
-__conf = Config(__conf_path)
+conf_m = Config(__conf_path)
 
-conf = __conf.parse()
+conf = conf_m.config_model
 """机器人设置"""
 service_list = {}
 """服务数据"""
@@ -26,7 +26,7 @@ def driver():
 
 
 def init():
-    nonebot.init(**__conf.get_runtime_conf())
+    nonebot.init(**conf_m.get_runtime_conf())
     driver().register_adapter(Adapter)
     nonebot.load_plugins("ATRI/system")
     nonebot.load_plugins("plugins")

@@ -26,12 +26,15 @@ class Config:
             exit(-1)
 
         self.config = conf
+        self.config_model: ConfigModel = ConfigModel.model_validate(self.config)
 
-    def parse(self) -> ConfigModel:
-        return ConfigModel.parse_obj(self.config)
+    def save_conf(self):
+        self.config = self.config_model.model_dump()
+        with open(CONFIG_DATA_PATH, 'w', encoding='utf-8') as file:
+            yaml.dump(self.config, file, allow_unicode=True, default_flow_style=False)
 
     def get_runtime_conf(self) -> dict:
-        bot_conf = BotConfig.parse_obj(self.config["BotConfig"])
+        bot_conf = BotConfig.model_validate(self.config["BotConfig"])
 
         return RuntimeConfig(
             host=bot_conf.host,
@@ -43,4 +46,4 @@ class Config:
             command_start=bot_conf.command_start,
             command_sep=bot_conf.command_sep,
             session_expire_timeout=bot_conf.session_expire_timeout,
-        ).dict()
+        ).model_dump()

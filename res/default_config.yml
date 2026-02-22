@@ -1,12 +1,12 @@
 # 设置参考文档: https://lokyoh.github.io/ATRI-LK-docs/config.html
-ConfigVersion: "1.1.0"
+ConfigVersion: "1.2.0"
 
 BotConfig:
   host: "{host}"
   port: {port}
   debug: false
   superusers: {superusers}
-  nickname: [ "亚托莉", "ATRI", "Atri", "atri", "アトリ" ]
+  nickname: [ "亚托莉", "ATRI" ]
   command_start: [ "", "/" ]
   command_sep: [ "." ]
   session_expire_timeout: 60
@@ -19,3 +19,8 @@ BrowsConfig:
   download_host: "{download_host}"
   proxy_host: "{proxy_host}"
   browser_channel: "{browser_channel}"
+
+WebUIConfig:
+  username: "{username}"
+  password: "{password}"
+  secret: "{secret}"

@@ -17,7 +17,7 @@ plugin = Service(
     "投喂",
     "向可爱的亚托莉投喂食物",
     "0.4.4",
-    Service.ServiceType.LKPLUGIN
+    Service.ServiceType.ENTERTAINMENT
 )
 
 feed = plugin.on_command("投食", "向可爱的亚托莉投喂食物", aliases={'投喂', '投喂食物'})

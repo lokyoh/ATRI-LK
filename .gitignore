@@ -1,6 +1,5 @@
 /config.yml
 /nonebot_plugins.json
-/.env.prod
 /data/
 /tests/
 /ATRI-LK-plugin/

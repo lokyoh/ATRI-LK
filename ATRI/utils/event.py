@@ -167,7 +167,7 @@ class AsyncInnerListener(InnerListener):
 
 class AsyncBaseEvents(BaseEvents):
     """
-    一个基础事件。
+    一个异步基础事件。
     """
 
     def __init__(self, stop_when_error=False):

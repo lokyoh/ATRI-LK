@@ -24,7 +24,7 @@ from ATRI.log import log
 from ATRI.permission import Permission, MASTER_LIST
 from ATRI.exceptions import ReadFileError, WriteFileError, ServiceNotFoundError, ServiceRegisterError
 from ATRI.utils.model import BaseModel
-from ATRI.utils.apscheduler import SchedulerController
+from ATRI.scheduler import SchedulerController
 from ATRI.configs import PluginConfig
 
 
@@ -85,7 +85,7 @@ class Service:
         """
         if not service:
             raise ServiceRegisterError("未命名服务")
-        if service in service_list or service == "master":
+        if service in service_list or service == "master" or service == "ATRI":
             raise ServiceRegisterError("服务重复注册或服务名违规")
         self.service = service
         self._docs = docs

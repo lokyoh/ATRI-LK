@@ -3,6 +3,7 @@ from nonebot.adapters.onebot.v11 import Adapter
 
 from .configs import Config
 from .dir import *
+from .event.register import register_triggers
 
 __version__ = "YHN-LK0-020"
 """版本号"""
@@ -28,6 +29,7 @@ def driver():
 def init():
     nonebot.init(**conf_m.get_runtime_conf())
     driver().register_adapter(Adapter)
+    register_triggers()
     nonebot.load_plugins("ATRI/system")
     nonebot.load_plugins("plugins")
     nonebot.load_plugins("plugins/rss")

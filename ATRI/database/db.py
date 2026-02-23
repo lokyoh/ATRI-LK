@@ -10,7 +10,10 @@ data = {}
 
 
 def add_database(name: str, model):
-    data[name] = model
+    if name not in data:
+        data[name] = [model]
+    else:
+        data[name].append(model)
 
 
 async def run():
@@ -26,7 +29,7 @@ async def run():
             }
         }
         database["apps"][d] = {
-            "models": [data[d]],
+            "models": data[d],
             "default_connection": d,
         }
     await Tortoise.init(database)

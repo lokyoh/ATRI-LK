@@ -11,4 +11,4 @@ def daily_update():
 
 def register_triggers():
     """注册ATRI事件总线触发器"""
-    ATRIScheduler.add_job(daily_update, 'daily_update', 'corn', hour=0, minute=0)
+    ATRIScheduler.add_job(daily_update, 'daily_update', 'cron', hour=0, minute=0)

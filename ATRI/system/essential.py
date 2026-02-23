@@ -29,7 +29,7 @@ async def _(event: GroupIncreaseNoticeEvent):
         pass
     await asyncio.sleep(randint(1, 6))
     await group_member_event.finish(
-        MessageBuilder("好欸! 事新人!").at(user_id=event.user_id).text(f"在下 {choice(list(conf.BotConfig.nickname))}")
+        MessageBuilder("好欸! 事新人!").at(user_id=event.user_id).text(f"在下 {choice(conf.BotConfig.nickname)}")
     )
 
 

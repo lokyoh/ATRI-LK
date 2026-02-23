@@ -250,7 +250,7 @@ class Limiter:
     def check(self, key: str) -> bool:
         if self.count[key] >= self.max_count:
             loop = asyncio.get_running_loop()
-            loop.call_later(self.down_time, self.reset)
+            loop.call_later(self.down_time, self.reset, key)
             return False
 
         return True

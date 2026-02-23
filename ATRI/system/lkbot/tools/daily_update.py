@@ -5,7 +5,7 @@ from ATRI import TEMP_DIR
 from ATRI.utils.event import BaseEvents, BaseEvent
 from ATRI.log import log
 
-daily_update_event = BaseEvents("daily_update")
+daily_update_event = BaseEvents()
 """每日数据更新事件"""
 
 

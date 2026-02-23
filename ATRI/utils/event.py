@@ -80,7 +80,7 @@ class BaseEvents:
     一个基础事件。
     """
 
-    def __init__(self, stop_when_error=False):
+    def __init__(self, stop_when_error: bool=False):
         self.listeners = {}
         self.stop_when_error = stop_when_error
 

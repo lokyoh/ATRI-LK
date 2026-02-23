@@ -32,7 +32,7 @@ class BaseFunc:
     test_mode_tip = '此功能为测试功能，只能在测试模式群聊下使用'
 
     def __init__(self):
-        self.bot_names = list(conf.BotConfig.nickname)
+        self.bot_names = conf.BotConfig.nickname
         self.bot_name = choice(self.bot_names)
 
     @staticmethod

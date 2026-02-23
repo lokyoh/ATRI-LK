@@ -110,7 +110,7 @@ class PreChatEvent(BaseEvent):
         self.message_event: GroupMessageEvent = event
 
 
-pre_chat_event = AsyncBaseEvents("pre_chat")
+pre_chat_event = AsyncBaseEvents()
 """聊天预处理事件,在处理聊天信息前触发"""
 
 

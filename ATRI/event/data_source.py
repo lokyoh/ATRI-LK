@@ -1,4 +1,5 @@
 import asyncio
+import inspect
 from typing import Callable, Dict, List, Any
 from enum import IntEnum
 from dataclasses import dataclass
@@ -38,6 +39,7 @@ class Subscription:
 
 class AsyncEventBus:
     """异步事件总线"""
+
     def __init__(self, name: str):
         self._name = name
         self._handlers: Dict[str, List[Subscription]] = {}
@@ -94,10 +96,20 @@ class AsyncEventBus:
             handlers_copy = self._handlers[event_type].copy()
             for subscription in handlers_copy:
                 try:
+                    sig = inspect.signature(subscription.handler)
+                    has_params = len(sig.parameters) > 0
                     if asyncio.iscoroutinefunction(subscription.handler):
-                        result = await subscription.handler(event)
+                        # 异步函数
+                        if has_params:
+                            result = await subscription.handler(event)
+                        else:
+                            result = await subscription.handler()
                     else:
-                        result = subscription.handler(event)
+                        # 同步函数
+                        if has_params:
+                            result = subscription.handler(event)
+                        else:
+                            result = subscription.handler()
                     results.append(result)
                     # 如果是一次性订阅，处理完后移除
                     if subscription.once:
@@ -146,6 +158,48 @@ def daily_update(priority: Priority = Priority.NORMAL, once: bool = False):
 
     def decorator(func: Callable) -> Callable:
         ATRIEventBus.subscribe("daily_update", priority=priority, once=once)(func)
+        return func
+
+    return decorator
+
+
+def heartbeat_1m(priority: Priority = Priority.NORMAL, once: bool = False):
+    """
+    注册1分钟心跳事件
+    :param priority: 优先级
+    :param once: 是否只执行一次
+    """
+
+    def decorator(func: Callable) -> Callable:
+        ATRIEventBus.subscribe("heartbeat_1m", priority=priority, once=once)(func)
+        return func
+
+    return decorator
+
+
+def heartbeat_30m(priority: Priority = Priority.NORMAL, once: bool = False):
+    """
+    注册30分钟心跳事件
+    :param priority: 优先级
+    :param once: 是否只执行一次
+    """
+
+    def decorator(func: Callable) -> Callable:
+        ATRIEventBus.subscribe("heartbeat_30m", priority=priority, once=once)(func)
+        return func
+
+    return decorator
+
+
+def shutdown(priority: Priority = Priority.NORMAL, once: bool = False):
+    """
+    注册关闭事件
+    :param priority: 优先级
+    :param once: 是否只执行一次
+    """
+
+    def decorator(func: Callable) -> Callable:
+        ATRIEventBus.subscribe("shutdown", priority=priority, once=once)(func)
         return func
 
     return decorator

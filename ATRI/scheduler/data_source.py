@@ -1,6 +1,7 @@
 import asyncio
 import inspect
 import logging
+from typing import Dict
 
 from apscheduler.job import Job
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
@@ -20,6 +21,7 @@ aps_logger.addHandler(LoguruHandler())
 
 class SchedulerJob:
     """计划任务对象"""
+
     def __init__(self, func, id: str, trigger: str | BaseTrigger = 'date', **kwargs):
         self.id = id
         self.job: Job = scheduler.add_job(func=func, trigger=trigger, id=id, name=id, **kwargs)
@@ -35,10 +37,13 @@ class SchedulerJob:
             status = "pending"
         return status
 
+    def pause(self):
+        self.job.pause()
+
 
 class SchedulerController:
     """服务的计划控制器"""
-    service_schedulers = {}
+    service_schedulers: Dict[str, Dict[str, SchedulerJob]] = {}
 
     def __init__(self, service: str):
         self.service = service

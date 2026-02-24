@@ -20,7 +20,8 @@ def add_database(name: str, model):
 async def run():
     database = {
         "connections": {},
-        "apps": {}
+        "apps": {},
+        "timezone": "Asia/Shanghai"
     }
     for d in data:
         database["connections"][d] = {

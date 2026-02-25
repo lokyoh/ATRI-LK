@@ -5,10 +5,10 @@ from pathlib import Path
 
 import nonebot
 
-from ATRI.log import log
-from ATRI import service_list
-from ATRI.utils import request
 from ATRI.exceptions import PluginError
+from ATRI.log import log
+from ATRI.service import ServiceTools
+from ATRI.utils import request
 
 PLUGINS_URL = "https://raw.githubusercontent.com/lokyoh/ATRI-LK-plugin/main/plugin.json"
 FILE_URL = "https://api.github.com/repos/lokyoh/ATRI-LK-plugin/contents/{}?ref=main"
@@ -44,7 +44,7 @@ class PluginManager:
 
     @classmethod
     async def install_plugin(cls, plugin_name: str, load: bool = False):
-        if not plugin_name in cls.plugin_list:
+        if plugin_name not in cls.plugin_list:
             log.info(f"安装未知插件`{plugin_name}`")
             raise PluginError(f"找不到插件 {plugin_name}")
         _plugin = cls.plugin_list[plugin_name]
@@ -114,9 +114,9 @@ class PluginManager:
 
     @classmethod
     async def remove_plugin(cls, plugin_name: str):
-        if not plugin_name in service_list:
+        if plugin_name not in ServiceTools.service_list:
             raise PluginError(f"未安装插件 {plugin_name}")
-        if not plugin_name in cls.plugin_list:
+        if plugin_name not in cls.plugin_list:
             raise PluginError(f"无法卸载 {plugin_name}，请手动卸载")
         path = cls.plugin_list[plugin_name]["path"].replace(".", "/")
         if not cls.plugin_list[plugin_name]["is_dir"]:

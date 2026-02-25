@@ -1,7 +1,7 @@
 import nonebot
 
 from .configs import Config
-from .dir import *
+from .dir import * # noqa: F403
 
 __version__ = "YHN-LK0-020"
 """版本号"""
@@ -12,8 +12,6 @@ conf_m = Config(__conf_path)
 
 conf = conf_m.config_model
 """机器人设置"""
-service_list = {}
-"""服务数据"""
 
 
 def asgi():

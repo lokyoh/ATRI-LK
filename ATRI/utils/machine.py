@@ -1,13 +1,14 @@
-import psutil
 import platform
 from sys import platform as pf
 
-from .model import BaseModel
+import psutil
+
 from .apscheduler import scheduler
+from .model import BaseModel
 
 if pf == "win32":
-    import wmi
-    from win32com.client import GetObject
+    import wmi # type: ignore
+    from win32com.client import GetObject # type: ignore
 
 
 class PlatformInfo(BaseModel):

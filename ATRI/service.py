@@ -3,7 +3,7 @@ import re
 from enum import Enum
 from pathlib import Path
 from types import ModuleType
-from typing import List, Set, Tuple, Type, Union, Optional
+from typing import List, Set, Tuple, Type, Union, Optional, Dict
 
 from nonebot import get_bot
 from nonebot.matcher import Matcher
@@ -18,7 +18,7 @@ from nonebot.rule import Rule, command, keyword, regex
 from nonebot.adapters import Event
 from nonebot.adapters.onebot.v11 import Message
 
-from ATRI import service_list, driver
+from ATRI import driver
 from ATRI.dir import CONFIG_DIR, PLUGIN_DATA_DIR
 from ATRI.log import log
 from ATRI.permission import Permission, MASTER_LIST
@@ -85,7 +85,7 @@ class Service:
         """
         if not service:
             raise ServiceRegisterError("未命名服务")
-        if service in service_list or service == "master" or service == "ATRI":
+        if service in ServiceTools.service_list or service == "master" or service == "ATRI":
             raise ServiceRegisterError("服务重复注册或服务名违规")
         self.service = service
         self._docs = docs
@@ -102,7 +102,7 @@ class Service:
         self._path = PLUGIN_DATA_DIR / self.service
         self._scheduler_manager = None
         self.__generate_service_conf()
-        service_list[service] = self
+        ServiceTools.service_list[service] = self
 
     def document(self, context: str) -> "Service":
         """
@@ -408,7 +408,7 @@ class Service:
 
     def conf(self) -> ServiceConfig:
         """
-        获取服务的配置。
+        获取服务的基础配置。
         :return: ServiceConfig对象
         """
         return ServiceTools(self.service).load_service_config()
@@ -433,13 +433,14 @@ class ServiceTools:
     """
     针对服务的工具类。
     """
+    service_list: Dict[str, Service] = {}
 
     def __init__(self, service: str):
         """
         针对服务的工具类。
         :param service: 服务名
         """
-        if not service in service_list:
+        if service not in self.service_list:
             raise ServiceNotFoundError("找不到指定服务")
         self.service = service
 
@@ -448,7 +449,7 @@ class ServiceTools:
         获取服务信息。
         :return: ServiceInfo对象
         """
-        return service_list[self.service].get_info()
+        return self.get_service_object(self.service).get_info()
 
     def save_service_config(self, service_config: ServiceConfig):
         """
@@ -496,7 +497,7 @@ class ServiceTools:
         if group_id:
             if group_id in auth_group:
                 return False
-            if data.white_list_mode and not group_id in data.white_list:
+            if data.white_list_mode and group_id not in data.white_list:
                 return False
         return True
 
@@ -508,6 +509,12 @@ class ServiceTools:
         data = self.load_service_config()
         data.enabled = is_enabled
         self.save_service_config(data)
+
+    @classmethod
+    def get_service_object(cls, service) -> Service | None:
+        if service in cls.service_list:
+            return cls.service_list[service]
+        return None
 
 
 def is_in_service(service: str) -> Rule:

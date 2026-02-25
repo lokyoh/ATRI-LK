@@ -1,10 +1,10 @@
 from nonebot.adapters.onebot.v11 import Message
 from nonebot.params import CommandArg
 
-from ATRI.service import Service, service_list, ServiceTools
-from ATRI.permission import MASTER
-from ATRI.message import MessageBuilder
 from ATRI.exceptions import PluginError
+from ATRI.message import MessageBuilder
+from ATRI.permission import MASTER
+from ATRI.service import Service, ServiceTools
 
 from .data_source import PluginManager
 
@@ -33,7 +33,7 @@ async def _():
             info = ""
         install = "未安装"
         version = plugin_list[_plugin]['version']
-        if _plugin in service_list:
+        if _plugin in ServiceTools.service_list:
             now_version = ServiceTools(_plugin).load_service().version
             if now_version != version:
                 install = "需更新"
@@ -64,7 +64,7 @@ async def _(args: Message = CommandArg()):
     _plugin = plugin_list[plugin_name]
     install = "未安装"
     version = _plugin['version']
-    if plugin_name in service_list:
+    if plugin_name in ServiceTools.service_list:
         now_version = ServiceTools(plugin_name).load_service().version
         if now_version != version:
             install = "需更新"
@@ -90,7 +90,7 @@ async def _(args: Message = CommandArg()):
     plugin_name = args.extract_plain_text().replace(" ", "")
     if not plugin_name:
         await add.finish("请输入插件名")
-    if plugin_name in service_list:
+    if plugin_name in ServiceTools.service_list:
         await add.finish(f"插件 {plugin_name} 已经安装")
     try:
         await PluginManager.install_plugin(plugin_name, False)
@@ -138,7 +138,7 @@ async def _(args: Message = CommandArg()):
     if not plugin_name in plugin_list:
         await update.finish(f"找不到插件 {plugin_name}")
     version = plugin_list[plugin_name]["version"]
-    if plugin_name in service_list:
+    if plugin_name in ServiceTools.service_list:
         if ServiceTools(plugin_name).load_service().version == version:
             await update.finish(f"{plugin_name} 无需更新")
     try:
@@ -161,7 +161,7 @@ async def _():
     except PluginError:
         await plugin_info.finish("获取插件信息失败")
     message = MessageBuilder().text("需要更新的插件:")
-    for plugin_name in service_list:
+    for plugin_name in ServiceTools.service_list:
         if plugin_name in plugin_list:
             version = plugin_list[plugin_name]["version"]
             now_version = ServiceTools(plugin_name).load_service().version
@@ -181,7 +181,7 @@ async def _():
     except PluginError:
         await plugin_info.finish("获取插件信息失败")
     message = MessageBuilder().text("更新情况(更新完成后请重启):")
-    for plugin_name in service_list:
+    for plugin_name in ServiceTools.service_list:
         if plugin_name in plugin_list:
             version = plugin_list[plugin_name]["version"]
             if ServiceTools(plugin_name).load_service().version != version:

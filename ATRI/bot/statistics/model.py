@@ -6,6 +6,7 @@ class MessageStatistics(Model):
     """
     消息统计模型类，对应数据库中的一张表
     """
+
     # 主键，自增ID
     id = fields.BigIntField(pk=True)
     # botID
@@ -16,6 +17,8 @@ class MessageStatistics(Model):
     group_id = fields.CharField(max_length=100, null=True, index=True)
     # 消息类型，如 "private" 或 "group"
     message_type = fields.CharField(max_length=20)
+    # 消息内容简略
+    content = fields.TextField()
     # 消息接收时间，自动设置为创建时间
     created_at = fields.DatetimeField(auto_now_add=True)
 
@@ -29,6 +32,7 @@ class ServiceStatistics(Model):
     """
     服务调用统计模型类，对应数据库中的一张表
     """
+
     # 主键，自增ID
     id = fields.BigIntField(pk=True)
     # botID

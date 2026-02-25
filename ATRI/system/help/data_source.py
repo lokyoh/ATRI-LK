@@ -3,19 +3,19 @@ import json
 import os.path
 from pathlib import Path
 from typing import Dict
-from PIL import Image
+
 from jinja2 import Environment, FileSystemLoader
+from nonebot.adapters.onebot.v11 import GroupMessageEvent, MessageSegment
+from PIL import Image
 
-from nonebot.adapters.onebot.v11 import MessageSegment, GroupMessageEvent
-
-from ATRI import __version__, conf, IMG_DIR, service_list, __sub_version__, RES_DIR
-from ATRI.message import MessageBuilder, img_msg, img_msg_from_path
-from ATRI.service import ServiceTools, Service
-from ATRI.utils.img_editor import IMGEditor
+from ATRI import IMG_DIR, RES_DIR, __sub_version__, __version__, conf
 from ATRI.exceptions import ServiceNotFoundError
 from ATRI.log import log
+from ATRI.message import MessageBuilder, img_msg, img_msg_from_path
 from ATRI.permission import MASTER_LIST
+from ATRI.service import Service, ServiceTools
 from ATRI.system.htmlrender import html_to_pic
+from ATRI.utils.img_editor import IMGEditor
 
 from . import help_config
 
@@ -77,6 +77,7 @@ class Helper:
 
     @classmethod
     def get_typed_services(cls) -> bool:
+        service_list = ServiceTools.service_list
         for _type in Service.ServiceType:
             if _type.name not in cls.service_dict:
                 cls.service_dict[_type.name] = list()
@@ -124,7 +125,7 @@ class Helper:
 
     @classmethod
     def get_services_img(cls):
-        n = int((len(service_list) + len(cls.service_dict)) / 15) + 1
+        n = int((len(ServiceTools.service_list) + len(cls.service_dict)) / 15) + 1
         top = 50
         border = 5
         width = 320
@@ -200,11 +201,11 @@ class Helper:
         services = {}
         for _type in Service.ServiceType:
             services[_type.value] = []
-        s_l = list(service_list.keys())
+        s_l = list(ServiceTools.service_list.keys())
         s_l.sort()
         length = len(s_l)
         for s in s_l:
-            _s: Service = service_list[s]
+            _s: Service = ServiceTools.service_list[s]
             info = _s.get_info()
             _type = info.type
             if _type == Service.ServiceType.HIDDEN.value:

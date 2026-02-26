@@ -66,7 +66,7 @@ class PluginConfig:
         return False
 
     @classmethod
-    def get(cls, service: str):
+    def get(cls, service: str) -> "PluginConfig | None":
         """
         获取指定服务的插件设置。
         :param service: 服务名

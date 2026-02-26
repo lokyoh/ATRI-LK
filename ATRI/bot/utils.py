@@ -52,9 +52,9 @@ class BotUtils:
         cls,
         bot: Bot,
         service: str,
-        user_id: str | None,
-        group_id: str | None,
         message: str | Message,
+        user_id: str | None = None,
+        group_id: str | None = None,
     ):
         """
         发送消息并添加服务调用统计记录。

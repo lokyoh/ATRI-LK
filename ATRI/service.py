@@ -413,7 +413,7 @@ class Service:
         """
         return ServiceTools(self.service).load_service_config()
 
-    def plugin_config(self) -> PluginConfig:
+    def plugin_config(self) -> PluginConfig | None:
         """
         获取服务的插件设置。
         :return: PluginConfig对象
@@ -449,7 +449,7 @@ class ServiceTools:
         获取服务信息。
         :return: ServiceInfo对象
         """
-        return self.get_service_object(self.service).get_info()
+        return self.get_service(self.service).get_info()
 
     def save_service_config(self, service_config: ServiceConfig):
         """
@@ -511,7 +511,7 @@ class ServiceTools:
         self.save_service_config(data)
 
     @classmethod
-    def get_service_object(cls, service) -> Service | None:
+    def get_service(cls, service) -> Service | None:
         if service in cls.service_list:
             return cls.service_list[service]
         return None

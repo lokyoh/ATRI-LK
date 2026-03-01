@@ -65,8 +65,13 @@ def handle_command(
             await plugin.send(fail_msg.format(target, error_msg))
 
 
-plugin = Service("管理").document("控制 ATRI 的各项服务").type(Service.ServiceType.SYSTEM).permission(MASTER).version(
-    "1.0.6")
+plugin = (
+    Service("管理")
+    .document("控制 ATRI 的各项服务")
+    .type(Service.ServiceType.SYSTEM)
+    .permission(MASTER)
+    .version("1.0.7")
+)
 
 block_user = plugin.on_command("封禁用户", "阻止目标用户使用 ATRI")
 handle_command(block_user, BotManager().block_user, "用户 {} 危！")

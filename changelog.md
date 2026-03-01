@@ -14,6 +14,8 @@
 - 更新:
   - `农场`添加图片缓存,肥料数据存储在单独文件中
   - `钓鱼`为渔具添加更多功能
+- Patch1:
+  - 修复bug[#5](https://github.com/lokyoh/ATRI-LK/issues/5)
 
 ## Dec 24, 2025
 

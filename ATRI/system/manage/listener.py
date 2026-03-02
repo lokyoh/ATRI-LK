@@ -7,6 +7,7 @@ from nonebot.adapters.onebot.v11 import (
 from nonebot.exception import IgnoredException
 from nonebot.matcher import Matcher
 from nonebot.message import run_preprocessor
+from sympy import preorder_traversal
 
 from ATRI.service import ServiceTools
 
@@ -34,8 +35,8 @@ async def _(matcher: Matcher, event: MessageEvent):
 
 @run_preprocessor
 async def _(event: Event):
-    user_id = str(getattr(event, "user_id", None))
-    group_id = str(getattr(event, "group_id", None))
+    user_id = str(getattr(event, "user_id", ""))
+    group_id = str(getattr(event, "group_id", ""))
 
     if user_id:
         blockuser_file_path = MANAGE_DIR / "block_user.json"
@@ -52,7 +53,6 @@ async def _(event: Event):
             with open(blockgroup_file_path, "w", encoding="utf-8") as w:
                 w.write(json.dumps(dict()))
         data = json.loads(blockgroup_file_path.read_bytes())
-        group_id = str(event.group_id)
         if group_id in data:
             raise IgnoredException(f"Blocked group: {group_id}")
 

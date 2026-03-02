@@ -512,8 +512,8 @@ class ServiceTools:
 
 def is_in_service(service: str) -> Rule:
     async def _is_in_service(event: Event) -> bool:
-        user_id = str(getattr(event, "user_id", None))
-        group_id = str(getattr(event, "group_id", None))
+        user_id = str(getattr(event, "user_id", ""))
+        group_id = str(getattr(event, "group_id", ""))
         return ServiceTools(service).auth_service(user_id, group_id)
 
     return Rule(_is_in_service)

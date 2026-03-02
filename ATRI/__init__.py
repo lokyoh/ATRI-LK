@@ -25,13 +25,16 @@ def driver():
 def init():
     nonebot.init(**conf_m.get_runtime_conf())
     from nonebot.adapters.onebot.v11 import Adapter
+
     driver().register_adapter(Adapter)
     from ATRI.event.register import register_triggers
+
     register_triggers()
     nonebot.load_plugins("ATRI/system")
     nonebot.load_plugins("plugins")
     nonebot.load_plugins("plugins/rss")
     from ATRI.service import driver_startup
+
     driver().on_startup(driver_startup)
 
 

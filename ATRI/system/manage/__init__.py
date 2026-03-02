@@ -1,50 +1,50 @@
+import inspect
 import re
 from datetime import datetime
-from typing import Type, Callable
-from asyncio import iscoroutinefunction
+from typing import Callable, Type
 
-from nonebot.matcher import Matcher
-from nonebot.params import ArgPlainText, CommandArg
 from nonebot.adapters.onebot.v11 import (
     Bot,
-    Message,
-    MessageEvent,
     FriendRequestEvent,
     GroupRequestEvent,
+    Message,
+    MessageEvent,
 )
+from nonebot.matcher import Matcher
+from nonebot.params import ArgPlainText, CommandArg
 
+from ATRI.message import MessageBuilder
+from ATRI.permission import ADMIN, MASTER
 from ATRI.rule import to_bot
 from ATRI.service import Service
-from ATRI.message import MessageBuilder
-from ATRI.permission import MASTER, ADMIN
 
-from .models import RequestInfo
 from .data_source import BotManager
+from .models import RequestInfo
 from .plugin import NonebotPluginManager
 
 _QUIT_ARGS = ["算了", "罢了"]
 
 
 def handle_command(
-        plugin: Type[Matcher],
-        func: Callable,
-        success_msg: str,
-        fail_msg: str = "操作 {} 失败...原因：\n{}",
+    plugin_matcher: Type[Matcher],
+    func: Callable,
+    success_msg: str,
+    fail_msg: str = "操作 {} 失败...原因：\n{}",
 ):
-    @plugin.handle()
-    async def handle_command(matcher: Matcher, args: Message = CommandArg()):
+    @plugin_matcher.handle()
+    async def handle_cmd(matcher: Matcher, args: Message = CommandArg()):
         msg = args.extract_plain_text()
         if msg:
             matcher.set_arg("target", args)
 
-    @plugin.got("target", "要操作的目标是？")
+    @plugin_matcher.got("target", "要操作的目标是？")
     async def handle_target(event: MessageEvent, target: str = ArgPlainText("target")):
         if target in _QUIT_ARGS:
-            await plugin.finish("好吧")
+            await plugin_matcher.finish("好吧")
 
         try:
             func_argcount = func.__code__.co_argcount
-            if iscoroutinefunction(func):
+            if inspect.iscoroutinefunction(func):
                 if func_argcount == 3:
                     result = await func(target, event)
                 else:
@@ -55,14 +55,14 @@ def handle_command(
                 else:
                     result = func(target)
             msg = success_msg.format(target)
-            if type(result) == bool:
+            if type(result) is bool:
                 msg += "启用" if result else "禁用"
-            if type(result) == str:
+            if type(result) is str:
                 msg = result
-            await plugin.send(msg)
+            await plugin_matcher.send(msg)
         except Exception as e:
             error_msg = str(e)
-            await plugin.send(fail_msg.format(target, error_msg))
+            await plugin_matcher.send(fail_msg.format(target, error_msg))
 
 
 plugin = (
@@ -70,7 +70,7 @@ plugin = (
     .document("控制 ATRI 的各项服务")
     .type(Service.ServiceType.SYSTEM)
     .permission(MASTER)
-    .version("1.0.7")
+    .version("1.1.0")
 )
 
 block_user = plugin.on_command("封禁用户", "阻止目标用户使用 ATRI")
@@ -92,7 +92,9 @@ handle_command(
     "服务 {} 已全局",
 )
 
-toggle_group_service = plugin.on_command("/控制", "针对所在群禁用/启用某一服务", permission=ADMIN)
+toggle_group_service = plugin.on_command(
+    "/控制", "针对所在群禁用/启用某一服务", permission=ADMIN
+)
 handle_command(
     toggle_group_service,
     BotManager().toggle_group_service,
@@ -103,7 +105,7 @@ toggle_service_white_list = plugin.on_command("/白名单", "禁用/启用某一
 handle_command(
     toggle_service_white_list,
     BotManager().toggle_service_white_list,
-    "服务 {} 白名单已"
+    "服务 {} 白名单已",
 )
 
 track_error = plugin.on_command("/追踪", "根据ID获取对应报错信息", aliases={"/track"})
@@ -125,7 +127,9 @@ handle_command(apply_group_req, BotManager().apply_group_req, "已同意该邀�
 reject_group_req = plugin.on_command("拒绝邀请", "根据申请码拒绝对应群邀请")
 handle_command(reject_group_req, BotManager().reject_group_req, "已拒绝该邀请")
 
-toggle_user_service = plugin.on_regex(r"对用户(.*?)(启用|禁用)(.*)", "针对单一用户禁用/启用某一服务")
+toggle_user_service = plugin.on_regex(
+    r"对用户(.*?)(启用|禁用)(.*)", "针对单一用户禁用/启用某一服务"
+)
 
 
 @toggle_user_service.handle()
@@ -143,7 +147,10 @@ async def _(event: MessageEvent):
         f"已{'允许' if result else '禁止'}用户 {target_user} 使用 {target_service}"
     )
 
-toggle_group_service_white_list = plugin.on_regex(r"(.*)白名单(添加|移除)群(.*)", "在某一服务的白名单中移除/添加某群")
+
+toggle_group_service_white_list = plugin.on_regex(
+    r"(.*)白名单(添加|移除)群(.*)", "在某一服务的白名单中移除/添加某群"
+)
 
 
 @toggle_group_service_white_list.handle()
@@ -153,10 +160,15 @@ async def _(event: MessageEvent):
     target_service = reg[0]
     target_group = reg[2]
     try:
-        result = BotManager().toggle_group_service_white_list(target_service, target_group)
+        result = BotManager().toggle_group_service_white_list(
+            target_service, target_group
+        )
     except Exception as e:
         await toggle_group_service_white_list.finish(f"操作失败，原因：{str(e)}")
-    await toggle_user_service.finish(f"{target_service} 的白名单已{'添加' if result else '移除'}群 {target_group}")
+    await toggle_user_service.finish(
+        f"{target_service} 的白名单已{'添加' if result else '移除'}群 {target_group}"
+    )
+
 
 friend_req = plugin.on_request("好友申请", "好友申请检测")
 
@@ -239,9 +251,9 @@ async def _():
         cache_list.append(f"{apply_user} | {apply_comment} | {apply_code}")
 
     result = (
-            "申请人ID | 申请信息 | 申请码\n"
-            + "\n".join(map(str, cache_list))
-            + "\nTip: 使用 同意/拒绝好友 [申请码] 以决定"
+        "申请人ID | 申请信息 | 申请码\n"
+        + "\n".join(map(str, cache_list))
+        + "\nTip: 使用 同意/拒绝好友 [申请码] 以决定"
     )
     await get_friend_req_list.finish(result)
 
@@ -264,9 +276,9 @@ async def _():
         cache_list.append(f"{apply_user} | {apply_comment} | {apply_code}")
 
     result = (
-            "申请人ID | 申请信息 | 申请码\n"
-            + "\n".join(map(str, cache_list))
-            + "\nTip: 使用 同意/拒绝邀请 [申请码] 以决定"
+        "申请人ID | 申请信息 | 申请码\n"
+        + "\n".join(map(str, cache_list))
+        + "\nTip: 使用 同意/拒绝邀请 [申请码] 以决定"
     )
     await get_group_req_list.finish(result)
 
@@ -310,7 +322,7 @@ async def _(plugin_name: str = ArgPlainText("plugin_name")):
 
 @add_nonebot_plugin.got("att", "是否安装(y/n)")
 async def _(
-        att: str = ArgPlainText("att"), plugin_name: str = ArgPlainText("plugin_name")
+    att: str = ArgPlainText("att"), plugin_name: str = ArgPlainText("plugin_name")
 ):
     if att not in ["y", "Y", "是"]:
         await add_nonebot_plugin.finish("反悔了呢")
@@ -328,7 +340,7 @@ remove_nonebot_plugin = plugin.on_command(
 @remove_nonebot_plugin.got("plugin_name", "要移除的插件名呢?")
 @remove_nonebot_plugin.got("att", "确定吗(y/n)")
 async def _(
-        att: str = ArgPlainText("att"), plugin_name: str = ArgPlainText("plugin_name")
+    att: str = ArgPlainText("att"), plugin_name: str = ArgPlainText("plugin_name")
 ):
     if att not in ["y", "Y", "是"]:
         await remove_nonebot_plugin.finish("反悔了呢")
@@ -353,9 +365,9 @@ async def _(event: MessageEvent):
     await upgrade_nonebot_plugin.finish(msg)
 
 
-from ATRI import driver
+from ATRI import driver  # noqa: E402
 
-from .listener import init_listener
+from .listener import init_listener  # noqa: E402
 
 driver().on_startup(init_listener)
 driver().on_startup(NonebotPluginManager().get_store_list)
@@ -366,5 +378,5 @@ plugin.scheduler_jobs().add_job(
     "interval",
     hours=1,
     max_instances=3,
-    misfire_grace_time=60
+    misfire_grace_time=60,
 )

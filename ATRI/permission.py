@@ -6,9 +6,9 @@ from nonebot.adapters.onebot.v11 import GroupMessageEvent
 
 from ATRI import conf
 from ATRI.utils import FileDealer
-from ATRI.configs.config import CONFIG_DATA_PATH
+from ATRI.dir import SYS_CONFIG_DIR
 
-MASTER_FILE_PATH = CONFIG_DATA_PATH / "master.json"
+MASTER_FILE_PATH = SYS_CONFIG_DIR / "master.json"
 MASTER_FILE = FileDealer(MASTER_FILE_PATH)
 MASTER_LIST = set()
 

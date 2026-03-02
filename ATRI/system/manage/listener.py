@@ -8,6 +8,7 @@ from nonebot.exception import IgnoredException
 from nonebot.matcher import Matcher
 from nonebot.message import run_preprocessor
 
+from ATRI import conf
 from ATRI.service import ServiceTools
 
 from .data_source import MANAGE_DIR
@@ -34,8 +35,22 @@ async def _(matcher: Matcher, event: MessageEvent):
 
 @run_preprocessor
 async def _(event: Event):
+    bot_id = str(event.self_id)
     user_id = str(getattr(event, "user_id", ""))
     group_id = str(getattr(event, "group_id", ""))
+
+    bot_status_file_path = MANAGE_DIR / "bot_status.json"
+    if not bot_status_file_path.is_file():
+        with open(bot_status_file_path, "w", encoding="utf-8") as w:
+            w.write(json.dumps(dict()))
+    data = json.loads(bot_status_file_path.read_bytes())
+    if (
+        not data.get(bot_id, {}).get("enable", True)
+        and user_id not in conf.BotConfig.superusers
+        if user_id
+        else True
+    ):
+        raise IgnoredException(f"Blocked user: {bot_id}")
 
     if user_id:
         blockuser_file_path = MANAGE_DIR / "block_user.json"

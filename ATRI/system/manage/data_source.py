@@ -5,6 +5,7 @@ from nonebot import get_bot
 from nonebot.adapters import Bot
 from nonebot.adapters.onebot.v11 import GroupMessageEvent
 
+from ATRI.bot import BotStatus
 from ATRI.utils import FileDealer
 from ATRI.service import ServiceTools
 from ATRI.message import MessageBuilder
@@ -54,12 +55,6 @@ class BotManager:
 
     async def __store_block_user(self, data: dict) -> None:
         await self.__store_data("block_user.json", data)
-
-    async def __load_bot_status(self) -> dict:
-        return await self.__load_data("bot_status.json")
-
-    async def __store_bot_status(self, data: dict) -> None:
-        await self.__store_data("bot_status.json", data)
 
     async def load_friend_req(self) -> RequestList:
         return RequestList.model_validate(await self.__load_data("friend_add.json"))
@@ -111,20 +106,15 @@ class BotManager:
         except Exception:
             raise Exception("写入文件时失败")
 
-    async def set_bot_status(self, status, bot_id: str) -> None:
-        data = await self.__load_bot_status()
-        data[bot_id] = status
-        try:
-            await self.__store_bot_status(data)
-        except Exception:
-            raise Exception("写入文件时失败")
+    @staticmethod
+    async def set_bot_status(status: bool, bot_id: str) -> None:
+        bot_statu = BotStatus.get_bot_statu(bot_id)
+        bot_statu.enable = status
+        BotStatus.set_bot_status(bot_id, bot_statu)
 
-    async def get_bot_status(self, bot_id: str) -> bool:
-        data = await self.__load_bot_status()
-        try:
-            return data.get(bot_id, True)
-        except Exception:
-            raise Exception("写入文件时失败")
+    @staticmethod
+    async def get_bot_status(bot_id: str) -> bool:
+        return BotStatus.get_bot_statu(bot_id).enable
 
     def toggle_global_service(self, service: str) -> bool:
         serv = ServiceTools(service)

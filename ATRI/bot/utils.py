@@ -5,6 +5,7 @@ from ATRI.log import log
 
 from .model import Group, User
 from .statistics import manual_add_server_statistic
+from .status import BotStatus
 
 
 class BotUtils:
@@ -64,6 +65,9 @@ class BotUtils:
         :param group_id: 群ID，群消息时必填
         :param message: 消息内容
         """
+        if BotStatus.is_blocked(bot_id=str(bot.self_id), user_id=user_id, group_id=group_id):
+            log.debug(f"Target is blocked, skip sending message. bot_id={bot.self_id}, user_id={user_id}, group_id={group_id}")
+            return
         track_id = None
         target_id = None
         target_type = None

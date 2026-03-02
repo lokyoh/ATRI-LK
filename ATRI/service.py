@@ -85,7 +85,7 @@ class Service:
         """
         if not service:
             raise ServiceRegisterError("未命名服务")
-        if service in ServiceTools.service_list or service == "master" or service == "ATRI":
+        if service in ServiceTools.service_list or service == "ATRI":
             raise ServiceRegisterError("服务重复注册或服务名违规")
         self.service = service
         self._docs = docs

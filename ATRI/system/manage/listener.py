@@ -7,7 +7,6 @@ from nonebot.adapters.onebot.v11 import (
 from nonebot.exception import IgnoredException
 from nonebot.matcher import Matcher
 from nonebot.message import run_preprocessor
-from sympy import preorder_traversal
 
 from ATRI.service import ServiceTools
 

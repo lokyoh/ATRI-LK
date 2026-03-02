@@ -6,7 +6,7 @@ from ATRI.permission import MASTER
 
 from .config import HelpConfig
 
-plugin = Service("帮助").document("ATRI 的食用指南~").type(Service.ServiceType.SYSTEM).version("2.0.0")
+plugin = Service("帮助").document("ATRI 的食用指南~").type(Service.ServiceType.SYSTEM).version("2.0.1")
 help_config: HelpConfig = plugin.add_plugin_config(HelpConfig).config()
 
 from .data_source import Helper, help_type

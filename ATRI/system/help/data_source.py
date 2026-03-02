@@ -115,6 +115,8 @@ class Helper:
                 cls.service_dict = json.load(f)
         if help_config.help_type == 'image':
             cls.get_image_list()
+        else:
+            cls.get_typed_services()
 
     @classmethod
     def get_image_list(cls, event=None) -> MessageSegment:
@@ -178,6 +180,7 @@ class Helper:
 
     @classmethod
     def get_text_list(cls, event=None):
+        cls.get_typed_services()
         services_info = ""
         for _type in Service.ServiceType:
             if _type == Service.ServiceType.HIDDEN:

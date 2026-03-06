@@ -64,12 +64,11 @@ class FishingController:
         # 检测是否在钓鱼
         if user_id not in cls.player_fishing_data:
             raise FishingException('你没有在钓鱼哦!')
-        # 删除钓鱼状态
-        del cls.player_fishing_data[user_id]
         with get_fish_user_data(user_id) as info:
             # 检测鱼是否上钩
             if cls.player_fishing_data[user_id] is None:
-                # 进行数据处理
+                # 删除钓鱼状态并进行数据处理
+                del cls.player_fishing_data[user_id]
                 info.increase_damage()
                 raise FishingException('🐟还没有上钩呢...请重新钓鱼吧')
             # 检测钓鱼是否超时
@@ -78,13 +77,16 @@ class FishingController:
             if trackle := info.get_fishing_tackle():
                 max_wait_time += trackle.reaction_time
             if now - cls.player_fishing_data[user_id] > max_wait_time:
-                # 进行数据处理
+                # 删除钓鱼状态并进行数据处理
+                del cls.player_fishing_data[user_id]
                 info.increase_damage()
                 info.use_bait()
                 if info.get_fishing_tackle():
                     info.increase_tackle_damage()
                 raise FishingException('🐟已经跑掉了...')
             # 进行数据处理
+            # 删除钓鱼状态
+            del cls.player_fishing_data[user_id]
             # 生成鱼
             fish_data = cls.gene_fish(info)
             # 生成宝藏

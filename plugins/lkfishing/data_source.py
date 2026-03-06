@@ -60,26 +60,41 @@ class FishingController:
         cls.player_fishing_data[user_id] = time.time()
 
     @classmethod
-    def take_up(cls, user_id) -> (FishData, list):
+    def take_up(cls, user_id) -> tuple[dict, list]:
+        # 检测是否在钓鱼
         if user_id not in cls.player_fishing_data:
             raise FishingException('你没有在钓鱼哦!')
+        # 删除钓鱼状态
+        del cls.player_fishing_data[user_id]
         with get_fish_user_data(user_id) as info:
-            info.increase_damage()
+            # 检测鱼是否上钩
             if cls.player_fishing_data[user_id] is None:
-                del cls.player_fishing_data[user_id]
+                # 进行数据处理
+                info.increase_damage()
                 raise FishingException('🐟还没有上钩呢...请重新钓鱼吧')
+            # 检测钓鱼是否超时
             now = time.time()
             max_wait_time = 15.
             if trackle := info.get_fishing_tackle():
                 max_wait_time += trackle.reaction_time
             if now - cls.player_fishing_data[user_id] > max_wait_time:
-                del cls.player_fishing_data[user_id]
+                # 进行数据处理
+                info.increase_damage()
                 info.use_bait()
-                info.increase_tackle_damage()
+                if info.get_fishing_tackle():
+                    info.increase_tackle_damage()
                 raise FishingException('🐟已经跑掉了...')
+            # 进行数据处理
+            # 生成鱼
             fish_data = cls.gene_fish(info)
+            # 生成宝藏
             t_l = cls.gene_treasure(info)
+            # 处理钓鱼用户数据
+            info.increase_damage()
             info.use_bait()
+            if info.get_fishing_tackle():
+                info.increase_tackle_damage()
+            # 为玩家添加钓鱼收获
             with get_user_data(user_id) as user_data:
                 for _fish, _num in fish_data.items():
                     user_data.item_num_change(f'{_fish.fish.name}{f'-{_fish.quality}' if _fish.quality else ''}', _num)
@@ -89,9 +104,6 @@ class FishingController:
                     for _item, _num in t_l.items():
                         user_data.item_num_change(_item, _num)
                         fish_data[_item] = _num
-            if info.get_fishing_tackle():
-                info.increase_tackle_damage()
-            del cls.player_fishing_data[user_id]
             return fish_data, achis
 
     @classmethod

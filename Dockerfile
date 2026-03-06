@@ -63,6 +63,8 @@ RUN apt-get update \
     libcairo2 \
     libpango-1.0-0 \
     libasound2 \
+    fonts-wqy-zenhei \
+    fonts-noto-cjk \
     && rm -rf /var/lib/apt/lists/* /tmp/*
 
 # 复制应用代码（最后复制以利用缓存）

@@ -16,6 +16,10 @@
   - `钓鱼`为渔具添加更多功能
 - Patch1:
   - 修复bug[#5](https://github.com/lokyoh/ATRI-LK/issues/5)
+- Patch3:
+  - 修复bug[#6](https://github.com/lokyoh/ATRI-LK/issues/6)
+- Patch4:
+  - 修复plugin的bug[#2](https://github.com/lokyoh/ATRI-LK-plugin/issues/2)
 
 ## Dec 24, 2025
 

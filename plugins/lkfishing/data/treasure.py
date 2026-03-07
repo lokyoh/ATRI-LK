@@ -8,10 +8,8 @@ class TreasureManager:
     def add_loot(self, loot_name, chance, item, num):
         if type(item) is str:
             item = [item]
-        if type(chance) is int:
-            chance = [chance]
-        if type(item) is str:
-            chance = [chance]
+        if type(num) is int:
+            num = [num]
         self.loot_list[loot_name] = {
             'chance': chance,
             'items': item,
@@ -36,11 +34,12 @@ class TreasureManager:
             i = 2
         else:
             i = 3
-        items = random.choices(list(self.loot_list.keys()), self.get_value_list(), k=i)
-        t_l = []
-        for item in items:
-            for i in range(len(item['items'])):
-                self.add_item_to_treasure(t_l, item['items'][i], item['nums'][i])
+        ll_names = random.choices(list(self.loot_list.keys()), self.get_value_list(), k=i)
+        t_l = {}
+        for ll_name in ll_names:
+            l_l = self.loot_list[ll_name]
+            for i in range(len(l_l['items'])):
+                self.add_item_to_treasure(t_l, l_l['items'][i], l_l['nums'][i])
         return t_l
 
     def clear(self):

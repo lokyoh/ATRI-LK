@@ -23,7 +23,7 @@ from .data.fish import FishData
 plugin = Service(
     "钓鱼",
     "ATRI的钓鱼插件",
-    "0.3.1",
+    "0.3.2",
     Service.ServiceType.ENTERTAINMENT
 ).main_cmd("/钓鱼")
 

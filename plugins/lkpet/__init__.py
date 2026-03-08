@@ -1,31 +1,54 @@
 from random import choice
 
-from nonebot.internal.matcher import Matcher
-from nonebot.params import CommandArg, ArgPlainText, Depends
-from nonebot.adapters.onebot.v11 import Event, Message, Bot, GroupMessageEvent
+from nonebot.adapters.onebot.v11 import Bot, Event, GroupMessageEvent, Message
 from nonebot.adapters.onebot.v11.helpers import Cooldown
+from nonebot.internal.matcher import Matcher
+from nonebot.params import ArgPlainText, CommandArg, Depends
 
-from ATRI.service import Service
 from ATRI.log import log
-from ATRI.permission import ADMIN, MASTER
 from ATRI.message import img_msg
+from ATRI.permission import ADMIN, MASTER
+from ATRI.service import Service
 from ATRI.system.htmlrender import text_to_pic
 from ATRI.system.lkapi.bot import util as lk_util
-from ATRI.system.lkapi.bot.checker import is_lk_user, not_safe_mode, is_test_mode, is_chat_switch_on
+from ATRI.system.lkapi.bot.checker import (
+    is_chat_switch_on,
+    is_lk_user,
+    is_test_mode,
+    not_safe_mode,
+)
 
 from .pet_chat import PetModel
 from .pet_data import PetData, pet_manager
 
-plugin = Service("宠物").document("赛博宠物插件").type(Service.ServiceType.ENTERTAINMENT).version(
-    "0.1.9").main_cmd("/pet")
+plugin = Service(
+    "宠物",
+    "赛博宠物插件",
+    "0.1.9",
+    Service.ServiceType.ENTERTAINMENT,
+).main_cmd("pet")
 
-_lmt_notice = ["慢...慢一..点❤", "冷静1下", "歇会歇会~~", "呜呜...别急", "太快了...受不了", "不要这么快呀"]
+_lmt_notice = [
+    "慢...慢一..点❤",
+    "冷静1下",
+    "歇会歇会~~",
+    "呜呜...别急",
+    "太快了...受不了",
+    "不要这么快呀",
+]
 
-talk_with_pet = plugin.on_command("/宠物", "与赛博宠物聊天")
+talk_with_pet = plugin.on_command("宠物", "与赛博宠物聊天")
 
 
-@talk_with_pet.handle([Cooldown(10, prompt=choice(_lmt_notice)), Depends(is_chat_switch_on), Depends(not_safe_mode),
-                       Depends(is_test_mode), Depends(is_lk_user)])
+@talk_with_pet.handle(
+    [
+        Cooldown(10, prompt=choice(_lmt_notice)),
+        Depends(is_chat_switch_on),
+        Depends(not_safe_mode),
+        Depends(is_test_mode),
+        Depends(is_lk_user),
+    ]
+)
 async def _(event: GroupMessageEvent, args: Message = CommandArg()):
     user_id = event.get_user_id()
     if user_id not in pet_manager.datas:
@@ -67,11 +90,15 @@ async def _(event: Event, matcher: Matcher, args: Message = CommandArg()):
 
 @adopt.got("pet_name", "宠物的名字呢？速速")
 @adopt.got("pet_instruction", "你想要个什么样的宠物呢")
-async def _(event: Event, name: str = ArgPlainText("pet_name"), instruction: str = ArgPlainText("pet_instruction")):
+async def _(
+    event: Event,
+    name: str = ArgPlainText("pet_name"),
+    instruction: str = ArgPlainText("pet_instruction"),
+):
     if name in lk_util.bot_names:
         await adopt.reject("讨厌，不能使用咱的名字哦")
     name = lk_util.clean_str(name)
-    if name == '':
+    if name == "":
         await adopt.reject("名字为空哦")
     if len(name) > 10:
         await adopt.reject("名称大于10字符")
@@ -114,7 +141,7 @@ async def _(event: Event, pet_name: str = ArgPlainText("new_pet_name")):
     if pet_name in lk_util.bot_names:
         await change_pet_name_cmd.finish("讨厌，不能使用咱的名字哦")
     pet_name = lk_util.clean_str(pet_name)
-    if pet_name == '':
+    if pet_name == "":
         await adopt.reject("名字为空哦")
     if len(pet_name) > 10:
         await change_pet_name_cmd.finish("名称大于10字符")
@@ -131,7 +158,7 @@ async def _(event: Event, matcher: Matcher, args: Message = CommandArg()):
     user_id = event.get_user_id()
     if user_id not in pet_manager.datas:
         await change_pet_name_cmd.finish("还没有领养宠物哟")
-    inst = args.extract_plain_text().replace('\'', '')
+    inst = args.extract_plain_text().replace("'", "")
     if inst:
         matcher.set_arg("pet_inst", args)
 
@@ -143,7 +170,9 @@ async def _(event: Event, inst: str = ArgPlainText("pet_inst")):
     await change_pet_inst_cmd.finish("修改成功啦")
 
 
-pet_list = plugin.cmd_as_group(cmd='宠物列表', docs='列出本群所有的宠物', permission=ADMIN)
+pet_list = plugin.cmd_as_group(
+    cmd="宠物列表", docs="列出本群所有的宠物", permission=ADMIN
+)
 
 
 @pet_list.handle()
@@ -152,24 +181,26 @@ async def _(bot: Bot, event: Event):
     member_list = await bot.get_group_member_list(group_id=group_id)
     members = []
     for member in member_list:
-        user_id = str(member['user_id'])
+        user_id = str(member["user_id"])
         if user_id in pet_manager.datas:
             members.append(user_id)
     num = len(members)
-    resp = '本群宠物列表:\n'
+    resp = "本群宠物列表:\n"
     i = 0
     j = 0
     while i < num:
         for i in range(20 + j * 20):
             if i == num:
                 break
-            resp += f'{i + 1}.{pet_manager.datas[members[i]].name}:{members[i]}\n'
-        await  pet_list.send(resp + f'宠物总数:{i}/{num}')
+            resp += f"{i + 1}.{pet_manager.datas[members[i]].name}:{members[i]}\n"
+        await pet_list.send(resp + f"宠物总数:{i}/{num}")
         j += 1
-        resp = ''
+        resp = ""
 
 
-all_pet_list = plugin.cmd_as_group(cmd='所有宠物', docs='列出所有宠物', permission=MASTER)
+all_pet_list = plugin.cmd_as_group(
+    cmd="所有宠物", docs="列出所有宠物", permission=MASTER
+)
 
 
 @all_pet_list.handle()
@@ -177,21 +208,21 @@ async def _(bot: Bot):
     group_list = await bot.get_group_list()
     members = []
     for group in group_list:
-        group_id = group['group_id']
+        group_id = group["group_id"]
         member_list = await bot.get_group_member_list(group_id=group_id)
         for member in member_list:
-            user_id = str(member['user_id'])
+            user_id = str(member["user_id"])
             if user_id not in members and user_id in pet_manager.datas:
                 members.append(user_id)
     num = len(members)
-    resp = '所有宠物列表:\n'
+    resp = "所有宠物列表:\n"
     i = 0
     j = 0
     while i < num:
         for i in range(20 + j * 20):
             if i == num:
                 break
-            resp += f'{i + 1}.{pet_manager.datas[members[i]].name}:{members[i]}\n'
-        await  all_pet_list.send(resp + f'宠物总数:{i}/{num}')
+            resp += f"{i + 1}.{pet_manager.datas[members[i]].name}:{members[i]}\n"
+        await all_pet_list.send(resp + f"宠物总数:{i}/{num}")
         j += 1
-        resp = ''
+        resp = ""

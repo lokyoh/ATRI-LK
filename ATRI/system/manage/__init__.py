@@ -93,7 +93,7 @@ handle_command(
 )
 
 toggle_group_service = plugin.on_command(
-    "/控制", "针对所在群禁用/启用某一服务", permission=ADMIN
+    "控制", "针对所在群禁用/启用某一服务", permission=ADMIN
 )
 handle_command(
     toggle_group_service,
@@ -101,14 +101,14 @@ handle_command(
     "服务 {} 已针对本群",
 )
 
-toggle_service_white_list = plugin.on_command("/白名单", "禁用/启用某一服务的白名单")
+toggle_service_white_list = plugin.on_command("白名单", "禁用/启用某一服务的白名单")
 handle_command(
     toggle_service_white_list,
     BotManager().toggle_service_white_list,
     "服务 {} 白名单已",
 )
 
-track_error = plugin.on_command("/追踪", "根据ID获取对应报错信息", aliases={"/track"})
+track_error = plugin.on_command("追踪", "根据ID获取对应报错信息", aliases={"track"})
 handle_command(
     track_error,
     BotManager().track_error,
@@ -283,7 +283,7 @@ async def _():
     await get_group_req_list.finish(result)
 
 
-recall_msg = plugin.on_command("/撤回", "撤回 ATRI 已发送的信息", to_bot())
+recall_msg = plugin.on_command("撤回", "撤回 ATRI 已发送的信息", to_bot())
 
 
 @recall_msg.handle()

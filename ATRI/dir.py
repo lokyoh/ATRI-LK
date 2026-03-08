@@ -19,6 +19,7 @@ TEXT_DIR = RES_DIR / "text"
 DATA_DIR = Path(".") / "data"
 SYS_CONFIG_DIR = DATA_DIR / "sys_config"
 """系统设置路径"""
+SYS_CONFIG_DIR.mkdir(parents=True, exist_ok=True)
 CONFIG_DIR = DATA_DIR / "config"
 """插件设置路径"""
 CONFIG_DIR.mkdir(parents=True, exist_ok=True)

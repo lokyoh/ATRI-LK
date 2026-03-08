@@ -9,13 +9,10 @@ from ATRI.service import Service, ServiceTools
 from .data_source import PluginManager
 
 plugin = Service(
-    "插件商店",
-    "插件商店",
-    "0.3.3",
-    Service.ServiceType.SYSTEM
+    "插件商店", "插件商店", "0.3.3", Service.ServiceType.SYSTEM
 ).permission(MASTER)
 
-plugins = plugin.on_command("/插件列表", "查看插件列表")
+plugins = plugin.on_command("插件列表", "查看插件列表")
 
 
 @plugins.handle()
@@ -32,7 +29,7 @@ async def _():
             j += 1
             info = ""
         install = "未安装"
-        version = plugin_list[_plugin]['version']
+        version = plugin_list[_plugin]["version"]
         if _plugin in ServiceTools.service_list:
             now_version = ServiceTools(_plugin).load_service().version
             if now_version != version:
@@ -46,7 +43,7 @@ async def _():
     await plugins.send(info)
 
 
-plugin_info = plugin.on_command("/插件详情", "查看指定插件详情")
+plugin_info = plugin.on_command("插件详情", "查看指定插件详情")
 
 
 @plugin_info.handle()
@@ -59,26 +56,28 @@ async def _(args: Message = CommandArg()):
     plugin_name = args.extract_plain_text().replace(" ", "")
     if not plugin_name:
         await plugin_info.finish("请输入插件名")
-    if not plugin_name in plugin_list:
+    if plugin_name not in plugin_list:
         await plugin_info.finish(f"找不到插件 {plugin_name}")
     _plugin = plugin_list[plugin_name]
     install = "未安装"
-    version = _plugin['version']
+    version = _plugin["version"]
     if plugin_name in ServiceTools.service_list:
         now_version = ServiceTools(plugin_name).load_service().version
         if now_version != version:
             install = "需更新"
         else:
             install = "已安装"
-    message = (MessageBuilder()
-               .text(f"{plugin_name} [{install}]")
-               .text(f"版本:{version}")
-               .text(f"作者:{_plugin['author']}")
-               .text(f"介绍:{_plugin['docs']}"))
+    message = (
+        MessageBuilder()
+        .text(f"{plugin_name} [{install}]")
+        .text(f"版本:{version}")
+        .text(f"作者:{_plugin['author']}")
+        .text(f"介绍:{_plugin['docs']}")
+    )
     await plugin_info.finish(message)
 
 
-add = plugin.on_command("/添加插件", "添加指定插件")
+add = plugin.on_command("添加插件", "添加指定插件")
 
 
 @add.handle()
@@ -94,14 +93,16 @@ async def _(args: Message = CommandArg()):
         await add.finish(f"插件 {plugin_name} 已经安装")
     try:
         await PluginManager.install_plugin(plugin_name, False)
-        await add.finish(f"{plugin_name}安装成功,部分功能需重启才生效(暂时关闭自动加载到下一版本)")
+        await add.finish(
+            f"{plugin_name}安装成功,部分功能需重启才生效(暂时关闭自动加载到下一版本)"
+        )
     except PluginError as e:
         await add.finish(e.prompt)
     except Exception:
         raise
 
 
-remove = plugin.on_command("/移除插件", "移除指定插件")
+remove = plugin.on_command("移除插件", "移除指定插件")
 
 
 @remove.handle()
@@ -122,7 +123,7 @@ async def _(args: Message = CommandArg()):
         raise
 
 
-update = plugin.on_command("/更新插件", "更新指定插件")
+update = plugin.on_command("更新插件", "更新指定插件")
 
 
 @update.handle()
@@ -135,7 +136,7 @@ async def _(args: Message = CommandArg()):
     plugin_name = args.extract_plain_text().replace(" ", "")
     if not plugin_name:
         await update.finish("请输入插件名")
-    if not plugin_name in plugin_list:
+    if plugin_name not in plugin_list:
         await update.finish(f"找不到插件 {plugin_name}")
     version = plugin_list[plugin_name]["version"]
     if plugin_name in ServiceTools.service_list:
@@ -150,7 +151,7 @@ async def _(args: Message = CommandArg()):
         raise
 
 
-check_update = plugin.on_command("/检查插件更新", "检查所有的插件的更新")
+check_update = plugin.on_command("检查插件更新", "检查所有的插件的更新")
 
 
 @check_update.handle()
@@ -170,7 +171,7 @@ async def _():
     await update_all.finish(message)
 
 
-update_all = plugin.on_command("/更新所有插件", "更新所有的插件")
+update_all = plugin.on_command("更新所有插件", "更新所有的插件")
 
 
 @update_all.handle()

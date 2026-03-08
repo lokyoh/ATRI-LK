@@ -1,5 +1,3 @@
-import json
-
 from nonebot.adapters.onebot.v11 import (
     Event,
     MessageEvent,
@@ -8,10 +6,8 @@ from nonebot.exception import IgnoredException
 from nonebot.matcher import Matcher
 from nonebot.message import run_preprocessor
 
-from ATRI import conf
+from ATRI.bot import BotStatus, GlobalStatus
 from ATRI.service import ServiceTools
-
-from .data_source import MANAGE_DIR
 
 
 @run_preprocessor
@@ -39,36 +35,14 @@ async def _(event: Event):
     user_id = str(getattr(event, "user_id", ""))
     group_id = str(getattr(event, "group_id", ""))
 
-    bot_status_file_path = MANAGE_DIR / "bot_status.json"
-    if not bot_status_file_path.is_file():
-        with open(bot_status_file_path, "w", encoding="utf-8") as w:
-            w.write(json.dumps(dict()))
-    data = json.loads(bot_status_file_path.read_bytes())
-    if (
-        not data.get(bot_id, {}).get("enable", True)
-        and user_id not in conf.BotConfig.superusers
-        if user_id
-        else True
-    ):
-        raise IgnoredException(f"Blocked user: {bot_id}")
-
-    if user_id:
-        blockuser_file_path = MANAGE_DIR / "block_user.json"
-        if not blockuser_file_path.is_file():
-            with open(blockuser_file_path, "w", encoding="utf-8") as w:
-                w.write(json.dumps(dict()))
-        data = json.loads(blockuser_file_path.read_bytes())
-        if user_id in data:
-            raise IgnoredException(f"Blocked user: {user_id}")
-
-    if group_id:
-        blockgroup_file_path = MANAGE_DIR / "block_group.json"
-        if not blockgroup_file_path.is_file():
-            with open(blockgroup_file_path, "w", encoding="utf-8") as w:
-                w.write(json.dumps(dict()))
-        data = json.loads(blockgroup_file_path.read_bytes())
-        if group_id in data:
-            raise IgnoredException(f"Blocked group: {group_id}")
+    if GlobalStatus.is_blocked(user_id, group_id):
+        raise IgnoredException(
+            f"Blocked by GlobalStatus: user_id={user_id}, group_id={group_id}"
+        )
+    if BotStatus.is_blocked(bot_id, user_id, group_id):
+        raise IgnoredException(
+            f"Blocked by BotStatus: bot_id={bot_id}, user_id={user_id}, group_id={group_id}"
+        )
 
 
 def init_listener():

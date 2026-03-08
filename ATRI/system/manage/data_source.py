@@ -1,15 +1,14 @@
 from pathlib import Path
-from datetime import datetime
 
 from nonebot import get_bot
 from nonebot.adapters import Bot
 from nonebot.adapters.onebot.v11 import GroupMessageEvent
 
-from ATRI.bot import BotStatus
-from ATRI.utils import FileDealer
-from ATRI.service import ServiceTools
-from ATRI.message import MessageBuilder
+from ATRI.bot import BotStatus, GlobalStatus
 from ATRI.exceptions import load_error
+from ATRI.message import MessageBuilder
+from ATRI.service import ServiceTools
+from ATRI.utils import FileDealer
 
 from .models import RequestList
 
@@ -44,18 +43,6 @@ class BotManager:
             await dealer.write_json(dict())
         await dealer.write_json(data)
 
-    async def __load_block_group(self) -> dict:
-        return await self.__load_data("block_group.json")
-
-    async def __store_block_group(self, data: dict) -> None:
-        await self.__store_data("block_group.json", data)
-
-    async def __load_block_user(self) -> dict:
-        return await self.__load_data("block_user.json")
-
-    async def __store_block_user(self, data: dict) -> None:
-        await self.__store_data("block_user.json", data)
-
     async def load_friend_req(self) -> RequestList:
         return RequestList.model_validate(await self.__load_data("friend_add.json"))
 
@@ -68,53 +55,40 @@ class BotManager:
     async def store_group_req(self, data: dict) -> None:
         await self.__store_data("group_invite.json", data)
 
-    async def block_group(self, group_id: str) -> None:
-        data = await self.__load_block_group()
-        data[group_id] = {"time": datetime.now().strftime("%Y-%m-%d %H:%M:%S")}
-        try:
-            await self.__store_block_group(data)
-        except Exception:
-            raise Exception("写入文件时失败")
+    @staticmethod
+    async def block_group(group_id: str) -> None:
+        GlobalStatus.read_from_file()
+        GlobalStatus.status.group_black_list.append(group_id)
+        GlobalStatus.save_to_file()
 
-    async def unblock_group(self, group_id: str) -> None:
-        data = await self.__load_block_group()
-        if group_id not in data:
+    @staticmethod
+    async def unblock_group(group_id: str) -> None:
+        GlobalStatus.read_from_file()
+        if group_id not in GlobalStatus.status.group_black_list:
             raise Exception("群不存在于封禁名单")
+        GlobalStatus.status.group_black_list.pop(group_id)
+        GlobalStatus.save_to_file()
 
-        try:
-            data.pop(group_id)
-            await self.__store_block_group(data)
-        except Exception:
-            raise Exception("写入文件时失败")
+    @staticmethod
+    async def block_user(user_id: str) -> None:
+        GlobalStatus.read_from_file()
+        GlobalStatus.status.user_black_list.append(user_id)
+        GlobalStatus.save_to_file()
 
-    async def block_user(self, user_id: str) -> None:
-        data = await self.__load_block_user()
-        data[user_id] = {"time": datetime.now().strftime("%Y-%m-%d %H:%M:%S")}
-        try:
-            await self.__store_block_user(data)
-        except Exception:
-            raise Exception("写入文件时失败")
-
-    async def unblock_user(self, user_id: str) -> None:
-        data = await self.__load_block_user()
-        if user_id not in data:
+    @staticmethod
+    async def unblock_user(user_id: str) -> None:
+        GlobalStatus.read_from_file()
+        if user_id not in GlobalStatus.status.user_black_list:
             raise Exception("用户不存在于封禁名单")
-
-        try:
-            data.pop(user_id)
-            await self.__store_block_user(data)
-        except Exception:
-            raise Exception("写入文件时失败")
+        GlobalStatus.status.user_black_list.pop(user_id)
+        GlobalStatus.save_to_file()
 
     @staticmethod
-    async def set_bot_status(status: bool, bot_id: str) -> None:
+    async def toggel_bot_status(bot_id: str) -> bool:
         bot_statu = BotStatus.get_bot_statu(bot_id)
-        bot_statu.enable = status
+        bot_statu.enable = not bot_statu.enable
         BotStatus.set_bot_status(bot_id, bot_statu)
-
-    @staticmethod
-    async def get_bot_status(bot_id: str) -> bool:
-        return BotStatus.get_bot_statu(bot_id).enable
+        return bot_statu.enable
 
     def toggle_global_service(self, service: str) -> bool:
         serv = ServiceTools(service)

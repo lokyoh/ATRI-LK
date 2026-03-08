@@ -1,18 +1,20 @@
 import os
-from pathlib import Path
 import sys
+from pathlib import Path
 
-from nonebot.adapters.onebot.v11 import Bot, Event, PrivateMessageEvent, GroupMessageEvent
+from nonebot.adapters.onebot.v11 import (
+    Bot,
+    Event,
+    GroupMessageEvent,
+    PrivateMessageEvent,
+)
 
 from ATRI import driver as atri_driver
-from ATRI.service import Service
 from ATRI.permission import MASTER
+from ATRI.service import Service
 
 plugin = Service(
-    "重启",
-    "重新启动ATRI",
-    "0.2.0",
-    Service.ServiceType.SYSTEM
+    "重启", "重新启动ATRI", "0.2.0", Service.ServiceType.SYSTEM
 ).permission(MASTER)
 
 PLUGIN_DIR = Path(".") / "data" / "plugins" / "restart"
@@ -28,7 +30,7 @@ async def restart_bot(bot_id: str, target_id):
     os.execv(sys.executable, [sys.executable] + sys.argv)
 
 
-restart = plugin.on_command("/重启", "重新启动ATRI", permission=MASTER)
+restart = plugin.on_command("重启", "重新启动ATRI", permission=MASTER)
 
 
 @restart.handle()

@@ -1,11 +1,12 @@
 from nonebot.adapters.onebot.v11 import Bot, Message
 
+from ATRI import conf
 from ATRI.exceptions import save_error, str_traceback
 from ATRI.log import log
 
 from .model import Group, User
 from .statistics import manual_add_server_statistic
-from .status import BotStatus
+from .status import BotStatus, GlobalStatus
 
 
 class BotUtils:
@@ -65,8 +66,17 @@ class BotUtils:
         :param group_id: 群ID，群消息时必填
         :param message: 消息内容
         """
-        if BotStatus.is_blocked(bot_id=str(bot.self_id), user_id=user_id, group_id=group_id):
-            log.debug(f"Target is blocked, skip sending message. bot_id={bot.self_id}, user_id={user_id}, group_id={group_id}")
+        if GlobalStatus.is_blocked(user_id=user_id, group_id=group_id):
+            log.debug(
+                f"Target is blocked, skip sending message. user_id={user_id}, group_id={group_id}"
+            )
+            return
+        if BotStatus.is_blocked(
+            bot_id=str(bot.self_id), user_id=user_id, group_id=group_id
+        ):
+            log.debug(
+                f"Target is blocked, skip sending message. bot_id={bot.self_id}, user_id={user_id}, group_id={group_id}"
+            )
             return
         track_id = None
         target_id = None
@@ -85,11 +95,17 @@ class BotUtils:
             error_message = str_traceback(e)
             track_id = save_error(prompt, error_message)
             log.error(f"{service} send_message ActionFailed:\n{error_message}")
-        manual_add_server_statistic(
-            bot=bot,
-            service=service,
-            call_type="send_message",
-            target_id=target_id,
-            target_type=target_type,
-            track_id=track_id,
-        )
+            raise e
+        finally:
+            manual_add_server_statistic(
+                bot=bot,
+                service=service,
+                call_type="send_message",
+                target_id=target_id,
+                target_type=target_type,
+                track_id=track_id,
+            )
+
+    @classmethod
+    def get_command_start(cls) -> str:
+        return conf.BotConfig.command_start[0] if conf.BotConfig.command_start else ""

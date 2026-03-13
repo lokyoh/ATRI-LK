@@ -90,6 +90,11 @@ class BotManager:
         BotStatus.set_bot_status(bot_id, bot_statu)
         return bot_statu.enable
 
+    @staticmethod
+    async def get_bot_status(bot_id: str) -> bool:
+        bot_statu = BotStatus.get_bot_statu(bot_id)
+        return bot_statu.enable
+
     def toggle_global_service(self, service: str) -> bool:
         serv = ServiceTools(service)
         try:

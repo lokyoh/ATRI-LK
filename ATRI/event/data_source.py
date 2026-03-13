@@ -1,10 +1,13 @@
 import asyncio
 import inspect
+import os
+import time
 from typing import Callable, Dict, List, Any
 from enum import IntEnum
 from dataclasses import dataclass
 from datetime import datetime
 
+from ATRI.dir import TEMP_DIR
 from ATRI.exceptions import str_traceback
 from ATRI.log import log
 
@@ -161,6 +164,24 @@ def daily_update(priority: Priority = Priority.NORMAL, once: bool = False):
         return func
 
     return decorator
+
+
+@daily_update()
+def clean_temp_files():
+    now = time.time()
+    cutoff = now - 24 * 3600
+    deleted = 0
+    for root, _, files in os.walk(TEMP_DIR):
+        for file in files:
+            file_path = os.path.join(root, file)
+            try:
+                file_time = os.path.getmtime(file_path)
+                if file_time < cutoff:
+                    os.remove(file_path)
+                    deleted += 1
+            except Exception as e:
+                log.warning(f"跳过: {file_path}，错误: {e}")
+    log.info(f"共删除 {deleted} 个临时文件。")
 
 
 def heartbeat_1m(priority: Priority = Priority.NORMAL, once: bool = False):

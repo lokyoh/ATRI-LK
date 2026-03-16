@@ -1,7 +1,9 @@
 import json
 import os
 
-from nonebot.adapters.onebot.v11 import Bot
+from nonebot.adapters.onebot.v11 import Bot, Event
+from nonebot.exception import IgnoredException
+from nonebot.message import run_preprocessor
 
 from ATRI import driver
 from ATRI.dir import SYS_CONFIG_DIR
@@ -97,8 +99,6 @@ class GlobalStatus:
         if not self.status.enable:
             return True
         if user_id:
-            if user_id in MASTER_LIST:
-                return False
             if self.status.is_user_black_list:
                 if user_id in self.status.user_black_list:
                     return True
@@ -138,3 +138,19 @@ def _(bot: Bot):
 def _(bot: Bot):
     bot_id = str(bot.self_id)
     BotStatus.remove_bot_statu(bot_id)
+
+
+@run_preprocessor
+async def _(event: Event):
+    bot_id = str(event.self_id)
+    user_id = str(getattr(event, "user_id", ""))
+    group_id = str(getattr(event, "group_id", ""))
+
+    if GlobalStatus.is_blocked(user_id, group_id):
+        raise IgnoredException(
+            f"Blocked by GlobalStatus: user_id={user_id}, group_id={group_id}"
+        )
+    if BotStatus.is_blocked(bot_id, user_id, group_id):
+        raise IgnoredException(
+            f"Blocked by BotStatus: bot_id={bot_id}, user_id={user_id}, group_id={group_id}"
+        )

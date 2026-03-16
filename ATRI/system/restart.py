@@ -12,6 +12,7 @@ from nonebot.adapters.onebot.v11 import (
 from ATRI import driver as atri_driver
 from ATRI.permission import MASTER
 from ATRI.service import Service
+from threading import Lock
 
 plugin = Service(
     "重启", "重新启动ATRI", "0.2.0", Service.ServiceType.SYSTEM
@@ -20,6 +21,9 @@ plugin = Service(
 PLUGIN_DIR = Path(".") / "data" / "plugins" / "restart"
 RESTART_TEMP = PLUGIN_DIR / "restart_temp"
 PLUGIN_DIR.mkdir(parents=True, exist_ok=True)
+
+# 重启锁，防止重复重启
+restart_lock = Lock()
 
 driver = atri_driver()
 
@@ -49,12 +53,33 @@ async def _(bot: Bot, event: Event):
 async def _(bot: Bot):
     if RESTART_TEMP.exists():
         with open(RESTART_TEMP, "r", encoding="utf8") as f:
-            bot_id, target_id = f.read().split()
-        if bot.self_id == bot_id:
-            target = target_id[1:]
-            message = "ATRI重启成功"
-            if target_id[0] == "p":
-                await bot.send_private_msg(user_id=int(target), message=message)
-            else:
-                await bot.send_group_msg(group_id=int(target), message=message)
-            RESTART_TEMP.unlink()
+            content = f.read().strip()
+
+            # 检查是否是 WebAPI 触发的重启
+            if content == "webapi_restart":
+                # WebAPI 重启模式，不发送通知或发送到固定位置
+                RESTART_TEMP.unlink()
+                # 释放重启锁
+                try:
+                    restart_lock.release()
+                except RuntimeError:
+                    # 锁可能已经被释放
+                    pass
+                return
+
+            # 原有的命令触发重启逻辑
+            bot_id, target_id = content.split()
+            if bot.self_id == bot_id:
+                target = target_id[1:]
+                message = "ATRI 重启成功"
+                if target_id[0] == "p":
+                    await bot.send_private_msg(user_id=int(target), message=message)
+                else:
+                    await bot.send_group_msg(group_id=int(target), message=message)
+                RESTART_TEMP.unlink()
+                # 释放重启锁
+                try:
+                    restart_lock.release()
+                except RuntimeError:
+                    # 锁可能已经被释放
+                    pass

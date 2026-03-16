@@ -136,6 +136,12 @@
 
 小改动请参考以往的 [commit](https://github.com/lokyoh/ATRI-LK/commits/main/).
 
+## 🐧 QQ群
+
+[ATRI-LK交流群](https://qm.qq.com/q/8Gx7UxXnA4)在此进行日常聊天、提问与新手指导
+
+[ATRI-LK技术群](https://qm.qq.com/q/cE5ceehNHq)在此获取最新开发资讯、提出本体开发意见、参与本体开发、插件开发交流或提出开发中的问题
+
 ## ❤️ 特别感谢 | Acknowledgments
 
 [Kyomotoi](https://github.com/Kyomotoi): [ATRI](https://github.com/Kyomotoi/ATRI)

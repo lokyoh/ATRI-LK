@@ -1,12 +1,8 @@
-from nonebot.adapters.onebot.v11 import (
-    Event,
-    MessageEvent,
-)
+from nonebot.adapters.onebot.v11 import MessageEvent
 from nonebot.exception import IgnoredException
 from nonebot.matcher import Matcher
 from nonebot.message import run_preprocessor
 
-from ATRI.bot import BotStatus, GlobalStatus
 from ATRI.service import ServiceTools
 
 
@@ -27,22 +23,6 @@ async def _(matcher: Matcher, event: MessageEvent):
     result = serv.auth_service(user_id, group_id)
     if not result:
         raise IgnoredException(f"{plugin_name} limited")
-
-
-@run_preprocessor
-async def _(event: Event):
-    bot_id = str(event.self_id)
-    user_id = str(getattr(event, "user_id", ""))
-    group_id = str(getattr(event, "group_id", ""))
-
-    if GlobalStatus.is_blocked(user_id, group_id):
-        raise IgnoredException(
-            f"Blocked by GlobalStatus: user_id={user_id}, group_id={group_id}"
-        )
-    if BotStatus.is_blocked(bot_id, user_id, group_id):
-        raise IgnoredException(
-            f"Blocked by BotStatus: bot_id={bot_id}, user_id={user_id}, group_id={group_id}"
-        )
 
 
 def init_listener():

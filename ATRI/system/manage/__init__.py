@@ -71,7 +71,7 @@ plugin = (
     .type(Service.ServiceType.SYSTEM)
     .permission(MASTER)
     .version("1.1.0")
-)
+).allow_switch(False)
 
 block_user = plugin.on_command("封禁用户", "阻止目标用户使用 ATRI")
 handle_command(block_user, BotManager().block_user, "用户 {} 危！")

@@ -6,7 +6,9 @@ from ATRI.service import Service
 
 from .config import HelpConfig
 
-plugin = Service("帮助", "ATRI 的食用指南~", "2.0.1", Service.ServiceType.SYSTEM)
+plugin = Service(
+    "帮助", "ATRI 的食用指南~", "2.0.1", Service.ServiceType.SYSTEM
+).allow_switch(False)
 
 help_config: HelpConfig = plugin.add_plugin_config(HelpConfig).config()
 

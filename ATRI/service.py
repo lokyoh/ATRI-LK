@@ -3,29 +3,34 @@ import re
 from enum import Enum
 from pathlib import Path
 from types import ModuleType
-from typing import List, Set, Tuple, Type, Union, Optional, Dict
+from typing import Dict, List, Optional, Set, Tuple, Type, Union
 
 from nonebot import get_bot
-from nonebot.matcher import Matcher
-from nonebot.dependencies import Dependent
-from nonebot.typing import (
-    T_State,
-    T_Handler,
-    T_RuleChecker,
-    T_PermissionChecker,
-)
-from nonebot.rule import Rule, command, keyword, regex
 from nonebot.adapters import Event
 from nonebot.adapters.onebot.v11 import Message
+from nonebot.dependencies import Dependent
+from nonebot.matcher import Matcher
+from nonebot.rule import Rule, command, keyword, regex
+from nonebot.typing import (
+    T_Handler,
+    T_PermissionChecker,
+    T_RuleChecker,
+    T_State,
+)
 
 from ATRI import driver
-from ATRI.dir import CONFIG_DIR, PLUGIN_DATA_DIR
-from ATRI.log import log
-from ATRI.permission import Permission, MASTER_LIST
-from ATRI.exceptions import ReadFileError, WriteFileError, ServiceNotFoundError, ServiceRegisterError
-from ATRI.utils.model import BaseModel
-from ATRI.scheduler import SchedulerController
 from ATRI.configs import PluginConfig
+from ATRI.dir import CONFIG_DIR, PLUGIN_DATA_DIR
+from ATRI.exceptions import (
+    ReadFileError,
+    ServiceNotFoundError,
+    ServiceRegisterError,
+    WriteFileError,
+)
+from ATRI.log import log
+from ATRI.permission import MASTER_LIST, Permission
+from ATRI.scheduler import SchedulerController
+from ATRI.utils.model import BaseModel
 
 
 class ServiceInfo(BaseModel):
@@ -33,8 +38,10 @@ class ServiceInfo(BaseModel):
     docs: str
     version: str
     type: str
+    author: str | None
     permission: str | None | list
     cmd_list: dict | None
+    allow_switch: bool
 
 
 class ServiceConfig(BaseModel):
@@ -70,11 +77,12 @@ class Service:
         HIDDEN = "隐藏服务"
 
     def __init__(
-            self,
-            service: str,
-            docs: str = "无介绍",
-            version: str = str(),
-            type_: ServiceType = ServiceType.OTHER
+        self,
+        service: str,
+        docs: str = "无介绍",
+        version: str = str(),
+        type_: ServiceType = ServiceType.OTHER,
+        author: str | None = None,
     ):
         """
         初始化一个服务。
@@ -87,11 +95,15 @@ class Service:
             raise ServiceRegisterError("未命名服务")
         if service in ServiceTools.service_list or service == "ATRI":
             raise ServiceRegisterError("服务重复注册或服务名违规")
+        if type_ is self.ServiceType.CLOSED:
+            raise ServiceRegisterError("无法注册`CLOSED`服务类型")
         self.service = service
         self._docs = docs
         self._version = version
         self._type = type_
+        self._author = author
         self._cmd_list = {}
+        self._allow_switch = True
         self._permission = None
         self._priority = 10
         self._main_cmd = (str(),)
@@ -129,6 +141,24 @@ class Service:
         :return: 服务本身
         """
         self._version = version
+        return self
+
+    def author(self, author: str) -> "Service":
+        """
+        设置服务作者。
+        :param author: 服务作者
+        :return: 服务本身
+        """
+        self._author = author
+        return self
+
+    def allow_switch(self, _is: bool) -> "Service":
+        """
+        设置服务是否可开关。
+        :param _is: 是否可开关
+        :return: 服务本身
+        """
+        self._allow_switch = _is
         return self
 
     def rule(self, rule: Optional[Union[Rule, T_RuleChecker]]) -> "Service":
@@ -197,7 +227,9 @@ class Service:
     def is_nonebot_plugin(self) -> "Service":
         """设置插件为nonebot插件"""
         name = "请参考对应插件文档"
-        self._cmd_list[name] = CommandInfo(type="ignore", docs=str(), aliases=list()).model_dump()
+        self._cmd_list[name] = CommandInfo(
+            type="ignore", docs=str(), aliases=list()
+        ).model_dump()
         return self
 
     def get_path(self) -> Path:
@@ -221,15 +253,15 @@ class Service:
             raise WriteFileError("Write service config failed")
 
     def on_message(
-            self,
-            name: str = str(),
-            docs: str = str(),
-            rule: Optional[Union[Rule, T_RuleChecker]] = None,
-            permission: Optional[Union[Permission, T_PermissionChecker]] = None,
-            handlers: Optional[List[Union[T_Handler, Dependent]]] = None,
-            block: bool = True,
-            priority: int = 10,
-            state: Optional[T_State] = None,
+        self,
+        name: str = str(),
+        docs: str = str(),
+        rule: Optional[Union[Rule, T_RuleChecker]] = None,
+        permission: Optional[Union[Permission, T_PermissionChecker]] = None,
+        handlers: Optional[List[Union[T_Handler, Dependent]]] = None,
+        block: bool = True,
+        priority: int = 10,
+        state: Optional[T_State] = None,
     ) -> Type[Matcher]:
         if not rule:
             rule = self._rule
@@ -261,7 +293,9 @@ class Service:
 
     def on_notice(self, name: str, docs: str, block: bool = True) -> Type[Matcher]:
         name = name + "-onntc"
-        self._cmd_list[name] = CommandInfo(type="notice", docs=docs, aliases=list()).model_dump()
+        self._cmd_list[name] = CommandInfo(
+            type="notice", docs=docs, aliases=list()
+        ).model_dump()
 
         matcher = Matcher.new(
             "notice",
@@ -278,7 +312,9 @@ class Service:
 
     def on_request(self, name: str, docs: str, block: bool = True) -> Type[Matcher]:
         name = name + "-onreq"
-        self._cmd_list[name] = CommandInfo(type="request", docs=docs, aliases=list()).model_dump()
+        self._cmd_list[name] = CommandInfo(
+            type="request", docs=docs, aliases=list()
+        ).model_dump()
 
         matcher = Matcher.new(
             "request",
@@ -294,18 +330,18 @@ class Service:
         return matcher
 
     def on_command(
-            self,
-            cmd: Union[str, Tuple[str, ...]],
-            docs: str,
-            rule: Optional[Union[Rule, T_RuleChecker]] = None,
-            aliases: Optional[Set[Union[str, Tuple[str, ...]]]] = None,
-            block: bool = True,
-            **kwargs,
+        self,
+        cmd: Union[str, Tuple[str, ...]],
+        docs: str,
+        rule: Optional[Union[Rule, T_RuleChecker]] = None,
+        aliases: Optional[Set[Union[str, Tuple[str, ...]]]] = None,
+        block: bool = True,
+        **kwargs,
     ) -> Type[Matcher]:
         if not cmd:
             raise TypeError("cmd is required")
         if not docs:
-            docs = '暂无描述'
+            docs = "暂无描述"
         if not rule:
             rule = self._rule
         if not aliases:
@@ -321,32 +357,36 @@ class Service:
         return self.on_message(rule=command(*commands) & rule, block=block, **kwargs)
 
     def on_keyword(
-            self,
-            keywords: Set[str],
-            docs: str,
-            rule: Optional[Union[Rule, T_RuleChecker]] = None,
-            **kwargs,
+        self,
+        keywords: Set[str],
+        docs: str,
+        rule: Optional[Union[Rule, T_RuleChecker]] = None,
+        **kwargs,
     ) -> Type[Matcher]:
         if not rule:
             rule = self._rule
 
         name = list(keywords)[0] + "-onkw"
-        self._cmd_list[name] = CommandInfo(type="keyword", docs=docs, aliases=list(keywords)).model_dump()
+        self._cmd_list[name] = CommandInfo(
+            type="keyword", docs=docs, aliases=list(keywords)
+        ).model_dump()
 
         return self.on_message(rule=keyword(*keywords) & rule, **kwargs)
 
     def on_regex(
-            self,
-            pattern: str,
-            docs: str,
-            flags: Union[int, re.RegexFlag] = 0,
-            rule: Optional[Union[Rule, T_RuleChecker]] = None,
-            **kwargs,
+        self,
+        pattern: str,
+        docs: str,
+        flags: Union[int, re.RegexFlag] = 0,
+        rule: Optional[Union[Rule, T_RuleChecker]] = None,
+        **kwargs,
     ) -> Type[Matcher]:
         if not rule:
             rule = self._rule
 
-        self._cmd_list[pattern] = CommandInfo(type="regex", docs=docs, aliases=list()).model_dump()
+        self._cmd_list[pattern] = CommandInfo(
+            type="regex", docs=docs, aliases=list()
+        ).model_dump()
 
         return self.on_message(rule=regex(pattern, flags) & rule, **kwargs)
 
@@ -354,7 +394,7 @@ class Service:
         if not cmd:
             raise TypeError("cmd is required")
         if not docs:
-            docs = '暂无描述'
+            docs = "暂无描述"
         sub_cmd = (cmd,) if isinstance(cmd, str) else cmd
         _cmd = self._main_cmd + sub_cmd
 
@@ -385,9 +425,11 @@ class Service:
             service=self.service,
             docs=self._docs,
             version=self._version,
-            type=self._type.value,
+            type=str(self._type.value),
+            author=self._author,
             permission=p,
-            cmd_list=self._cmd_list
+            cmd_list=self._cmd_list,
+            allow_switch=self._allow_switch,
         )
 
     def scheduler_jobs(self) -> SchedulerController:
@@ -433,7 +475,33 @@ class ServiceTools:
     """
     针对服务的工具类。
     """
+
     service_list: Dict[str, Service] = {}
+    builtin_plugins: tuple = (
+        "agent",
+        "帮助",
+        "图库",
+        "用户",
+        "群管",
+        "主人",
+        "管理",
+        "插件商店",
+        "更新",
+        "WebAPI",
+        "广播",
+        "基础部件",
+        "反馈",
+        "重启",
+        "状态",
+        "运势",
+        "聊天",
+        "农场",
+        "钓鱼",
+        "宠物",
+        "rss",
+        "签到",
+        "投喂",
+    )
 
     def __init__(self, service: str):
         """
@@ -467,8 +535,7 @@ class ServiceTools:
         path = CONFIG_DIR / f"{self.service}.json"
         if not path.is_file():
             raise ReadFileError(
-                f"无法找到服务 {self.service} 对应的信息文件\n"
-                f"请重新启动"
+                f"无法找到服务 {self.service} 对应的信息文件\n请重新启动"
             )
         return ServiceConfig.read_from_file(path)
 
@@ -515,6 +582,18 @@ class ServiceTools:
         if service in cls.service_list:
             return cls.service_list[service]
         return None
+
+    @classmethod
+    def get_typed_service_dict(cls):
+        s_d = {}
+        for s_t in Service.ServiceType:
+            if s_t == Service.ServiceType.CLOSED:
+                continue
+            s_d[s_t.value] = []
+        for s in cls.service_list.values():
+            info = s.get_info()
+            s_d[info.type].append(info.service)
+        return s_d
 
 
 def is_in_service(service: str) -> Rule:

@@ -3,9 +3,9 @@ import nonebot
 from .configs import Config
 from .dir import *  # noqa: F403
 
-__version__ = "YHN-LK0-020"
+__version__ = "YHN-LK0-021"
 """版本号"""
-__sub_version__ = "Patch6"
+__sub_version__ = "Release"
 """次版本号"""
 __conf_path = Path(".") / "config.yml"
 conf_m = Config(__conf_path)

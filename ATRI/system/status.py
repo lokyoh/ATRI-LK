@@ -15,7 +15,7 @@ from ATRI.utils import Limiter
 from ATRI.utils.img_editor import IMGEditor
 from ATRI.utils.model import BaseModel
 
-plugin = Service("状态", "检查 ATRI 状态", "1.1.1", Service.ServiceType.SYSTEM)
+plugin = Service("状态", "检查 ATRI 状态", "1.1.2", Service.ServiceType.SYSTEM)
 
 
 class GetStatusError(BaseBotException):

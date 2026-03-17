@@ -15,7 +15,7 @@ from ATRI.service import Service
 from threading import Lock
 
 plugin = Service(
-    "重启", "重新启动ATRI", "0.2.0", Service.ServiceType.SYSTEM
+    "重启", "重新启动ATRI", "0.3.0", Service.ServiceType.SYSTEM
 ).permission(MASTER)
 
 PLUGIN_DIR = Path(".") / "data" / "plugins" / "restart"
@@ -51,22 +51,15 @@ async def _(bot: Bot, event: Event):
 
 @driver.on_bot_connect
 async def _(bot: Bot):
-    if RESTART_TEMP.exists():
-        with open(RESTART_TEMP, "r", encoding="utf8") as f:
-            content = f.read().strip()
-
+    restart_lock.acquire_lock()
+    try:
+        if RESTART_TEMP.exists():
+            with open(RESTART_TEMP, "r", encoding="utf8") as f:
+                content = f.read().strip()
             # 检查是否是 WebAPI 触发的重启
             if content == "webapi_restart":
                 # WebAPI 重启模式，不发送通知或发送到固定位置
                 RESTART_TEMP.unlink()
-                # 释放重启锁
-                try:
-                    restart_lock.release()
-                except RuntimeError:
-                    # 锁可能已经被释放
-                    pass
-                return
-
             # 原有的命令触发重启逻辑
             bot_id, target_id = content.split()
             if bot.self_id == bot_id:
@@ -77,9 +70,6 @@ async def _(bot: Bot):
                 else:
                     await bot.send_group_msg(group_id=int(target), message=message)
                 RESTART_TEMP.unlink()
-                # 释放重启锁
-                try:
-                    restart_lock.release()
-                except RuntimeError:
-                    # 锁可能已经被释放
-                    pass
+    finally:
+        # 释放重启锁
+        restart_lock.release()

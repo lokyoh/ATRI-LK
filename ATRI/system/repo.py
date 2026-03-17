@@ -12,7 +12,7 @@ _repo_flmt_notice = choice(["慢...慢一..点❤", "冷静1下", "歇会歇会~
 
 _REPO_FORMAT = MessageBuilder("来自用户{user}反馈:").text("{msg}").done()
 
-plugin = Service("反馈", "向维护者发送消息", "1.1.0", Service.ServiceType.SYSTEM)
+plugin = Service("反馈", "向维护者发送消息", "1.1.1", Service.ServiceType.SYSTEM)
 
 reporter = plugin.on_command("来杯红茶", "向维护者发送消息", aliases={"反馈", "报告"})
 

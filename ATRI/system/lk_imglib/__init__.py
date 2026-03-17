@@ -14,7 +14,7 @@ from .data_source import GroupImageManager, image_manager
 plugin = Service(
     "图库",
     "额外图库系统，支持全局图库与群聊图库",
-    "0.0.2",
+    "0.0.3",
     Service.ServiceType.LKPLUGIN,
 ).main_cmd("图库")
 

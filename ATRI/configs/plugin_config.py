@@ -1,7 +1,7 @@
 import os
 from typing import Type
 
-from ATRI.dir import CONFIG_DIR
+from ATRI.dir import PLUGIN_CONFIG_DIR
 from ATRI.utils.model import BaseModel
 
 plugin_config = {}
@@ -17,7 +17,7 @@ class PluginConfig:
         :param model: 插件设置模型BaseModel
         """
         self.model = model
-        self.path = CONFIG_DIR / f"{service}_config.json"
+        self.path = PLUGIN_CONFIG_DIR / f"{service}_config.json"
         if not os.path.exists(self.path):
             os.makedirs(os.path.dirname(self.path), exist_ok=True)
             self.change_config(self.model())

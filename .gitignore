@@ -1,12 +1,13 @@
 /config.yml
+/config_backup.yml
 /nonebot_plugins.json
-/.env.prod
 /data/
 /tests/
 /ATRI-LK-plugin/
 /plugins/
 __pycache__/
 /.idea/
+/.vscode/
 *.pyc
 !/plugins/rss/__init__.py
 !/plugins/fortune/

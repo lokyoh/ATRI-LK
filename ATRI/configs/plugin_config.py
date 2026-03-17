@@ -1,7 +1,7 @@
-from typing import Type
 import os
+from typing import Type
 
-from ATRI.dir import CONFIG_DIR
+from ATRI.dir import PLUGIN_CONFIG_DIR
 from ATRI.utils.model import BaseModel
 
 plugin_config = {}
@@ -9,6 +9,7 @@ plugin_config = {}
 
 
 class PluginConfig:
+    """插件设置类，提供加载、修改和获取插件设置的功能。"""
     def __init__(self, service: str, model: Type[BaseModel]):
         """
         插件设置。
@@ -16,7 +17,7 @@ class PluginConfig:
         :param model: 插件设置模型BaseModel
         """
         self.model = model
-        self.path = CONFIG_DIR / f"{service}_config.json"
+        self.path = PLUGIN_CONFIG_DIR / f"{service}_config.json"
         if not os.path.exists(self.path):
             os.makedirs(os.path.dirname(self.path), exist_ok=True)
             self.change_config(self.model())
@@ -31,10 +32,11 @@ class PluginConfig:
         try:
             config = self.model.read_from_file(self.path)
         except Exception as e:
-            from ATRI.log import log
             from ATRI.exceptions import str_traceback
+            from ATRI.log import log
+
             log.error(f"加载配置文件错误:{str_traceback(e)}")
-            config =  self.model()
+            config = self.model()
         self._config = config
         return self._config
 
@@ -45,7 +47,7 @@ class PluginConfig:
         """
         return self._config
 
-    def change_config(self, value: BaseModel = None):
+    def change_config(self, value: BaseModel | None = None):
         """
         修改插件设置。
         :param value: 修改后的插件设置模型
@@ -64,7 +66,7 @@ class PluginConfig:
         return False
 
     @classmethod
-    def get(cls, service: str):
+    def get(cls, service: str) -> "PluginConfig | None":
         """
         获取指定服务的插件设置。
         :param service: 服务名

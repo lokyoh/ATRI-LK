@@ -3,14 +3,7 @@ import traceback
 from pathlib import Path
 from typing import Optional
 
-from nonebot.matcher import Matcher
-from nonebot.adapters.onebot.v11 import ActionFailed
-from nonebot.adapters.onebot.v11 import Bot, GroupMessageEvent
-from nonebot.message import run_postprocessor
-
-from ATRI.log import log
-from ATRI.message import MessageBuilder
-from ATRI.utils import Limiter, gen_random_str
+from ATRI.utils import gen_random_str
 from ATRI.utils.model import BaseModel
 
 ERROR_DIR = Path(".") / "data" / "errors"
@@ -24,7 +17,7 @@ class ErrorInfo(BaseModel):
     content: str
 
 
-def _save_error(prompt: str, content: str) -> str:
+def save_error(prompt: str, content: str) -> str:
     track_id = gen_random_str(8)
     data = ErrorInfo(
         track_id=track_id,
@@ -96,56 +89,6 @@ class EventRuntimeError(BaseBotException):
     def __init__(self, prompt: str, content: str) -> None:
         self.content = content
         super().__init__(prompt)
-
-
-limiter = Limiter(3, 600)
-
-
-@run_postprocessor
-async def _(bot: Bot, event, matcher: Matcher, exception: Optional[Exception]):
-    if not exception:
-        return
-    if isinstance(exception, EventRuntimeError):
-        exception: EventRuntimeError
-        prompt = "事件运行错误 " + exception.prompt or exception.__class__.__name__
-        track_id = _save_error(prompt, exception.content)
-        log.error(f"EventRuntimeError: {prompt}")
-    elif isinstance(exception, BaseBotException):
-        exception: BaseBotException
-        prompt = "机器人基本错误 " + exception.prompt or exception.__class__.__name__
-        track_id = _save_error(prompt, str_traceback(exception))
-        log.error(f"BotException: {prompt}")
-    elif isinstance(exception, ActionFailed):
-        prompt = "发送错误 请参考协议端输出"
-        track_id = _save_error(prompt, str_traceback(exception))
-        log.error(f"ActionFailed: {prompt}")
-    elif isinstance(exception, Exception):
-        prompt = "其他错误 " + exception.__class__.__name__
-        track_id = _save_error(prompt, str_traceback(exception))
-        log.error(f"Exception: {prompt}")
-    else:
-        prompt = "未知错误 " + exception.__class__.__name__
-        track_id = _save_error(prompt, str_traceback(exception))
-        log.error(f"Ignore Exception: {prompt}")
-    log.error(f"Error Track ID: {track_id}")
-    msg = (
-        MessageBuilder("呜——出错了...请反馈维护者")
-        .text(f"来自: {matcher.module_name}")
-        .text(f"信息: {prompt}")
-        .text(f"追踪ID: {track_id}")
-    )
-    if isinstance(event, GroupMessageEvent):
-        group_id = str(event.group_id)
-        if not limiter.check(group_id):
-            msg = MessageBuilder("该群报错提示已达限制, 将冷却10min").text("如需反馈请: 来杯红茶")
-        else:
-            limiter.increase(group_id)
-        if limiter.get_times(group_id) > 3:
-            return
-    try:
-        await bot.send(event, msg)
-    except Exception:
-        return
 
 
 def str_traceback(e) -> str:

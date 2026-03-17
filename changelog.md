@@ -1,5 +1,41 @@
 > 此处仅为记录重大更新，修复 BUG/以及其它 请关注[`GitHub commits`](https://github.com/lokyoh/ATRI-LK/commits/main)
 
+## Mar 18, 2026
+
+> - 插件商店支持github仓库安装，插件模板[HelloWorld](https://github.com/lokyoh/atrilk_plugin_helloworld)
+> - 指令格式改变
+> - 依赖更新
+> - 配置文件更新
+
+- 更新版本至: `YHN-LK0-021`
+- 新增:
+  - 添加`ATRIScheduler`为系统计划管理器
+  - 添加`ATRIEventBus`为系统事件总线
+  - `BotUtils``BotStatus``GlobalStatus`工具
+  - `statistics`消息与调用统计
+  - `ATRIEventBus`添加一些事件
+  - `img_editor`工具新增图片path转base64
+  - 自带`.env.prod`文件并更新`.gitgnore`
+  - 添加`package_manager`工具实现Python包的安装卸载功能
+  - `service`的`Service``ServiceTools`新增字段与功能
+  - 插件依赖安装与卸载功能
+- 修改:
+  - `ATRI`的`__conf`重命名为`conf_m`并未其添加保存配置的功能
+  - `帮助`插件默认形式改为`html`
+  - `投喂`插件类型改为娱乐
+  - 命令命名前缀规范化
+  - 调整配置文件目录结构
+- 更新:
+  - `plugin_store`支持github仓库安装
+  - `scheduler`工具中服务的计划任务控制器的添加计划任务方法添加参数支持,任务暂停与更多功能
+  - `manage`新增bot全局响应控制,调整部分内容,迁移权限检测至`ATRI`
+  - `restart`插件更新
+  - docker构建更新与依赖更新
+  - 更新配置至`1.1.1`
+- 修复:
+  - 一些问题
+- 更多更改查看commit...
+
 ## Jan 25, 2026
 
 > 农场与钓鱼插件更新。
@@ -20,6 +56,8 @@
   - 修复bug[#6](https://github.com/lokyoh/ATRI-LK/issues/6)
 - Patch4:
   - 修复plugin的bug[#2](https://github.com/lokyoh/ATRI-LK-plugin/issues/2)
+- Patch6
+  - 修复plugin的bug[#2](https://github.com/lokyoh/ATRI-LK-plugin/issues/2)的新问题
 
 ## Dec 24, 2025
 

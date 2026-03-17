@@ -1,7 +1,7 @@
 from ATRI import driver as atri_driver
 from ATRI import __version__, __sub_version__
 from ATRI.log import log
-from ATRI.utils.apscheduler import scheduler
+from ATRI.scheduler import scheduler
 from ATRI.utils.check_update import CheckUpdate, get_version_num
 from ATRI.database import init_database, close_database_connection
 

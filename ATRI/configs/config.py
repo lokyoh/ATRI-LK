@@ -1,4 +1,6 @@
 import yaml
+import os
+import shutil
 from time import sleep
 from pathlib import Path
 
@@ -13,25 +15,39 @@ _DEFAULT_CONFIG_PATH = Path(".") / "res" / "default_config.yml"
 
 class Config:
     def __init__(self, config_path: Path):
+        self.config_path = config_path
         if not config_path.is_file():
             init_config(config_path, _DEFAULT_CONFIG_PATH)
             sleep(3)
 
         raw_conf = yaml.safe_load(_DEFAULT_CONFIG_PATH.read_bytes())
         conf = yaml.safe_load(config_path.read_bytes())
+        r_c_v = raw_conf.get("ConfigVersion")
+        c_v = conf.get("ConfigVersion")
 
-        if raw_conf.get("ConfigVersion") != conf.get("ConfigVersion"):
-            print("!!! 你的 config.yml 文件已废弃, 请 删除/备份 并重新启动")
+        if tuple(map(int, r_c_v.split('.')[:2])) != tuple(map(int, c_v.split('.')[:2])):
+            shutil.copy2(config_path, config_path.with_name('config_backup.yml'))
+            os.remove(config_path)
+            print("!!! 你的 config.yml 文件已废弃,已自动为你备份为 config_backup.yml 并删除原文件,请重新启动重新配置")
             sleep(3)
             exit(-1)
 
         self.config = conf
+        self.config_model: ConfigModel = ConfigModel.model_validate(self.config)
 
-    def parse(self) -> ConfigModel:
-        return ConfigModel.parse_obj(self.config)
+        if r_c_v != c_v:
+            shutil.copy2(config_path, config_path.with_name('config_backup.yml'))
+            self.config_model.ConfigVersion = r_c_v
+            self.save_conf()
+            print("!!! 你的 config.yml 文件已过时,已自动为你备份并自动更新")
+
+    def save_conf(self):
+        self.config = self.config_model.model_dump()
+        with open(self.config_path, 'w', encoding='utf-8') as file:
+            yaml.dump(self.config, file, allow_unicode=True, default_flow_style=False, sort_keys=False)
 
     def get_runtime_conf(self) -> dict:
-        bot_conf = BotConfig.parse_obj(self.config["BotConfig"])
+        bot_conf = BotConfig.model_validate(self.config["BotConfig"])
 
         return RuntimeConfig(
             host=bot_conf.host,
@@ -43,4 +59,4 @@ class Config:
             command_start=bot_conf.command_start,
             command_sep=bot_conf.command_sep,
             session_expire_timeout=bot_conf.session_expire_timeout,
-        ).dict()
+        ).model_dump()

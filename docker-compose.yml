@@ -2,28 +2,17 @@ services:
   app:
     build:
       context: .  # 使用当前目录作为构建上下文
-      dockerfile: Dockerfile  # 指定 Dockerfile 路径
-    container_name: atri-lk  # 自定义容器名称
+    container_name: ATRI-LK  # 自定义容器名称
     working_dir: /app  # 容器内工作目录
     ports:
       - "20000:20000"  # 映射端口
     volumes:
-      - ./.git:/app/.git
-      - ./.github:/app/.github
-      - ./.idea:/app/.idea
-      - ./ATRI:/app/ATRI
       - ./data:/app/data
       - ./plugins:/app/plugins
       - ./res:/app/res
       - ./.env.prod:/app/.env.prod
-      - ./.gitignore:/app/.gitignore
       - ./config.yml:/app/config.yml
-      - ./main.py:/app/main.py
       - ./nonebot_plugins.json:/app/nonebot_plugins.json
-      - ./poetry.lock:/app/poetry.lock
-      - ./pyproject.toml:/app/pyproject.toml
     environment:
-      - PYTHONPATH=/app  # 设置 Python 模块路径
       - TZ=Asia/Shanghai  # 设置时区
     restart: unless-stopped  # 自动重启策略
-    command: python main.py  # 覆盖 Dockerfile 中的 CMD

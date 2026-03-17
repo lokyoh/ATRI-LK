@@ -135,7 +135,7 @@ class FileDealer:
     async def write_json(self, content):
         try:
             async with aiofiles.open(self.path, "w", encoding=self.encoding) as target:
-                await target.write(json.dumps(content))
+                await target.write(json.dumps(content, ensure_ascii=False))
         except Exception:
             raise Exception(f"Writing file ({self.path}) failed!")
 
@@ -250,7 +250,7 @@ class Limiter:
     def check(self, key: str) -> bool:
         if self.count[key] >= self.max_count:
             loop = asyncio.get_running_loop()
-            loop.call_later(self.down_time, self.reset)
+            loop.call_later(self.down_time, self.reset, key)
             return False
 
         return True

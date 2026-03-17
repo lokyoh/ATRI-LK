@@ -215,7 +215,7 @@
             <div class="command-container">
                 {% for cmd in service.cmd_list %}
                 <div class="command-item">
-                    <span class="command-name">{{ cmd }}</span>
+                    <span class="command-name">{{ cmd_str if service.cmd_list[cmd].type == "command" else "" }}{{ cmd }}</span>
                     {{ switch_type(service.cmd_list[cmd].type) }}
                 </div>
                 {% endfor %}

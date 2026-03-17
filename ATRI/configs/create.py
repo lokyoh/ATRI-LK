@@ -2,6 +2,7 @@ from pathlib import Path
 from ipaddress import IPv4Address
 
 from .data_source import Console, C
+from ..utils import gen_random_str
 
 console = Console(C())
 
@@ -45,6 +46,8 @@ def init_config(conf_path: Path, default_conf_path: Path):
         str,
         "输入不正确 示例: http://127.0.0.1:8100",
     )
+
+    console.info("[b]playwright设置[/b]\n", style="white")
     browser = console.input(
         "浏览器内核 (默认: [green]chromium[/green], 可选: [green]firefox[/green])",
         "chromium",
@@ -66,6 +69,18 @@ def init_config(conf_path: Path, default_conf_path: Path):
         str,
     )
 
+    console.info("[b]WebUI设置[/b]\n", style="white")
+    username = console.input(
+        "登录用户名",
+        str(),
+        str,
+    )
+    password = console.input(
+        "登录密码",
+        str(),
+        str,
+    )
+
     console.success("[white]至此, 所需基本配置已填写完毕[white]")
 
     raw_conf = default_conf_path.read_text("utf-8")
@@ -79,6 +94,10 @@ def init_config(conf_path: Path, default_conf_path: Path):
     raw_conf = raw_conf.replace("{download_host}", download_host)
     raw_conf = raw_conf.replace("{proxy_host}", proxy_host)
     raw_conf = raw_conf.replace("{browser_channel}", browser_channel)
+
+    raw_conf = raw_conf.replace("{username}", username)
+    raw_conf = raw_conf.replace("{password}", password)
+    raw_conf = raw_conf.replace("{secret}", gen_random_str(8))
 
     with open(conf_path, "w", encoding="utf-8") as w:
         w.write(raw_conf)

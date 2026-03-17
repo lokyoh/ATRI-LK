@@ -9,9 +9,10 @@ from nonebot.internal.params import ArgPlainText
 from nonebot.matcher import Matcher
 
 from ATRI import IMG_DIR
+from ATRI.bot import BotUtils
 from ATRI.exceptions import str_traceback
 from ATRI.log import log
-from ATRI.message import img_msg_from_path, img_msg, MessageBuilder, rec_msg
+from ATRI.message import MessageBuilder, img_msg, img_msg_from_path, rec_msg
 from ATRI.permission import MASTER
 from ATRI.service import Service
 from ATRI.system.htmlrender import md_to_pic
@@ -23,22 +24,35 @@ from ATRI.system.lkapi.utils.audio import AudioEditor
 from .config import LKChatConfig
 
 plugin = Service(
-    "聊天",
-    "ATRI进行聊天处理的插件",
-    "0.7.2",
-    Service.ServiceType.ENTERTAINMENT
-).main_cmd("/聊天")
+    "聊天", "ATRI进行聊天处理的插件", "0.7.2", Service.ServiceType.ENTERTAINMENT
+).main_cmd("聊天")
 config: LKChatConfig = plugin.add_plugin_config(LKChatConfig).config()
 
-from .chat import chat_model
-from .data_source import pre_chat_event, get_random_atri, REPLY_MESSAGE, VOICE_PATTERN, get_atri_memery, \
-    match_atri_voice, match_atri_img, PreChatEvent
-from .explanations import add_word
-from .user import get_user_info, save_user_info
+from .chat import chat_model  # noqa: E402
+from .data_source import (  # noqa: E402
+    REPLY_MESSAGE,
+    PreChatEvent,
+    get_atri_memery,
+    get_random_atri,
+    match_atri_img,
+    match_atri_voice,
+    pre_chat_event,
+)
+from .explanations import add_word  # noqa: E402
+from .user import get_user_info, save_user_info  # noqa: E402
 
-_lmt_notice = ["慢...慢一..点❤", "冷静1下", "歇会歇会~~", "呜呜...别急", "太快了...受不了", "不要这么快呀"]
+_lmt_notice = [
+    "慢...慢一..点❤",
+    "冷静1下",
+    "歇会歇会~~",
+    "呜呜...别急",
+    "太快了...受不了",
+    "不要这么快呀",
+]
 
-on_talk = plugin.on_message("机器人聊天", "和亚托莉愉快的聊天、交流吧", priority=990, block=False)
+on_talk = plugin.on_message(
+    "机器人聊天", "和亚托莉愉快的聊天、交流吧", priority=990, block=False
+)
 
 
 @on_talk.handle()
@@ -55,14 +69,17 @@ async def _(event: GroupMessageEvent, matcher: Matcher, bot: Bot):
             return
         text = lk_util.get_trans_text(event.get_message())
         if text == "":
-            await on_talk.finish('找我有什么事么?如果要查询我有什么功能的话就输入"/服务列表"吧,高性能的我随时为你服务哦。', at_sender=True)
+            await on_talk.finish(
+                f'找我有什么事么?如果要查询我有什么功能的话就输入"{BotUtils.get_command_start()}服务列表"吧,高性能的我随时为你服务哦。',
+                at_sender=True,
+            )
         if len(text) > 100:
-            await on_talk.finish('消息长度过长！', at_sender=True)
+            await on_talk.finish("消息长度过长！", at_sender=True)
         sender_id = event.get_user_id()
         if not lk_util.is_valid_user(sender_id):
             await on_talk.finish(lk_util.bind_tip)
         matcher.stop_propagation()
-        match_result = re.compile(r'语音(.+)').match(text)
+        match_result = re.compile(r"语音(.+)").match(text)
         group_id = event.group_id
         if match_result:
             text = match_result.group(1)
@@ -80,7 +97,9 @@ async def _(event: GroupMessageEvent, matcher: Matcher, bot: Bot):
             await on_talk.finish(f"真是的，{lk_util.bot_name}被玩坏了，呜呜呜...")
         if match_result:
             record_file = AudioEditor.get_tts_file(response[0])
-            await on_talk.finish(rec_msg(file=AudioEditor().audio_to_base64(record_file)))
+            await on_talk.finish(
+                rec_msg(file=AudioEditor().audio_to_base64(record_file))
+            )
         else:
             if "\n\n" in response[0]:
                 await on_talk.finish(img_msg(await md_to_pic(response[0])))
@@ -99,12 +118,16 @@ async def _(event: GroupMessageEvent, matcher: Matcher, bot: Bot):
             await on_talk.finish(img)
 
 
-change_model = plugin.cmd_as_group("切换模型", "切换机器人聊天所使用的语言模型默认为`gemini-main`", permission=MASTER)
+change_model = plugin.cmd_as_group(
+    "切换模型", "切换机器人聊天所使用的语言模型默认为`gemini-main`", permission=MASTER
+)
 
 
-@change_model.got("chat_model",
-                  f"请输入要选择的类型名:\n{'\n'.join(f'{i}.{_type}' for i, _type in enumerate(chat_manager.get_chats_name(), 1))}")
-async def _(arg: str = ArgPlainText('chat_model')):
+@change_model.got(
+    "chat_model",
+    f"请输入要选择的类型名:\n{'\n'.join(f'{i}.{_type}' for i, _type in enumerate(chat_manager.get_chats_name(), 1))}",
+)
+async def _(arg: str = ArgPlainText("chat_model")):
     if arg in chat_manager.get_chats_name():
         config.help_type = arg
         plugin.plugin_config().change_config(config)
@@ -113,13 +136,16 @@ async def _(arg: str = ArgPlainText('chat_model')):
     await change_model.finish("切换成功")
 
 
-word_add = plugin.cmd_as_group("添加解释", "为词语添加解释，用法：chat.添加解释 词语 解释 重要度(0-100越大越重要)",
-                               permission=MASTER)
+word_add = plugin.cmd_as_group(
+    "添加解释",
+    "为词语添加解释，用法：chat.添加解释 词语 解释 重要度(0-100越大越重要)",
+    permission=MASTER,
+)
 
 
 @word_add.handle()
 async def _(event: GroupMessageEvent):
-    k = event.get_plaintext().split(' ')
+    k = event.get_plaintext().split(" ")
     if len(k) != 4:
         await word_add.finish("格式错误")
     try:
@@ -147,7 +173,7 @@ del_mem = plugin.cmd_as_group("删除记忆", "删除亚托莉对你的记忆")
 
 @del_mem.handle()
 async def _(event: GroupMessageEvent):
-    k = event.get_plaintext().split(' ')
+    k = event.get_plaintext().split(" ")
     if len(k) != 2:
         await del_mem.finish("格式错误")
     try:
@@ -156,7 +182,7 @@ async def _(event: GroupMessageEvent):
         num = int(k[1])
         user_info.memery.pop(num - 1)
         save_user_info(user_id, user_info)
-        msg = MessageBuilder().text('删除成功')
+        msg = MessageBuilder().text("删除成功")
         if num - 1 > 0:
             msg.image(await md_to_pic(get_atri_memery(user_info.memery)))
     except Exception:
@@ -187,14 +213,16 @@ async def _(event: PokeNotifyEvent, bot: Bot):
         else:
             try:
                 if event.group_id:
-                    await bot.call_api("group_poke", user_id=event.user_id, group_id=event.group_id)
+                    await bot.call_api(
+                        "group_poke", user_id=event.user_id, group_id=event.group_id
+                    )
                 else:
                     await bot.call_api("friend_poke", user_id=event.user_id)
             except Exception:
                 log.warning("戳一戳发送失败")
 
 
-atri_voice = plugin.on_command(cmd="/亚托莉语音", docs="随机亚托莉语音")
+atri_voice = plugin.on_command(cmd="亚托莉语音", docs="随机亚托莉语音")
 
 
 @atri_voice.handle()

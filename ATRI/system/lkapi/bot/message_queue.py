@@ -75,6 +75,7 @@ class MessageQueue:
         for msg in msg_list:
             try:
                 if type(event) is GroupMessageEvent:
+                    event: GroupMessageEvent
                     await bot.send_group_msg(group_id=event.group_id, message=msg)
                 elif type(event) is PrivateMessageEvent:
                     await bot.send_private_msg(user_id=event.user_id, message=msg)

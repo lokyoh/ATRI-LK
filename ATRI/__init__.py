@@ -1,20 +1,17 @@
 import nonebot
-from nonebot.adapters.onebot.v11 import Adapter
 
 from .configs import Config
-from .dir import *
+from .dir import *  # noqa: F403
 
 __version__ = "YHN-LK0-020"
 """版本号"""
 __sub_version__ = "Patch6"
 """次版本号"""
 __conf_path = Path(".") / "config.yml"
-__conf = Config(__conf_path)
+conf_m = Config(__conf_path)
 
-conf = __conf.parse()
+conf = conf_m.config_model
 """机器人设置"""
-service_list = {}
-"""服务数据"""
 
 
 def asgi():
@@ -26,13 +23,11 @@ def driver():
 
 
 def init():
-    nonebot.init(**__conf.get_runtime_conf())
+    nonebot.init(**conf_m.get_runtime_conf())
+    from nonebot.adapters.onebot.v11 import Adapter
     driver().register_adapter(Adapter)
-    nonebot.load_plugins("ATRI/system")
-    nonebot.load_plugins("plugins")
-    nonebot.load_plugins("plugins/rss")
-    from ATRI.service import driver_startup
-    driver().on_startup(driver_startup)
+    from ATRI.load import load_atri
+    load_atri()
 
 
 def run():

@@ -1,15 +1,16 @@
-import random
 import asyncio
+import random
 
+from nonebot.adapters.onebot.v11 import Bot, GroupMessageEvent, Message, MessageEvent
 from nonebot.matcher import Matcher
-from nonebot.params import CommandArg, ArgPlainText
-from nonebot.adapters.onebot.v11 import Bot, Message, MessageEvent, GroupMessageEvent
+from nonebot.params import ArgPlainText, CommandArg
 
+from ATRI.bot import BotUtils
+from ATRI.message import MessageBuilder
+from ATRI.permission import ADMIN, MASTER
 from ATRI.rule import to_bot
 from ATRI.service import Service
 from ATRI.utils import FileDealer
-from ATRI.permission import ADMIN, MASTER
-from ATRI.message import MessageBuilder
 
 _BROADCAST_REPO_FORMAT = (
     MessageBuilder("广播报告:")
@@ -41,10 +42,17 @@ async def __store_reject_list(data: list) -> None:
     await file.write_json(data)
 
 
-plugin = Service("广播").document("向 ATRI 所在的所有群发送信息").rule(to_bot()).type(
-    Service.ServiceType.FUNCTION).version("1.0.1").permission(ADMIN)
+plugin = (
+    Service(
+        "广播", "向 ATRI 所在的所有群发送信息", "1.0.2", Service.ServiceType.FUNCTION
+    )
+    .rule(to_bot())
+    .permission(ADMIN)
+)
 
-caster = plugin.on_command("/广播", "向 ATRI 所在的群发送信息", aliases={"/bc"}, permission=MASTER)
+caster = plugin.on_command(
+    "广播", "向 ATRI 所在的群发送信息", aliases={"bc"}, permission=MASTER
+)
 
 
 @caster.handle()
@@ -69,7 +77,9 @@ async def _(bot: Bot, event: MessageEvent, msg: str = ArgPlainText("bc_msg")):
     for i in group_list:
         group_id = i["group_id"]
         try:
-            await bot.send_group_msg(group_id=group_id, message=bc_msg)
+            await BotUtils.send_message(
+                bot=bot, service="广播", group_id=group_id, message=bc_msg
+            )
             success_group.append(group_id)
         except Exception:
             failed_group.append(group_id)
@@ -86,7 +96,7 @@ async def _(bot: Bot, event: MessageEvent, msg: str = ArgPlainText("bc_msg")):
     await caster.finish(Message(result))
 
 
-reject_bc = plugin.on_command("/拒绝广播", "拒绝来自维护者的信息推送", permission=ADMIN)
+reject_bc = plugin.on_command("拒绝广播", "拒绝来自维护者的信息推送", permission=ADMIN)
 
 
 @reject_bc.handle()
@@ -102,7 +112,7 @@ async def _(event: GroupMessageEvent):
         await reject_bc.finish("完成!")
 
 
-accept_bc = plugin.on_command("/接受广播", "接受来自维护者的信息推送", permission=ADMIN)
+accept_bc = plugin.on_command("接受广播", "接受来自维护者的信息推送", permission=ADMIN)
 
 
 @accept_bc.handle()

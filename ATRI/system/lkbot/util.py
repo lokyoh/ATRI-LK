@@ -18,7 +18,7 @@ from .tools.daily_update import daily_update
 from .data.load_item import auto_load_items
 from .tools.get_pic import set_local_image_func
 
-PLUGIN_VERSION = "0.11.1"
+PLUGIN_VERSION = "0.11.2"
 """lkbot插件版本"""
 PLUGIN_DIR = Path(".") / "data" / "plugins" / "lkbot"
 """lkbot插件数据路径"""
@@ -32,7 +32,7 @@ class BaseFunc:
     test_mode_tip = '此功能为测试功能，只能在测试模式群聊下使用'
 
     def __init__(self):
-        self.bot_names = list(conf.BotConfig.nickname)
+        self.bot_names = conf.BotConfig.nickname
         self.bot_name = choice(self.bot_names)
 
     @staticmethod

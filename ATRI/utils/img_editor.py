@@ -183,3 +183,8 @@ def get_image_bytes(image_path) -> bytes:
     """从图片文件获取bytes"""
     with open(image_path, "rb") as image_file:
         return image_file.read()
+
+def pic2bs4(image_path) -> str:
+    buffer = get_image_bytes(image_path)
+    base64_encoded = base64.b64encode(buffer).decode('utf-8')
+    return f'base64://{base64_encoded}'

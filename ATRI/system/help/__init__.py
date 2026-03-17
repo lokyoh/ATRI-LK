@@ -1,19 +1,22 @@
-from nonebot.adapters.onebot.v11 import MessageEvent, ActionFailed
+from nonebot.adapters.onebot.v11 import ActionFailed, MessageEvent
 from nonebot.internal.params import ArgPlainText
 
-from ATRI.service import Service
 from ATRI.permission import MASTER
+from ATRI.service import Service
 
 from .config import HelpConfig
 
-plugin = Service("帮助").document("ATRI 的食用指南~").type(Service.ServiceType.SYSTEM).version("2.0.1")
+plugin = Service(
+    "帮助", "ATRI 的食用指南~", "2.0.1", Service.ServiceType.SYSTEM
+).allow_switch(False)
+
 help_config: HelpConfig = plugin.add_plugin_config(HelpConfig).config()
 
-from .data_source import Helper, help_type
+from .data_source import Helper, help_type  # noqa: E402
 
 plugin.on_startup(lambda: Helper().init_services())
 
-menu = plugin.on_command("/菜单", "获取食用bot的方法", aliases={"/menu"})
+menu = plugin.on_command("菜单", "获取食用bot的方法", aliases={"menu"})
 
 
 @menu.handle()
@@ -21,7 +24,7 @@ async def _():
     await menu.finish(Helper().menu())
 
 
-about = plugin.on_command("/关于", "获取关于bot的信息", aliases={"/about"})
+about = plugin.on_command("关于", "获取关于bot的信息", aliases={"about"})
 
 
 @about.handle()
@@ -29,7 +32,7 @@ async def _():
     await about.finish(Helper().about())
 
 
-service_list = plugin.on_command("/服务列表", "获取服务列表", aliases={"/功能列表"})
+service_list = plugin.on_command("服务列表", "获取服务列表", aliases={"功能列表"})
 
 
 @service_list.handle()
@@ -40,7 +43,7 @@ async def _(event: MessageEvent):
         await service_list.finish(Helper().get_text_list())
 
 
-service_info = plugin.on_command("/帮助", "获取对应服务详细信息", aliases={"/help"})
+service_info = plugin.on_command("帮助", "获取对应服务详细信息", aliases={"help"})
 
 
 @service_info.handle()
@@ -61,12 +64,14 @@ async def _ready_service_info(event: MessageEvent):
     await service_info.finish(repo)
 
 
-change_type = plugin.on_command('/帮助切换形式', '切换帮助的形式', permission=MASTER)
+change_type = plugin.on_command("帮助切换形式", "切换帮助的形式", permission=MASTER)
 
 
-@change_type.got("help_type",
-                 f"请输入要选择的类型名:\n{'\n'.join(f'{i}.{_type}' for i, _type in enumerate(help_type, 1))}")
-async def _(arg: str = ArgPlainText('help_type')):
+@change_type.got(
+    "help_type",
+    f"请输入要选择的类型名:\n{'\n'.join(f'{i}.{_type}' for i, _type in enumerate(help_type, 1))}",
+)
+async def _(arg: str = ArgPlainText("help_type")):
     if arg in help_type:
         help_config.help_type = arg
         plugin.plugin_config().change_config(help_config)

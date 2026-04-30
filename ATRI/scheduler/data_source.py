@@ -127,19 +127,13 @@ class SchedulerController:
 
     def get_job(self, name) -> SchedulerJob:
         """获取SchedulerJob对象"""
-        if (
-            self.service not in self.service_schedulers
-            or name not in self.service_schedulers[self.service]
-        ):
+        if not self.has_job(name):
             raise BotRuntimeError(f"找不到服务`{self.service}`的任务`{name}`")
         return self.service_schedulers[self.service][name]
 
     def remove_job(self, name):
         """移除指定Job"""
-        if (
-            self.service not in self.service_schedulers
-            or name not in self.service_schedulers[self.service]
-        ):
+        if not self.has_job(name):
             raise BotRuntimeError(f"找不到服务`{self.service}`的任务`{name}`")
         self.get_job(name).job.remove()
         del self.service_schedulers[self.service][name]

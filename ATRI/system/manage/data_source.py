@@ -66,7 +66,7 @@ class BotManager:
         GlobalStatus.read_from_file()
         if group_id not in GlobalStatus.status.group_black_list:
             raise Exception("群不存在于封禁名单")
-        GlobalStatus.status.group_black_list.pop(group_id)
+        GlobalStatus.status.group_black_list.remove(group_id)
         GlobalStatus.save_to_file()
 
     @staticmethod
@@ -80,7 +80,7 @@ class BotManager:
         GlobalStatus.read_from_file()
         if user_id not in GlobalStatus.status.user_black_list:
             raise Exception("用户不存在于封禁名单")
-        GlobalStatus.status.user_black_list.pop(user_id)
+        GlobalStatus.status.user_black_list.remove(user_id)
         GlobalStatus.save_to_file()
 
     @staticmethod

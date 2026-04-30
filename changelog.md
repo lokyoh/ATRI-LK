@@ -35,6 +35,8 @@
 - 修复:
   - 一些问题
 - 更多更改查看commit...
+- Patch1:
+  - 修复bug[#10](https://github.com/lokyoh/ATRI-LK/issues/10)
 
 ## Jan 25, 2026
 

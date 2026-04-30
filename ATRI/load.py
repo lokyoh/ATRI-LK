@@ -29,11 +29,11 @@ def parse_requirement_line(line: str) -> tuple[str, str] | None:
     if line.startswith('-'):
         return None
     # 匹配包名和版本（支持 ==, >=, <=, ~=, != 等操作符）
-    match = re.match(r'^([a-zA-Z0-9_-]+(?:\[[a-zA-Z0-9_-]+\])?)([=<>!~]+.*)?$', line)
+    match = re.match(r'^([a-zA-Z0-9_-]+(?:\[[a-zA-Z0-9_-]+])?)([=<>!~]+.*)?$', line)
     if match:
         package_name = match.group(1)
         # 移除可选的 extras，例如 package[extra] -> package
-        base_name = re.sub(r'\[.*\]', '', package_name)
+        base_name = re.sub(r'\[.*]', '', package_name)
         version = match.group(2) or 'latest'
         return base_name.lower(), version
     return None

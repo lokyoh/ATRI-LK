@@ -88,7 +88,7 @@ class BotStatus:
         return False
 
 
-class GlobalStatus:
+class GlobalStatusModel:
     def __init__(self):
         self.status = Statu()
         self.read_from_file()
@@ -124,7 +124,7 @@ class GlobalStatus:
             self.status = Statu.read_from_file(GLOBAL_STATUS_FILE_PATH)
 
 
-GlobalStatus: GlobalStatus = GlobalStatus()
+GlobalStatus: GlobalStatusModel = GlobalStatusModel()
 """全局状态"""
 
 

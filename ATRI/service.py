@@ -234,6 +234,8 @@ class Service:
 
     def get_path(self) -> Path:
         """获取服务专属路径"""
+        if not self._path.exists():
+            self._path.mkdir(parents=True, exist_ok=True)
         return self._path
 
     def __generate_service_conf(self):

@@ -6,6 +6,7 @@ from .database import user_table
 class User(BaseModel):
     love: int = 50
     memery: list = []
+    profile: str = ""
 
 
 def get_user_info(user_id) -> User:

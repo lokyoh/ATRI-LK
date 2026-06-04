@@ -5,6 +5,7 @@ class LKChatConfig(BaseModel):
     """
     lkchat设置:
     """
-    model: str = 'gemini-main'
-    max_history: int = 20
-    max_text_length: int = 100
+    chat_switch: bool = False
+    proactively_chat: bool = False
+    key_word: list[str] = ["ATRI", "atri", "亚托莉", "Atri", "萝卜子"]
+    whit_list: list[str] = []

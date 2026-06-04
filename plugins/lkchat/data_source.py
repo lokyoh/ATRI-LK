@@ -4,12 +4,20 @@ from random import choice
 import os
 import re
 
-from nonebot.adapters.onebot.v11 import MessageSegment, GroupMessageEvent
+from nonebot.adapters.onebot.v11 import MessageSegment, GroupMessageEvent, Bot, Message
+from nonebot.exception import FinishedException
 from nonebot.matcher import Matcher
 
 from ATRI import IMG_DIR, RECORD_DIR
+from ATRI.exceptions import str_traceback
+from ATRI.log import log
 from ATRI.message import img_msg_from_path, rec_msg_from_path
+from ATRI.system.agent.agent import ATRIAgent
+from ATRI.system.agent.agent.sender import QQChatSender
+from ATRI.system.lkapi.bot import util as lk_util
 from ATRI.utils.event import AsyncBaseEvents, BaseEvent
+
+from . import config
 
 REPLY_MESSAGE = [
     "lsp你再戳？",
@@ -157,3 +165,27 @@ def match_atri_img(text):
             if selected_img:
                 return img_msg_from_path(img_path / selected_img)
     return None
+
+
+def has_key_word(text):
+    return any(key_word in text for key_word in config.key_word)
+
+
+async def call_agent(event: GroupMessageEvent, matcher: Matcher, bot: Bot):
+    group_id = str(event.group_id)
+    sender_id = event.get_user_id()
+    message = event.get_message()
+    skip_chat = False if config.proactively_chat else True
+    skip_judgment = False if config.proactively_chat else True
+    if event.to_me or has_key_word(message.extract_plain_text()):
+        skip_chat = False
+        skip_judgment = True
+    try:
+        sender = QQChatSender(matcher)
+        await ATRIAgent.chat(bot, sender, group_id, sender_id, message, skip_chat, skip_judgment)
+    except FinishedException:
+        raise
+    except Exception as e:
+        log.warning(str_traceback(e))
+        if skip_judgment and not skip_chat:
+            await matcher.finish(f"真是的，{lk_util.bot_name}被玩坏了，呜呜呜...")

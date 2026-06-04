@@ -90,6 +90,7 @@ def uninstall_package(path: Path):
         except Exception as e:
             log.error(f"处理插件 {plugin_name} 的依赖时出错：{e}")
 
+
 class PluginManager:
     plugin_list = {}
 
@@ -212,13 +213,13 @@ class PluginManager:
     async def install_github_plugin(cls, repo: str):
         import subprocess
         log.info(f"开始从 GitHub 克隆插件：{repo}")
+        # 从 repo URL 中提取项目名称
+        if repo.endswith(".git"):
+            repo_name = repo.split("/")[-1].replace(".git", "")
+        else:
+            repo_name = repo.split("/")[-1]
+        target_path = PLUGINS_DIR / repo_name
         try:
-            # 从 repo URL 中提取项目名称
-            if repo.endswith(".git"):
-                repo_name = repo.split("/")[-1].replace(".git", "")
-            else:
-                repo_name = repo.split("/")[-1]
-            target_path = PLUGINS_DIR / repo_name
             # 如果目录已存在，先删除
             if target_path.exists():
                 log.warning(f"目录 {target_path} 已存在，正在删除...")
@@ -247,9 +248,15 @@ class PluginManager:
             log.info(f"GitHub 插件 `{repo_name}` 安装结束")
         except subprocess.CalledProcessError as e:
             log.error(f"Git clone 失败：{e.stderr}")
+            if target_path.exists():
+                log.info(f"清理插件目录 {target_path}...")
+                _safe_rmtree(target_path)
             raise PluginError(f"Git clone 失败：{e.stderr}")
         except Exception as e:
             log.error(f"安装 GitHub 插件失败：{e}")
+            if target_path.exists():
+                log.info(f"清理插件目录 {target_path}...")
+                _safe_rmtree(target_path)
             raise PluginError(f"安装 GitHub 插件失败：{e}")
 
     @classmethod

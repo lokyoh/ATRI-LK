@@ -6,6 +6,7 @@ class LLMModel(BaseModel):
     llm模型配置:
 
     """
+
     name: str = ""
     model: str = ""
     temperature: float = 0.7
@@ -17,6 +18,7 @@ class LLMProvider(BaseModel):
     llm模型提供商配置:
 
     """
+
     provider_name: str = ""
     provider_type: str = ""
     url: str = ""
@@ -28,6 +30,7 @@ class ProviderManager:
     """
     模型提供商管理器
     """
+
     providers: dict[str, LLMProvider] = {}
 
     @classmethod
@@ -40,6 +43,10 @@ class ProviderManager:
     def clear_all(cls):
         cls.providers.clear()
 
+    @classmethod
+    def get_provider_list(cls) -> list[LLMProvider]:
+        return list(cls.providers.values())
+
 
 default_provider = LLMProvider(
     provider_name="siliconflow",
@@ -50,19 +57,19 @@ default_provider = LLMProvider(
             name="siliconflow/DeepSeek-V3.2",
             model="deepseek-ai/DeepSeek-V3.2",
             temperature=0.7,
-            type="chat"
+            type="chat",
         ),
         LLMModel(
             name="siliconflow/qwen3-vl-30",
             model="Qwen/Qwen3-VL-30B-A3B-Instruct",
             temperature=0.7,
-            type="image"
+            type="image",
         ),
         LLMModel(
             name="siliconflow/qwen3-30B",
             model="Qwen/Qwen3-30B-A3B-Instruct-2507",
             temperature=0.3,
-            type="tool"
+            type="tool",
         ),
-    ]
+    ],
 )

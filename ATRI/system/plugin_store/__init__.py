@@ -9,7 +9,7 @@ from ATRI.service import Service, ServiceTools
 from .data_source import PluginManager
 
 plugin = Service(
-    "插件商店", "插件商店", "0.4.0", Service.ServiceType.SYSTEM
+    "插件商店", "插件商店", "0.4.1", Service.ServiceType.SYSTEM
 ).permission(MASTER)
 
 plugins = plugin.on_command("插件列表", "查看插件列表")
@@ -32,10 +32,12 @@ async def _():
         version = plugin_list[_plugin]["version"]
         if _plugin in ServiceTools.service_list:
             if version == "github":
-                r = await PluginManager.check_github_plugin_update(plugin_list[_plugin]['repo'])
+                r = await PluginManager.check_github_plugin_update(
+                    plugin_list[_plugin]["repo"]
+                )
                 if r["has_update"]:
                     install = "需更新"
-                    version = f"{r["local_version"]}->" + r["remote_version"]
+                    version = f"{r['local_version']}->" + r["remote_version"]
                 else:
                     install = "已安装"
             else:
@@ -71,7 +73,7 @@ async def _(args: Message = CommandArg()):
     version = _plugin["version"]
     if plugin_name in ServiceTools.service_list:
         if version == "github":
-            r = await PluginManager.check_github_plugin_update(_plugin['repo'])
+            r = await PluginManager.check_github_plugin_update(_plugin["repo"])
             if r["has_update"]:
                 install = "需更新"
             else:
@@ -109,9 +111,7 @@ async def _(args: Message = CommandArg()):
         await add.finish(f"插件 {plugin_name} 已经安装")
     try:
         await PluginManager.install_plugin(plugin_name, False)
-        await add.finish(
-            f"{plugin_name}安装成功,需重启才生效"
-        )
+        await add.finish(f"{plugin_name}安装成功,需重启才生效")
     except PluginError as e:
         await add.finish(e.prompt)
     except Exception:
@@ -157,7 +157,9 @@ async def _(args: Message = CommandArg()):
     version = plugin_list[plugin_name]["version"]
     if plugin_name in ServiceTools.service_list:
         if version == "github":
-            r = await PluginManager.check_github_plugin_update(plugin_list[plugin_name]['repo'])
+            r = await PluginManager.check_github_plugin_update(
+                plugin_list[plugin_name]["repo"]
+            )
             if not r["has_update"]:
                 await update.finish(f"{plugin_name} 无需更新")
         if ServiceTools(plugin_name).load_service().version == version:
@@ -190,9 +192,13 @@ async def _():
         if plugin_name in plugin_list:
             version = plugin_list[plugin_name]["version"]
             if version == "github":
-                r = await PluginManager.check_github_plugin_update(plugin_list[plugin_name]['repo'])
+                r = await PluginManager.check_github_plugin_update(
+                    plugin_list[plugin_name]["repo"]
+                )
                 if r["has_update"]:
-                    message.text(f"{plugin_name} {r["local_version"]}->{r["remote_version"]}")
+                    message.text(
+                        f"{plugin_name} {r['local_version']}->{r['remote_version']}"
+                    )
             else:
                 now_version = ServiceTools(plugin_name).load_service().version
                 if now_version != version:
@@ -216,7 +222,7 @@ async def _():
             version = plugin_list[plugin_name]["version"]
             try:
                 if version == "github":
-                    repo = plugin_list[plugin_name]['repo']
+                    repo = plugin_list[plugin_name]["repo"]
                     r = await PluginManager.check_github_plugin_update(repo)
                     if r["has_update"]:
                         await PluginManager.update_github_plugin(repo)

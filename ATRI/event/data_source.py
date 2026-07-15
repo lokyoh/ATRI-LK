@@ -2,10 +2,10 @@ import asyncio
 import inspect
 import os
 import time
-from typing import Callable, Dict, List, Any
-from enum import IntEnum
 from dataclasses import dataclass
 from datetime import datetime
+from enum import IntEnum
+from typing import Any, Callable, Dict, List
 
 from ATRI.dir import TEMP_DIR
 from ATRI.exceptions import str_traceback
@@ -21,6 +21,7 @@ class Priority(IntEnum):
 @dataclass
 class Event:
     """事件对象"""
+
     type: str
     data: Any
     event_bus: str
@@ -35,6 +36,7 @@ class Event:
 @dataclass
 class Subscription:
     """订阅信息"""
+
     handler: Callable
     priority: Priority = Priority.NORMAL
     once: bool = False  # 是否只执行一次
@@ -48,15 +50,13 @@ class AsyncEventBus:
         self._handlers: Dict[str, List[Subscription]] = {}
         self._middlewares = []
 
-    def subscribe(self, event_type: str, priority: Priority = Priority.NORMAL, once: bool = False):
+    def subscribe(
+        self, event_type: str, priority: Priority = Priority.NORMAL, once: bool = False
+    ):
         """订阅装饰器"""
 
         def decorator(handler):
-            subscription = Subscription(
-                handler=handler,
-                priority=priority,
-                once=once
-            )
+            subscription = Subscription(handler=handler, priority=priority, once=once)
             if event_type not in self._handlers:
                 self._handlers[event_type] = []
             self._handlers[event_type].append(subscription)
@@ -70,8 +70,7 @@ class AsyncEventBus:
         """取消订阅"""
         if event_type in self._handlers:
             self._handlers[event_type] = [
-                sub for sub in self._handlers[event_type]
-                if sub.handler != handler
+                sub for sub in self._handlers[event_type] if sub.handler != handler
             ]
 
     def use(self, middleware):
@@ -86,7 +85,9 @@ class AsyncEventBus:
                 return None
         return event
 
-    async def publish(self, event_type: str, source: str, data: Any = None) -> List[Any]:
+    async def publish(
+        self, event_type: str, source: str, data: Any = None
+    ) -> List[Any]:
         """异步发布事件"""
         event = Event(type=event_type, data=data, event_bus=self._name, source=source)
         # 应用中间件
@@ -119,11 +120,14 @@ class AsyncEventBus:
                         self._handlers[event_type].remove(subscription)
                 except Exception as e:
                     log.error(
-                        f"{self._name} 来自 {source} 类型为 {event_type} 的事件处理器 {subscription.handler.__name__} 出错: {str_traceback(e)}")
+                        f"{self._name} 来自 {source} 类型为 {event_type} 的事件处理器 {subscription.handler.__name__} 出错: {str_traceback(e)}"
+                    )
                     results.append(e)
         return results
 
-    def publish_sync(self, event_type: str, data: Any = None, source: str = None) -> List[Any]:
+    def publish_sync(
+        self, event_type: str, data: Any = None, source: str = "unidentified"
+    ) -> List[Any]:
         """同步发布事件"""
         event = Event(type=event_type, data=data, event_bus=self._name, source=source)
         results = []
@@ -136,20 +140,29 @@ class AsyncEventBus:
                         self._handlers[event_type].remove(subscription)
                 except Exception as e:
                     log.error(
-                        f"{self._name} 类型为 {event_type} 的事件处理器 {subscription.handler.__name__} 出错: {str_traceback(e)}")
+                        f"{self._name} 类型为 {event_type} 的事件处理器 {subscription.handler.__name__} 出错: {str_traceback(e)}"
+                    )
                     results.append(e)
         return results
 
 
 async def logging_middleware(event: Event) -> Event:
     """日志中间件"""
-    log.debug(f'{event.event_bus} 从 {event.source} 发布事件: {event.type}')
+    log.debug(f"{event.event_bus} 从 {event.source} 发布事件: {event.type}")
+    return event
+
+
+async def aeb_logging_middleware(event: Event) -> Event:
+    """日志中间件"""
+    if event.type == "heartbeat_1m" or event.type == "heartbeat_30m":
+        return event
+    log.debug(f"{event.event_bus} 从 {event.source} 发布事件: {event.type}")
     return event
 
 
 ATRIEventBus: AsyncEventBus = AsyncEventBus("ATRIEventBus")
 """ATRI系统事件总线"""
-ATRIEventBus.use(logging_middleware)
+ATRIEventBus.use(aeb_logging_middleware)
 
 
 def daily_update(priority: Priority = Priority.NORMAL, once: bool = False):

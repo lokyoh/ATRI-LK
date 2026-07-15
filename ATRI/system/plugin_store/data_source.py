@@ -1,7 +1,7 @@
 import os
 import shutil
-import subprocess
 import stat
+import subprocess
 from pathlib import Path
 
 import nonebot
@@ -24,6 +24,7 @@ def _safe_rmtree(path: Path):
     在 Windows 上更稳健地删除目录，处理只读文件和文件占用问题
     """
     import time
+
     if not path.exists():
         return
 
@@ -69,7 +70,7 @@ def uninstall_package(path: Path):
     if requirements_file.exists():
         try:
             log.debug(f"开始处理插件 {plugin_name} 的依赖")
-            with open(requirements_file, 'r', encoding='utf-8') as f:
+            with open(requirements_file, "r", encoding="utf-8") as f:
                 lines = f.readlines()
             pm = PackageManager()
             uninstall_packages = []
@@ -131,49 +132,57 @@ class PluginManager:
             if res_list:
                 log.info(f"开始为插件`{plugin_name}`下载资源")
                 for res in res_list:
-                    data = await request.get(FILE_URL.format(res))
-                    if data.status_code != 200:
-                        log.warning(f"在下载插件`{plugin_name}`的资源时网络连接错误，code:{data.status_code}")
-                        raise PluginError(f"网络连接错误，code:{data.status_code}")
-                    if '.' in res:
-                        file = data.json()
-                        file_list = [file]
-                    else:
-                        file_list = data.json()
-                    for file in file_list:
-                        file_path = Path(".") / file["path"]
-                        data = await request.get(file["download_url"])
-                        file_path.parent.mkdir(parents=True, exist_ok=True)
-                        log.debug(f"下载文件`{file_path}`")
-                        with open(file_path, 'wb') as f:
-                            f.write(data.content)
+                    try:
+                        data = await request.get(FILE_URL.format(res))
+                        if data.status_code != 200:
+                            log.warning(
+                                f"在下载插件`{plugin_name}`的资源时网络连接错误，code:{data.status_code}"
+                            )
+                            raise PluginError(f"网络连接错误，code:{data.status_code}")
+                        if "." in res:
+                            file = data.json()
+                            file_list = [file]
+                        else:
+                            file_list = data.json()
+                        await cls.download_github_file(file_list)
+                    except PluginError as e:
+                        raise e
         except Exception as e:
             log.warning(f"插件`{plugin_name}`资源安装失败:发生错误{e}")
             raise PluginError(f"插件资源安装失败:{e}")
-        path = _plugin["path"]
+        path: str = _plugin["path"]
         p_path = path.replace(".", "/")
         try:
-            log.debug(f"开始下载插件`{plugin_name}`")
-            if _plugin["is_dir"]:
-                data = await request.get(FILE_URL.format(p_path))
-                if data.status_code != 200:
-                    raise PluginError(f"网络连接错误,code:{data.status_code}")
-                file_list = data.json()
-            else:
-                p_path += ".py"
-                data = await request.get(FILE_URL.format(p_path))
-                if data.status_code != 200:
-                    raise PluginError(f"网络连接错误,code:{data.status_code}")
-                file = data.json()
-                file_list = [file]
-            for file in file_list:
-                file_path = Path(".") / file["path"]
-                data = await request.get(file["download_url"])
-                file_path.parent.mkdir(parents=True, exist_ok=True)
-                log.debug(f"下载文件`{file_path}`")
-                with open(file_path, 'w', encoding="utf-8") as f:
-                    f.write(data.text)
-            req_path = Path('.') / p_path / "requirements.txt"
+            try:
+                log.debug(f"开始下载插件`{plugin_name}`")
+                if _plugin["is_dir"]:
+                    data = await request.get(FILE_URL.format(p_path))
+                    if data.status_code != 200:
+                        raise PluginError(f"网络连接错误,code:{data.status_code}")
+                    file_list = data.json()
+                else:
+                    p_path += ".py"
+                    data = await request.get(FILE_URL.format(p_path))
+                    if data.status_code != 200:
+                        raise PluginError(f"网络连接错误,code:{data.status_code}")
+                    file = data.json()
+                    file_list = [file]
+                await cls.download_github_file(file_list)
+            except PluginError as e:
+                # 清理已下载的文件或目录
+                try:
+                    target_path = Path(".") / p_path
+                    if target_path.exists():
+                        log.info(f"清理插件目录 {target_path}...")
+                        if _plugin["is_dir"]:
+                            _safe_rmtree(target_path)
+                        else:
+                            target_path.unlink()
+                        log.info(f"已清理插件 {plugin_name} 的残留文件")
+                except Exception as cleanup_error:
+                    log.error(f"清理插件 {plugin_name} 残留文件失败: {cleanup_error}")
+                raise e
+            req_path = Path(".") / p_path / "requirements.txt"
             if req_path.exists():
                 log.info(f"开始为`{plugin_name}`安装依赖")
                 result = subprocess.run(
@@ -212,6 +221,7 @@ class PluginManager:
     @classmethod
     async def install_github_plugin(cls, repo: str):
         import subprocess
+
         log.info(f"开始从 GitHub 克隆插件：{repo}")
         # 从 repo URL 中提取项目名称
         if repo.endswith(".git"):
@@ -244,7 +254,7 @@ class PluginManager:
                     text=True,
                 )
                 log.debug(f"`{repo_name}` 依赖安装信息：{result.stdout}")
-                log.info(f"依赖安装完成")
+                log.info("依赖安装完成")
             log.info(f"GitHub 插件 `{repo_name}` 安装结束")
         except subprocess.CalledProcessError as e:
             log.error(f"Git clone 失败：{e.stderr}")
@@ -322,7 +332,7 @@ class PluginManager:
                         text=True,
                     )
                     log.debug(f"`{repo_name}` 依赖安装信息：{result.stdout}")
-                    log.info(f"依赖安装完成")
+                    log.info("依赖安装完成")
             log.info(f"GitHub 插件 `{repo_name}` 更新结束")
         except subprocess.CalledProcessError as e:
             log.error(f"Git pull 失败：{e.stderr}")
@@ -352,32 +362,36 @@ class PluginManager:
             # 读取本地 meta.yml
             local_meta_path = target_path / "meta.yml"
             if not local_meta_path.exists():
-                raise PluginError(f"未找到本地 meta.yml 文件")
-            with open(local_meta_path, 'r', encoding='utf-8') as f:
+                raise PluginError("未找到本地 meta.yml 文件")
+            with open(local_meta_path, "r", encoding="utf-8") as f:
                 local_meta = yaml.safe_load(f)
-            local_version = local_meta.get('version', 'unknown')
+            local_version = local_meta.get("version", "unknown")
             log.debug(f"本地版本：{local_version}")
             # 获取远程 meta.yml
             # 构建 raw github 内容 URL
             if repo.startswith("https://github.com/"):
                 # 从 https://github.com/user/repo 转换为 https://raw.githubusercontent.com/user/repo/main/meta.yml
                 repo_path = repo.replace("https://github.com/", "").rstrip("/")
-                remote_meta_url = f"https://raw.githubusercontent.com/{repo_path}/main/meta.yml"
+                remote_meta_url = (
+                    f"https://raw.githubusercontent.com/{repo_path}/main/meta.yml"
+                )
             else:
                 raise PluginError(f"不支持的仓库类型：{repo}")
             response = await request.get(remote_meta_url, follow_redirects=True)
             if response.status_code != 200:
-                raise PluginError(f"无法获取远程 meta.yml，状态码：{response.status_code}")
+                raise PluginError(
+                    f"无法获取远程 meta.yml，状态码：{response.status_code}"
+                )
             remote_meta = yaml.safe_load(response.text)
-            remote_version = remote_meta.get('version', 'unknown')
+            remote_version = remote_meta.get("version", "unknown")
             log.debug(f"远程版本：{remote_version}")
             # 比较版本号
             has_update = local_version != remote_version
             result = {
-                'has_update': has_update,
-                'local_version': local_version,
-                'remote_version': remote_version,
-                'repo_name': repo_name
+                "has_update": has_update,
+                "local_version": local_version,
+                "remote_version": remote_version,
+                "repo_name": repo_name,
             }
             if has_update:
                 log.info(f"发现新版本：{repo_name} {local_version} -> {remote_version}")
@@ -390,3 +404,22 @@ class PluginManager:
         except Exception as e:
             log.error(f"检查 GitHub 插件更新失败：{e}")
             raise PluginError(f"检查 GitHub 插件更新失败：{e}")
+
+    @staticmethod
+    async def download_github_file(file_list):
+        """
+        下载 GitHub 文件
+        :param file_list: 下载保存路径列表
+        :return: None
+        """
+        for file in file_list:
+            file_path = Path(".") / file["path"]
+            data = await request.get(file["download_url"])
+            file_path.parent.mkdir(parents=True, exist_ok=True)
+            log.debug(f"下载文件`{file_path}`")
+            with open(file_path, "wb") as f:
+                f.write(data.content)
+            # 检查文件是否为空
+            if file_path.stat().st_size == 0:
+                file_path.unlink()
+                raise PluginError(f"下载的文件为空: {file_path}")

@@ -64,6 +64,7 @@ class SchedulerController:
         trigger: str | BaseTrigger = "date",
         args: list | None = None,
         kwargs: dict | None = None,
+        use_log: bool = True,
         **job_kwargs,
     ) -> SchedulerJob:
         """添加计划任务，使用方法同 apscheduler，并支持传递参数给任务函数"""
@@ -85,9 +86,11 @@ class SchedulerController:
 
                 async def wrapper(*args, **kwargs):
                     try:
-                        log.debug(f"开始执行`{self.service}`的任务`{name}`")
+                        if use_log:
+                            log.debug(f"开始执行`{self.service}`的任务`{name}`")
                         await f(*args, **kwargs)
-                        log.debug(f"`{self.service}`的任务`{name}`执行完毕")
+                        if use_log:
+                            log.debug(f"`{self.service}`的任务`{name}`执行完毕")
                     except Exception as e:
                         log.error(
                             f"在执行`{self.service}`的任务`{name}`时失败:\n{str_traceback(e)}"
@@ -98,9 +101,11 @@ class SchedulerController:
 
                 async def wrapper(*args, **kwargs):
                     try:
-                        log.debug(f"开始执行`{self.service}`的任务`{name}`")
+                        if use_log:
+                            log.debug(f"开始执行`{self.service}`的任务`{name}`")
                         await asyncio.to_thread(f, *args, **kwargs)
-                        log.debug(f"`{self.service}`的任务`{name}`执行完毕")
+                        if use_log:
+                            log.debug(f"`{self.service}`的任务`{name}`执行完毕")
                     except Exception as e:
                         log.error(
                             f"在执行`{self.service}`的任务`{name}`时失败:\n{str_traceback(e)}"

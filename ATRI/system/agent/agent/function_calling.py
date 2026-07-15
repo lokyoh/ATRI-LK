@@ -1,12 +1,13 @@
+from datetime import datetime
 from typing import Type
 
 from ATRI.log import log
 from ATRI.utils import request
 
+from ..config import config
 from .memes import FaceManager
 from .user import get_user_info, save_user_info
 from .user_profile import UserProfile
-from ..config import config
 
 
 class ChatFunctionArg:
@@ -17,7 +18,9 @@ class ChatFunctionArg:
 
 
 class ChatFunction:
-    def __init__(self, function_name: str, description: str, args: list[ChatFunctionArg]):
+    def __init__(
+        self, function_name: str, description: str, args: list[ChatFunctionArg]
+    ):
         self.function_name = function_name
         self.description = description
         self.args = args
@@ -43,7 +46,9 @@ class FunctionCallingManager:
     chat_functions: list[ChatFunction] = []
 
     @classmethod
-    def register(cls, func_name: str, func: Type[FunctionCalling], func_dif: ChatFunction):
+    def register(
+        cls, func_name: str, func: Type[FunctionCalling], func_dif: ChatFunction
+    ):
         cls.calling[func_name] = func
         cls.chat_functions.append(func_dif)
 
@@ -73,64 +78,77 @@ def register_function_calling():
         @staticmethod
         async def call(data: FunctionCallingData):
             # 处理好感度变化
-            num = data.data.get('num', 0)
+            num = data.data.get("num", 0)
             if num:
                 user_info = get_user_info(data.sender_id)
                 user_info.love = user_info.love + num
-                log.debug(f"用户 {data.sender_id} 好感度变化：{num}, 当前值：{user_info.love}")
+                log.debug(
+                    f"用户 {data.sender_id} 好感度变化：{num}, 当前值：{user_info.love}"
+                )
                 save_user_info(data.sender_id, user_info)
 
-    FunctionCallingManager.register("love_change", LoveChangeFunctionCalling, ChatFunction(
-        function_name="love_change",
-        description="更改你对用户的好感度",
-        args=[
-            ChatFunctionArg(
-                name="num",
-                _type="int",
-                description="与对话人好感度增减数值"
-            )
-        ]
-    ))
+    FunctionCallingManager.register(
+        "love_change",
+        LoveChangeFunctionCalling,
+        ChatFunction(
+            function_name="love_change",
+            description="更改你对用户的好感度",
+            args=[
+                ChatFunctionArg(
+                    name="num", _type="int", description="与对话人好感度增减数值"
+                )
+            ],
+        ),
+    )
 
     class MemeryChangeFunctionCalling(FunctionCalling):
         @staticmethod
         async def call(data: FunctionCallingData):
             # 处理记忆变更
-            mem = data.data.get('mem')
-            del_index = data.data.get('del')
+            mem = data.data.get("mem")
+            del_index = data.data.get("del")
             # 新增记忆
             user_info = get_user_info(data.sender_id)
             if mem:
-                user_info.memery.append(mem)
-                log.debug(f"用户 {data.sender_id} 新增记忆：{mem}")
+                user_info.memery.append(
+                    f"{datetime.now().strftime('%Y年%m月%d日%a-%H时%M分')} {mem}"
+                )
+                log.debug(
+                    f"用户 {data.sender_id} 新增记忆：{datetime.now().strftime('%Y年%m月%d日%a-%H时%M分')} {mem}"
+                )
             if del_index:
                 if type(del_index) is int:
                     del_index = [del_index]
                 del_index.sort(reverse=True)
                 for index in del_index:
                     try:
+                        index: int
                         user_info.memery.pop(index)
                         log.debug(f"用户 {data.sender_id} 删除记忆：{index}")
                     except IndexError:
                         log.warning(f"用户 {data.sender_id} 删除记忆失败：{index}")
             save_user_info(data.sender_id, user_info)
 
-    FunctionCallingManager.register("memery_change", MemeryChangeFunctionCalling, ChatFunction(
-        function_name="memery_change",
-        description="更改你对用户的临时长期记忆，该记忆存在数量上限11",
-        args=[
-            ChatFunctionArg(
-                name="mem",
-                _type="str",
-                description="新增记忆临时长期记忆,可选"
-            ),
-            ChatFunctionArg(
-                name="del",
-                _type="list[int]",
-                description="需要删除的记忆列表索引,请积极删除无用记忆,可选"
-            )
-        ]
-    ))
+    FunctionCallingManager.register(
+        "memery_change",
+        MemeryChangeFunctionCalling,
+        ChatFunction(
+            function_name="memery_change",
+            description="更改你对用户的临时长期记忆，该记忆存在数量上限11",
+            args=[
+                ChatFunctionArg(
+                    name="mem",
+                    _type="str",
+                    description="新增记忆临时长期记忆,超出上限则先入先出,不要添加时间戳,直接输出记忆内容,可选",
+                ),
+                ChatFunctionArg(
+                    name="del",
+                    _type="list[int]",
+                    description="需要删除的记忆列表索引,请积极删除无用与过期的记忆,可选",
+                ),
+            ],
+        ),
+    )
 
     # 生成表情的例子字符串
     meme_examples = []
@@ -138,7 +156,7 @@ def register_function_calling():
         desc = FaceManager.get_meme_description(meme)
         if desc:
             # 只取描述的前一部分，避免过长
-            short_desc = desc.split('（')[0] if '（' in desc else desc[:20]
+            short_desc = desc.split("（")[0] if "（" in desc else desc[:20]
             meme_examples.append(f"{meme}:{short_desc}")
     meme_example_str = ";".join(meme_examples)
 
@@ -147,19 +165,18 @@ def register_function_calling():
         async def call(data: FunctionCallingData):
             return FaceManager.get_face(data.data.get("meme", ""))
 
-    ReplyFunctionCallingManager.register("send_face", SendFaceFunctionCalling, ChatFunction(
-        function_name="send_face",
-        description=f"发送一个指定表情词表情。表情词定义:{meme_example_str}",
-        args=[
-            ChatFunctionArg(
-                name="meme",
-                _type="str",
-                description="表情词"
-            )
-        ]
-    ))
+    ReplyFunctionCallingManager.register(
+        "send_face",
+        SendFaceFunctionCalling,
+        ChatFunction(
+            function_name="send_face",
+            description=f"发送一个指定表情词表情。表情词定义:{meme_example_str}",
+            args=[ChatFunctionArg(name="meme", _type="str", description="表情词")],
+        ),
+    )
 
     if config.search.enable:
+
         class SearchFunctionCalling(FunctionCalling):
             continue_calling = True
 
@@ -180,21 +197,21 @@ def register_function_calling():
                     response = await request.post(
                         url,
                         headers={
-                            'Content-Type': 'application/json',
-                            'Authorization': f'Bearer {config.search.api_key}'
+                            "Content-Type": "application/json",
+                            "Authorization": f"Bearer {config.search.api_key}",
                         },
                         json={
                             "query": query,
                             "include_answer": "advanced",
                             "search_depth": "basic",
                             "chunks_per_source": 1,
-                            "country": "china"
-                        }
+                            "country": "china",
+                        },
                     )
                     if response.status_code == 200:
                         resp = response.json()
                         log.info(f"{query} 搜索结果：\n{resp['answer']}")
-                        return resp['answer']
+                        return resp["answer"]
                     else:
                         error_msg = f"搜索失败，状态码：{response.status_code}"
                         log.warning(error_msg)
@@ -204,17 +221,17 @@ def register_function_calling():
                     log.error(error_msg)
                     return error_msg
 
-        FunctionCallingManager.register("search", SearchFunctionCalling, ChatFunction(
-            function_name="search",
-            description="搜索网络上的信息，并到一个总结性回答",
-            args=[
-                ChatFunctionArg(
-                    name="query",
-                    _type="str",
-                    description="搜索关键词"
-                )
-            ]
-        ))
+        FunctionCallingManager.register(
+            "search",
+            SearchFunctionCalling,
+            ChatFunction(
+                function_name="search",
+                description="搜索网络上的信息，并到一个总结性回答",
+                args=[
+                    ChatFunctionArg(name="query", _type="str", description="搜索关键词")
+                ],
+            ),
+        )
 
         class UserProfileGetFunctionCalling(FunctionCalling):
             continue_calling = True
@@ -224,20 +241,22 @@ def register_function_calling():
                 """
                 获取指定用户的用户画像
                 """
-                user_id = data.data.get('user_id')
+                user_id = data.data.get("user_id")
                 return UserProfile.get_profile(user_id)
 
-        FunctionCallingManager.register("get_user_profile", UserProfileGetFunctionCalling, ChatFunction(
-            function_name="get_user_profile",
-            description="获取指定用户的用户画像，可以多次调用",
-            args=[
-                ChatFunctionArg(
-                    name="user_id",
-                    _type="str",
-                    description="目标用户ID"
-                )
-            ]
-        ))
+        FunctionCallingManager.register(
+            "get_user_profile",
+            UserProfileGetFunctionCalling,
+            ChatFunction(
+                function_name="get_user_profile",
+                description="获取指定用户的用户画像，可以多次调用",
+                args=[
+                    ChatFunctionArg(
+                        name="user_id", _type="str", description="目标用户ID"
+                    )
+                ],
+            ),
+        )
 
         class UserProfileChangeFunctionCalling(FunctionCalling):
             @staticmethod
@@ -245,28 +264,32 @@ def register_function_calling():
                 """
                 获取指定用户的用户画像
                 """
-                user_id = data.data.get('user_id')
-                profile_change = data.data.get('profile_change')
+                user_id = data.data.get("user_id")
+                profile_change = data.data.get("profile_change")
                 log.info(f"用户 {user_id} 更改画像：{profile_change}")
-                now_user_profile = await UserProfile.change_profile(user_id, profile_change)
+                now_user_profile = await UserProfile.change_profile(
+                    user_id, profile_change
+                )
                 log.info(f"用户 {user_id} 画像更改成功: {now_user_profile}")
 
-        FunctionCallingManager.register("change_user_profile", UserProfileChangeFunctionCalling, ChatFunction(
-            function_name="change_user_profile",
-            description="更改指定用户的用户画像，用户画像包含客观描写与个人看法，但不是必须都存在的，可以多次调用",
-            args=[
-                ChatFunctionArg(
-                    name="user_id",
-                    _type="str",
-                    description="目标用户ID"
-                ),
-                ChatFunctionArg(
-                    name="profile_change",
-                    _type="str",
-                    description="如何更改用户画像，除自己以外的人物全都使用用户ID，仅在change操作时需要"
-                )
-            ]
-        ))
+        FunctionCallingManager.register(
+            "change_user_profile",
+            UserProfileChangeFunctionCalling,
+            ChatFunction(
+                function_name="change_user_profile",
+                description="更改指定用户的用户画像，用户画像包含客观描写与个人看法，但不是必须都存在的，可以多次调用",
+                args=[
+                    ChatFunctionArg(
+                        name="user_id", _type="str", description="目标用户ID"
+                    ),
+                    ChatFunctionArg(
+                        name="profile_change",
+                        _type="str",
+                        description="如何更改用户画像，除自己以外的人物全都使用用户ID，仅在change操作时需要",
+                    ),
+                ],
+            ),
+        )
 
 
 register_function_calling()

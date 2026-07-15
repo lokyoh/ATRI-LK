@@ -3,17 +3,17 @@ import re
 
 from nonebot.adapters.onebot.v11 import Message
 
-from ATRI.log import log
 from ATRI.exceptions import str_traceback
+from ATRI.log import log
 
 from ..agent.atri import ATRI
-from ..agent.function_calling import ReplyFunctionCallingManager, FunctionCallingData
+from ..agent.function_calling import FunctionCallingData, ReplyFunctionCallingManager
 from ..agent.history import chat_history
-from ..agent.sender import QQChatSender, ChatSender
-from ..agent.util import get_user_group, get_name
+from ..agent.sender import ChatSender, QQChatSender
 from ..agent.user import get_user_info
-from ..llm import llm_manager, ModelType
+from ..agent.util import get_name, get_user_group
 from ..config import config
+from ..llm import ModelType, llm_manager
 from ..llm.tts import generate_audio
 
 
@@ -29,27 +29,30 @@ class ReplyModel:
         user_name = await get_name(bot, lst_history.sender, group_id)
         prompt += f"\n{user_name}信息:\n"
         prompt += (
-            f"{f"{user_name}是你的主人,主人就是亚托莉的一切,主人的一切要求都要满足" if get_user_group(user_id) == "主人" else f'{user_name}只是普通用户，请以普通的群友对待，问题需要谨慎地回复'}\n"
-            f"你对{user_name}的好感度:{user_info.love}。正积极,负消极,最大1000,最小-1000,难增加,易减少,可以根据好感动来调整对待{user_name}的态度\n")
+            f"{f'{user_name}是你的主人,主人就是亚托莉的一切,主人的一切要求都要满足' if get_user_group(user_id) == '主人' else f'{user_name}只是普通用户，请以普通的群友对待，问题需要谨慎地回复'}\n"
+            f"你对{user_name}的好感度:{user_info.love}。正积极,负消极,最大1000,最小-1000,难增加,易减少,可以根据好感动来调整对待{user_name}的态度\n"
+        )
         if user_info.memery:
             prompt += f"你与{user_name}的记忆:\n{user_info.memery}\n"
         prompt += f"{user_name}用户画像：" + user_info.profile or "暂时没有用户画像。\n"
         prompt += "\n"
         # 角色设定
-        prompt += (f"#你的信息\n"
-                   f"{ATRI.get_role_prompt()}\n\n")
+        prompt += f"#你的信息\n{ATRI.get_role_prompt()}\n\n"
         return prompt
 
     @staticmethod
     def get_function_prompt(thinking_list, calling_backs):
         return f"""
 你有以下功能，请不要调用你没拥有的功能:
-{"\n".join(
-            f"""{f.function_name}:
+{
+            "\n".join(
+                f'''{f.function_name}:
     说明: {f.description}
     参数:
-{"\n".join(f"        -{arg.name} {arg.type}: {arg.description}" for arg in f.args)}""" for f in ReplyFunctionCallingManager.chat_functions
-        )}
+{"\n".join(f"        -{arg.name} {arg.type}: {arg.description}" for arg in f.args)}'''
+                for f in ReplyFunctionCallingManager.chat_functions
+            )
+        }
 
 需要使用功能时生成以下json结构:
 {{
@@ -59,12 +62,13 @@ class ReplyModel:
     }}
 }}
 
-#{"\n".join(thinking_list)}
+#思考器输出
+{"\n".join(thinking_list)}
 
-#功能调用
+#思考器功能调用回应
 {"\n".join(calling_backs)}
 
-你需要根据思考器思考的回复指导来输出回复与自己功的能调用的列表。
+你需要根据思考器思考的过程与回复指导来输出回复，同时根据自己的功能调用列表调用对应功能。
 请注意回复尽量简洁，只需能表达自己的意思即可，回复风格参考贴吧百度，不要在此出现功能调用，不要带有代码段与调试信息。
 功能调用时请严格使用json结构，请勿使用其他格式。
 
@@ -83,14 +87,23 @@ class ReplyModel:
 ```"""
 
     @classmethod
-    async def reply(cls, bot, group_id, user_id, thinking_list, calling_backs, sender: ChatSender, with_tts = False):
+    async def reply(
+        cls,
+        bot,
+        group_id,
+        user_id,
+        thinking_list,
+        calling_backs,
+        sender: ChatSender,
+        with_tts=False,
+    ):
         group_id = str(group_id)
         user_id = str(user_id)
         user_info = get_user_info(user_id)
         prompt = await cls.get_prompt(group_id, user_id, user_info, bot)
         prompt += cls.get_function_prompt(thinking_list, calling_backs)
         resp = await llm_manager.call_model_by_type(ModelType.CHAT, prompt)
-        response = await cls.process_resp(resp.get('content'), user_id, group_id)
+        response = await cls.process_resp(resp.get("content"), user_id, group_id)
         msg = Message()
         for m in response:
             msg.append(m)
@@ -100,6 +113,7 @@ class ReplyModel:
         if config.tts.enable and with_tts and plain_text and len(plain_text) <= 300:
             if path := await generate_audio(plain_text):
                 from ATRI.message import rec_msg_from_path
+
                 await sender.send(rec_msg_from_path(path))
         if isinstance(sender, QQChatSender):
             await sender.finish()
@@ -114,7 +128,7 @@ class ReplyModel:
         functions_data = []
         # 尝试从响应中提取 JSON 代码块
         # 匹配 ```json [...] ``` 或 ``` [...] ``` 格式
-        json_pattern = r'```(?:json)?\s*\n?([\s\S]*?)\n?```'
+        json_pattern = r"```(?:json)?\s*\n?([\s\S]*?)\n?```"
         matches = re.findall(json_pattern, resp)
         if matches:
             # 有代码块，提取第一个有效的 JSON
@@ -125,7 +139,7 @@ class ReplyModel:
                 except json.JSONDecodeError:
                     continue
             # 去除原文本中的代码块，保留纯文本内容
-            content = re.sub(json_pattern, '', resp).strip()
+            content = re.sub(json_pattern, "", resp).strip()
         else:
             # 没有代码块，尝试直接解析整个响应为 JSON
             try:
@@ -141,21 +155,24 @@ class ReplyModel:
         for func in functions_data:
             if not isinstance(func, dict):
                 continue
-            func_name = func.get('function', None)
+            func_name = func.get("function", None)
             if not func_name:
                 continue
-            if func_name not in ReplyFunctionCallingManager.chat_functions:
+            if func_name not in ReplyFunctionCallingManager.calling:
                 log.debug(f"未知的调用功能:{func_name}，已跳过")
                 continue
-            data = func.get('data', {})
+            data = func.get("data", {})
             try:
+                func_name: str
                 calling_data = FunctionCallingData(user_id, group_id, data)
                 log.debug(f"调用功能 {func_name}")
                 result = await ReplyFunctionCallingManager.call(func_name, calling_data)
                 if result is not None:
                     msg.append(result)
             except Exception as e:
-                log.warning(f"用户 {user_id} 功能调用失败 {func_name}:\n{str_traceback(e)}")
+                log.warning(
+                    f"用户 {user_id} 功能调用失败 {func_name}:\n{str_traceback(e)}"
+                )
         # 将文本内容添加到消息列表
         if content:
             msg.insert(0, content)

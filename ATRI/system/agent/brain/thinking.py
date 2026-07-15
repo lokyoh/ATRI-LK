@@ -1,17 +1,17 @@
-import re
 import json
+import re
 
 from ..agent.atri import ATRI
+from ..agent.explanations import get_top_explanations
 from ..agent.function_calling import FunctionCallingManager
 from ..agent.history import ChatHistory, ImageHistory, chat_history, img_history
-from ..agent.util import get_user_group, get_name
+from ..agent.schedule import ATRISchedule
 from ..agent.user import get_user_info
-from ..agent.explanations import get_top_explanations
-from ..llm import llm_manager, ModelType
+from ..agent.util import get_name, get_user_group
+from ..llm import ModelType, llm_manager
 
 
 class ThinkingModel:
-
     @staticmethod
     async def get_history_prompt(group_id, bot):
         if group_id not in img_history:
@@ -20,7 +20,7 @@ class ThinkingModel:
             chat_history[group_id] = ChatHistory()
         history_list = list(chat_history[group_id].get_history()[:-1])
         # 历史聊天记录
-        history_prompt = f"#历史聊天记录\n"
+        history_prompt = "#历史聊天记录\n"
         if history_list:
             messages = [await h.get_message(bot) for h in history_list]
             history_prompt += "\n".join(messages)
@@ -45,27 +45,36 @@ class ThinkingModel:
         user_name = await get_name(bot, lst_history.sender, group_id)
         prompt += f"\n{user_name}信息:\n"
         prompt += (
-            f"{f"{user_name}是你的主人,主人就是亚托莉的一切,主人的一切要求都要满足" if get_user_group(user_id) == "主人" else f'{user_name}只是普通用户，请以普通的群友对待，问题需要谨慎地回复'}\n"
-            f"你对{user_name}的好感度:{user_info.love}。正积极,负消极,最大1000,最小-1000,难增加,易减少,可以根据好感动来调整对待{user_name}的态度\n")
+            f"{f'{user_name}是你的主人,主人就是亚托莉的一切,主人的一切要求都要满足' if get_user_group(user_id) == '主人' else f'{user_name}只是普通用户，请以普通的群友对待，问题需要谨慎地回复'}\n"
+            f"你对{user_name}的好感度:{user_info.love}。正积极,负消极,最大1000,最小-1000,难增加,易减少,可以根据好感动来调整对待{user_name}的态度\n"
+        )
         if user_info.memery:
             prompt += f"你与{user_name}的记忆:\n{user_info.memery}\n"
         prompt += f"{user_name}用户画像：" + user_info.profile or "暂时没有用户画像。\n"
         prompt += "\n"
         # 角色设定
-        prompt += (f"#你的信息\n"
-                   f"{ATRI.get_role_prompt()}\n\n")
+        prompt += f"#你的信息\n{ATRI.get_role_prompt()}\n\n"
+        # 当前日程
+        today_schedule = await ATRISchedule().get_schedule()
+        prompt += (
+            f"#你的日程\n"
+            f"今日穿搭:{today_schedule.get('today_outfit', '出现错误')}\n今日日程:{today_schedule.get('daily_schedule', '出现错误')}\n\n"
+        )
         return prompt
 
     @staticmethod
     def get_function_prompt():
         return f"""
 你有以下功能:
-{"\n".join(
-            f"""{f.function_name}:
+{
+            "\n".join(
+                f'''{f.function_name}:
     说明: {f.description}
     参数:
-{"\n".join(f"        -{arg.name} {arg.type}: {arg.description}" for arg in f.args)}""" for f in FunctionCallingManager.chat_functions
-        )}
+{"\n".join(f"        -{arg.name} {arg.type}: {arg.description}" for arg in f.args)}'''
+                for f in FunctionCallingManager.chat_functions
+            )
+        }
 
 需要使用功能时生成以下json结构:
 {{
@@ -76,6 +85,7 @@ class ThinkingModel:
 }}
 
 """
+
     @staticmethod
     def get_resp_prompt():
         return """你需要输出思考过程与功能调用的列表。
@@ -123,10 +133,12 @@ class ThinkingModel:
         prompt += cls.get_function_prompt()
         prompt += cls.get_resp_prompt()
         resp = await llm_manager.call_model_by_type(ModelType.CHAT, prompt)
-        return await cls.process_resp(resp.get('content'))
+        return await cls.process_resp(resp.get("content"))
 
     @classmethod
-    async def continue_thinking(cls, bot, group_id, user_id, function_calling_data, stop_calling) -> tuple[str, list]:
+    async def continue_thinking(
+        cls, bot, group_id, user_id, function_calling_data, stop_calling
+    ) -> tuple[str, list]:
         user_info = get_user_info(user_id)
         prompt = await cls.get_prompt(group_id, user_id, user_info, bot)
         prompt += "\n\n".join(function_calling_data)
@@ -137,13 +149,13 @@ class ThinkingModel:
             prompt + cls.get_function_prompt()
             prompt += cls.get_continue_resp_prompt()
         resp = await llm_manager.call_model_by_type(ModelType.CHAT, prompt)
-        return await cls.process_resp(resp.get('content'))
+        return await cls.process_resp(resp.get("content"))
 
     @classmethod
     async def process_resp(cls, resp) -> tuple[str, list]:
         content = resp or "没有输出结果"
         functions_data = []
-        json_pattern = r'```(?:json)?\s*\n?([\s\S]*?)\n?```'
+        json_pattern = r"```(?:json)?\s*\n?([\s\S]*?)\n?```"
         matches = re.findall(json_pattern, resp)
         if matches:
             for match in matches:
@@ -152,7 +164,7 @@ class ThinkingModel:
                     break
                 except json.JSONDecodeError:
                     continue
-            content = re.sub(json_pattern, '', resp).strip()
+            content = re.sub(json_pattern, "", resp).strip()
         else:
             try:
                 functions_data = json.loads(resp)

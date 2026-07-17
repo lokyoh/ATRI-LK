@@ -1,3 +1,5 @@
+import yaml
+
 from ATRI.utils.model import BaseModel
 
 
@@ -47,6 +49,42 @@ class ProviderManager:
     def get_provider_list(cls) -> list[LLMProvider]:
         return list(cls.providers.values())
 
+    @classmethod
+    def del_provider(cls, provider_name: str):
+        if provider_name in cls.providers:
+            del cls.providers[provider_name]
+
+    @classmethod
+    def del_model(cls, provider_name: str, model_name: str):
+        if provider_name in cls.providers:
+            provider = cls.providers[provider_name]
+            provider.models = [
+                model for model in provider.models if model.name != model_name
+            ]
+
+    @classmethod
+    def add_model(cls, provider_name: str, model: LLMModel):
+        if provider_name in cls.providers:
+            provider = cls.providers[provider_name]
+            provider.models.append(model)
+
+    @classmethod
+    def save_provider_config(cls):
+        from ATRI.system.agent.config import PROVIDER_CONFIG_FILE
+
+        provider_data = {
+            provider.provider_name: provider.model_dump()
+            for provider in cls.providers.values()
+        }
+        with open(PROVIDER_CONFIG_FILE, "w", encoding="utf-8") as file:
+            yaml.dump(
+                provider_data,
+                file,
+                allow_unicode=True,
+                default_flow_style=False,
+                sort_keys=False,
+            )
+
 
 default_provider = LLMProvider(
     provider_name="siliconflow",
@@ -54,8 +92,8 @@ default_provider = LLMProvider(
     url="https://api.siliconflow.cn/v1",
     models=[
         LLMModel(
-            name="siliconflow/DeepSeek-V3.2",
-            model="deepseek-ai/DeepSeek-V3.2",
+            name="siliconflow/DeepSeek-V4-Flash",
+            model="deepseek-ai/DeepSeek-V4-Flash",
             temperature=0.7,
             type="chat",
         ),

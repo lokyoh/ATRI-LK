@@ -10,6 +10,7 @@ plugin_config = {}
 
 class PluginConfig:
     """插件设置类，提供加载、修改和获取插件设置的功能。"""
+
     def __init__(self, service: str, model: Type[BaseModel]):
         """
         插件设置。
@@ -56,6 +57,7 @@ class PluginConfig:
             self._config.write_into_file(self.path)
         else:
             value.write_into_file(self.path)
+            self.load_config()
 
     def __enter__(self):
         return self._config

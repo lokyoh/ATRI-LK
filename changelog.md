@@ -1,5 +1,21 @@
 > 此处仅为记录重大更新，修复 BUG/以及其它 请关注[`GitHub commits`](https://github.com/lokyoh/ATRI-LK/commits/main)
 
+## Jul 17, 2026
+
+> 新增ATRI智能体与webapi
+
+- 更新版本至: `YHN-LK0-022`
+- 新增:
+  - ATRI智能体插件`agent`
+  - `webapi`插件
+  - `SchedulerJob`新增`use_log`参数来决定是否添加日志
+  - `plugin_store`新增空文件下载检测与自动删除失败下载
+- 修改:
+  - 去除心跳事件的提示日志
+  - `聊天`将使用`agent`提供的聊天服务
+- 修复:
+  - `meta_event`事件不再记录在DEBUG日志中
+
 ## Mar 18, 2026
 
 > - 插件商店支持github仓库安装，插件模板[HelloWorld](https://github.com/lokyoh/atrilk_plugin_helloworld)
@@ -37,6 +53,8 @@
 - 更多更改查看commit...
 - Patch1:
   - 修复bug[#10](https://github.com/lokyoh/ATRI-LK/issues/10)
+- Patch2:
+  - 修复bug[#11](https://github.com/lokyoh/ATRI-LK/issues/11)
 
 ## Jan 25, 2026
 
@@ -95,7 +113,8 @@
 
 ## Sep 25, 2025
 
-> 新的`运势`与`图库`插件,`聊天`新增AI聊天表情发送,为`ATRI`服务新增白名单,新添`用户`排行功能,修改事件工具,`钓鱼`成就注册方法参数的修改。
+> 新的`运势`与`图库`插件,`聊天`新增AI聊天表情发送,为`ATRI`服务新增白名单,新添`用户`排行功能,修改事件工具,`钓鱼`
+> 成就注册方法参数的修改。
 
 - 更新版本至: `YHN-LK0-017`
 - 新增:
@@ -232,7 +251,8 @@
 ## Dec 31, 2024
 
 > ATRI新增异常类型，新添消息组功能。
-> lkbot及其附属插件结构更新与部分功能更新，新增经验、好感倍率，新增`初始化完成事件`，添加以物易物功能，添加本地加载物品与物品功能加载，`lkchat`聊天功能更新。
+> lkbot及其附属插件结构更新与部分功能更新，新增经验、好感倍率，新增`初始化完成事件`，添加以物易物功能，添加本地加载物品与物品功能加载，
+`lkchat`聊天功能更新。
 > 改用子依赖形式实现验证。
 
 - 更新版本至: `YHN-LK0-009`

@@ -3,9 +3,38 @@ import json
 
 from ATRI.dir import SYS_CONFIG_DIR
 from ATRI.event import daily_update
+from ATRI.log import log
 
 from ..llm import ModelType, llm_manager
 from .atri import ATRI
+
+
+class NowSchedule:
+    def __init__(self, today_outfit: str = "Null", now_schedule: str = "Null"):
+        self.outfit: str = today_outfit
+        self.now_schedule: str = now_schedule
+
+
+class ScheduleNode:
+    def __init__(self, data):
+        self.start_time = datetime.time.fromisoformat(data["start_time"])
+        self.end_time = datetime.time.fromisoformat(data["end_time"])
+        self.schedule: str = data["schedule"]
+
+
+class TodaySchedule:
+    def __init__(self, data):
+        self.outfit: str = data["outfit"]
+        self.schedule: list[ScheduleNode] = []
+        for s in data["schedule"]:
+            self.schedule.append(ScheduleNode(s))
+
+    def get_schedule_from_now(self):
+        now_time = datetime.datetime.now().time()
+        for s in self.schedule:
+            if s.start_time <= now_time <= s.end_time:
+                return s.schedule
+        return None
 
 
 class ATRISchedule:
@@ -15,16 +44,24 @@ class ATRISchedule:
 你需要严格按照以下要求输出结果：
 1. **输出格式**：必须为纯 JSON，不包含任何额外的解释、说明或 Markdown 代码块标记。
 2. JSON 中需包含两个字段：
-   - `today_outfit`：字符串，详细描述该人物今日的完整穿搭，包括服装、配饰、鞋履、妆容、发型等。
-   - `daily_schedule`：字符串，以清晰的时间线形式详细记录从 06:00 至次日 02:00 的每一个行程安排。每项行程需标注具体时间点或时间段，并附带简要但生动的活动描述。
+   - `outfit`：字符串，详细描述该人物今日的完整穿搭，包括服装、配饰、鞋履、妆容、发型等。
+   - `schedule`：日程列表，以清晰的时间线形式详细记录从 06:00 至次日 02:00 的每一个行程安排，并附带简要但生动的活动描述。
 3. 日程应真实、具体且富有生活感，并体现该人物的身份、职业、性格或故事背景。应至少包含 10 个不同的时间节点。
-4. 人物身份与日程可自由发挥，但必须建立在连贯、合理的情节逻辑之上。"""
+4. 人物身份与日程可自由发挥，但必须建立在连贯、合理的情节逻辑之上。
+5. 日程可以参考历史日程但不要历史日程一至。"""
     after_prompt = """"### 输出示例
 ```json
-{{
-  "today_outfit": "...",
-  "daily_schedule": "06:00 ...\\n...\\n02:00 ..."
-}}
+{
+  "outfit": "...",
+  "schedule": [
+    {
+      "start_time": "06:00",
+      "end_time": "07:00",
+      "schedule": "...",
+    },
+    ...
+  ]
+}
 ```
 
 请开始生成。"""
@@ -39,6 +76,13 @@ class ATRISchedule:
         if self.data_file.exists():
             with open(self.data_file, "r", encoding="utf-8") as f:
                 self.schedule_data = json.load(f)
+            keys = list(self.schedule_data.keys())
+            for s in keys:
+                try:
+                    TodaySchedule(self.schedule_data[s])
+                except Exception:
+                    del self.schedule_data[s]
+                    log.debug(f"删除不可用日程:{s}")
 
     def _save_data(self):
         """保存日程数据"""
@@ -72,11 +116,26 @@ class ATRISchedule:
         self._save_data()
 
     async def get_schedule(self):
+        """获取当前的日程"""
+        today_schedule = await self.get_today_schedule()
+        if today_schedule is None:
+            return NowSchedule()
+        now_schedule = today_schedule.get_schedule_from_now()
+        if now_schedule is None:
+            now_schedule = "Null"
+        return NowSchedule(today_schedule.outfit, now_schedule)
+
+    async def get_today_schedule(self):
         """获取今天的日程"""
         today = self.get_now_date()
         if today not in self.schedule_data:
             await self.generate_schedule(today)
-        return self.schedule_data[today]
+        try:
+            return TodaySchedule(self.schedule_data[today])
+        except Exception:
+            del self.schedule_data[today]
+            log.warning("日程生成不符合规范，已删除，如果多次遇到请考虑更换模型。")
+            return None
 
     def get_all_schedule(self):
         """获取所有的日程"""

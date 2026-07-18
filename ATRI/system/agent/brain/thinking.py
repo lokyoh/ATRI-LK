@@ -55,10 +55,10 @@ class ThinkingModel:
         # 角色设定
         prompt += f"#你的信息\n{ATRI.get_role_prompt()}\n\n"
         # 当前日程
-        today_schedule = await ATRISchedule().get_schedule()
+        now_schedule = await ATRISchedule().get_schedule()
         prompt += (
             f"#你的日程\n"
-            f"今日穿搭:{today_schedule.get('today_outfit', '出现错误')}\n今日日程:{today_schedule.get('daily_schedule', '出现错误')}\n\n"
+            f"今日穿搭:{now_schedule.outfit}\n目前日程:{now_schedule.now_schedule}\n\n"
         )
         return prompt
 

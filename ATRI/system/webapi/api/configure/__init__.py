@@ -34,10 +34,6 @@ async def _() -> Result:
         return Result.fail("系统正在重启中，请勿重复操作")
 
     try:
-        # 保存重启标记，用于重启后通知用户
-        with open(RESTART_TEMP, "w", encoding="utf8") as f:
-            f.write("webapi_restart")
-
         # 执行重启
         os.execv(sys.executable, [sys.executable] + sys.argv)
     except Exception as e:

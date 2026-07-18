@@ -121,10 +121,11 @@ class LLMMessage:
                     result = await img_history[group_id].add_image(mid, url)
                     instance.message.append(MessageSegment(result))
                 img_count += 1
+            elif segment.type == "video":
+                instance.message.append(MessageSegment("[视频]"))
+            elif segment.type == "file":
+                pass
             else:
-                instance.message.append(
-                    MessageSegment(f"[这是未支持解析的{segment.type}类型消息]")
-                )
                 log.warning(f"未支持的消息类型：{segment.type}\n{segment.data}")
         return instance
 
@@ -149,6 +150,8 @@ class History:
     async def create(cls, sender, group_id, message):
         instance = cls(sender, group_id)
         instance.message = await LLMMessage.create(message, instance.mid, group_id)
+        if instance.message is None:
+            return None
         return instance
 
     async def get_message(self, bot, get_reply=True):
@@ -168,6 +171,8 @@ class ChatHistory:
     async def add_history(self, user_id, group_id, message: Message | History):
         if isinstance(message, Message):
             h = await History.create(user_id, group_id, message)
+            if h is None:
+                return None
         else:
             h = message
         if h := self.history.add(h):

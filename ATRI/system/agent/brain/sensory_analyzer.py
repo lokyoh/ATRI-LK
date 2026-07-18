@@ -1,9 +1,7 @@
 import json
 import re
 
-from ATRI.log import log
-
-from ..llm import ModelType, llm_manager, ALL_MODEL_RESP_ERR, NO_MODEL_ERR
+from ..llm import ALL_MODEL_RESP_ERR, NO_MODEL_ERR, ModelType, llm_manager
 
 
 class SensoryAnalyzer:
@@ -40,7 +38,8 @@ class SensoryAnalyzer:
     async def analyze(cls, history: str, chat_content: str) -> dict:
         try:
             response = await llm_manager.call_model_by_type(
-                ModelType.TOOL, cls.prompt.format(history_content=history, chat_content=chat_content)
+                ModelType.TOOL,
+                cls.prompt.format(history_content=history, chat_content=chat_content),
             )
             if response == NO_MODEL_ERR:
                 raise RuntimeError(NO_MODEL_ERR)
@@ -48,10 +47,10 @@ class SensoryAnalyzer:
                 raise RuntimeError(ALL_MODEL_RESP_ERR)
             # 从响应中提取文本内容
             if isinstance(response, dict):
-                content = response.get('content', '')
+                content = response.get("content", "")
             else:
-                content = str(response) if response else ''
-            pattern = r'```json\s*(.*?)\s*```'
+                content = str(response) if response else ""
+            pattern = r"```json\s*(.*?)\s*```"
             match = re.search(pattern, content, re.DOTALL)
             if match:
                 json_str = match.group(1).strip()

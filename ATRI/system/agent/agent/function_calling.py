@@ -1,10 +1,8 @@
 from datetime import datetime
 from typing import Type
 
-from ATRI.log import log
-from ATRI.utils import request
-
 from ..config import config
+from ..utils import log, request
 from .memes import FaceManager
 from .user import get_user_info, save_user_info
 from .user_profile import UserProfile

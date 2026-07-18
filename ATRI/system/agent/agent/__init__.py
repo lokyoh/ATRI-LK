@@ -158,7 +158,7 @@ class ATRIAgent:
             calling_backs += calling_back
             if continue_chat:
                 thinking, functions_data = await ThinkingModel.continue_thinking(
-                    bot, chat_id, user_id, calling_back, times >= 15
+                    bot, chat_id, user_id, calling_backs, times >= 15
                 )
                 thinking_list.append(thinking)
             else:

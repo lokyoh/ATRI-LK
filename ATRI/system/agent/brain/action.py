@@ -28,13 +28,13 @@ class ActionModel:
                 if result is not None:
                     if FunctionCallingManager.is_continue_calling(func_name):
                         calling_back.append(
-                            f"你调用了{func_name}并得到响应：\n{result}"
+                            f"调用{func_name}成功并得到响应：\n{result}"
                         )
                         continue_chat = True
                     else:
-                        calling_back.append(f"你调用了{func_name}并得到响应:\n{result}")
+                        calling_back.append(f"调用{func_name}成功并得到响应:\n{result}")
                 else:
-                    calling_back.append(f"你调用了{func_name}")
+                    calling_back.append(f"调用{func_name}成功")
             except Exception as e:
                 log.warning(
                     f"用户 {user_id} 功能调用失败 {func_name}:\n{str_traceback(e)}"

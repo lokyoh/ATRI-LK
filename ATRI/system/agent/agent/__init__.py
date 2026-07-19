@@ -1,3 +1,4 @@
+import datetime
 import time
 from asyncio import Lock
 
@@ -119,6 +120,10 @@ class ATRIAgent:
             log.warning("没有配置tool类型的模型")
             if skip_judgment:
                 await chat_model.reply(bot, chat_id, user_id, chat_sender)
+        plain_text = message.extract_plain_text()
+        now_time = datetime.datetime.now().time()
+        if not skip_judgment and (plain_text == "" or 2 <= now_time.hour < 6):
+            return
         msg = await this_msg.get_message(bot)
         msg_his = ""
         history_list = list(c_h.get_history()[:-1])
@@ -128,8 +133,6 @@ class ATRIAgent:
         else:
             msg_his += "无历史聊天记录"
         img_his = i_h.get_history()
-        if not skip_judgment and message.extract_plain_text() == "":
-            return
         sensory = await SensoryAnalyzer.analyze(f"{img_his}\n\n{msg_his}", msg)
         str_sensory = (
             f"整体情感:{sensory.get('sensory', {}).get('total', '未知')} "

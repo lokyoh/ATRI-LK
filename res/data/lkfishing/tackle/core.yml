@@ -1,0 +1,50 @@
+basic_hook:
+  name: "基础鱼钩"
+  description: "普通鱼钩，适合新手使用。"
+  durable: 50
+  waiting_time: 1
+  fishi_quality: 5
+  reaction_time: 1
+  treasure_chance: 50
+  fishi_chance: 0.02
+  price: 80
+leather_float:
+  name: "皮革浮标"
+  description: "提高咬钩效率的小型浮标。"
+  durable: 40
+  waiting_time: 2
+  fishi_quality: 8
+  reaction_time: 2
+  treasure_chance: 100
+  fishi_chance: 0.04
+  price: 150
+steel_weight:
+  name: "钢制铅坠"
+  description: "稳定钓线，减少渔具抖动，适合中级钓鱼。"
+  durable: 60
+  waiting_time: 3
+  fishi_quality: 12
+  reaction_time: 1
+  treasure_chance: 200
+  fishi_chance: 0.06
+  price: 320
+magic_bobber:
+  name: "魔法浮漂"
+  description: "增加鱼类辨识力的高级渔具，适合捕捉稀有鱼。"
+  durable: 80
+  waiting_time: 4
+  fishi_quality: 18
+  reaction_time: 3
+  treasure_chance: 300
+  fishi_chance: 0.1
+  price: 760
+ancient_reel:
+  name: "远古鱼线轮"
+  description: "稀有钓具，可显著提升钓鱼成功率和宝藏几率。"
+  durable: 100
+  waiting_time: 5
+  fishi_quality: 25
+  reaction_time: 4
+  treasure_chance: 400
+  fishi_chance: 0.15
+  price: 1500

@@ -19,7 +19,7 @@ from .data.user import get_fish_user_data
 from .data_source import FishingController
 
 plugin = Service(
-    "钓鱼", "ATRI的钓鱼插件", "0.3.2", Service.ServiceType.ENTERTAINMENT
+    "钓鱼", "ATRI的钓鱼插件", "0.3.3", Service.ServiceType.ENTERTAINMENT
 ).main_cmd("钓鱼")
 
 player_info = plugin.cmd_as_group("我的信息", "查看自己的个人信息")

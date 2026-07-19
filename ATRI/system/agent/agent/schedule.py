@@ -31,8 +31,10 @@ class TodaySchedule:
 
     def get_schedule_from_now(self):
         now_time = datetime.datetime.now().time()
+        if 2 <= now_time.hour < 6:
+            return "睡眠中。"
         for s in self.schedule:
-            if s.start_time <= now_time <= s.end_time:
+            if s.start_time <= now_time < s.end_time:
                 return s.schedule
         return None
 

@@ -368,21 +368,7 @@ class PluginManager:
             local_version = local_meta.get("version", "unknown")
             log.debug(f"本地版本：{local_version}")
             # 获取远程 meta.yml
-            # 构建 raw github 内容 URL
-            if repo.startswith("https://github.com/"):
-                # 从 https://github.com/user/repo 转换为 https://raw.githubusercontent.com/user/repo/main/meta.yml
-                repo_path = repo.replace("https://github.com/", "").rstrip("/")
-                remote_meta_url = (
-                    f"https://raw.githubusercontent.com/{repo_path}/main/meta.yml"
-                )
-            else:
-                raise PluginError(f"不支持的仓库类型：{repo}")
-            response = await request.get(remote_meta_url, follow_redirects=True)
-            if response.status_code != 200:
-                raise PluginError(
-                    f"无法获取远程 meta.yml，状态码：{response.status_code}"
-                )
-            remote_meta = yaml.safe_load(response.text)
+            remote_meta = cls.get_github_plugin_meta(repo)
             remote_version = remote_meta.get("version", "unknown")
             log.debug(f"远程版本：{remote_version}")
             # 比较版本号
@@ -406,6 +392,26 @@ class PluginManager:
             raise PluginError(f"检查 GitHub 插件更新失败：{e}")
 
     @staticmethod
+    async def get_github_plugin_meta(repo: str):
+        """
+        获取 GitHub 插件的 meta.yml 信息
+        :param repo: GitHub 仓库地址
+        :return: dict 包含 meta 信息
+        """
+        if repo.startswith("https://github.com/"):
+            # 从 https://github.com/user/repo 转换为 https://raw.githubusercontent.com/user/repo/main/meta.yml
+            repo_path = repo.replace("https://github.com/", "").rstrip("/")
+            remote_meta_url = (
+                f"https://raw.githubusercontent.com/{repo_path}/main/meta.yml"
+            )
+        else:
+            raise PluginError(f"不支持的仓库类型：{repo}")
+        response = await request.get(remote_meta_url, follow_redirects=True)
+        if response.status_code != 200:
+            raise PluginError(f"无法获取远程 meta.yml，状态码：{response.status_code}")
+        return yaml.safe_load(response.text)
+
+    @staticmethod
     async def download_github_file(file_list):
         """
         下载 GitHub 文件
@@ -423,3 +429,43 @@ class PluginManager:
             if file_path.stat().st_size == 0:
                 file_path.unlink()
                 raise PluginError(f"下载的文件为空: {file_path}")
+
+    @classmethod
+    async def check_update(cls, plugin_name: str):
+        if plugin_name not in cls.plugin_list:
+            return None
+        _plugin = cls.plugin_list[plugin_name]
+        version = _plugin.get("version", "null")
+        if plugin_name in ServiceTools.service_list:
+            if version == "github":
+                r = await cls.check_github_plugin_update(_plugin["repo"])
+                if r["has_update"]:
+                    return r["local_version"], r["remote_version"]
+                return None
+            now_version = ServiceTools(plugin_name).load_service().version
+            if now_version != version:
+                return now_version, version
+        return None
+
+    @classmethod
+    async def update_plugin(cls, plugin_name: str):
+        plugin_name = request.service
+        if plugin_name not in cls.plugin_list:
+            return False, f"找不到插件 {plugin_name}"
+        version = cls.plugin_list[plugin_name]["version"]
+        from ATRI.service import ServiceTools
+
+        if plugin_name in ServiceTools.service_list:
+            if cls.check_update(plugin_name) is not None:
+                return False, f"{plugin_name} 无需更新"
+        try:
+            _plugin = cls.plugin_list[plugin_name]
+            if repo := _plugin.get("repo", None):
+                await cls.update_github_plugin(repo)
+            else:
+                await cls.install_plugin(plugin_name)
+            return True, f"{plugin_name}-{version}安装成功，请重启以启用新版插件"
+        except PluginError as e:
+            return False, f"更新插件失败：{e.prompt}"
+        except Exception:
+            raise

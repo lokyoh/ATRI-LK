@@ -1,3 +1,25 @@
+trash :
+  name: "垃圾"
+  description: "它是垃圾。"
+  type: "其他"
+  price: 1
+  position:
+    - "river"
+    - "lake"
+    - "ocean"
+  xp: 1
+  weight: 100
+driftwood:
+  name: "浮木"
+  description: "从水里漂来的一块木头。"
+  type: "其他"
+  price: 3
+  position:
+    - "river"
+    - "lake"
+    - "ocean"
+  xp: 3
+  weight: 50
 greenalgae:
   name: "绿藻"
   description: "它黏黏的。"

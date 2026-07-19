@@ -46,3 +46,8 @@ async def login_get_token(form_data: OAuth2PasswordRequestForm = Depends()):
     return Result.ok(
         {"access_token": access_token, "token_type": "bearer"}, "欢迎回家, 主人!"
     )
+
+
+@router.get("/ping")
+async def ping():
+    return Result.ok("pong")

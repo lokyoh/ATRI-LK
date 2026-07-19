@@ -9,7 +9,7 @@ from ATRI.service import Service, ServiceTools
 from .data_source import PluginManager
 
 plugin = Service(
-    "插件商店", "插件商店", "0.4.1", Service.ServiceType.SYSTEM
+    "插件商店", "插件商店", "0.4.2", Service.ServiceType.SYSTEM
 ).permission(MASTER)
 
 plugins = plugin.on_command("插件列表", "查看插件列表")
@@ -145,36 +145,14 @@ update = plugin.on_command("更新插件", "更新指定插件")
 @update.handle()
 async def _(args: Message = CommandArg()):
     try:
-        plugin_list = await PluginManager.get_plugin_list()
         await PluginManager.check_list()
     except PluginError:
         await plugin_info.finish("获取插件信息失败")
     plugin_name = args.extract_plain_text().replace(" ", "")
     if not plugin_name:
         await update.finish("请输入插件名")
-    if plugin_name not in plugin_list:
-        await update.finish(f"找不到插件 {plugin_name}")
-    version = plugin_list[plugin_name]["version"]
-    if plugin_name in ServiceTools.service_list:
-        if version == "github":
-            r = await PluginManager.check_github_plugin_update(
-                plugin_list[plugin_name]["repo"]
-            )
-            if not r["has_update"]:
-                await update.finish(f"{plugin_name} 无需更新")
-        if ServiceTools(plugin_name).load_service().version == version:
-            await update.finish(f"{plugin_name} 无需更新")
-    try:
-        _plugin = PluginManager.plugin_list[plugin_name]
-        if repo := _plugin.get("repo", None):
-            await PluginManager.update_github_plugin(repo)
-        else:
-            await PluginManager.install_plugin(plugin_name)
-        await update.finish(f"{plugin_name}-{version}安装成功，请重启以启用新版插件")
-    except PluginError as e:
-        await update.finish(e.prompt)
-    except Exception:
-        raise
+    _, msg = await PluginManager.update_plugin(plugin_name)
+    await update.finish(msg)
 
 
 check_update = plugin.on_command("检查插件更新", "检查所有的插件的更新")
@@ -190,19 +168,9 @@ async def _():
     message = MessageBuilder().text("需要更新的插件:")
     for plugin_name in ServiceTools.service_list:
         if plugin_name in plugin_list:
-            version = plugin_list[plugin_name]["version"]
-            if version == "github":
-                r = await PluginManager.check_github_plugin_update(
-                    plugin_list[plugin_name]["repo"]
-                )
-                if r["has_update"]:
-                    message.text(
-                        f"{plugin_name} {r['local_version']}->{r['remote_version']}"
-                    )
-            else:
-                now_version = ServiceTools(plugin_name).load_service().version
-                if now_version != version:
-                    message.text(f"{plugin_name} {now_version}->{version}")
+            r = await PluginManager.check_update(plugin_name)
+            if r:
+                message.text(f"{plugin_name} {r[0]}->{r[1]}")
     await update_all.finish(message)
 
 
@@ -219,20 +187,13 @@ async def _():
     message = MessageBuilder().text("更新情况(更新完成后请重启):")
     for plugin_name in ServiceTools.service_list:
         if plugin_name in plugin_list:
-            version = plugin_list[plugin_name]["version"]
             try:
-                if version == "github":
-                    repo = plugin_list[plugin_name]["repo"]
-                    r = await PluginManager.check_github_plugin_update(repo)
-                    if r["has_update"]:
-                        await PluginManager.update_github_plugin(repo)
-                        message.text(f"{plugin_name}-{version}安装成功")
+                ok, msg = await PluginManager.update_plugin(plugin_name)
+                if ok:
+                    message.text(msg)
                 else:
-                    if ServiceTools(plugin_name).load_service().version != version:
-                        await PluginManager.install_plugin(plugin_name)
-                        message.text(f"{plugin_name}-{version}安装成功")
-            except PluginError as e:
-                message.text(e.prompt)
+                    if msg.startswith("更新插件失败："):
+                        message.text(msg)
             except Exception as e:
                 message.text(str(e))
     await update_all.finish(message)

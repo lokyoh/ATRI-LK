@@ -139,10 +139,10 @@ class FishingController:
         item_list, item_weight_list = cls.get_fish_item_weight(user_data.position, user_farm_datas.weather)
         if len(fish_list) == 0 and len(item_list) == 0:
             raise FishingException('该地域此时没有任何鱼类!!!\n请反馈...')
-        fishi_chance = .1
+        fishi_chance = .8
         if tackle := user_data.get_fishing_tackle():
             fishi_chance += tackle.fishi_chance
-        if (len(item_list) != 0 and random.random() < fishi_chance) or len(fish_list) == 0:
+        if (len(item_list) != 0 and random.random() > fishi_chance) or len(fish_list) == 0:
             fish = random.choices(item_list, weights=item_weight_list)[0]
         else:
             fish = random.choices(fish_list, weights=weight_list)[0]
@@ -282,4 +282,4 @@ def loading_lkfishing_data():
     FishingController.load_treasure_data()
     shops.register(FishingController.fishing_shop)
     load_achievements()
-    log.success(f'lkfishing数据加载完成')
+    log.success('lkfishing数据加载完成')

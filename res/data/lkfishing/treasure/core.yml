@@ -1,12 +1,34 @@
 primary_bait:
   items: "初级鱼饵"
-  nums: 1
+  nums: 10
   chance: 100
 middle_bait:
   items: "中级鱼饵"
-  nums: 1
-  chance: 5
+  nums: 5
+  chance: 50
 advanced_bait:
   items: "高级鱼饵"
+  nums: 3
+  chance: 30
+basic_hook:
+  items: "基础鱼钩"
+  nums: 1
+  chance: 50
+leather_float:
+  name: "皮革浮标"
+  nums: 1
+  chance: 20
+steel_weight:
+  name: "钢制铅坠"
+  description: "稳定钓线，减少渔具抖动，适合中级钓鱼。"
+  nums: 1
+  chance: 10
+magic_bobber:
+  name: "魔法浮漂"
+  description: "增加鱼类辨识力的高级渔具，适合捕捉稀有鱼。"
+  nums: 1
+  chance: 5
+ancient_reel:
+  name: "远古鱼线轮"
   nums: 1
   chance: 1

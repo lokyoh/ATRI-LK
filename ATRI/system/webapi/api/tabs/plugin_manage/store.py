@@ -23,28 +23,32 @@ async def _() -> Result[dict]:
     try:
         # 获取插件列表
         plugin_data = await PluginManager.get_plugin_list()
-
         # 获取已安装的模块列表
         from ATRI.service import ServiceTools
 
         plugins = list(ServiceTools.service_list.keys())
-
         # 转换插件数据格式
         plugin_list = []
         for idx, (plugin_name, plugin_info) in enumerate(plugin_data.items()):
+            p_version = plugin_info.get("version", "unknown")
+            if p_version == "github":
+                try:
+                    meta = await PluginManager.get_github_plugin_meta(plugin_info["repo"])
+                    p_version = meta.get("version", "unknown")
+                except Exception:
+                    p_version = "error"
             plugin_list.append(
                 {
                     "id": idx,
                     "name": plugin_name,
-                    "module": plugin_info.get("path", ""),
                     "author": plugin_info.get("author", "未知"),
-                    "version": plugin_info.get("version", "1.0.0"),
+                    "version": p_version,
                     "plugin_type": plugin_info.get("type", "其他插件"),
                     "description": plugin_info.get("docs", ""),
-                    "github_url": plugin_info.get("github_url", ""),
+                    "github_url": plugin_info.get("repo", ""),
+                    "need_update": await PluginManager.check_update(plugin_name) is not None,
                 }
             )
-
         return Result.ok({"install_plugin": plugins, "plugin_list": plugin_list})
     except Exception as e:
         str_tb = str_traceback(e)
@@ -80,16 +84,12 @@ async def _(request: PluginRequest) -> Result:
 )
 async def _(request: PluginRequest) -> Result:
     try:
-        # 先移除再安装（简单粗暴的更新方式）
-        try:
-            await PluginManager.remove_plugin(request.service)
-        except Exception:
-            pass  # 如果移除失败继续执行
-
-        # 重新安装
-        await PluginManager.install_plugin(request.service, load=False)
-
-        return Result.ok(info=f"插件 {request.service} 更新成功，请重启后加载")
+        plugin_name = request.service
+        ok, msg = await PluginManager.update_plugin(plugin_name)
+        if ok:
+            return Result.ok(info=msg)
+        else:
+            return Result.fail(info=msg)
     except Exception as e:
         str_tb = str_traceback(e)
         log.error(f"更新插件失败:{str_tb}")

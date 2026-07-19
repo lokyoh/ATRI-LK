@@ -15,20 +15,20 @@ basic_hook:
   nums: 1
   chance: 50
 leather_float:
-  name: "皮革浮标"
+  items: "皮革浮标"
   nums: 1
   chance: 20
 steel_weight:
-  name: "钢制铅坠"
+  items: "钢制铅坠"
   description: "稳定钓线，减少渔具抖动，适合中级钓鱼。"
   nums: 1
   chance: 10
 magic_bobber:
-  name: "魔法浮漂"
+  items: "魔法浮漂"
   description: "增加鱼类辨识力的高级渔具，适合捕捉稀有鱼。"
   nums: 1
   chance: 5
 ancient_reel:
-  name: "远古鱼线轮"
+  items: "远古鱼线轮"
   nums: 1
   chance: 1

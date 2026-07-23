@@ -26,6 +26,9 @@
   - `agent`修复日程时间判断错误与固定睡眠时间缺失,添加在固定时间段不再主动聊天
   - `插件商店`新提取了几个独立方法
   - `webapi`修复`ping`api的缺失,插件商店相关api更新,同步更新WebUI至v0.0.3
+- Patch3:
+  - 修复bug[#12](https://github.com/lokyoh/ATRI-LK/issues/12)
+
 
 ## Mar 18, 2026
 

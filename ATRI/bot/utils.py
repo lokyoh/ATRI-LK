@@ -66,6 +66,8 @@ class BotUtils:
         :param group_id: 群ID，群消息时必填
         :param message: 消息内容
         """
+        user_id = str(user_id) if user_id else None
+        group_id = str(group_id) if group_id else None
         if GlobalStatus.is_blocked(user_id=user_id, group_id=group_id):
             log.debug(
                 f"Target is blocked, skip sending message. user_id={user_id}, group_id={group_id}"

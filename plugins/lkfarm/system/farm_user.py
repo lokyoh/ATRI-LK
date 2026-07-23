@@ -4,21 +4,21 @@ from random import choices, randint
 from typing import List
 
 from ATRI.log import log
-from ATRI.utils.lock import GroupLock
 from ATRI.system.lkapi.entity.user import UserData
+from ATRI.utils.lock import GroupLock
 
-from .crop import crop_data_list, CropData
+from .crop import CropData, crop_data_list
 from .datebase import farm_table, user_table
 from .farm_field import FarmField
-from .weather import get_weather
 from .fertilizer import fertilizer_data_list
 from .season import Month
+from .weather import get_weather
 
 
 class UserFarmData:
     def __init__(self, data):
         self.id = data[0]
-        self.date = datetime.strptime(data[1], '%Y-%m-%d').date()
+        self.date = datetime.strptime(data[1], "%Y-%m-%d").date()
         self.endurance = data[2]
         self.lucky = data[3]
         self.exp = data[4]
@@ -64,20 +64,22 @@ class UserFarmData:
         return level, level_exp
 
     def get_field(self, row, line) -> FarmField:
-        return self.fields[(ord(row) - ord('A')) * 8 + line - 1]
+        return self.fields[(ord(row) - ord("A")) * 8 + line - 1]
 
-    def seeding(self, row: str, line: int, crop: str, user_data: UserData) -> tuple[bool, str | None]:
+    def seeding(
+        self, row: str, line: int, crop: str, user_data: UserData
+    ) -> tuple[bool, str | None]:
         """请检查种子是否存在"""
         data: FarmField = self.get_field(row, line)
         if data.state == 0:
-            return False, f"请先锄地"
+            return False, "请先锄地"
         if data.crop != "" or data.state == 0:
-            return False, f"已经有作物了"
-        if not crop in crop_data_list:
+            return False, "已经有作物了"
+        if crop not in crop_data_list:
             return False, f"{crop} 的作物数据未找到"
         month = date.today().month
         if not crop_data_list[crop].growable(month):
-            return False, f"{crop} 不能在{Month(month).to_season().value()}播种"
+            return False, f"{crop} 不能在{Month(month).to_season().value}播种"
         if not user_data.item_num_change(f"{crop}种子", -1):
             return False, f"背包中没有 {crop} 种子"
         data.seeding(crop)
@@ -87,25 +89,27 @@ class UserFarmData:
     def watering(self, row: str, line: int) -> tuple[bool, str | None]:
         data: FarmField = self.get_field(row, line)
         if data.state == 0:
-            return False, f"请先锄地"
+            return False, "请先锄地"
         if data.water == 1:
-            return False, f"已经浇水了"
+            return False, "已经浇水了"
         if not self.endurance_change(-20):
             return False, "体力不足"
         data.watering()
         log.debug(f"{self.id}在{row}{line}位置浇水")
         return True, None
 
-    def harvesting(self, row: str, line: int, user_data: UserData) -> tuple[bool, str | None]:
+    def harvesting(
+        self, row: str, line: int, user_data: UserData
+    ) -> tuple[bool, str | None]:
         data: FarmField = self.get_field(row, line)
         if data.state == 0:
-            return False, f"请先锄地"
+            return False, "请先锄地"
         if data.crop == "":
-            return False, f"没有作物"
-        if not data.crop in crop_data_list:
-            return False, f"未知作物"
+            return False, "没有作物"
+        if data.crop not in crop_data_list:
+            return False, "未知作物"
         if not data.crop_can_harvest():
-            return False, f"不可收获"
+            return False, "不可收获"
         crop_data: CropData = crop_data_list[data.crop]
         data.harvesting(user_data, crop_data, self)
         self.exp_change(crop_data.get_harvest_exp())
@@ -115,20 +119,22 @@ class UserFarmData:
     def hoeing(self, row: str, line: int) -> tuple[bool, str | None]:
         data: FarmField = self.get_field(row, line)
         if data.state == 1:
-            return False, f"已经锄过地了"
+            return False, "已经锄过地了"
         if not self.endurance_change(-20):
             return False, "体力不足"
         data.hoeing()
         log.debug(f"{self.id}在{row}{line}位置锄地")
         return True, None
 
-    def fertilization(self, row: str, line: int, fertilizer: str, user_data: UserData) -> tuple[bool, str | None]:
+    def fertilization(
+        self, row: str, line: int, fertilizer: str, user_data: UserData
+    ) -> tuple[bool, str | None]:
         data: FarmField = self.get_field(row, line)
         if data.state == 0:
-            return False, f"请先锄地"
+            return False, "请先锄地"
         if data.crop != "" or data.state == 0:
-            return False, f"已经种植作物不能再施肥了"
-        if not fertilizer in fertilizer_data_list:
+            return False, "已经种植作物不能再施肥了"
+        if fertilizer not in fertilizer_data_list:
             return False, f"{fertilizer} 的肥料数据未找到"
         if not user_data.item_num_change(fertilizer, -1):
             return False, f"背包中没有 {fertilizer}"
@@ -139,9 +145,9 @@ class UserFarmData:
     def c_remove(self, row, line):
         data: FarmField = self.get_field(row, line)
         if data.state == 0:
-            return False, f"请先锄地"
+            return False, "请先锄地"
         if data.crop is None:
-            return False, f"没有作物"
+            return False, "没有作物"
         if not self.endurance_change(-20):
             return False, "体力不足"
         crop = data.crop
@@ -150,14 +156,16 @@ class UserFarmData:
         return True, None
 
     def update(self, user_date, weather):
-        day = datetime.strptime(user_date, '%Y-%m-%d').date()
+        day = datetime.strptime(user_date, "%Y-%m-%d").date()
         if day == date.today():
             return
         self.date = date.today()
         self.endurance = 1500
         self.lucky = randint(-100, 100)
-        user_table.update(f"DATE = '{date.today()}', ENDURANCE = {self.endurance}, LUCKY = {self.lucky}",
-                          f"ID = {self.id}")
+        user_table.update(
+            f"DATE = '{date.today()}', ENDURANCE = {self.endurance}, LUCKY = {self.lucky}",
+            f"ID = {self.id}",
+        )
         is_cross_seasonal = False
         if Month(date.today().month).to_season() != Month(day.month).to_season():
             is_cross_seasonal = True
@@ -172,15 +180,16 @@ class UserFarmData:
 
     def to_dict(self) -> dict:
         data = {
-            'ID': self.id,
-            'DATE': self.date,
-            'ENDURANCE': self.endurance,
-            'LUCKY': self.lucky,
-            'EXP': self.exp,
+            "ID": self.id,
+            "DATE": self.date,
+            "ENDURANCE": self.endurance,
+            "LUCKY": self.lucky,
+            "EXP": self.exp,
         }
         for i, field in enumerate(self.fields):
-            data[f"FIELD_{chr(ord('A') + int(i / 8))}{i % 8 + 1}"] = json.dumps(field.to_field_dic(),
-                                                                                ensure_ascii=False)
+            data[f"FIELD_{chr(ord('A') + int(i / 8))}{i % 8 + 1}"] = json.dumps(
+                field.to_field_dic(), ensure_ascii=False
+            )
         return data
 
     def save_user_data(self):
@@ -196,7 +205,7 @@ class UserFarmData:
         return self._modify or self._check_fields_modify()
 
     def __setattr__(self, key, value):
-        if not key.startswith('_'):
+        if not key.startswith("_"):
             self._modify = True
         super().__setattr__(key, value)
 
@@ -206,7 +215,7 @@ class UserFarmData:
 
     def __exit__(self, exc_type, exc_val, exc_tb):
         if exc_type is None and self.is_modify():
-            log.debug(f'保存用户{self.id}的农场信息')
+            log.debug(f"保存用户{self.id}的农场信息")
             user_farm_datas.save_user_data(self)
         user_farm_datas.user_lock[self.id].release()
         return False
@@ -224,28 +233,41 @@ class UserFarmDataManager:
             _today_weather = self.weather
             self.weather = self.next_weather
             _next_day = date.today() + timedelta(days=1)
-            self.next_weather = get_weather(_next_day.month, _next_day.day, _today_weather)
-            farm_table.update(f"DATE = '{date.today()}', WEATHER = {self.weather}, NEXT_WEATHER = {self.next_weather}",
-                              f"DATE != '{date.today()}'")
+            self.next_weather = get_weather(
+                _next_day.month, _next_day.day, _today_weather
+            )
+            farm_table.update(
+                f"DATE = '{date.today()}', WEATHER = {self.weather}, NEXT_WEATHER = {self.next_weather}",
+                f"DATE != '{date.today()}'",
+            )
 
         content = farm_table.select_all()
         if len(content) <= 0:
             self.weather = 0
             next_day = date.today() + timedelta(days=1)
             self.next_weather = get_weather(next_day.month, next_day.day, 0)
-            farm_table.insert("DATE, WEATHER, NEXT_WEATHER", f"'{date.today()}', {self.weather}, {self.next_weather}")
+            farm_table.insert(
+                "DATE, WEATHER, NEXT_WEATHER",
+                f"'{date.today()}', {self.weather}, {self.next_weather}",
+            )
         else:
-            day = datetime.strptime(content[0][0], '%Y-%m-%d').date()
+            day = datetime.strptime(content[0][0], "%Y-%m-%d").date()
             today = date.today()
             if day != today:
                 if (day - today).days == 1:
                     yesterday_weather = self.weather
                     self.weather = self.next_weather
-                    self.next_weather = get_weather(today.month, today.day, yesterday_weather)
+                    self.next_weather = get_weather(
+                        today.month, today.day, yesterday_weather
+                    )
                 else:
                     last_day = today - timedelta(days=1)
-                    self.weather = get_weather(last_day.month, last_day.day, choices([0, 1], [0.8, 0.2])[0])
-                    self.next_weather = get_weather(today.month, today.day, self.weather)
+                    self.weather = get_weather(
+                        last_day.month, last_day.day, choices([0, 1], [0.8, 0.2])[0]
+                    )
+                    self.next_weather = get_weather(
+                        today.month, today.day, self.weather
+                    )
                 update_farm()
             else:
                 self.weather = content[0][1]
@@ -265,7 +287,7 @@ class UserFarmDataManager:
         else:
             self._user_list.append(user_id)
         user_table.insert({"ID": user_id, "DATE": date.today()})
-        log.debug(f'为用户{user_id}新建农场')
+        log.debug(f"为用户{user_id}新建农场")
         return True
 
     def get_farm_data(self, user_id) -> UserFarmData:

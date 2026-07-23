@@ -44,7 +44,7 @@ async def __store_reject_list(data: list) -> None:
 
 plugin = (
     Service(
-        "广播", "向 ATRI 所在的所有群发送信息", "1.0.2", Service.ServiceType.FUNCTION
+        "广播", "向 ATRI 所在的所有群发送信息", "1.0.3", Service.ServiceType.FUNCTION
     )
     .rule(to_bot())
     .permission(ADMIN)
@@ -76,6 +76,9 @@ async def _(bot: Bot, event: MessageEvent, msg: str = ArgPlainText("bc_msg")):
     failed_group = list()
     for i in group_list:
         group_id = i["group_id"]
+        reject_list = await __load_reject_list()
+        if str(group_id) in reject_list:
+            continue
         try:
             await BotUtils.send_message(
                 bot=bot, service="广播", group_id=group_id, message=bc_msg

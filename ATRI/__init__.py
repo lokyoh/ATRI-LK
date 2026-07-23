@@ -5,9 +5,9 @@ from .dir import *  # noqa: F403
 
 __version__ = "YHN-LK0-022"
 """版本号"""
-__sub_version__ = "Patch2"
+__sub_version__ = "Patch3"
 """次版本号"""
-__conf_path = Path(".") / "config.yml"
+__conf_path = Path(".") / "config.yml"  # noqa: F405
 conf_m = Config(__conf_path)
 
 conf = conf_m.config_model

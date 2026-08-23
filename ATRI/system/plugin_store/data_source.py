@@ -368,7 +368,7 @@ class PluginManager:
             local_version = local_meta.get("version", "unknown")
             log.debug(f"本地版本：{local_version}")
             # 获取远程 meta.yml
-            remote_meta = cls.get_github_plugin_meta(repo)
+            remote_meta = await cls.get_github_plugin_meta(repo)
             remote_version = remote_meta.get("version", "unknown")
             log.debug(f"远程版本：{remote_version}")
             # 比较版本号
@@ -449,7 +449,6 @@ class PluginManager:
 
     @classmethod
     async def update_plugin(cls, plugin_name: str):
-        plugin_name = request.service
         if plugin_name not in cls.plugin_list:
             return False, f"找不到插件 {plugin_name}"
         version = cls.plugin_list[plugin_name]["version"]

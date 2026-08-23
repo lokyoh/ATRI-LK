@@ -5,7 +5,7 @@ plugin = (
     Service(
         "agent",
         "为ATRI-LK项目专门设计的智能体。",
-        "0.0.4",
+        "0.0.5",
         Service.ServiceType.HIDDEN,
     )
     .allow_switch(False)

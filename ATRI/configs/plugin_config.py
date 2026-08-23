@@ -38,7 +38,11 @@ class PluginConfig:
 
             log.error(f"加载配置文件错误:{str_traceback(e)}")
             config = self.model()
-        self._config = config
+        if hasattr(self, "_config"):
+            self._config.__dict__.clear()
+            self._config.__dict__.update(config.__dict__)
+        else:
+            self._config = config
         return self._config
 
     def config(self):

@@ -1,33 +1,34 @@
 ![](res/img/atri.png)
 
-### 👋 Here is ATRI-LK版 - 一个厨力项目的修改版
+# ATRI-LK
+
+### 👋 ATRI-LK：厨力项目的改进版本
 
 アトリは、高性能ですから！
 
-为🐧即时聊天工具中复现一只优秀的**功能性**机器人是本项目的目标.  
-本项目新版采用[napcatAPI](https://napcat.apifox.cn/)功能，在非[NapCatQQ](https://napneko.github.io/)机器人使用可能报错
+ATRI-LK 致力于在 QQ/OneBot 即时聊天平台中复现一只功能丰富、表现稳定的机器人。项目基于原 ATRI 开发，并加入更多扩展功能。
+
+> 本项目新版部分功能依赖 [napcatAPI](https://napcat.apifox.cn/)。在非 [NapCatQQ](https://napneko.github.io/) 机器人环境下可能会出现兼容性问题。
 
 ## 📌 声明 | Declarations
 
-**一切开发旨在学习，请勿用于非法用途**
+**本项目仅供学习与研究使用，请勿用于非法用途。**
 
-[原项目地址](https://github.com/Kyomotoi/ATRI)
-
-本项目名称、灵感均来自 [ANIPLEX](https://aniplex-exe.com/) 发行的 [ATRI-My Dear Moments-](https://atri-mdm.com/).
-
-本项目中所使用的任何有关 [ATRI](https://atri-mdm.com/)
-的图标、LOGO，解释权、著作权均归 [ANIPLEX](https://aniplex-exe.com/). 你可以[在此](https://aniplex-exe.com/guidelines/)
-查看相关内容.
+- 原项目地址：[Kyomotoi/ATRI](https://github.com/Kyomotoi/ATRI)
+- 项目名称与灵感来源于 [ANIPLEX](https://aniplex-exe.com/) 发行的 [ATRI-My Dear Moments-](https://atri-mdm.com/)
+- 本项目中涉及的 ATRI 相关图标、LOGO 等版权归 [ANIPLEX](https://aniplex-exe.com/) 所有
+- 相关使用规范请查阅：[ANIPLEX 使用指南](https://aniplex-exe.com/guidelines/)
 
 ## ✨ 特性概览 | Features
 
-- 使用 [NoneBot 2](https://v2.nonebot.dev/) 进行项目底层构建.
-- 为[原项目](https://github.com/Kyomotoi/ATRI)添加更多功能
-- 遵循 [OneBot v11](https://onebot.dev/) 规范.
+- 使用 [NoneBot 2](https://v2.nonebot.dev/) 作为底层框架
+- 在原 ATRI 基础上增加更多功能和插件支持
+- 遵循 [OneBot v11](https://onebot.dev/) 标准
+- 支持可扩展插件系统，便于二次开发与个性化配置
 
 ## 📱 功能概览 | Services Overview
 
-<details markdown='1'><summary>系统插件:</summary>
+<details markdown='1'><summary>系统插件</summary>
 
 - 帮助
 - 管理
@@ -40,7 +41,7 @@
 
 </details>
 
-<details markdown='1'><summary>LKBOT插件(LK插件)</summary>
+<details markdown='1'><summary>LK系列插件</summary>
 
 - [x] 用户系统
 - [x] 物品商店系统
@@ -51,12 +52,12 @@
 
 </details>
 
-<details markdown='1'><summary>内置LK附属插件</summary>
+<details markdown='1'><summary>内置 LK 附属插件</summary>
 
-> 勾上的即已大致完成，但仍需优化。  
-> 未被勾选的是暂时未完成但已经加入。  
-> 计划中表示最近会进行开发。  
-> 划线的暂时不进行更新。
+> 已勾选的功能已基本完成，仍可能继续优化。
+> 未勾选的内容已在项目中加入但仍在补充中。
+> 计划中表示未来将继续开发。
+> 划线项目暂时不再更新。
 
 - [x] 签到
 - [x] 投喂
@@ -78,7 +79,7 @@
 - [ ] 钓鱼
   - [x] 钓鱼
   - [x] 鱼竿,鱼饵
-  - [ ] 鱼具
+  - [x] 鱼具
   - [x] 35种鱼,4种非鱼钓鱼战利品
   - [x] 成就
   - [x] 宝藏
@@ -86,46 +87,14 @@
 
 </details>
 
-请在[ATRI-LK-plugin](https://github.com/lokyoh/ATRI-LK-plugin)处或插件商店内下载额外插件:
+请在 [ATRI-LK-plugin](https://github.com/lokyoh/ATRI-LK-plugin) 或插件商店下载更多扩展插件
 
-<details markdown='1'><summary>原ATRI插件</summary>
+## 🤖 ATRI 智能体 | ATRI Agent
 
-- 文爱
-- 涩图
-- 涩批翻译机
-- 以图搜图
-- ~~以图搜番~~
-- ATRI语（加密、解密，改自[`rcnb`](https://github.com/rcnbapp/RCNB.js)）
-- 简单骰子
-- b站动态订阅
-- 谁是卷王 (基于 wakatime)
-- 自定义词库（多种方式匹配）
-- 看不懂的笑话
-- RSS订阅
+本项目自研的智能体系统，支持：
 
-</details>
-
-<details markdown='1'><summary>其它插件</summary>
-
-- 组队系统
-- 每日新闻
-- ~~coser~~
-- mc服务器
-- 棋类游戏
-- 钉宫语录
-- 舔狗日记
-- 每日发癫
-- 点歌
-
-</details>
-
-## 🤖 ATRI智能体 | ATRI Agent
-
-专为本项目设计的智能体。
-
-功能:
-
-- 好感度、用户记忆与用户画像
+- 好感度管理
+- 用户记忆与画像
 - 自定义词语解释
 - 表情发送
 - 网络搜索
@@ -133,41 +102,41 @@
 
 ## 🚀 开始部署 | Getting Started
 
-请参考文档: [部署项目](https://lokyoh.github.io/ATRI-LK-docs/quick_start/introduction.html)
+请参考官方文档：
+
+- [部署项目](https://lokyoh.github.io/ATRI-LK-docs/quick_start/introduction.html)
 
 ## 📖 文档 | Documentation
 
-所有公开的信息都可在 [ATRI-LK-docs](https://lokyoh.github.io/ATRI-LK-docs/) 获取.
-使用 [VitePress](https://vitepress.dev/) 构建.
+更多使用说明与开发文档请访问：
 
-[文档仓库](https://github.com/lokyoh/ATRI-LK-docs)
+- [ATRI-LK 文档站点](https://lokyoh.github.io/ATRI-LK-docs/)
+- [文档仓库](https://github.com/lokyoh/ATRI-LK-docs)
+
+本站点基于 [VitePress](https://vitepress.dev/) 构建。
 
 ## 🔊 更新日志 | Changelog
 
-版本更新请参考[此处](changelog.md)或查看[release](https://github.com/lokyoh/ATRI-LK/releases)
+版本更新请查看：
 
-小改动请参考以往的 [commit](https://github.com/lokyoh/ATRI-LK/commits/main/).
+- [changelog.md](changelog.md)
+- [Release 页面](https://github.com/lokyoh/ATRI-LK/releases)
+- [提交记录](https://github.com/lokyoh/ATRI-LK/commits/main/)
 
-## 🐧 QQ群
+## 🐧 QQ 群
 
-[ATRI-LK交流群](https://qm.qq.com/q/8Gx7UxXnA4)在此进行日常聊天、提问与新手指导
-
-[ATRI-LK技术群](https://qm.qq.com/q/cE5ceehNHq)在此获取最新开发资讯、提出本体开发意见、参与本体开发、插件开发交流或提出开发中的问题
+- [ATRI-LK 交流群](https://qm.qq.com/q/8Gx7UxXnA4)：日常交流、提问与新手指导
+- [ATRI-LK 技术群](https://qm.qq.com/q/cE5ceehNHq)：获取开发资讯、提交建议与插件交流
 
 ## ❤️ 特别感谢 | Acknowledgments
 
-[Kyomotoi](https://github.com/Kyomotoi): [ATRI](https://github.com/Kyomotoi/ATRI)
-及其所有[贡献者](https://github.com/Kyomotoi/ATRI/graphs/contributors)
-
-[Bot Universe](https://github.com/botuniverse): [Onebot标准](https://onebot.dev/)
-
-[NoneBot](https://github.com/nonebot): [NoneBot2](https://github.com/nonebot/nonebot2)
-
-[JetBrains](https://www.jetbrains.com): 为本项目提供 [PyCharm](https://www.jetbrains.com/pycharm)
-等 IDE 的授权<br>
+- [Kyomotoi](https://github.com/Kyomotoi)：原项目 [ATRI](https://github.com/Kyomotoi/ATRI) 及其贡献者
+- [Bot Universe](https://github.com/botuniverse)：OneBot 标准
+- [NoneBot](https://github.com/nonebot)：NoneBot2 框架
+- [JetBrains](https://www.jetbrains.com)：为本项目提供 PyCharm 等 IDE 授权
 
 ## 📄 许可 | License
 
-本项目使用 [GPLv3](https://www.gnu.org/licenses/gpl-3.0.html).
+本项目采用 [GPLv3](https://www.gnu.org/licenses/gpl-3.0.html) 许可。
 
-意味着你可以运行本项目，并向你的用户提供服务，如后续有对本项目源码的修改，你需要向用户公开修改后的此项目的源码.
+这意味着你可以运行本项目并对外提供服务，但如果你修改了源码，需要公开修改后的源码。

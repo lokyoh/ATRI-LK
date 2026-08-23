@@ -3,8 +3,8 @@ import random
 from enum import Enum
 from typing import Any, Awaitable, Callable, Dict, List, Optional
 
-from .contents import LLMContents
 from ..utils import log, request
+from .contents import LLMContents
 
 NO_MODEL_ERR = "没有可用的模型"
 ALL_MODEL_RESP_ERR = "没有可用的模型"
@@ -28,15 +28,15 @@ class LLMModel:
     """
 
     def __init__(
-            self,
-            name: str,
-            model: str,
-            endpoint: str,
-            temperature: float = 1,
-            api_key: Optional[str] = None,
-            headers: Optional[Dict[str, str]] = None,
-            method: str = "POST",
-            call_func: Optional[Callable[..., Awaitable[Any]]] = None,
+        self,
+        name: str,
+        model: str,
+        endpoint: str,
+        temperature: float = 1,
+        api_key: Optional[str] = None,
+        headers: Optional[Dict[str, str]] = None,
+        method: str = "POST",
+        call_func: Optional[Callable[..., Awaitable[Any]]] = None,
     ):
         """
         :param name: 模型唯一标识名称
@@ -65,15 +65,10 @@ class LLMModel:
         if self.call_func:
             return await self.call_func(self, content)
         if isinstance(content, LLMContents):
-            _content = []
-            for part in content.contents:
-                if part.type == "text":
-                    _content.append({"type": "text", "text": part.content})
-                elif part.type == "image":
-                    _content.append({"type": "image_url", "image_url": {"url": part.content, "detail": "high"}})
-                elif part.type == "audio":
-                    _content.append({"type": "audio_url", "audio_url": {"url": part.content}})
-            content = _content
+            log_content = content.get_shorten_content()
+            content = content.get_contents()
+        else:
+            log_content = content
         if self.method == "POST":
             headers = self.headers.copy()
             if self.api_key:
@@ -85,19 +80,22 @@ class LLMModel:
                 "messages": [
                     {"role": "user", "content": content},
                 ],
-                "temperature": self.temperature
+                "temperature": self.temperature,
             }
+            log.debug(f"模型输入: {log_content}")
             resp = await request.post(
                 url=self.endpoint + "/chat/completions", json=data, headers=headers
             )
         else:
             raise ValueError(f"不支持的 HTTP 方法: {self.method}")
-
         try:
             resp_json = resp.json()
             _resp = {
                 "usage": resp_json.get("usage", {}),
-                "content": resp_json.get("choices", [{}])[0].get("message", {}).get("content", "").lstrip('\n')
+                "content": resp_json.get("choices", [{}])[0]
+                .get("message", {})
+                .get("content", "")
+                .lstrip("\n"),
             }
             log.debug(f"模型输出: {_resp.get('content')}\nTokens: {resp.get('usage')}")
             return _resp
@@ -106,9 +104,14 @@ class LLMModel:
                 resp_jons = json.loads(resp.text)
                 _resp = {
                     "usage": resp_jons.get("usage", {}),
-                    "content": resp_jons.get("choices", [{}])[0].get("message", {}).get("content", "").lstrip('\n')
+                    "content": resp_jons.get("choices", [{}])[0]
+                    .get("message", {})
+                    .get("content", "")
+                    .lstrip("\n"),
                 }
-                log.debug(f"模型输出: {_resp.get('content')}\nTokens: {resp_jons.get('usage')}")
+                log.debug(
+                    f"模型输出: {_resp.get('content')}\nTokens: {resp_jons.get('usage')}"
+                )
                 return _resp
             except Exception:
                 log.debug(f"模型输出: {resp.text}")
@@ -164,7 +167,9 @@ class LLMManager:
         resp = await model.call(content)
         return resp
 
-    async def call_model_by_type(self, model_type: ModelType, content: str | LLMContents) -> dict | str:
+    async def call_model_by_type(
+        self, model_type: ModelType, content: str | LLMContents
+    ) -> dict | str:
         """
         调用指定类型的模型，返回每个模型的响应列表
         :param model_type: 模型类型

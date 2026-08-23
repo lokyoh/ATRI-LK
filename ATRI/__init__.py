@@ -5,7 +5,7 @@ from .dir import *  # noqa: F403
 
 __version__ = "YHN-LK0-022"
 """版本号"""
-__sub_version__ = "Patch3"
+__sub_version__ = "Patch4"
 """次版本号"""
 __conf_path = Path(".") / "config.yml"  # noqa: F405
 conf_m = Config(__conf_path)
@@ -25,8 +25,10 @@ def driver():
 def init():
     nonebot.init(**conf_m.get_runtime_conf())
     from nonebot.adapters.onebot.v11 import Adapter
+
     driver().register_adapter(Adapter)
     from ATRI.load import load_atri
+
     load_atri()
 
 

@@ -9,7 +9,7 @@ from ATRI.service import Service, ServiceTools
 from .data_source import PluginManager
 
 plugin = Service(
-    "插件商店", "插件商店", "0.4.2", Service.ServiceType.SYSTEM
+    "插件商店", "插件商店", "0.4.3", Service.ServiceType.SYSTEM
 ).permission(MASTER)
 
 plugins = plugin.on_command("插件列表", "查看插件列表")

@@ -34,8 +34,14 @@ class TodaySchedule:
         if 2 <= now_time.hour < 6:
             return "睡眠中。"
         for s in self.schedule:
-            if s.start_time <= now_time < s.end_time:
-                return s.schedule
+            start = s.start_time
+            end = s.end_time
+            if start < end:
+                if start <= now_time < end:
+                    return s.schedule
+            else:
+                if now_time >= start or now_time < end:
+                    return s.schedule
         return None
 
 
@@ -155,4 +161,5 @@ class ATRISchedule:
 
 @daily_update()
 async def generate_schedule():
+    log.info("开始更新亚托莉日程...")
     await ATRISchedule().generate_schedule(datetime.date.today().strftime("%Y-%m-%d"))

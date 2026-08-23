@@ -14,21 +14,31 @@ else:
 
 
 class RequestClient:
-    def __init__(self, time_out: float | None, verify: bool = False):
+    def __init__(
+        self, time_out: float | None, verify: bool = False, use_log: bool = True
+    ):
         self.client = httpx.AsyncClient(timeout=httpx.Timeout(time_out), verify=verify)
+        self.use_log = use_log
 
     async def get(self, url: str, **kwargs):
-        log.debug(f"GET {url} by {proxy if proxy else 'No proxy'} | MORE: \n {kwargs}")
+        if self.use_log:
+            log.debug(
+                f"GET {url} by {proxy if proxy else 'No proxy'} | MORE: \n {kwargs}"
+            )
         return await self.client.get(url, **kwargs)
 
     async def post(self, url: str, **kwargs):
-        log.debug(f"POST {url} by {proxy if proxy else 'No proxy'} | MORE: \n {kwargs}")
+        if self.use_log:
+            log.debug(
+                f"POST {url} by {proxy if proxy else 'No proxy'} | MORE: \n {kwargs}"
+            )
         return await self.client.post(url, **kwargs)
 
     async def delete(self, url: str, **kwargs):
-        log.debug(
-            f"DELETE {url} by {proxy if proxy else 'No proxy'} | MORE: \n {kwargs}"
-        )
+        if self.use_log:
+            log.debug(
+                f"DELETE {url} by {proxy if proxy else 'No proxy'} | MORE: \n {kwargs}"
+            )
         return await self.client.delete(url, **kwargs)
 
 

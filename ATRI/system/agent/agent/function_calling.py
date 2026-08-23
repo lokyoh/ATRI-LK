@@ -168,7 +168,7 @@ def register_function_calling():
         SendFaceFunctionCalling,
         ChatFunction(
             function_name="send_face",
-            description=f"发送一个指定表情词表情。表情词定义:{meme_example_str}",
+            description=f"(可选)发送一个指定表情词表情来表达自己的强烈情绪。表情词定义:{meme_example_str}",
             args=[ChatFunctionArg(name="meme", _type="str", description="表情词")],
         ),
     )

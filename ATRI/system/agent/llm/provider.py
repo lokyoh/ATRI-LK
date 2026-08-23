@@ -55,6 +55,10 @@ class ProviderManager:
             del cls.providers[provider_name]
 
     @classmethod
+    def set_provider(cls, provider_name: str, provider: LLMProvider):
+        cls.providers[provider_name] = provider
+
+    @classmethod
     def del_model(cls, provider_name: str, model_name: str):
         if provider_name in cls.providers:
             provider = cls.providers[provider_name]

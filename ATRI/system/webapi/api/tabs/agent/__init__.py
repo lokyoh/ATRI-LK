@@ -39,7 +39,7 @@ async def _() -> Result[AgentConfig]:
 async def _(settings: AgentConfig) -> Result:
     try:
         config_manager.change_config(settings)
-        return Result.ok(message="设置成功!")
+        return Result.ok(info="设置成功!")
     except Exception as e:
         log.error(f"{router.prefix}/set_settings 调用错误:{str_traceback(e)}")
         return Result.fail(f"发生了一点错误捏 {type(e)}: {e}")
@@ -71,7 +71,7 @@ async def _(provider: LLMProvider) -> Result:
     try:
         ProviderManager.register(provider)
         ProviderManager.save_provider_config()
-        return Result.ok(message="添加成功!")
+        return Result.ok(info="添加成功!")
     except Exception as e:
         log.error(f"{router.prefix}/add_provider 调用错误:{str_traceback(e)}")
         return Result.fail(f"发生了一点错误捏 {type(e)}: {e}")
@@ -88,9 +88,25 @@ async def _(provider_name: str) -> Result:
     try:
         ProviderManager.del_provider(provider_name)
         ProviderManager.save_provider_config()
-        return Result.ok(message="删除成功!")
+        return Result.ok(info="删除成功!")
     except Exception as e:
         log.error(f"{router.prefix}/del_provider 调用错误:{str_traceback(e)}")
+        return Result.fail(f"发生了一点错误捏 {type(e)}: {e}")
+
+
+@router.post(
+    "/set_provider",
+    dependencies=[authentication()],
+    response_model=Result,
+    response_class=JSONResponse,
+    description="设置一个llm provider",
+)
+async def _(provider_name, provider: LLMProvider) -> Result:
+    try:
+        ProviderManager.set_provider(provider_name, provider)
+        return Result.ok(info="设置成功!")
+    except Exception as e:
+        log.error(f"{router.prefix}/set_provider 调用错误:{str_traceback(e)}")
         return Result.fail(f"发生了一点错误捏 {type(e)}: {e}")
 
 
@@ -105,7 +121,7 @@ async def _(provider_name: str, model: LLMModel) -> Result:
     try:
         ProviderManager.add_model(provider_name, model)
         ProviderManager.save_provider_config()
-        return Result.ok(message="添加成功!")
+        return Result.ok(info="添加成功!")
     except Exception as e:
         log.error(f"{router.prefix}/add_model 调用错误:{str_traceback(e)}")
         return Result.fail(f"发生了一点错误捏 {type(e)}: {e}")
@@ -122,7 +138,7 @@ async def _(provider_name: str, model_name: str) -> Result:
     try:
         ProviderManager.del_model(provider_name, model_name)
         ProviderManager.save_provider_config()
-        return Result.ok(message="删除成功!")
+        return Result.ok(info="删除成功!")
     except Exception as e:
         log.error(f"{router.prefix}/del_model 调用错误:{str_traceback(e)}")
         return Result.fail(f"发生了一点错误捏 {type(e)}: {e}")

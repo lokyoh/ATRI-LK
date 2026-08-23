@@ -60,7 +60,7 @@ class ImageHistory:
             self.images[mid] = []
         self.images[mid].append(f"图片{self.index}: {text}")
         self.index += 1
-        return f"[图片{self.index}]"
+        return f"[图片{self.index - 1}]"
 
     def remove(self, mid):
         if mid in self.images:

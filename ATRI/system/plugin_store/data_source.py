@@ -455,7 +455,7 @@ class PluginManager:
         from ATRI.service import ServiceTools
 
         if plugin_name in ServiceTools.service_list:
-            if cls.check_update(plugin_name) is not None:
+            if cls.check_update(plugin_name) is None:
                 return False, f"{plugin_name} 无需更新"
         try:
             _plugin = cls.plugin_list[plugin_name]

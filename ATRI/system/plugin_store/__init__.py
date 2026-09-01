@@ -9,7 +9,7 @@ from ATRI.service import Service, ServiceTools
 from .data_source import PluginManager
 
 plugin = Service(
-    "插件商店", "插件商店", "0.4.3", Service.ServiceType.SYSTEM
+    "插件商店", "插件商店", "0.4.4", Service.ServiceType.SYSTEM
 ).permission(MASTER)
 
 plugins = plugin.on_command("插件列表", "查看插件列表")
@@ -22,7 +22,7 @@ async def _():
     j = 0
     info = "插件列表:\n"
     num = len(plugin_list)
-    for _plugin in plugin_list.keys():
+    for _plugin in plugin_list:
         if i - j * 20 > 20:
             info += f"第{j + 1}页 共{i - 1}/{num}个"
             await plugins.send(info)

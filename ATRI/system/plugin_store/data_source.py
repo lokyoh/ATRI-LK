@@ -132,21 +132,18 @@ class PluginManager:
             if res_list:
                 log.info(f"开始为插件`{plugin_name}`下载资源")
                 for res in res_list:
-                    try:
-                        data = await request.get(FILE_URL.format(res))
-                        if data.status_code != 200:
-                            log.warning(
-                                f"在下载插件`{plugin_name}`的资源时网络连接错误，code:{data.status_code}"
-                            )
-                            raise PluginError(f"网络连接错误，code:{data.status_code}")
-                        if "." in res:
-                            file = data.json()
-                            file_list = [file]
-                        else:
-                            file_list = data.json()
-                        await cls.download_github_file(file_list)
-                    except PluginError as e:
-                        raise e
+                    data = await request.get(FILE_URL.format(res))
+                    if data.status_code != 200:
+                        log.warning(
+                            f"在下载插件`{plugin_name}`的资源时网络连接错误，code:{data.status_code}"
+                        )
+                        raise PluginError(f"网络连接错误，code:{data.status_code}")
+                    if "." in res:
+                        file = data.json()
+                        file_list = [file]
+                    else:
+                        file_list = data.json()
+                    await cls.download_github_file(file_list)
         except Exception as e:
             log.warning(f"插件`{plugin_name}`资源安装失败:发生错误{e}")
             raise PluginError(f"插件资源安装失败:{e}")
@@ -168,7 +165,7 @@ class PluginManager:
                     file = data.json()
                     file_list = [file]
                 await cls.download_github_file(file_list)
-            except PluginError as e:
+            except PluginError:
                 # 清理已下载的文件或目录
                 try:
                     target_path = Path(".") / p_path
@@ -181,7 +178,7 @@ class PluginManager:
                         log.info(f"已清理插件 {plugin_name} 的残留文件")
                 except Exception as cleanup_error:
                     log.error(f"清理插件 {plugin_name} 残留文件失败: {cleanup_error}")
-                raise e
+                raise
             req_path = Path(".") / p_path / "requirements.txt"
             if req_path.exists():
                 log.info(f"开始为`{plugin_name}`安装依赖")
@@ -348,7 +345,7 @@ class PluginManager:
         :param repo: GitHub 仓库地址
         :return: dict 包含更新信息 {'has_update': bool, 'local_version': str, 'remote_version': str}
         """
-        log.info(f"开始检查 GitHub 插件更新：{repo}")
+        log.debug(f"开始检查 GitHub 插件更新：{repo}")
         try:
             # 从 repo URL 中提取项目名称
             if repo.endswith(".git"):
@@ -366,11 +363,9 @@ class PluginManager:
             with open(local_meta_path, "r", encoding="utf-8") as f:
                 local_meta = yaml.safe_load(f)
             local_version = local_meta.get("version", "unknown")
-            log.debug(f"本地版本：{local_version}")
             # 获取远程 meta.yml
             remote_meta = await cls.get_github_plugin_meta(repo)
             remote_version = remote_meta.get("version", "unknown")
-            log.debug(f"远程版本：{remote_version}")
             # 比较版本号
             has_update = local_version != remote_version
             result = {
@@ -380,9 +375,9 @@ class PluginManager:
                 "repo_name": repo_name,
             }
             if has_update:
-                log.info(f"发现新版本：{repo_name} {local_version} -> {remote_version}")
-            else:
-                log.info(f"{repo_name} 已是最新版本 ({local_version})")
+                log.debug(
+                    f"发现新版本：{repo_name} {local_version} -> {remote_version}"
+                )
             return result
         except yaml.YAMLError as e:
             log.error(f"解析 meta.yml 失败：{e}")
@@ -454,9 +449,11 @@ class PluginManager:
         version = cls.plugin_list[plugin_name]["version"]
         from ATRI.service import ServiceTools
 
-        if plugin_name in ServiceTools.service_list:
-            if cls.check_update(plugin_name) is None:
-                return False, f"{plugin_name} 无需更新"
+        if (
+            plugin_name in ServiceTools.service_list
+            and await cls.check_update(plugin_name) is None
+        ):
+            return False, f"{plugin_name} 无需更新"
         try:
             _plugin = cls.plugin_list[plugin_name]
             if repo := _plugin.get("repo", None):

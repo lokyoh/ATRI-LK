@@ -1,0 +1,106 @@
+name: Release on ATRI version change
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - 'ATRI/__init__.py'
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 2
+
+      - name: Detect ATRI version change
+        id: version
+        shell: bash
+        run: |
+          python - <<'PY'
+          import os
+          import re
+          import subprocess
+          import sys
+          from pathlib import Path
+
+          file_path = Path('ATRI/__init__.py')
+          text = file_path.read_text(encoding='utf-8')
+
+          version_match = re.search(r'^__version__\s*=\s*[\'\"]([^\'\"]+)[\'\"]', text, re.M)
+          sub_match = re.search(r'^__sub_version__\s*=\s*[\'\"]([^\'\"]+)[\'\"]', text, re.M)
+
+          if not version_match or not sub_match:
+              print('ATRI version fields not found in ATRI/__init__.py')
+              sys.exit(1)
+
+          current_version = version_match.group(1)
+          current_sub_version = sub_match.group(1)
+
+          prev_text = ''
+          try:
+              prev_text = subprocess.check_output(
+                  ['git', 'show', 'HEAD~1:ATRI/__init__.py'],
+                  text=True,
+                  stderr=subprocess.DEVNULL,
+              )
+          except subprocess.CalledProcessError:
+              prev_text = ''
+
+          prev_version_match = re.search(r'^__version__\s*=\s*[\'\"]([^\'\"]+)[\'\"]', prev_text, re.M)
+          prev_sub_match = re.search(r'^__sub_version__\s*=\s*[\'\"]([^\'\"]+)[\'\"]', prev_text, re.M)
+
+          prev_version = prev_version_match.group(1) if prev_version_match else ''
+          prev_sub_version = prev_sub_match.group(1) if prev_sub_match else ''
+
+          print(f'CURRENT_VERSION={current_version}')
+          print(f'CURRENT_SUB_VERSION={current_sub_version}')
+          print(f'PREV_VERSION={prev_version}')
+          print(f'PREV_SUB_VERSION={prev_sub_version}')
+
+          with open(os.environ['GITHUB_OUTPUT'], 'a', encoding='utf-8') as output:
+              output.write(f'version={current_version}\n')
+              output.write(f'sub_version={current_sub_version}\n')
+
+          if prev_version == current_version and prev_sub_version == current_sub_version:
+              print('Version did not change; skipping release.')
+              with open(os.environ['GITHUB_OUTPUT'], 'a', encoding='utf-8') as output:
+                  output.write('skip_release=true\n')
+              sys.exit(0)
+
+          version_suffix_match = re.search(r'YHN-LK(\d+)-(\d+)', current_version)
+          if not version_suffix_match:
+              print(f'Unsupported version format: {current_version}')
+              sys.exit(1)
+
+          lk_branch_value = int(version_suffix_match.group(1))
+          minor_value = int(version_suffix_match.group(2))
+          patch_value = 0
+          patch_match = re.search(r'(?:Patch|Pre|Release)(\d*)', current_sub_version)
+          if patch_match and patch_match.group(1):
+              patch_value = int(patch_match.group(1))
+
+          tag_name = f'{lk_branch_value}.{minor_value}.{patch_value}'
+          release_title = f'{current_version} {current_sub_version}'
+
+          with open(os.environ['GITHUB_OUTPUT'], 'a', encoding='utf-8') as output:
+              output.write(f'tag={tag_name}\n')
+              output.write(f'title={release_title}\n')
+
+          print(f'TAG={tag_name}')
+          print(f'TITLE={release_title}')
+          PY
+
+      - name: Publish GitHub Release
+        if: steps.version.outputs.skip_release != 'true'
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ steps.version.outputs.tag }}
+          name: ${{ steps.version.outputs.title }}
+          body: ${{ github.event.head_commit.message }}

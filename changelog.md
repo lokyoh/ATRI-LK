@@ -30,9 +30,11 @@
   - 修复bug[#12](https://github.com/lokyoh/ATRI-LK/issues/12)
 - Patch4:
   - `agent`修复日程获取错误,图片标号错误;精简debug日志
-  - `webapi`新增模型供应设置接口,修复bug,同步更新WebUI至v0.0.5
+  - `webapi`新增模型供应设置接口,修复bug
   - 修复插件配置对象不一致
   - `插件商店`修复插件更新方法错误与github插件检查更新bug
+- Patch5:
+  - 修复插件商店bug 
 
 
 ## Mar 18, 2026

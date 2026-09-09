@@ -23,3 +23,26 @@
 ## utils
 
 包含日志与请求工具
+
+## 模型使用
+
+### 文本对话
+
+简单的使用示例如下:
+
+```python
+from ATRI.system.agent.llm import ModelType, llm_manager
+
+resp = await llm_manager.call_model_by_type(ModelType.CHAT, "你好!")
+print(resp.content)
+```
+
+当模型不可用或调用失败则抛出`ModelRequestError`异常
+
+也可以使用`LLMContents`构造复杂的请求
+
+```python
+from ATRI.system.agent.llm import LLMContent, LLMContents
+
+content = LLMContents().text("你好!")
+```

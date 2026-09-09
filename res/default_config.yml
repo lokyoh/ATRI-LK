@@ -1,5 +1,5 @@
 # 设置参考文档: https://lokyoh.github.io/ATRI-LK-docs/config.html
-ConfigVersion: "1.1.1"
+ConfigVersion: "1.1.2"
 
 BotConfig:
   host: "{host}"
@@ -13,6 +13,7 @@ BotConfig:
   access_token: ""
   proxy: "{proxy}"
   request_timeout: 30
+  timezone: "{timezone}"
 
 BrowsConfig:
   browser: "{browser}"

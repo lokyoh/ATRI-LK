@@ -103,18 +103,23 @@ class ReplyModel:
         prompt = await cls.get_prompt(group_id, user_id, user_info, bot)
         prompt += cls.get_function_prompt(thinking_list, calling_backs)
         resp = await llm_manager.call_model_by_type(ModelType.CHAT, prompt)
-        response = await cls.process_resp(resp.get("content"), user_id, group_id)
+        response = await cls.process_resp(resp.content, user_id, group_id)
         msg = Message()
         for m in response:
             msg.append(m)
         plain_text = msg.extract_plain_text()
         chat_history[group_id].add_reply(plain_text)
         await sender.send(msg)
-        if config.tts.enable and with_tts and plain_text and len(plain_text) <= 300:
-            if path := await generate_audio(plain_text):
-                from ATRI.message import rec_msg_from_path
+        if (
+            config.tts.enable
+            and with_tts
+            and plain_text
+            and len(plain_text) <= 300
+            and (path := await generate_audio(plain_text))
+        ):
+            from ATRI.message import rec_msg_from_path
 
-                await sender.send(rec_msg_from_path(path))
+            await sender.send(rec_msg_from_path(path))
         if isinstance(sender, QQChatSender):
             await sender.finish()
 

@@ -11,9 +11,9 @@ from .crop import crop_data_list, CropData
 
 
 class FieldData:
-    def __init__(self, crop: str = None):
+    def __init__(self, crop: str | None = None):
         self.quality = 0
-        if crop in crop_data_list:
+        if crop and crop in crop_data_list:
             c_d = crop_data_list[crop]
             self.growth_stage = copy.copy(c_d.get_growth_stage())
         else:

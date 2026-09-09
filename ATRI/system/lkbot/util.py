@@ -7,18 +7,17 @@ from nonebot.adapters.onebot.v11 import Message
 from ATRI import conf
 from ATRI.log import log
 from ATRI.permission import MASTER_LIST
-from ATRI.utils.event import BaseEvents, BaseEvent
+from ATRI.utils.event import BaseEvent, BaseEvents
 
 from .config import config
 from .data.item import items
-from .data.item_func import register_core_func, item_funcs
-from .data.shop import shops
-from .data.user import users, UserData
-from .tools.daily_update import daily_update
+from .data.item_func import item_funcs, register_core_func
 from .data.load_item import auto_load_items
+from .data.shop import shops
+from .data.user import UserData, users
 from .tools.get_pic import set_local_image_func
 
-PLUGIN_VERSION = "0.11.2"
+PLUGIN_VERSION = "0.11.3"
 """lkbot插件版本"""
 PLUGIN_DIR = Path(".") / "data" / "plugins" / "lkbot"
 """lkbot插件数据路径"""
@@ -26,10 +25,11 @@ PLUGIN_DIR = Path(".") / "data" / "plugins" / "lkbot"
 
 class BaseFunc:
     """lk插件的实用工具，用于其他插件使用lk插件提供的服务"""
-    bind_tip = '还未绑定名称哟，使用指令 /绑定 进行绑定'
-    safe_mode_tip = '健康模式群聊无法使用此功能'
-    chat_switch_off = 'AI聊天服务已关闭'
-    test_mode_tip = '此功能为测试功能，只能在测试模式群聊下使用'
+
+    bind_tip = "还未绑定名称哟，使用指令 /绑定 进行绑定"
+    safe_mode_tip = "健康模式群聊无法使用此功能"
+    chat_switch_off = "AI聊天服务已关闭"
+    test_mode_tip = "此功能为测试功能，只能在测试模式群聊下使用"
 
     def __init__(self):
         self.bot_names = conf.BotConfig.nickname
@@ -69,7 +69,9 @@ class BaseFunc:
             user_id = str(user_id)
         return users.get_user_name(user_id) if self.is_valid_user(user_id) else None
 
-    def buy_item_func(self, user_data: UserData, shop_name: str, item_name: str, num: int) -> str:
+    def buy_item_func(
+        self, user_data: UserData, shop_name: str, item_name: str, num: int
+    ) -> str:
         """用户从商店购买物品,注意数据保护及保存"""
         shop = shops.get_shop_by_name(shop_name)
         index = shop.get_goods_index(item_name)
@@ -103,12 +105,14 @@ class BaseFunc:
             if num == -1:
                 num = item_stack.meta.num
             elif num < -1 or num == 0:
-                raise ValueError('数量错误')
+                raise ValueError("数量错误")
             if not self.item_change_func(user_data, item_name, -num):
                 item_num = item_stack.meta.num
                 return f"物品 {item_name} 数量不足{num}个，你只有{item_num}个"
             user_data.money_change(item.get_item_price() * num)
-            return f"回收 {item_name}*{num} 成功，获得{item.get_item_price() * num}ATRI币"
+            return (
+                f"回收 {item_name}*{num} 成功，获得{item.get_item_price() * num}ATRI币"
+            )
         return f"你没有 {item_name}"
 
     def sell_item(self, user_id: str, item_name: str, num: int) -> str:
@@ -117,7 +121,9 @@ class BaseFunc:
             return self.sell_item_func(user_data, item_name, num)
 
     @staticmethod
-    def use_item_func(user_data: UserData, item_name: str, num: int) -> tuple[bool, str]:
+    def use_item_func(
+        user_data: UserData, item_name: str, num: int
+    ) -> tuple[bool, str]:
         """用户使用物品,注意数据保护及保存"""
         item = items.get_item_by_name(item_name)
         if not item.item_can_use():
@@ -129,10 +135,10 @@ class BaseFunc:
                 num = item_num
             if item_num < num:
                 return False, f"物品 {item_name} 数量不足{num}个，你只有{item_num}个"
-            msg = ''
+            msg = ""
             for i in range(num):
                 resp = item.use_item(user_data)
-                msg += f'{i + 1}. {resp}\n'
+                msg += f"{i + 1}. {resp}\n"
             return True, msg
         else:
             return False, f"你没有物品 {item_name}"
@@ -156,18 +162,18 @@ class BaseFunc:
     def clean_str(original_string: str) -> str:
         """去除字符串中的非法字符"""
         pattern = r"[\\'\"<> :：\(\)（）“”’‘【】\[\]`~]"
-        cleaned_string = re.sub(pattern, '', original_string)
+        cleaned_string = re.sub(pattern, "", original_string)
         return cleaned_string
 
     @staticmethod
     def extract_number(s: str) -> tuple[str, int]:
         """从字符串中提取名称与数字,要求格式:物品,物品*n,物品×n,全部物品"""
-        match = re.search(r'(.*?)[*×](\d+)$', s)
+        match = re.search(r"(.*?)[*×](\d+)$", s)
         if match:
             item_name = match.group(1)
             number = int(match.group(2))
             return item_name, number
-        if s.startswith('全部'):
+        if s.startswith("全部"):
             item_name = s[2:]
             return item_name, -1
         return s, 1
@@ -177,9 +183,7 @@ class BaseFunc:
         for bot_name in self.bot_names:
             if bot_name in name:
                 return False
-        if re.search(r'爸|妈|爷|父|母|奶|father|mother|papa|mama|grand|主人|爹|娘', name, re.I):
-            return False
-        return True
+        return not re.search(r"爸|妈|爷|父|母|奶|father|mother|papa|mama|grand|主人|爹|娘", name, re.IGNORECASE)
 
     def get_trans_text(self, o_message: Message) -> str:
         """
@@ -187,19 +191,19 @@ class BaseFunc:
         :param o_message: 原始消息
         :return: 返回转换后的消息
         """
-        text = ''
+        text = ""
         for segment in o_message:
-            if segment.type == 'text':
-                text += segment.data['text']
-            elif segment.type == 'at' and self.is_valid_user(segment.data['qq']):
-                text += f'[@{self.get_name(segment.data['qq'])}]'
+            if segment.type == "text":
+                text += segment.data["text"]
+            elif segment.type == "at" and self.is_valid_user(segment.data["qq"]):
+                text += f"[@{self.get_name(segment.data['qq'])}]"
             elif segment.type == "face":
-                face_text = segment.data.get("raw", {}).get("faceText", '')
+                face_text = segment.data.get("raw", {}).get("faceText", "")
                 if face_text:
                     text += face_text
             elif segment.type == "image":
-                summary = segment.data.get("summary", '')
-                if summary != '[动画表情]':
+                summary = segment.data.get("summary", "")
+                if summary != "[动画表情]":
                     text += summary
         return text
 
@@ -212,8 +216,8 @@ class BaseFunc:
         :return 返回两个数据:第一个为操作是否成功，第二个为返回的提示信息
         """
         if not self.is_valid_user(user_id):
-            return False, '可惜捏，没找到那个人'
-        if len(new_name) > limit or new_name == '':
+            return False, "可惜捏，没找到那个人"
+        if len(new_name) > limit or new_name == "":
             return False, f"那个...名称字数超出限制{limit}或为空"
         if not self.is_valid_name(new_name):
             return False, "那个...这个名字不太合适吧"
@@ -228,7 +232,7 @@ class SignInEvent(BaseEvent):
     """
 
     def __init__(self, user_data: UserData):
-        super().__init__('签到事件')
+        super().__init__("签到事件")
         self.user_data = user_data
 
 
@@ -238,7 +242,7 @@ class UserInfoEvent(BaseEvent):
     """
 
     def __init__(self, user_data: UserData):
-        super().__init__('获取玩家信息事件')
+        super().__init__("获取玩家信息事件")
         self.user_data = user_data
 
 
@@ -258,34 +262,36 @@ def load_item_data():
     """加载物品与商店数据，可通过调用以实现随时加载数据"""
     items.items_clear()
     shops.shops_clear()
-    log.debug(f"register item from file")
+    log.debug("register item from file")
     # 从本地文件加载物品数据
     auto_load_items()
-    log.debug(f"register item from code")
+    log.debug("register item from code")
     # 可以在此事件为物品添加使用方法的添加
-    item_loading_events.notify(BaseEvent('物品加载事件'))
-    log.success(f'物品商店注册完成:共注册{len(items.get_item_list())}个物品，{len(shops.get_shop_names())}个商店')
+    item_loading_events.notify(BaseEvent("物品加载事件"))
+    log.success(
+        f"物品商店注册完成:共注册{len(items.get_item_list())}个物品，{len(shops.get_shop_names())}个商店"
+    )
 
 
 def on_startup():
     """所有插件加载完毕后启动时的启动项"""
-    from ATRI.system.lkbot import plugin
-    log.debug(f"register core item function")
+    log.debug("register core item function")
     register_core_func()
-    log.debug(f"register other item function")
-    func_register_events.notify(BaseEvent('物品功能注册事件'))
-    log.success(f'物品方法注册成功:共注册{item_funcs.check_num()}个检测器，{item_funcs.func_num()}个物品方法')
+    log.debug("register other item function")
+    func_register_events.notify(BaseEvent("物品功能注册事件"))
+    log.success(
+        f"物品方法注册成功:共注册{item_funcs.check_num()}个检测器，{item_funcs.func_num()}个物品方法"
+    )
     load_item_data()
-    log.debug(f"add daily update job")
-    plugin.scheduler_jobs().add_job(daily_update, '每日更新任务', 'cron', hour=0, minute=0)
     try:
         from ATRI.system.lk_imglib.data_source import get_background
+
         set_local_image_func(get_background)
-        log.info('启用全局图库内图片作为本地图源')
-    except:
-        pass
-    init_finish_events.notify(BaseEvent('初始化完成事件'))
-    log.debug(f"init finish")
+        log.info("启用全局图库内图片作为本地图源")
+    except Exception:
+        log.debug("未安装图库插件")
+    init_finish_events.notify(BaseEvent("初始化完成事件"))
+    log.debug("init finish")
 
 
 lk_util = BaseFunc()

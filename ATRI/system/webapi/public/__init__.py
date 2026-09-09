@@ -1,4 +1,5 @@
-from fastapi import APIRouter, FastAPI
+import anyio
+from fastapi import APIRouter, FastAPI, HTTPException
 from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
 
@@ -18,6 +19,15 @@ async def index():
     return FileResponse(WEBUI_PATH / "index.html")
 
 
+@router.get("/{full_path:path}", include_in_schema=False)
+async def spa_fallback(full_path: str):
+    if full_path.startswith(("atri/", "api/", "assets/")):
+        raise HTTPException(status_code=404, detail="Not Found")
+    if "." in full_path.split("/")[-1]:
+        raise HTTPException(status_code=404, detail="Not Found")
+    return FileResponse(WEBUI_PATH / "index.html")
+
+
 @router.get("/favicon.ico")
 async def favicon():
     return FileResponse(WEBUI_PATH / "favicon.ico")
@@ -34,8 +44,8 @@ async def webui_download():
         follow_redirects=True,
     )
     zip_path = TEMP_DIR / "public.zip"
-    with open(zip_path, "wb") as f:
-        f.write(response.content)
+    async with await anyio.open_file(zip_path, "wb") as f:
+        await f.write(response.content)
     import shutil
 
     log.info("解压WebUI...")
@@ -60,8 +70,10 @@ async def init_public(app: FastAPI):
             await webui_download()
         else:
             if VERSION_FILE.exists():
-                with open(VERSION_FILE, "r", encoding="utf-8") as f:
-                    version = f.read().strip()
+                async with await anyio.open_file(
+                    VERSION_FILE, "r", encoding="utf-8"
+                ) as f:
+                    version = (await f.read()).strip()
                     log.info(f"WebUI 版本: {version}")
                     latest_version = await get_latest_webui_version()
                     if latest_version != "error" and version != latest_version:
@@ -71,7 +83,6 @@ async def init_public(app: FastAPI):
                 log.warning("WebUI 版本文件不存在，需要更新。")
                 await webui_download()
         folders = [x.name for x in WEBUI_PATH.iterdir() if x.is_dir()]
-        app.include_router(router)
         for pathname in folders:
             log.debug(f"挂载文件夹: {pathname}")
             app.mount(
@@ -82,5 +93,6 @@ async def init_public(app: FastAPI):
                 ),
                 name=f"public_{pathname}",
             )
+        app.include_router(router)
     except Exception as e:
         log.error(f"初始化 WebUI资源 失败:{str_traceback(e)}")

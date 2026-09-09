@@ -1,9 +1,11 @@
-from datetime import datetime
-from typing import Type
+from typing import ClassVar
+
+from ATRI.utils.datetime import now
 
 from ..config import config
 from ..utils import log, request
 from .memes import FaceManager
+from .memory.manage import memory_manager
 from .user import get_user_info, save_user_info
 from .user_profile import UserProfile
 
@@ -40,12 +42,12 @@ class FunctionCalling:
 
 
 class FunctionCallingManager:
-    calling: dict[str, Type[FunctionCalling]] = {}
-    chat_functions: list[ChatFunction] = []
+    calling: ClassVar[dict[str, type[FunctionCalling]]] = {}
+    chat_functions: ClassVar[list[ChatFunction]] = []
 
     @classmethod
     def register(
-        cls, func_name: str, func: Type[FunctionCalling], func_dif: ChatFunction
+        cls, func_name: str, func: type[FunctionCalling], func_dif: ChatFunction
     ):
         cls.calling[func_name] = func
         cls.chat_functions.append(func_dif)
@@ -65,8 +67,8 @@ class FunctionCallingManager:
 
 
 class ReplyFunctionCallingManager(FunctionCallingManager):
-    calling: dict[str, Type[FunctionCalling]] = {}
-    chat_functions: list[ChatFunction] = []
+    calling: ClassVar[dict[str, type[FunctionCalling]]] = {}
+    chat_functions: ClassVar[list[ChatFunction]] = []
 
 
 def register_function_calling():
@@ -109,10 +111,10 @@ def register_function_calling():
             user_info = get_user_info(data.sender_id)
             if mem:
                 user_info.memery.append(
-                    f"{datetime.now().strftime('%Y年%m月%d日%a-%H时%M分')} {mem}"
+                    f"{now().strftime('%Y年%m月%d日%a-%H时%M分')} {mem}"
                 )
                 log.debug(
-                    f"用户 {data.sender_id} 新增记忆：{datetime.now().strftime('%Y年%m月%d日%a-%H时%M分')} {mem}"
+                    f"用户 {data.sender_id} 新增记忆：{now().strftime('%Y年%m月%d日%a-%H时%M分')} {mem}"
                 )
             if del_index:
                 if type(del_index) is int:
@@ -143,6 +145,74 @@ def register_function_calling():
                     name="del",
                     _type="list[int]",
                     description="需要删除的记忆列表索引,请积极删除无用与过期的记忆,可选",
+                ),
+            ],
+        ),
+    )
+
+    class GetMemoriesFunctionCalling(FunctionCalling):
+        continue_calling = True
+
+        @staticmethod
+        async def call(data: FunctionCallingData):
+            query = data.data.get("query", "")
+            top_k = data.data.get("top_k", 5)
+            min_similarity = data.data.get("min_similarity")
+            if not query:
+                return []
+            return await memory_manager.get_memories(query, int(top_k), min_similarity)
+
+    FunctionCallingManager.register(
+        "get_memories",
+        GetMemoriesFunctionCalling,
+        ChatFunction(
+            function_name="get_memories",
+            description="根据语义检索长期记忆。仅在需要回忆相关历史事实时使用，由你自行决定查询数量和最低相似度。",
+            args=[
+                ChatFunctionArg(
+                    name="query", _type="str", description="要回忆的主题或事实"
+                ),
+                ChatFunctionArg(
+                    name="top_k",
+                    _type="int",
+                    description="返回记忆数量，建议 1 到 5，由你根据需要决定",
+                ),
+                ChatFunctionArg(
+                    name="min_similarity",
+                    _type="float",
+                    description="最低相似度，范围 0 到 1，由你根据需要决定",
+                ),
+            ],
+        ),
+    )
+
+    class AccessMemoryFunctionCalling(FunctionCalling):
+        @staticmethod
+        async def call(data: FunctionCallingData):
+            from .memory.manage import memory_manager
+
+            memory_id = data.data.get("memory_id")
+            reinforce = data.data.get("reinforce", 0.1)
+            if memory_id is None:
+                return None
+            return await memory_manager.access_memory(
+                {"id": int(memory_id)}, float(reinforce)
+            )
+
+    FunctionCallingManager.register(
+        "access_memory",
+        AccessMemoryFunctionCalling,
+        ChatFunction(
+            function_name="access_memory",
+            description="采用并强化一条已经检索到的长期记忆。只能采用检索结果中的记忆，并自行决定强化值。",
+            args=[
+                ChatFunctionArg(
+                    name="memory_id", _type="int", description="检索结果中的记忆 ID"
+                ),
+                ChatFunctionArg(
+                    name="reinforce",
+                    _type="float",
+                    description="重要度强化值，建议 0 到 0.2，由你根据本次使用价值决定",
                 ),
             ],
         ),
@@ -215,7 +285,7 @@ def register_function_calling():
                         log.warning(error_msg)
                         return error_msg
                 except Exception as e:
-                    error_msg = f"搜索出错：{str(e)}"
+                    error_msg = f"搜索出错：{e}"
                     log.error(error_msg)
                     return error_msg
 

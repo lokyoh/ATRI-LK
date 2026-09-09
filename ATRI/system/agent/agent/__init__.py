@@ -1,10 +1,11 @@
-import datetime
 import time
 from asyncio import Lock
+from typing import ClassVar
 
-from nonebot.adapters.onebot.v11 import Message
+from nonebot.adapters.onebot.v11 import Bot, Message
 
 from ATRI.log import log
+from ATRI.utils.datetime import now
 
 from ..basic.chat import chat_model
 from ..brain import (
@@ -32,14 +33,14 @@ class ChatMessage:
 
 class ATRIAgent:
     waiting_num = 0
-    temp_messages: dict[str, list[ChatMessage]] = {}
+    temp_messages: ClassVar[dict[str, list[ChatMessage]]] = {}
     chat_lock = Lock()
-    temp_lock = {}
+    temp_lock: ClassVar[dict[str, Lock]] = {}
 
     @classmethod
     async def chat(
         cls,
-        bot,
+        bot: Bot,
         chat_sender: ChatSender,
         chat_id,
         user_id,
@@ -55,7 +56,7 @@ class ATRIAgent:
         async with cls.temp_lock[chat_id]:
             if chat_id not in cls.temp_messages:
                 cls.temp_messages[chat_id] = []
-            t_m.message = await History.create(user_id, chat_id, message)
+            t_m.message = await History.create(bot.self_id, user_id, chat_id, message)
             cls.temp_messages[chat_id].append(t_m)
         if skip_chat:
             return
@@ -66,6 +67,7 @@ class ATRIAgent:
         if not t_m.force_chat and not t_m.check_time():
             cls.waiting_num -= 1
             cls.chat_lock.release()
+            return
         try:
             if cls.temp_messages[chat_id]:
                 async with cls.temp_lock[chat_id]:
@@ -78,14 +80,14 @@ class ATRIAgent:
                         if m.message is None:
                             continue
                         await chat_history[chat_id].add_history(
-                            m.user_id, chat_id, m.message
+                            bot.self_id, m.user_id, chat_id, m.message
                         )
                         if m.force_chat:
                             break
             await cls._chat(
                 bot, chat_sender, chat_id, user_id, message, skip_chat, skip_judgment
             )
-        except Exception:
+        except Exception:  # noqa: TRY203
             raise
         finally:
             cls.waiting_num -= 1
@@ -121,7 +123,7 @@ class ATRIAgent:
             if skip_judgment:
                 await chat_model.reply(bot, chat_id, user_id, chat_sender)
         plain_text = message.extract_plain_text()
-        now_time = datetime.datetime.now().time()
+        now_time = now().time()
         if not skip_judgment and (plain_text == "" or 2 <= now_time.hour < 6):
             return
         msg = await this_msg.get_message(bot)
@@ -142,11 +144,10 @@ class ATRIAgent:
             f"对方需求:{','.join(sensory.get('demand', ['未知']))}"
         )
         log.info(f"情感分析:{str_sensory}")
-        if not skip_judgment:
-            if not await JudgmentModel.analyze(
-                f"{img_his}\n\n{msg_his}", msg, str_sensory
-            ):
-                return
+        if not skip_judgment and not await JudgmentModel.analyze(
+            f"{img_his}\n\n{msg_his}", msg, str_sensory
+        ):
+            return
         thinking, functions_data = await ThinkingModel.thinking(
             bot, chat_id, user_id, str_sensory
         )

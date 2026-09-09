@@ -7,13 +7,16 @@ app = nonebot.get_app()
 
 origins = ["*"]
 
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=origins,
-    allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
-)
+if app.middleware_stack is None and not any(
+    middleware.cls is CORSMiddleware for middleware in app.user_middleware
+):
+    app.add_middleware(
+        CORSMiddleware,
+        allow_origins=origins,
+        allow_credentials=True,
+        allow_methods=["*"],
+        allow_headers=["*"],
+    )
 
 
 AVA_URL = "http://q1.qlogo.cn/g?b=qq&nk={}&s=160"

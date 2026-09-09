@@ -1,5 +1,7 @@
-from ATRI.utils.model import BaseModel
+from pydantic import Field
+
 from ATRI.configs import PluginConfig
+from ATRI.utils.model import BaseModel
 
 
 class Config(BaseModel):
@@ -8,14 +10,10 @@ class Config(BaseModel):
     test_groups: list[str] 测试模式群聊
     r18_groups: list[str] 非健康模式群聊
     chat_switch: bool 聊天开关
-    api_key: str 谷歌AI的api_key
-    active_chat: str: 激活的模型
     """
-    test_groups: list[str] = []
-    r18_groups: list[str] = []
+    test_groups: list[str] = Field(default_factory=list)
+    r18_groups: list[str] = Field(default_factory=list)
     chat_switch: bool = True
-    api_key: str = ''
-    active_chat: str = 'gemini'
 
 
 _config_manage = PluginConfig("lk插件", Config)

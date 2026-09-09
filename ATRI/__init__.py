@@ -1,13 +1,13 @@
 import nonebot
 
 from .configs import Config
-from .dir import *  # noqa: F403
+from .dir import *
 
 __version__ = "YHN-LK0-022"
 """版本号"""
 __sub_version__ = "Patch5"
 """次版本号"""
-__conf_path = Path(".") / "config.yml"  # noqa: F405
+__conf_path = Path(".") / "config.yml"
 conf_m = Config(__conf_path)
 
 conf = conf_m.config_model

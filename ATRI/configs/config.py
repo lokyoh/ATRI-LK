@@ -1,8 +1,10 @@
-import yaml
 import os
 import shutil
-from time import sleep
+import sys
 from pathlib import Path
+from time import sleep
+
+import yaml
 
 from .create import init_config
 from .models import BotConfig, ConfigModel, RuntimeConfig
@@ -30,7 +32,7 @@ class Config:
             os.remove(config_path)
             print("!!! 你的 config.yml 文件已废弃,已自动为你备份为 config_backup.yml 并删除原文件,请重新启动重新配置")
             sleep(3)
-            exit(-1)
+            sys.exit(-1)
 
         self.config = conf
         self.config_model: ConfigModel = ConfigModel.model_validate(self.config)

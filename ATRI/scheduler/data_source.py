@@ -1,11 +1,12 @@
 import asyncio
 import inspect
 import logging
-from typing import Dict
+from typing import ClassVar
 
 from apscheduler.job import Job
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from apscheduler.triggers.base import BaseTrigger
+from apscheduler.triggers.date import DateTrigger
 from nonebot.log import LoguruHandler
 
 from ATRI.exceptions import BotRuntimeError, str_traceback
@@ -49,7 +50,7 @@ class SchedulerJob:
 class SchedulerController:
     """服务的计划控制器"""
 
-    service_schedulers: Dict[str, Dict[str, SchedulerJob]] = {}
+    service_schedulers: ClassVar[dict[str, dict[str, SchedulerJob]]] = {}
 
     def __init__(self, service: str):
         self.service = service
@@ -77,7 +78,9 @@ class SchedulerController:
         if kwargs is not None:
             job_kwargs["kwargs"] = kwargs
         if "id" in job_kwargs:
-            del job_kwargs["id"]
+            job_kwargs.pop("id")
+        is_one_time = trigger == "date" or isinstance(trigger, DateTrigger)
+        job_ref: dict[str, SchedulerJob] = {}
 
         def job_func(f):
             from ATRI.log import log
@@ -95,6 +98,11 @@ class SchedulerController:
                         log.error(
                             f"在执行`{self.service}`的任务`{name}`时失败:\n{str_traceback(e)}"
                         )
+                    finally:
+                        if is_one_time and self.service_schedulers[self.service].get(
+                            name
+                        ) is job_ref.get("job"):
+                            self.service_schedulers[self.service].pop(name, None)
 
                 return wrapper
             else:
@@ -110,6 +118,11 @@ class SchedulerController:
                         log.error(
                             f"在执行`{self.service}`的任务`{name}`时失败:\n{str_traceback(e)}"
                         )
+                    finally:
+                        if is_one_time and self.service_schedulers[self.service].get(
+                            name
+                        ) is job_ref.get("job"):
+                            self.service_schedulers[self.service].pop(name, None)
 
                 return wrapper
 
@@ -120,6 +133,7 @@ class SchedulerController:
             **job_kwargs,
         )
         self.service_schedulers[self.service][name] = job
+        job_ref["job"] = job
         return job
 
     def add_pause_job(
@@ -140,7 +154,9 @@ class SchedulerController:
         """移除指定Job"""
         if not self.has_job(name):
             raise BotRuntimeError(f"找不到服务`{self.service}`的任务`{name}`")
-        self.get_job(name).job.remove()
+        job = self.get_job(name)
+        if scheduler.get_job(job_id=job.id) is not None:
+            job.job.remove()
         del self.service_schedulers[self.service][name]
 
     def has_job(self, name):

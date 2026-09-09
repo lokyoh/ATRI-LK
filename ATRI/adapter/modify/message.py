@@ -1,5 +1,5 @@
 import nonebot.message as nb_message
-from nonebot.message import *  # noqa: F403
+from nonebot.message import *
 from nonebot.message import (
     _event_postprocessors,
     _event_preprocessors,
@@ -12,8 +12,8 @@ async def new_apply_event_preprocessors(
     bot: "Bot",
     event: "Event",
     state: T_State,
-    stack: Optional[AsyncExitStack] = None,
-    dependency_cache: Optional[T_DependencyCache] = None,
+    stack: AsyncExitStack | None = None,
+    dependency_cache: T_DependencyCache | None = None,
     show_log: bool = True,
 ) -> bool:
     """运行事件预处理。
@@ -69,8 +69,8 @@ async def new_apply_event_postprocessors(
     bot: "Bot",
     event: "Event",
     state: T_State,
-    stack: Optional[AsyncExitStack] = None,
-    dependency_cache: Optional[T_DependencyCache] = None,
+    stack: AsyncExitStack | None = None,
+    dependency_cache: T_DependencyCache | None = None,
     show_log: bool = True,
 ) -> None:
     """运行事件后处理。

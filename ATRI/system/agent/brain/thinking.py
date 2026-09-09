@@ -133,7 +133,7 @@ class ThinkingModel:
         prompt += cls.get_function_prompt()
         prompt += cls.get_resp_prompt()
         resp = await llm_manager.call_model_by_type(ModelType.CHAT, prompt)
-        return await cls.process_resp(resp.get("content"))
+        return await cls.process_resp(resp.content)
 
     @classmethod
     async def continue_thinking(
@@ -149,7 +149,7 @@ class ThinkingModel:
             prompt + cls.get_function_prompt()
             prompt += cls.get_continue_resp_prompt()
         resp = await llm_manager.call_model_by_type(ModelType.CHAT, prompt)
-        return await cls.process_resp(resp.get("content"))
+        return await cls.process_resp(resp.content)
 
     @classmethod
     async def process_resp(cls, resp) -> tuple[str, list]:

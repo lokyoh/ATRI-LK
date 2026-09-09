@@ -1,4 +1,5 @@
 from nonebot.adapters.onebot.v11 import Message
+from nonebot.exception import FinishedException
 from nonebot.params import CommandArg
 
 from ATRI.exceptions import PluginError
@@ -6,7 +7,7 @@ from ATRI.message import MessageBuilder
 from ATRI.permission import MASTER
 from ATRI.service import Service, ServiceTools
 
-from .data_source import PluginManager
+from .data_source import PluginManager, PluginRuntimeManager
 
 plugin = Service(
     "插件商店", "插件商店", "0.4.4", Service.ServiceType.SYSTEM
@@ -110,8 +111,8 @@ async def _(args: Message = CommandArg()):
     if plugin_name in ServiceTools.service_list:
         await add.finish(f"插件 {plugin_name} 已经安装")
     try:
-        await PluginManager.install_plugin(plugin_name, False)
-        await add.finish(f"{plugin_name}安装成功,需重启才生效")
+        await PluginManager.install_plugin(plugin_name, True)
+        await add.finish(f"{plugin_name}安装成功")
     except PluginError as e:
         await add.finish(e.prompt)
     except Exception:
@@ -132,7 +133,7 @@ async def _(args: Message = CommandArg()):
         await remove.finish("请输入插件名")
     try:
         await PluginManager.remove_plugin(plugin_name)
-        await remove.finish(f"{plugin_name}移除成功，请重启生效")
+        await remove.finish(f"{plugin_name}移除成功")
     except PluginError as e:
         await remove.finish(e.prompt)
     except Exception:
@@ -197,3 +198,22 @@ async def _():
             except Exception as e:
                 message.text(str(e))
     await update_all.finish(message)
+
+
+reload = plugin.on_command("重载插件", "重新加载所有插件")
+
+
+@reload.handle()
+async def _(args: Message = CommandArg()):
+    plugin_name = args.extract_plain_text().replace(" ", "")
+    if not plugin_name:
+        await update.finish("请输入插件名")
+    try:
+        await PluginRuntimeManager.reload_plugin(plugin_name)
+        await reload.finish(f"已重载插件{plugin_name}")
+    except FinishedException:
+        pass
+    except PluginError as e:
+        await reload.finish(e.prompt)
+    except Exception as e:
+        await reload.finish(f"重载{plugin_name}发生错误:{e}")

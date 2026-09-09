@@ -1,4 +1,5 @@
 from typing import Annotated
+
 from pydantic import Field
 
 from ..utils import gen_random_str
@@ -17,6 +18,7 @@ class BotConfig(BaseModel):
     access_token: str
     proxy: str
     request_timeout: int
+    timezone: str = "Asia/Shanghai"
 
 
 class BrowsConfig(BaseModel):
@@ -27,7 +29,7 @@ class BrowsConfig(BaseModel):
 
 
 class WebUIConfig(BaseModel):
-    username: str = 'admin'
+    username: str = "admin"
     password: str = Field(default_factory=lambda: gen_random_str(8))
     secret: str = Field(default_factory=lambda: gen_random_str(8))
 

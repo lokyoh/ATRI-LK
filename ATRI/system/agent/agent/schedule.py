@@ -2,8 +2,9 @@ import datetime
 import json
 
 from ATRI.dir import SYS_CONFIG_DIR
-from ATRI.event import daily_update
+from ATRI.event import Priority, daily_update
 from ATRI.log import log
+from ATRI.utils.datetime import now, now_time, today
 
 from ..llm import ModelType, llm_manager
 from .atri import ATRI
@@ -30,17 +31,17 @@ class TodaySchedule:
             self.schedule.append(ScheduleNode(s))
 
     def get_schedule_from_now(self):
-        now_time = datetime.datetime.now().time()
-        if 2 <= now_time.hour < 6:
+        _now_time = now_time()
+        if 2 <= _now_time.hour < 6:
             return "睡眠中。"
         for s in self.schedule:
             start = s.start_time
             end = s.end_time
             if start < end:
-                if start <= now_time < end:
+                if start <= _now_time < end:
                     return s.schedule
             else:
-                if now_time >= start or now_time < end:
+                if _now_time >= start or _now_time < end:
                     return s.schedule
         return None
 
@@ -99,24 +100,19 @@ class ATRISchedule:
 
     async def generate_schedule(self, date: str):
         """生成最新的日程"""
+        # 当获取更多当前聊天消息时再更新历史日程获取,不然用处不大 his_sch = self.get_all_schedule_text()
+        prompt = (
+            self.before_prompt
+            # + f"\n\n### 人物简介\n{ATRI.get_role_prompt()}\n\n### 历史日程\n{his_sch}\n\n"
+            + f"\n\n### 人物简介\n{ATRI.get_role_prompt()}\n\n"
+            + self.after_prompt
+        )
         try:
-            his_sch = (
-                "\n".join(
-                    f"{s}:{self.schedule_data[s].get('daily_schedule', '错误日程')}"
-                    for s in self.schedule_data
-                )
-                if self.schedule_data
-                else "暂无日程"
-            )
-            prompt = (
-                self.before_prompt
-                + f"\n\n### 人物简介\n{ATRI.get_role_prompt()}\n\n### 历史日程\n{his_sch}\n\n"
-                + self.after_prompt
-            )
             schedule = await llm_manager.call_model_by_type(ModelType.TOOL, prompt)
-            s_data = json.loads(schedule.get("content"))
+            s_data = json.loads(schedule.content)
         except Exception as e:
-            raise e
+            log.error(f"日程生成失败：{e}")
+            return
         self.schedule_data[date] = s_data
         self.schedule_data = {
             k: self.schedule_data[k] for k in sorted(self.schedule_data.keys())[-5:]
@@ -151,15 +147,13 @@ class ATRISchedule:
 
     @staticmethod
     def get_now_date():
-        if datetime.datetime.now().hour >= 6:
-            return datetime.date.today().strftime("%Y-%m-%d")
+        if now().hour >= 6:
+            return today().strftime("%Y-%m-%d")
         else:
-            return (datetime.date.today() - datetime.timedelta(days=1)).strftime(
-                "%Y-%m-%d"
-            )
+            return (today() - datetime.timedelta(days=1)).strftime("%Y-%m-%d")
 
 
-@daily_update()
+@daily_update(priority=Priority.LOW)
 async def generate_schedule():
     log.info("开始更新亚托莉日程...")
-    await ATRISchedule().generate_schedule(datetime.date.today().strftime("%Y-%m-%d"))
+    await ATRISchedule().generate_schedule(today().strftime("%Y-%m-%d"))

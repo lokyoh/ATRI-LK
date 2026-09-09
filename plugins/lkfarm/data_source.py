@@ -1,43 +1,48 @@
 import os
 import re
 import zlib
-from datetime import date, timedelta, datetime
+from datetime import timedelta
+from typing import ClassVar
 
+import anyio
 from nonebot.adapters.onebot.v11 import Event
 from nonebot.internal.matcher import Matcher
 from nonebot.internal.params import Depends
 
 from ATRI.dir import RES_DIR, TEMP_DIR
+from ATRI.event import Priority, daily_update
+from ATRI.log import log
 from ATRI.system.htmlrender import md_to_pic
 from ATRI.system.lkapi.bot import util as lk_util
 from ATRI.system.lkapi.bot.events import (
+    SignInEvent,
+    UserInfoEvent,
     item_loading_events,
     sign_in_events,
-    SignInEvent,
-    daily_update_event,
     user_info_events,
-    UserInfoEvent,
 )
-from ATRI.system.lkapi.entity.item import items, ItemType
+from ATRI.system.lkapi.entity.item import ItemType, items
 from ATRI.system.lkapi.entity.shop import shops
 from ATRI.system.lkapi.entity.user import UserData
+from ATRI.utils.datetime import date_fromtimestamp, today
 from ATRI.utils.sqlite import DataBase
-from ATRI.log import log
 
-from .system.crop import load_crop_data, crop_data_list, CropData, Month, Season
+from . import config, plugin
+from .system.crop import CropData, Month, Season, crop_data_list, load_crop_data
 from .system.farm_shop import farm_shop, get_farm_shop_info
-from .system.farm_user import user_farm_datas, UserFarmData, get_user_farm_data
-from .system.fertilizer import load_fertilizer_data, add_fertilizer_to_shop
+from .system.farm_user import UserFarmData, get_user_farm_data, user_farm_datas
+from .system.fertilizer import add_fertilizer_to_shop, load_fertilizer_data
 from .system.forecast import weather_forecast
 from .system.weather import get_weather
-from . import config, plugin
 
 _config = config.config()
 
-plugin.scheduler_jobs().add_job(weather_forecast, "农场天气预报", 'cron', hour=_config.hour, minute=_config.minute)
+plugin.scheduler_jobs().add_job(
+    weather_forecast, "农场天气预报", "cron", hour=_config.hour, minute=_config.minute
+)
 
-FARM_RES_PATH = RES_DIR / 'data' / "lkfarm"
-FARM_TEMP_PATH = TEMP_DIR / 'farm'
+FARM_RES_PATH = RES_DIR / "data" / "lkfarm"
+FARM_TEMP_PATH = TEMP_DIR / "farm"
 
 
 @item_loading_events.handle()
@@ -45,11 +50,11 @@ def lkfarm_item_loading():
     farm_shop.clear_goods()
     load_fertilizer_data()
     add_fertilizer_to_shop()
-    load_crop_data('Core', FARM_RES_PATH / "Crop")
+    load_crop_data("Core", FARM_RES_PATH / "Crop")
     shops.register(farm_shop)
 
 
-@daily_update_event.handle()
+@daily_update(Priority.HIGH)
 def lkfarm_farm_daily_update():
     log.info("开始更新农场数据")
     db = DataBase("lkbot.db")
@@ -57,23 +62,29 @@ def lkfarm_farm_daily_update():
     def daily_up_date():
         _today_weather = user_farm_datas.weather
         user_farm_datas.weather = user_farm_datas.next_weather
-        _next_day = date.today() + timedelta(days=1)
-        user_farm_datas.next_weather = get_weather(_next_day.month, _next_day.day, _today_weather)
+        _next_day = today() + timedelta(days=1)
+        user_farm_datas.next_weather = get_weather(
+            _next_day.month, _next_day.day, _today_weather
+        )
         db.get_exist_table("LKFARM").update(
-            f"DATE = '{date.today()}', WEATHER = {user_farm_datas.weather}, NEXT_WEATHER = {user_farm_datas.next_weather}",
-            f"DATE != '{date.today()}'")
+            f"DATE = '{today()}', WEATHER = {user_farm_datas.weather}, NEXT_WEATHER = {user_farm_datas.next_weather}",
+            f"DATE != '{today()}'",
+        )
 
     daily_up_date()
     db.disconnect()
-    month = date.today().month
-    if date.today().day == 1 and month % 3 == 0:
+    month = today().month
+    if today().day == 1 and month % 3 == 0:
         log.info("开始更新种子商店")
         farm_shop.clear_goods()
         add_fertilizer_to_shop()
         for name in crop_data_list:
             crop_data: CropData = crop_data_list[name]
             if crop_data.growable(month) and crop_data.get_seed_price() != 0:
-                farm_shop.add_goods(name if crop_data.crop_is_seed() else f"{name}种子", crop_data.get_seed_price())
+                farm_shop.add_goods(
+                    name if crop_data.crop_is_seed() else f"{name}种子",
+                    crop_data.get_seed_price(),
+                )
         farm_shop.set_shop_info(get_farm_shop_info())
         log.success(f"种子商店更新完成，共{len(farm_shop.get_goods_list())}种子上架")
     log.success("农场数据更新成功")
@@ -81,7 +92,7 @@ def lkfarm_farm_daily_update():
 
 @sign_in_events.handle()
 def lkfarm_sign_in(event: SignInEvent):
-    season = Month(date.today().month).to_season()
+    season = Month(today().month).to_season()
     item = ""
     if season == Season.SPRING:
         item = "胡萝卜种子"
@@ -103,11 +114,11 @@ def lkfarm_sign_in(event: SignInEvent):
 def lkfarm_user_info(event: UserInfoEvent):
     user_id = str(event.user_data.id)
     user_farm_datas.has_user(user_id)
-    event.add_result(f'体力:{get_user_farm_data(user_id).endurance}')
+    event.add_result(f"体力:{get_user_farm_data(user_id).endurance}")
 
 
 class FarmSystem:
-    _FARM_MODEL = '''# {name}的农场
+    _FARM_MODEL = """# {name}的农场
 > 天气:{weather} 明日:{next_weather}  
 > 等级:{level} 经验:{exp} 体力:{endur}
 
@@ -123,8 +134,8 @@ class FarmSystem:
 |8|{field[7]}|{field[15]}|{field[23]}|{field[31]}|
 
 > {today_date}
-'''
-    WEATHER = ["晴", "雨", "雷雨", "雪"]
+"""
+    WEATHER: ClassVar[list[str]] = ["晴", "雨", "雷雨", "雪"]
 
     @staticmethod
     async def check_user(matcher: Matcher, event: Event):
@@ -141,7 +152,7 @@ class FarmSystem:
             fields.append(field.to_md())
         level, level_exp = user_data.get_level_exp()
         farm_md = self._FARM_MODEL.format(
-            today_date=date.today(),
+            today_date=today(),
             weather=self.WEATHER[user_farm_datas.weather],
             next_weather=self.WEATHER[user_farm_datas.next_weather],
             endur=user_data.endurance,
@@ -150,22 +161,25 @@ class FarmSystem:
             level=level,
             exp=level_exp,
         )
-        f_hash = format(zlib.crc32(farm_md.encode()) & 0xFFFFFFFF, '08x')
-        f_path_hash = FARM_TEMP_PATH / f'{user_id}.hash'
-        f_path_img = FARM_TEMP_PATH / f'{user_id}.png'
-        if f_path_img.exists() and date.fromtimestamp(os.path.getmtime(f_path_img)) == datetime.now().date():
-            if f_path_hash.exists():
-                with open(f_path_hash, 'r') as f:
-                    old_hash = f.read()
-                if old_hash == f_hash:
-                    with open(f_path_img, 'rb') as f:
-                        return f.read()
+        f_hash = format(zlib.crc32(farm_md.encode()) & 0xFFFFFFFF, "08x")
+        f_path_hash = FARM_TEMP_PATH / f"{user_id}.hash"
+        f_path_img = FARM_TEMP_PATH / f"{user_id}.png"
+        if (
+            f_path_img.exists()
+            and date_fromtimestamp(os.path.getmtime(f_path_img)) == today()
+            and f_path_hash.exists()
+        ):
+            async with anyio.open_file(f_path_hash, "r") as f:
+                old_hash = await f.read()
+            if old_hash == f_hash:
+                async with anyio.open_file(f_path_img, "rb") as f:
+                    return await f.read()
         FARM_TEMP_PATH.mkdir(parents=True, exist_ok=True)
-        with open(f_path_hash, 'w') as f:
-            f.write(f_hash)
+        async with anyio.open_file(f_path_hash, "w") as f:
+            await f.write(f_hash)
         f_bytes = await md_to_pic(farm_md)
-        with open(f_path_img, 'wb') as f:
-            f.write(f_bytes)
+        async with anyio.open_file(f_path_img, "wb") as f:
+            await f.write(f_bytes)
         return f_bytes
 
     @staticmethod
@@ -258,15 +272,18 @@ class FarmSystem:
     @staticmethod
     def easy_operation(f_user_data: UserFarmData, user_data: UserData):
         for i, field in enumerate(f_user_data.fields):
-            row = chr(ord('A') + int(i / 8))
+            row = chr(ord("A") + int(i / 8))
             line = i % 8 + 1
             if field.state == 0:
                 f_user_data.hoeing(row, line)
             if field.state == 1 and field.water == 0:
                 f_user_data.watering(row, line)
-            if field.state == 1 and field.crop in crop_data_list:
-                if field.crop_can_harvest():
-                    f_user_data.harvesting(row, line, user_data)
+            if (
+                field.state == 1
+                and field.crop in crop_data_list
+                and field.crop_can_harvest()
+            ):
+                f_user_data.harvesting(row, line, user_data)
 
 
 farm_system = FarmSystem()

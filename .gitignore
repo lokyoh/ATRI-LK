@@ -4,11 +4,13 @@
 /data/
 /tests/
 /ATRI-LK-plugin/
-/plugins/
+/plugins/*
 __pycache__/
 /.idea/
 /.vscode/
 *.pyc
+!/plugins/rss/
+/plugins/rss/*
 !/plugins/rss/__init__.py
 !/plugins/fortune/
 !/plugins/lkchat/

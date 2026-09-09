@@ -1,5 +1,30 @@
 > 此处仅为记录重大更新，修复 BUG/以及其它 请关注[`GitHub commits`](https://github.com/lokyoh/ATRI-LK/commits/main)
 
+## Sep 9, 2026
+
+> - !!!破坏性更新!!! `Service`重命名方法`type`,移除`ATRI.utils.apsheduler`,`lkapi`移除`ai`模块,会导致过时插件无法使用,请先更新插件
+> - 插件商店卸载更新插件升级
+> - `agent`新增带遗忘的长期记忆
+> - WebUIv0.0.5鸽到此版本发布
+
+- 更新版本至: `YHN-LK0-023`
+- 新增:
+  - `ATRI.service.Service`新增`module_name`与`_on_unload_handlers`属性,新增`on_unload`装饰器,新增`unload`方法
+  - 新增`ATRI.utils.datetime`带全局时区的日期时间工具
+  - `agent`新增带遗忘的长期记忆,图片描述存储
+  - `插件商店`新增安装插件自动启用,卸载插件自动卸载,更新插件自动重启,新增`重载所有插件`指令
+  - `WebAPI`新增`日志`界面,添加100条日志缓存
+  - `ATRI.service.Service`将`type`方法重命名为`set_type`
+  - 修改启动时检查更新输出,修改`更新`插件的更新逻辑
+- 修复:
+  - `WebAPI`修复刷新页面后404
+  - 修复`scheduler`模块一次性任务执行后不清理bug
+  - 修复bug[#9](https://github.com/lokyoh/ATRI-LK/issues/9)
+- 移除:
+  - 移除不再使用的`ATRI.utils.apsheduler`,请用`ATRI.sheduler`代替
+  - `lkapi`移除不再使用的`ai`模块及设置,请用`agent.llm.llmmanager`代替
+  - `lkbot`的每日更新事件,请用`ATRI.event`的`daily_update`代替
+
 ## Jul 17, 2026
 
 > 新增ATRI智能体与webapi

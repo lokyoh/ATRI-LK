@@ -1,8 +1,9 @@
-from pathlib import Path
 from ipaddress import IPv4Address
+from pathlib import Path
+from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
-from .data_source import Console, C
 from ..utils import gen_random_str
+from .data_source import C, Console
 
 console = Console(C())
 
@@ -36,13 +37,13 @@ def init_config(conf_path: Path, default_conf_path: Path):
     )
     access_token = console.input(
         "协议端通信密钥, 此项留空[b]将无法进入控制台[/b]. 无长度限制 示例: [green]21^sASDA!@3l67GJlk7sd!14#[/green]",
-        str(),
+        "",
         str,
         "输入不正确 示例: 21^sASDA!@3l67GJlk7sd!14# (请尽可能复杂, 无长度限制)",
     )
     proxy = console.input(
         "是否有代理. 格式参考: http(s)://127.0.0.1:8100 (如无请 Enter 以跳过)",
-        str(),
+        "",
         str,
         "输入不正确 示例: http://127.0.0.1:8100",
     )
@@ -55,31 +56,42 @@ def init_config(conf_path: Path, default_conf_path: Path):
     )
     download_host = console.input(
         "下载 playwright 的代理地址 (如无请 Enter 以跳过)",
-        str(),
+        "",
         str,
     )
     proxy_host = console.input(
         "浏览器自定代理地址 (如无请 Enter 以跳过)",
-        str(),
+        "",
         str,
     )
     browser_channel = console.input(
         "浏览器实现途径，手动填写可以直接使用系统自带浏览器而不用重新下载 chromium (系统无浏览器请 Enter 以跳过, 可选: [green]chrome, chrome-beta, chrome-dev, chrome-canary, msedge, msedge-beta, msedge-dev, msedge-canary[/green])",
-        str(),
+        "",
         str,
     )
 
     console.info("[b]WebUI设置[/b]\n", style="white")
     username = console.input(
         "登录用户名",
-        str(),
+        "",
         str,
     )
     password = console.input(
         "登录密码",
-        str(),
+        "",
         str,
     )
+    while True:
+        timezone = console.input(
+            "时区 (默认: [green]Asia/Shanghai[/green])",
+            "Asia/Shanghai",
+            str,
+        )
+        try:
+            ZoneInfo(timezone)
+            break
+        except ZoneInfoNotFoundError:
+            console.warn(f"时区 {timezone} 不存在, 请重新输入")
 
     console.success("[white]至此, 所需基本配置已填写完毕[white]")
 
@@ -98,6 +110,7 @@ def init_config(conf_path: Path, default_conf_path: Path):
     raw_conf = raw_conf.replace("{username}", username)
     raw_conf = raw_conf.replace("{password}", password)
     raw_conf = raw_conf.replace("{secret}", gen_random_str(8))
+    raw_conf = raw_conf.replace("{timezone}", timezone)
 
     with open(conf_path, "w", encoding="utf-8") as w:
         w.write(raw_conf)

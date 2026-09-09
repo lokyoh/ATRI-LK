@@ -31,12 +31,17 @@ async def _() -> Result[dict]:
         plugin_list = []
         for idx, (plugin_name, plugin_info) in enumerate(plugin_data.items()):
             p_version = plugin_info.get("version", "unknown")
+            local_version = None
+            remote_version = None
             if p_version == "github":
                 try:
                     meta = await PluginManager.get_github_plugin_meta(plugin_info["repo"])
                     p_version = meta.get("version", "unknown")
                 except Exception:
                     p_version = "error"
+            update_versions = await PluginManager.check_update(plugin_name)
+            if update_versions is not None:
+                local_version, remote_version = update_versions
             plugin_list.append(
                 {
                     "id": idx,
@@ -46,7 +51,9 @@ async def _() -> Result[dict]:
                     "plugin_type": plugin_info.get("type", "其他插件"),
                     "description": plugin_info.get("docs", ""),
                     "github_url": plugin_info.get("repo", ""),
-                    "need_update": await PluginManager.check_update(plugin_name) is not None,
+                    "need_update": update_versions is not None,
+                    "local_version": local_version,
+                    "remote_version": remote_version,
                 }
             )
         return Result.ok({"install_plugin": plugins, "plugin_list": plugin_list})
@@ -66,9 +73,8 @@ async def _() -> Result[dict]:
 async def _(request: PluginRequest) -> Result:
     try:
         # 安装插件
-        await PluginManager.install_plugin(request.service, load=False)
-
-        return Result.ok(info=f"插件 {request.service} 安装成功，请重启后加载")
+        await PluginManager.install_plugin(request.service, load=True)
+        return Result.ok(info=f"插件 {request.service} 安装成功")
     except Exception as e:
         str_tb = str_traceback(e)
         log.error(f"安装插件失败:{str_tb}")
@@ -105,9 +111,7 @@ async def _(request: PluginRequest) -> Result:
 )
 async def _(request: PluginRequest) -> Result:
     try:
-        # 移除插件
         await PluginManager.remove_plugin(request.service)
-
         return Result.ok(info=f"插件 {request.service} 移除成功")
     except Exception as e:
         str_tb = str_traceback(e)

@@ -4,7 +4,6 @@ from random import choice
 
 from nonebot.adapters.onebot.v11 import Bot
 from nonebot.adapters.onebot.v11.event import GroupMessageEvent, PokeNotifyEvent
-from nonebot.internal.params import ArgPlainText
 from nonebot.matcher import Matcher
 
 from ATRI import IMG_DIR
@@ -15,24 +14,23 @@ from ATRI.service import Service
 from ATRI.system.agent.agent.explanations import add_word
 from ATRI.system.agent.agent.user import get_user_info, save_user_info
 from ATRI.system.htmlrender import md_to_pic
-from ATRI.system.lkapi.ai import chat_manager
 
 from .config import LKChatConfig
 
 plugin = Service(
-    "聊天", "ATRI进行聊天处理的插件", "0.8.0", Service.ServiceType.ENTERTAINMENT
+    "聊天", "ATRI进行聊天处理的插件", "0.8.1", Service.ServiceType.ENTERTAINMENT
 ).main_cmd("聊天")
 config: LKChatConfig = plugin.add_plugin_config(LKChatConfig).config()
 
-from .data_source import (  # noqa: E402
+from .data_source import (
     REPLY_MESSAGE,
     PreChatEvent,
+    call_agent,
     get_atri_memery,
     get_random_atri,
     match_atri_img,
     match_atri_voice,
     pre_chat_event,
-    call_agent,
 )
 
 _lmt_notice = [
@@ -66,24 +64,6 @@ async def _(event: GroupMessageEvent, matcher: Matcher, bot: Bot):
                 await on_talk.finish(img)
     elif group_id in config.whit_list:
         await call_agent(event, matcher, bot)
-
-
-change_model = plugin.cmd_as_group(
-    "切换模型", "切换机器人聊天所使用的语言模型默认为`gemini-main`", permission=MASTER
-)
-
-
-@change_model.got(
-    "chat_model",
-    f"请输入要选择的类型名:\n{'\n'.join(f'{i}.{_type}' for i, _type in enumerate(chat_manager.get_chats_name(), 1))}",
-)
-async def _(arg: str = ArgPlainText("chat_model")):
-    if arg in chat_manager.get_chats_name():
-        config.model = arg
-        plugin.plugin_config().change_config(config)
-    else:
-        await change_model.finish("请输入正确的类型")
-    await change_model.finish("切换成功")
 
 
 word_add = plugin.cmd_as_group(

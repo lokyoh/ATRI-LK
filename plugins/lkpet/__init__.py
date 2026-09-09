@@ -24,7 +24,7 @@ from .pet_data import PetData, pet_manager
 plugin = Service(
     "宠物",
     "赛博宠物插件",
-    "0.1.9",
+    "0.1.10",
     Service.ServiceType.ENTERTAINMENT,
 ).main_cmd("pet")
 

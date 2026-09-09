@@ -88,7 +88,7 @@ def load_plugins():
                 for line in lines:
                     parsed = parse_requirement_line(line)
                     if parsed:
-                        package_name, version = parsed
+                        package_name, _ = parsed
                         plugin_packages.append(package_name)
                         # 检查是否已安装
                         if not check_package_installed(
@@ -130,6 +130,10 @@ def load_system():
 
 
 def load_atri():
+    from ATRI import conf
+    from ATRI.utils.datetime import set_timezone
+
+    set_timezone(conf.BotConfig.timezone)
     load_system()
     load_plugins()
     from ATRI.service import driver_startup

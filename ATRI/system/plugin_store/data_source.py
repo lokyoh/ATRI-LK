@@ -1,9 +1,17 @@
+import asyncio
+import hashlib
+import importlib
+import locale
 import os
+import shlex
 import shutil
 import stat
 import subprocess
+import sys
 from pathlib import Path
 
+import anyio
+import httpx
 import nonebot
 import yaml
 
@@ -17,6 +25,35 @@ from ATRI.utils.package_manager import PackageManager
 PLUGINS_URL = "https://raw.githubusercontent.com/lokyoh/ATRI-LK-plugin/main/plugin.json"
 FILE_URL = "https://api.github.com/repos/lokyoh/ATRI-LK-plugin/contents/{}?ref=main"
 PLUGINS_DIR = Path(".") / "plugins"
+DOWNLOAD_RETRIES = 3
+DOWNLOAD_RETRY_DELAY = 1
+
+
+def _build_shell_command(args: list[str]) -> str:
+    if os.name == "nt":
+        return subprocess.list2cmdline(args)
+    return shlex.join(args)
+
+
+async def _run_shell_command(command: str, cwd: str | Path | None = None):
+    process = await asyncio.create_subprocess_shell(
+        command,
+        cwd=str(cwd) if cwd is not None else None,
+        stdout=asyncio.subprocess.PIPE,
+        stderr=asyncio.subprocess.PIPE,
+    )
+    stdout_bytes, stderr_bytes = await process.communicate()
+    encoding = locale.getpreferredencoding(False)
+    stdout = stdout_bytes.decode(encoding, errors="replace")
+    stderr = stderr_bytes.decode(encoding, errors="replace")
+    if process.returncode != 0:
+        raise subprocess.CalledProcessError(
+            process.returncode,
+            command,
+            output=stdout,
+            stderr=stderr,
+        )
+    return stdout, stderr
 
 
 def _safe_rmtree(path: Path):
@@ -92,6 +129,80 @@ def uninstall_package(path: Path):
             log.error(f"处理插件 {plugin_name} 的依赖时出错：{e}")
 
 
+class PluginRuntimeManager:
+    """插件运行时管理器，负责热重载已加载的插件模块。"""
+
+    @staticmethod
+    def _clear_nonebot_plugin_registry(module_name: str):
+        """清理 NoneBot 中已经残留的插件注册信息，避免重复加载。"""
+        nb_plugin = getattr(nonebot, "plugin", None)
+        if nb_plugin is None:
+            return
+        plugin_module_name = module_name.rsplit(".", 1)[-1]
+        stale_plugin_ids = []
+        for plugin_id, plugin in list(getattr(nb_plugin, "_plugins", {}).items()):
+            if (
+                plugin.module_name == module_name
+                or plugin.module_name.startswith(f"{module_name}.")
+                or plugin.name == plugin_module_name
+                or plugin.id_ == plugin_module_name
+                or plugin.id_.startswith(f"{plugin_module_name}:")
+            ):
+                stale_plugin_ids.append(plugin_id)
+        for plugin_id in stale_plugin_ids:
+            plugin = nb_plugin._plugins.get(plugin_id)
+            if plugin is not None:
+                nb_plugin._revert_plugin(plugin)
+        for manager in list(getattr(nb_plugin, "_managers", [])):
+            removed_ids = []
+            for plugin_id, controlled_module in list(
+                manager.controlled_modules.items()
+            ):
+                if controlled_module == module_name or controlled_module.startswith(
+                    f"{module_name}."
+                ):
+                    removed_ids.append(plugin_id)
+            for plugin_id in removed_ids:
+                if plugin_id in getattr(manager, "_third_party_plugin_ids", {}):
+                    del manager._third_party_plugin_ids[plugin_id]
+                if plugin_id in getattr(manager, "_searched_plugin_ids", {}):
+                    del manager._searched_plugin_ids[plugin_id]
+            if not manager.controlled_modules:
+                try:
+                    nb_plugin._managers.remove(manager)
+                except ValueError:
+                    pass
+
+    @staticmethod
+    def resolve_plugin_name(plugin_name: str) -> str:
+        s = ServiceTools.get_service(plugin_name)
+        if s is None:
+            raise PluginError(f"没有发现插件: {plugin_name}")
+        return s.module_name
+
+    @staticmethod
+    async def unload_plugin(plugin_name: str):
+        module_name = PluginRuntimeManager.resolve_plugin_name(plugin_name)
+        s = ServiceTools.get_service(plugin_name)
+        if s:
+            await s.unload()
+        PluginRuntimeManager._clear_nonebot_plugin_registry(module_name)
+        for key in list(sys.modules):
+            if key == module_name or key.startswith(f"{module_name}."):
+                del sys.modules[key]
+        ServiceTools.service_list.pop(plugin_name, None)
+        log.info(f"已卸载插件模块：{module_name}")
+
+    @staticmethod
+    async def reload_plugin(plugin_name: str):
+        module_name = PluginRuntimeManager.resolve_plugin_name(plugin_name)
+        await PluginRuntimeManager.unload_plugin(plugin_name)
+        nonebot.load_plugin(module_name)
+        module = importlib.import_module(module_name)
+        log.success(f"已热重载插件：{module_name}")
+        return module
+
+
 class PluginManager:
     plugin_list = {}
 
@@ -125,7 +236,14 @@ class PluginManager:
             raise PluginError(f"找不到插件 {plugin_name}")
         _plugin = cls.plugin_list[plugin_name]
         if repo := _plugin.get("repo", None):
-            await cls.install_github_plugin(repo)
+            path = await cls.install_github_plugin(repo)
+            if load:
+                if not path or not str(path).strip():
+                    raise PluginError(
+                        f"安装插件 {plugin_name} 失败：未返回有效插件路径 {path}"
+                    )
+                path = path.replace("\\", ".")
+                nonebot.load_plugin(path)
             return
         res_list = _plugin.get("res")
         try:
@@ -182,13 +300,10 @@ class PluginManager:
             req_path = Path(".") / p_path / "requirements.txt"
             if req_path.exists():
                 log.info(f"开始为`{plugin_name}`安装依赖")
-                result = subprocess.run(
-                    ["pip", "install", "-r", str(req_path)],
-                    check=True,
-                    capture_output=True,
-                    text=True,
+                stdout, _ = await _run_shell_command(
+                    _build_shell_command(["pip", "install", "-r", str(req_path)])
                 )
-                log.debug(f"`{plugin_name}`依赖安装信息:{result}")
+                log.debug(f"`{plugin_name}`依赖安装信息: stdout={stdout}")
             if load:
                 nonebot.load_plugin(path)
             log.info(f"插件`{plugin_name}`安装结束")
@@ -205,6 +320,7 @@ class PluginManager:
         _plugin = cls.plugin_list[plugin_name]
         if repo := _plugin.get("repo", None):
             await cls.remove_github_plugin(repo)
+            await PluginRuntimeManager.unload_plugin(plugin_name)
             return
         path = cls.plugin_list[plugin_name]["path"].replace(".", "/")
         if not cls.plugin_list[plugin_name]["is_dir"]:
@@ -213,12 +329,11 @@ class PluginManager:
         else:
             uninstall_package(path)
             shutil.rmtree(path)
+        await PluginRuntimeManager.unload_plugin(plugin_name)
         log.info(f"插件`{plugin_name}`移除成功")
 
     @classmethod
-    async def install_github_plugin(cls, repo: str):
-        import subprocess
-
+    async def install_github_plugin(cls, repo: str) -> str:
         log.info(f"开始从 GitHub 克隆插件：{repo}")
         # 从 repo URL 中提取项目名称
         if repo.endswith(".git"):
@@ -232,27 +347,22 @@ class PluginManager:
                 log.warning(f"目录 {target_path} 已存在，正在删除...")
                 _safe_rmtree(target_path)
             # 执行 git clone
-            result = subprocess.run(
-                ["git", "clone", repo, str(target_path)],
-                check=True,
-                capture_output=True,
-                text=True,
+            stdout, _ = await _run_shell_command(
+                _build_shell_command(["git", "clone", repo, str(target_path)])
             )
-            log.debug(f"Git clone 输出：{result.stdout}")
+            log.debug(f"Git clone 输出：{stdout}")
             log.info(f"成功克隆插件：{repo_name} 到 {target_path}")
             # 检查并安装依赖
             req_path = target_path / "requirements.txt"
             if req_path.exists():
                 log.info(f"开始为 `{repo_name}` 安装依赖")
-                result = subprocess.run(
-                    ["pip", "install", "-r", str(req_path)],
-                    check=True,
-                    capture_output=True,
-                    text=True,
+                stdout, _ = await _run_shell_command(
+                    _build_shell_command(["pip", "install", "-r", str(req_path)])
                 )
-                log.debug(f"`{repo_name}` 依赖安装信息：{result.stdout}")
+                log.debug(f"`{repo_name}` 依赖安装信息：{stdout}")
                 log.info("依赖安装完成")
             log.info(f"GitHub 插件 `{repo_name}` 安装结束")
+            return str(target_path)
         except subprocess.CalledProcessError as e:
             log.error(f"Git clone 失败：{e.stderr}")
             if target_path.exists():
@@ -305,16 +415,13 @@ class PluginManager:
             if not git_dir.exists():
                 raise PluginError(f"{target_path} 不是 git 仓库，无法更新")
             # 执行 git pull
-            result = subprocess.run(
-                ["git", "pull"],
-                cwd=str(target_path),
-                check=True,
-                capture_output=True,
-                text=True,
+            stdout, _ = await _run_shell_command(
+                _build_shell_command(["git", "pull", "--force"]),
+                cwd=target_path,
             )
-            log.debug(f"Git pull 输出：{result.stdout}")
+            log.debug(f"Git pull 输出：{stdout}")
             # 检查是否有更新
-            if "Already up to date" in result.stdout or "已经是最新的" in result.stdout:
+            if "Already up to date" in stdout or "已经是最新的" in stdout:
                 log.info(f"GitHub 插件 `{repo_name}` 已经是最新版本")
             else:
                 log.info(f"成功更新 GitHub 插件：{repo_name}")
@@ -322,13 +429,10 @@ class PluginManager:
                 req_path = target_path / "requirements.txt"
                 if req_path.exists():
                     log.info(f"开始为 `{repo_name}` 安装依赖")
-                    result = subprocess.run(
-                        ["pip", "install", "-r", str(req_path)],
-                        check=True,
-                        capture_output=True,
-                        text=True,
+                    stdout, _ = await _run_shell_command(
+                        _build_shell_command(["pip", "install", "-r", str(req_path)])
                     )
-                    log.debug(f"`{repo_name}` 依赖安装信息：{result.stdout}")
+                    log.debug(f"`{repo_name}` 依赖安装信息：{stdout}")
                     log.info("依赖安装完成")
             log.info(f"GitHub 插件 `{repo_name}` 更新结束")
         except subprocess.CalledProcessError as e:
@@ -360,8 +464,10 @@ class PluginManager:
             local_meta_path = target_path / "meta.yml"
             if not local_meta_path.exists():
                 raise PluginError("未找到本地 meta.yml 文件")
-            with open(local_meta_path, "r", encoding="utf-8") as f:
-                local_meta = yaml.safe_load(f)
+            async with await anyio.open_file(
+                local_meta_path, "r", encoding="utf-8"
+            ) as f:
+                local_meta = yaml.safe_load(await f.read())
             local_version = local_meta.get("version", "unknown")
             # 获取远程 meta.yml
             remote_meta = await cls.get_github_plugin_meta(repo)
@@ -415,15 +521,46 @@ class PluginManager:
         """
         for file in file_list:
             file_path = Path(".") / file["path"]
-            data = await request.get(file["download_url"])
+            temporary_path = file_path.with_name(f".{file_path.name}.part")
             file_path.parent.mkdir(parents=True, exist_ok=True)
-            log.debug(f"下载文件`{file_path}`")
-            with open(file_path, "wb") as f:
-                f.write(data.content)
-            # 检查文件是否为空
-            if file_path.stat().st_size == 0:
-                file_path.unlink()
-                raise PluginError(f"下载的文件为空: {file_path}")
+            last_error = None
+            for attempt in range(1, DOWNLOAD_RETRIES + 1):
+                try:
+                    data = await request.get(file["download_url"])
+                    if data.status_code != 200:
+                        raise PluginError(
+                            f"下载文件失败: {file_path}, 状态码: {data.status_code}"
+                        )
+                    content = data.content
+                    if not content:
+                        raise PluginError(f"下载的文件为空: {file_path}")
+                    expected_sha = file.get("sha")
+                    if expected_sha:
+                        blob = f"blob {len(content)}\0".encode() + content
+                        actual_sha = hashlib.sha1(blob).hexdigest()
+                        if actual_sha != expected_sha:
+                            raise PluginError(
+                                f"下载文件校验失败: {file_path}, "
+                                f"期望 {expected_sha}, 实际 {actual_sha}"
+                            )
+                    log.debug(f"下载文件`{file_path}`")
+                    async with await anyio.open_file(temporary_path, "wb") as f:
+                        await f.write(content)
+                    os.replace(temporary_path, file_path)
+                    break
+                except (httpx.HTTPError, OSError, PluginError) as e:
+                    last_error = e
+                    temporary_path.unlink(missing_ok=True)
+                    if attempt < DOWNLOAD_RETRIES:
+                        log.warning(
+                            f"下载文件`{file_path}`失败，第 {attempt} 次重试: {e}"
+                        )
+                        await asyncio.sleep(DOWNLOAD_RETRY_DELAY)
+                    else:
+                        raise PluginError(
+                            f"下载文件失败（重试 {DOWNLOAD_RETRIES} 次）: "
+                            f"{file_path}: {last_error}"
+                        ) from e
 
     @classmethod
     async def check_update(cls, plugin_name: str):
@@ -460,7 +597,15 @@ class PluginManager:
                 await cls.update_github_plugin(repo)
             else:
                 await cls.install_plugin(plugin_name)
-            return True, f"{plugin_name}-{version}安装成功，请重启以启用新版插件"
+            try:
+                await PluginRuntimeManager.reload_plugin(plugin_name)
+                return True, f"{plugin_name}-{version} 更新成功，已热重载插件"
+            except Exception as e:
+                log.warning(f"插件 {plugin_name} 热重载失败：{e}")
+                return (
+                    True,
+                    f"{plugin_name}-{version}安装成功，请重启以启用新版插件",
+                )
         except PluginError as e:
             return False, f"更新插件失败：{e.prompt}"
         except Exception:

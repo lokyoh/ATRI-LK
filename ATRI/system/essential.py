@@ -3,10 +3,10 @@ from pathlib import Path
 from random import choice, randint
 
 from nonebot.adapters.onebot.v11 import (
-    GroupIncreaseNoticeEvent,
-    GroupDecreaseNoticeEvent,
     GroupAdminNoticeEvent,
     GroupBanNoticeEvent,
+    GroupDecreaseNoticeEvent,
+    GroupIncreaseNoticeEvent,
 )
 
 from ATRI import conf
@@ -18,7 +18,7 @@ __TEMP_DIR = Path(".") / "data" / "temp"
 __ESSENTIAL_DIR.mkdir(parents=True, exist_ok=True)
 __TEMP_DIR.mkdir(parents=True, exist_ok=True)
 
-plugin = Service("基础部件").document("对基础请求进行处理").type(Service.ServiceType.HIDDEN).version("1.0.2")
+plugin = Service("基础部件", "对基础请求进行处理", "1.0.2", Service.ServiceType.HIDDEN)
 
 group_member_event = plugin.on_notice("群成员变动", "群成员变动检测")
 
@@ -29,7 +29,9 @@ async def _(event: GroupIncreaseNoticeEvent):
         pass
     await asyncio.sleep(randint(1, 6))
     await group_member_event.finish(
-        MessageBuilder("好欸! 事新人!").at(user_id=event.user_id).text(f"在下 {choice(conf.BotConfig.nickname)}")
+        MessageBuilder("好欸! 事新人!")
+        .at(user_id=event.user_id)
+        .text(f"在下 {choice(conf.BotConfig.nickname)}")
     )
 
 

@@ -12,6 +12,9 @@ router = APIRouter()
 async def system_logs_realtime(websocket: WebSocket):
     await websocket.accept()
 
+    for log in LOG_STORAGE.get_recent():
+        await websocket.send_text(log)
+
     async def log_listener(log: str):
         await websocket.send_text(log)
 

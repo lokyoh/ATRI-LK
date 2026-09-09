@@ -1,9 +1,9 @@
 from ..utils import log, request
 from .contents import LLMContents
-from .model import LLMModel
+from .model import LLMModel, LLMResponse, ModelRequestError
 
 
-async def call_func(model: LLMModel, content: str | LLMContents):
+async def call_func(model: LLMModel, content: str | LLMContents) -> LLMResponse:
     g_c: dict = {
         "thinkingConfig": {"thinkingBudget": 0},
         "responseMimeType": "text/plain",
@@ -29,12 +29,12 @@ async def call_func(model: LLMModel, content: str | LLMContents):
     )
     if response.status_code == 200:
         data = response.json()
-        return {
-            "usage": data["usageMetadata"],
-            "content": data["candidates"][0]["content"]["parts"][0]["text"],
-        }
+        return LLMResponse(
+            content=data["candidates"][0]["content"]["parts"][0]["text"],
+            usage=data["usageMetadata"]
+        )
     log.warning(f"请求失败了:{response.status_code}\n{response.text}")
-    return f"请求失败了:{response.status_code}\n具体信息请查看后台警告"
+    raise ModelRequestError(f"请求失败了:{response.status_code}\n具体信息请查看后台警告", status_code=response.status_code)
 
 
 def create_gemini_model(

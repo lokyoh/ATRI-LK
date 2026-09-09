@@ -28,6 +28,13 @@ class TTSConfig(BaseModel):
     api_key: str = ""
 
 
+class EmbeddingConfig(BaseModel):
+    enable: bool = False
+    model: str = ""
+    url: str = ""
+    api_key: str = ""
+
+
 class AgentConfig(BaseModel):
     """
     agent插件设置:
@@ -36,6 +43,7 @@ class AgentConfig(BaseModel):
     max_history: int = 20
     search: SearchConfig = SearchConfig()
     tts: TTSConfig = TTSConfig()
+    embedding: EmbeddingConfig = EmbeddingConfig()
 
 
 config_manager: PluginConfig = plugin.add_plugin_config(AgentConfig)
@@ -61,8 +69,8 @@ def load_provider_from_config():
             )
         return
     provider_data: dict = yaml.safe_load(PROVIDER_CONFIG_FILE.read_bytes())
-    for _provider in provider_data:
+    for _provider, value in provider_data.items():
         try:
-            ProviderManager.register(LLMProvider(**provider_data[_provider]))
+            ProviderManager.register(LLMProvider(**value))
         except Exception as e:
             log.error(f"{_provider}无效配置:\n{str_traceback(e)}")

@@ -1,22 +1,32 @@
 import asyncio
+import inspect
 import re
 from enum import Enum
 from pathlib import Path
 from types import ModuleType
-from typing import Dict, List, Optional, Set, Tuple, Type, Union
+from typing import ClassVar
 
 from nonebot import get_bot
 from nonebot.adapters import Event
 from nonebot.adapters.onebot.v11 import Message
 from nonebot.dependencies import Dependent
-from nonebot.matcher import Matcher
-from nonebot.rule import Rule, command, keyword, regex
+from nonebot.matcher import Matcher, matchers
+from nonebot.rule import (
+    TRIE_VALUE,
+    CommandRule,
+    Rule,
+    TrieRule,
+    command,
+    keyword,
+    regex,
+)
 from nonebot.typing import (
     T_Handler,
     T_PermissionChecker,
     T_RuleChecker,
     T_State,
 )
+from pydantic import Field
 
 from ATRI import driver
 from ATRI.configs import PluginConfig
@@ -46,10 +56,10 @@ class ServiceInfo(BaseModel):
 
 class ServiceConfig(BaseModel):
     enabled: bool = True
-    disable_user: list = []
-    disable_group: list = []
+    disable_user: list[str] = Field(default_factory=list)
+    disable_group: list[str] = Field(default_factory=list)
     white_list_mode: bool = False
-    white_list: list = []
+    white_list: list[str] = Field(default_factory=list)
 
 
 class CommandInfo(BaseModel):
@@ -80,7 +90,7 @@ class Service:
         self,
         service: str,
         docs: str = "无介绍",
-        version: str = str(),
+        version: str = "",
         type_: ServiceType = ServiceType.OTHER,
         author: str | None = None,
     ):
@@ -98,6 +108,17 @@ class Service:
         if type_ is self.ServiceType.CLOSED:
             raise ServiceRegisterError("无法注册`CLOSED`服务类型")
         self.service = service
+        frame = inspect.currentframe()
+        try:
+            caller = frame.f_back if frame else None
+            module_name = caller.f_globals.get("__name__") if caller else None
+            if module_name and module_name.endswith(".service"):
+                module_name = module_name.rsplit(".", 1)[0]
+        finally:
+            del frame
+        if not module_name:
+            raise ServiceRegisterError("无法解析运行时模块名")
+        self.module_name = module_name
         self._docs = docs
         self._version = version
         self._type = type_
@@ -106,13 +127,14 @@ class Service:
         self._allow_switch = True
         self._permission = None
         self._priority = 10
-        self._main_cmd = (str(),)
+        self._main_cmd = ("",)
         self._temp = False
         self._rule = is_in_service(service)
         self._handlers = None
         self._state = None
         self._path = PLUGIN_DATA_DIR / self.service
         self._scheduler_manager = None
+        self._on_unload_handlers = []
         self.__generate_service_conf()
         ServiceTools.service_list[service] = self
 
@@ -125,7 +147,7 @@ class Service:
         self._docs = context
         return self
 
-    def type(self, type_: ServiceType) -> "Service":
+    def set_type(self, type_: ServiceType) -> "Service":
         """
         设置服务类型。
         :param type_: 服务类型
@@ -161,7 +183,7 @@ class Service:
         self._allow_switch = _is
         return self
 
-    def rule(self, rule: Optional[Union[Rule, T_RuleChecker]]) -> "Service":
+    def rule(self, rule: Rule | T_RuleChecker | None) -> "Service":
         """
         为服务添加触发判定。
         :param rule: 触发判断
@@ -179,7 +201,7 @@ class Service:
         self._permission = perm
         return self
 
-    def handlers(self, hand: Optional[List[T_Handler]]) -> "Service":
+    def handlers(self, hand: list[T_Handler] | None) -> "Service":
         """
         为服务设置处理函数。
         :param hand: 处理函数列表
@@ -206,7 +228,7 @@ class Service:
         self._priority = level
         return self
 
-    def state(self, state: Optional[T_State]) -> "Service":
+    def state(self, state: T_State | NotImplementedError) -> "Service":
         """
         为服务设置事件处理状态。
         :param state: 事件处理状态
@@ -228,7 +250,7 @@ class Service:
         """设置插件为nonebot插件"""
         name = "请参考对应插件文档"
         self._cmd_list[name] = CommandInfo(
-            type="ignore", docs=str(), aliases=list()
+            type="ignore", docs="", aliases=[]
         ).model_dump()
         return self
 
@@ -244,10 +266,7 @@ class Service:
             return
         data = ServiceConfig(
             enabled=True,
-            disable_user=list(),
-            disable_group=list(),
             white_list_mode=False,
-            white_list=list(),
         )
         try:
             data.write_into_file(path)
@@ -256,15 +275,15 @@ class Service:
 
     def on_message(
         self,
-        name: str = str(),
-        docs: str = str(),
-        rule: Optional[Union[Rule, T_RuleChecker]] = None,
-        permission: Optional[Union[Permission, T_PermissionChecker]] = None,
-        handlers: Optional[List[Union[T_Handler, Dependent]]] = None,
+        name: str = "",
+        docs: str = "",
+        rule: Rule | T_RuleChecker | None = None,
+        permission: Permission | T_PermissionChecker | None = None,
+        handlers: list[T_Handler | Dependent] | None = None,
         block: bool = True,
         priority: int = 10,
-        state: Optional[T_State] = None,
-    ) -> Type[Matcher]:
+        state: T_State | None = None,
+    ) -> type[Matcher]:
         if not rule:
             rule = self._rule
         if not permission:
@@ -277,7 +296,7 @@ class Service:
         if name:
             name = name + "-onmsg"
             self._cmd_list[name] = CommandInfo(
-                type="message", docs=docs, aliases=list()
+                type="message", docs=docs, aliases=[]
             ).model_dump()
 
         matcher = Matcher.new(
@@ -293,10 +312,10 @@ class Service:
         )
         return matcher
 
-    def on_notice(self, name: str, docs: str, block: bool = True) -> Type[Matcher]:
+    def on_notice(self, name: str, docs: str, block: bool = True) -> type[Matcher]:
         name = name + "-onntc"
         self._cmd_list[name] = CommandInfo(
-            type="notice", docs=docs, aliases=list()
+            type="notice", docs=docs, aliases=[]
         ).model_dump()
 
         matcher = Matcher.new(
@@ -312,10 +331,10 @@ class Service:
         )
         return matcher
 
-    def on_request(self, name: str, docs: str, block: bool = True) -> Type[Matcher]:
+    def on_request(self, name: str, docs: str, block: bool = True) -> type[Matcher]:
         name = name + "-onreq"
         self._cmd_list[name] = CommandInfo(
-            type="request", docs=docs, aliases=list()
+            type="request", docs=docs, aliases=[]
         ).model_dump()
 
         matcher = Matcher.new(
@@ -333,13 +352,13 @@ class Service:
 
     def on_command(
         self,
-        cmd: Union[str, Tuple[str, ...]],
+        cmd: str | tuple[str, ...],
         docs: str,
-        rule: Optional[Union[Rule, T_RuleChecker]] = None,
-        aliases: Optional[Set[Union[str, Tuple[str, ...]]]] = None,
+        rule: Rule | T_RuleChecker | None = None,
+        aliases: set[str | tuple[str, ...]] | None = None,
         block: bool = True,
         **kwargs,
-    ) -> Type[Matcher]:
+    ) -> type[Matcher]:
         if not cmd:
             raise TypeError("cmd is required")
         if not docs:
@@ -360,15 +379,15 @@ class Service:
 
     def on_keyword(
         self,
-        keywords: Set[str],
+        keywords: set[str],
         docs: str,
-        rule: Optional[Union[Rule, T_RuleChecker]] = None,
+        rule: Rule | T_RuleChecker | None = None,
         **kwargs,
-    ) -> Type[Matcher]:
+    ) -> type[Matcher]:
         if not rule:
             rule = self._rule
 
-        name = list(keywords)[0] + "-onkw"
+        name = next(iter(keywords)) + "-onkw"
         self._cmd_list[name] = CommandInfo(
             type="keyword", docs=docs, aliases=list(keywords)
         ).model_dump()
@@ -379,34 +398,34 @@ class Service:
         self,
         pattern: str,
         docs: str,
-        flags: Union[int, re.RegexFlag] = 0,
-        rule: Optional[Union[Rule, T_RuleChecker]] = None,
+        flags: int | re.RegexFlag = 0,
+        rule: Rule | T_RuleChecker | None = None,
         **kwargs,
-    ) -> Type[Matcher]:
+    ) -> type[Matcher]:
         if not rule:
             rule = self._rule
 
         self._cmd_list[pattern] = CommandInfo(
-            type="regex", docs=docs, aliases=list()
+            type="regex", docs=docs, aliases=[]
         ).model_dump()
 
         return self.on_message(rule=regex(pattern, flags) & rule, **kwargs)
 
-    def cmd_as_group(self, cmd: str, docs: str, **kwargs) -> Type[Matcher]:
+    def cmd_as_group(self, cmd: str, docs: str, **kwargs) -> type[Matcher]:
         if not cmd:
             raise TypeError("cmd is required")
         if not docs:
             docs = "暂无描述"
-        sub_cmd = (cmd,) if isinstance(cmd, str) else cmd
+        sub_cmd = (cmd,)
         _cmd = self._main_cmd + sub_cmd
 
         if "aliases" in kwargs:
-            del kwargs["aliases"]
+            kwargs.pop("aliases", None)
 
         return self.on_command(_cmd, docs, **kwargs)
 
     @staticmethod
-    async def send_to_master(message: Union[str, Message]):
+    async def send_to_master(message: str | Message):
         """
         发送消息给主人。
         :param message: 消息
@@ -450,6 +469,90 @@ class Service:
             else:
                 func()
 
+    @staticmethod
+    def rebuild_command_trie():
+        """根据当前仍然存活的 matcher 规则重建命令前缀 trie。"""
+        from itertools import product
+
+        from pygtrie import CharTrie
+
+        TrieRule.prefix = CharTrie()
+        try:
+            from nonebot import get_driver
+
+            config = get_driver().config
+            command_start = config.command_start
+            command_sep = config.command_sep
+        except Exception:
+            return
+        for matcher_group in matchers.values():
+            for matcher in matcher_group:
+                rule = getattr(matcher, "rule", None)
+                if rule is None:
+                    continue
+                for checker in getattr(rule, "checkers", set()):
+                    call = getattr(checker, "call", None)
+                    if not isinstance(call, CommandRule):
+                        continue
+                    cmds = getattr(call, "cmds", None)
+                    if not cmds:
+                        continue
+                    for cmd in cmds:
+                        if len(cmd) == 1:
+                            for start in command_start:
+                                TrieRule.add_prefix(
+                                    f"{start}{cmd[0]}", TRIE_VALUE(start, cmd)
+                                )
+                        else:
+                            for start, sep in product(command_start, command_sep):
+                                TrieRule.add_prefix(
+                                    f"{start}{sep.join(cmd)}",
+                                    TRIE_VALUE(start, cmd),
+                                )
+
+    async def unload(self):
+        """服务卸载"""
+        module_name = getattr(self, "module_name", None)
+        service_name = getattr(self, "service", None)
+        # 1. 清理当前服务注册的 Matcher
+        for priority, matcher_group in list(matchers.items()):
+            matcher_group[:] = [
+                matcher
+                for matcher in matcher_group
+                if getattr(matcher, "module_name", None)
+                not in {module_name, service_name}
+            ]
+            if not matcher_group:
+                del matchers[priority]
+        # 2. 重新构建命令前缀 trie，避免重载后残留旧命令前缀
+        self.rebuild_command_trie()
+        # 3. 清理当前服务注册的定时任务
+        jobs = SchedulerController.service_schedulers.get(self.service, {})
+        for job_name, job in list(jobs.items()):
+            try:
+                job.job.remove()
+            except Exception as e:
+                log.warning(f"移除定时任务 {job_name} 失败: {e}")
+            finally:
+                jobs.pop(job_name, None)
+        SchedulerController.service_schedulers.pop(self.service, None)
+        self._scheduler_manager = None
+        # 4. 执行卸载回调，保证在清理结束后再释放资源
+        hooks = list(getattr(self, "_on_unload_handlers", []))
+        if hasattr(self, "_on_unload_handlers"):
+            self._on_unload_handlers.clear()
+        for func in hooks:
+            if not callable(func):
+                continue
+            result = func()
+            if inspect.isawaitable(result):
+                await result
+
+    def on_unload(self, func):
+        """注册一个服务卸载时执行的函数"""
+        self._on_unload_handlers.append(func)
+        return func
+
     def conf(self) -> ServiceConfig:
         """
         获取服务的基础配置。
@@ -464,7 +567,7 @@ class Service:
         """
         return PluginConfig.get(self.service)
 
-    def add_plugin_config(self, model: Type[BaseModel]) -> PluginConfig:
+    def add_plugin_config(self, model: type[BaseModel]) -> PluginConfig:
         """
         添加服务的插件设置。
         :param model: 插件设置模型
@@ -478,7 +581,7 @@ class ServiceTools:
     针对服务的工具类。
     """
 
-    service_list: Dict[str, Service] = {}
+    service_list: ClassVar[dict[str, Service]] = {}
     builtin_plugins: tuple = (
         "agent",
         "帮助",
@@ -548,7 +651,9 @@ class ServiceTools:
         c_path = CONFIG_DIR / f"{self.service}.json"
         c_path.unlink()
 
-    def auth_service(self, user_id: str = None, group_id: str = None) -> bool:
+    def auth_service(
+        self, user_id: str | None = None, group_id: str | None = None
+    ) -> bool:
         """
         当前服务对指定用户或群聊是否可用。
         :param user_id: 用户id

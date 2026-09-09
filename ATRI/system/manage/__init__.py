@@ -1,7 +1,6 @@
 import inspect
 import re
-from datetime import datetime
-from typing import Callable, Type
+from collections.abc import Callable
 
 from nonebot.adapters.onebot.v11 import (
     Bot,
@@ -17,6 +16,7 @@ from ATRI.message import MessageBuilder
 from ATRI.permission import ADMIN, MASTER
 from ATRI.rule import to_bot
 from ATRI.service import Service
+from ATRI.utils.datetime import now_timestamp
 
 from .data_source import BotManager
 from .models import RequestInfo
@@ -26,7 +26,7 @@ _QUIT_ARGS = ["算了", "罢了"]
 
 
 def handle_command(
-    plugin_matcher: Type[Matcher],
+    plugin_matcher: type[Matcher],
     func: Callable,
     success_msg: str,
     fail_msg: str = "操作 {} 失败...原因：\n{}",
@@ -66,12 +66,10 @@ def handle_command(
 
 
 plugin = (
-    Service("管理")
-    .document("控制 ATRI 的各项服务")
-    .type(Service.ServiceType.SYSTEM)
+    Service("管理", "控制 ATRI 的各项服务", "1.1.0", Service.ServiceType.SYSTEM)
     .permission(MASTER)
-    .version("1.1.0")
-).allow_switch(False)
+    .allow_switch(False)
+)
 
 block_user = plugin.on_command("封禁用户", "阻止目标用户使用 ATRI")
 handle_command(block_user, BotManager().block_user, "用户 {} 危！")
@@ -142,7 +140,7 @@ async def _(event: MessageEvent):
     try:
         result = BotManager().toggle_user_service(target_service, target_user)
     except Exception as e:
-        await toggle_user_service.finish(f"操作失败，原因：{str(e)}")
+        await toggle_user_service.finish(f"操作失败，原因：{e}")
     await toggle_user_service.finish(
         f"已{'允许' if result else '禁止'}用户 {target_user} 使用 {target_service}"
     )
@@ -164,7 +162,7 @@ async def _(event: MessageEvent):
             target_service, target_group
         )
     except Exception as e:
-        await toggle_group_service_white_list.finish(f"操作失败，原因：{str(e)}")
+        await toggle_group_service_white_list.finish(f"操作失败，原因：{e}")
     await toggle_user_service.finish(
         f"{target_service} 的白名单已{'添加' if result else '移除'}群 {target_group}"
     )
@@ -178,7 +176,7 @@ async def _(event: FriendRequestEvent):
     apply_code = event.flag
     user_id = event.get_user_id()
     apply_comment = event.comment
-    now_time = str(datetime.now().timestamp())
+    now_time = str(now_timestamp())
 
     raw_data = await BotManager().load_friend_req()
     data = raw_data.model_dump()
@@ -211,7 +209,7 @@ async def _(event: GroupRequestEvent):
     target_group = event.group_id
     user_id = event.get_user_id()
     apply_comment = event.comment
-    now_time = str(datetime.now().timestamp())
+    now_time = str(now_timestamp())
 
     raw_data = await BotManager().load_group_req()
     data = raw_data.model_dump()
@@ -242,7 +240,7 @@ async def _():
     if not data:
         await get_friend_req_list.finish("当前没有申请")
 
-    cache_list = list()
+    cache_list = []
     for i in data.data:
         apply_code = i
         apply_data = data.data[i]
@@ -267,7 +265,7 @@ async def _():
     if not data:
         await get_group_req_list.finish("当前没有申请")
 
-    cache_list = list()
+    cache_list = []
     for i in data.data:
         apply_code = i
         apply_data = data.data[i]
@@ -315,7 +313,7 @@ async def _(plugin_name: str = ArgPlainText("plugin_name")):
         .text(f"说明: {plugin_info.desc}")
         .text(f"作者: {plugin_info.author}")
         .text(f"插件主页: {plugin_info.homepage}")
-        .text(f"{str() if plugin_info.is_official else '[!] 非'}官方插件")
+        .text(f"{'' if plugin_info.is_official else '[!] 非'}官方插件")
     )
     await add_nonebot_plugin.send(msg)
 
@@ -365,9 +363,9 @@ async def _(event: MessageEvent):
     await upgrade_nonebot_plugin.finish(msg)
 
 
-from ATRI import driver  # noqa: E402
+from ATRI import driver
 
-from .listener import init_listener  # noqa: E402
+from .listener import init_listener
 
 driver().on_startup(init_listener)
 driver().on_startup(NonebotPluginManager().get_store_list)

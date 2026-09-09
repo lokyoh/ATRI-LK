@@ -1,5 +1,5 @@
 import time
-from datetime import datetime, timedelta
+from datetime import timedelta
 
 import nonebot
 from nonebot.adapters import Bot
@@ -14,6 +14,7 @@ from ATRI.log import log
 from ATRI.scheduler import SchedulerController
 from ATRI.service import ServiceTools
 from ATRI.system.manage import BotManager
+from ATRI.utils.datetime import fromtimestamp, now
 
 from ....config import AVA_URL, GROUP_AVA_URL, QueryDateType
 from .model import (
@@ -95,11 +96,11 @@ class ApiDataSource:
         参数:
             select_bot: bot
         """
-        now = datetime.now()
+        _now = now()
         # 今日累计接收消息
         select_bot.received_messages = await MessageStatistics.filter(
             bot_id=select_bot.self_id,
-            created_at__gte=now - timedelta(hours=now.hour),
+            created_at__gte=_now - timedelta(hours=_now.hour),
         ).count()
         # 群聊数量
         try:
@@ -116,11 +117,11 @@ class ApiDataSource:
         # 连接时间
         select_bot.connect_time = bot_live.get(select_bot.self_id) or 0
         if select_bot.connect_time:
-            connect_date = datetime.fromtimestamp(select_bot.connect_time)
+            connect_date = fromtimestamp(select_bot.connect_time)
             select_bot.connect_date = connect_date.strftime("%Y-%m-%d %H:%M:%S")
         select_bot.version = cls.__get_bot_version()
         day_call = await ServiceStatistics.filter(
-            created_at__gte=now - timedelta(hours=now.hour)
+            created_at__gte=_now - timedelta(hours=_now.hour)
         ).count()
         select_bot.day_call = day_call
 
@@ -161,23 +162,23 @@ class ApiDataSource:
         返回:
             QueryCount: 数据内容
         """
-        now = datetime.now()
+        _now = now()
         query = MessageStatistics
         if bot_id:
             query = query.filter(bot_id=bot_id)
         all_count = await query.annotate().count()
         day_count = await query.filter(
-            created_at__gte=now - timedelta(hours=now.hour, minutes=now.minute)
+            created_at__gte=_now - timedelta(hours=_now.hour, minutes=_now.minute)
         ).count()
         week_count = await query.filter(
-            created_at__gte=now - timedelta(days=7, hours=now.hour, minutes=now.minute)
+            created_at__gte=_now - timedelta(days=7, hours=_now.hour, minutes=_now.minute)
         ).count()
         month_count = await query.filter(
-            created_at__gte=now - timedelta(days=30, hours=now.hour, minutes=now.minute)
+            created_at__gte=_now - timedelta(days=30, hours=_now.hour, minutes=_now.minute)
         ).count()
         year_count = await query.filter(
-            created_at__gte=now
-            - timedelta(days=365, hours=now.hour, minutes=now.minute)
+            created_at__gte=_now
+            - timedelta(days=365, hours=_now.hour, minutes=_now.minute)
         ).count()
         return QueryCount(
             num=all_count,
@@ -197,23 +198,23 @@ class ApiDataSource:
         返回:
             QueryCount: 数据内容
         """
-        now = datetime.now()
+        _now = now()
         query = ServiceStatistics
         if bot_id:
             query = query.filter(bot_id=bot_id)
         all_count = await query.annotate().count()
         day_count = await query.filter(
-            created_at__gte=now - timedelta(hours=now.hour, minutes=now.minute)
+            created_at__gte=_now - timedelta(hours=_now.hour, minutes=_now.minute)
         ).count()
         week_count = await query.filter(
-            created_at__gte=now - timedelta(days=7, hours=now.hour, minutes=now.minute)
+            created_at__gte=_now - timedelta(days=7, hours=_now.hour, minutes=_now.minute)
         ).count()
         month_count = await query.filter(
-            created_at__gte=now - timedelta(days=30, hours=now.hour, minutes=now.minute)
+            created_at__gte=_now - timedelta(days=30, hours=_now.hour, minutes=_now.minute)
         ).count()
         year_count = await query.filter(
-            created_at__gte=now
-            - timedelta(days=365, hours=now.hour, minutes=now.minute)
+            created_at__gte=_now
+            - timedelta(days=365, hours=_now.hour, minutes=_now.minute)
         ).count()
         return QueryCount(
             num=all_count,
@@ -237,33 +238,33 @@ class ApiDataSource:
             bot_id: bot id.
         """
         query = base_query
-        now = datetime.now()
+        _now = now()
         if bot_id:
             query = query.filter(bot_id=bot_id)
         if date_type == QueryDateType.DAY:
             query = query.filter(
-                created_at__gte=now
-                - timedelta(hours=now.hour, minutes=now.minute, seconds=now.second)
+                created_at__gte=_now
+                - timedelta(hours=_now.hour, minutes=_now.minute, seconds=_now.second)
             )
         if date_type == QueryDateType.WEEK:
             query = query.filter(
-                created_at__gte=now
+                created_at__gte=_now
                 - timedelta(
-                    days=7, hours=now.hour, minutes=now.minute, seconds=now.second
+                    days=7, hours=_now.hour, minutes=_now.minute, seconds=_now.second
                 )
             )
         if date_type == QueryDateType.MONTH:
             query = query.filter(
-                created_at__gte=now
+                created_at__gte=_now
                 - timedelta(
-                    days=30, hours=now.hour, minutes=now.minute, seconds=now.second
+                    days=30, hours=_now.hour, minutes=_now.minute, seconds=_now.second
                 )
             )
         if date_type == QueryDateType.YEAR:
             query = query.filter(
-                created_at__gte=now
+                created_at__gte=_now
                 - timedelta(
-                    days=365, hours=now.hour, minutes=now.minute, seconds=now.second
+                    days=365, hours=_now.hour, minutes=_now.minute, seconds=_now.second
                 )
             )
         return query
@@ -292,7 +293,10 @@ class ApiDataSource:
         )
         id2name = {}
         if data_list:
-            bot = nonebot.get_bot(bot_id)
+            try:
+                bot = nonebot.get_bot(bot_id)
+            except ValueError:
+                return []
             if info_list := await BotUtils.get_group_list(bot):
                 for group_info in info_list:
                     id2name[group_info.group_id] = group_info.group_name

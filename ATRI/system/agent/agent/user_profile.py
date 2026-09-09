@@ -1,6 +1,5 @@
-from .user import get_user_info
-from .user import save_user_info
-from ..llm import llm_manager, ModelType
+from ..llm import ModelType, llm_manager
+from .user import get_user_info, save_user_info
 
 
 class UserProfile:
@@ -26,6 +25,9 @@ class UserProfile:
         user_info = get_user_info(user_id)
         o_profile = user_info.profile
         prompt = cls.prompt.format(o_profile, profile_change)
-        profile = await llm_manager.call_model_by_type(ModelType.TOOL, prompt)
-        user_info.profile = profile.get('content')
+        try:
+            profile = await llm_manager.call_model_by_type(ModelType.TOOL, prompt)
+        except Exception:
+            return
+        user_info.profile = profile.content
         save_user_info(user_id, user_info)

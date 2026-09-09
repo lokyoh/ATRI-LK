@@ -226,13 +226,12 @@ async def _(name: str = ArgPlainText("rank_name")):
     await rank.finish(msg)
 
 
-plugin_admin = (
-    Service("群管")
-    .document("ATRI的综合性插件的群聊管理员指令部分")
-    .type(Service.ServiceType.LKPLUGIN)
-    .version(PLUGIN_VERSION)
-    .permission(ADMIN)
-)
+plugin_admin = Service(
+    "群管",
+    "ATRI的综合性插件的群聊管理员指令部分",
+    PLUGIN_VERSION,
+    Service.ServiceType.LKPLUGIN,
+).permission(ADMIN)
 
 user_list = plugin_admin.on_command(
     cmd="用户列表", docs="列出本群所有的用户", permission=ADMIN
@@ -240,7 +239,7 @@ user_list = plugin_admin.on_command(
 
 
 @user_list.handle()
-async def _(bot: Bot, event: MessageEvent):
+async def _(bot: Bot, event: GroupMessageEvent):
     mg = await LKBot.get_group_user_list(bot, int(event.group_id))
     await mg.send_message(user_list)
 
@@ -301,13 +300,12 @@ async def _(event: GroupMessageEvent):
         await r18_mode_switch.finish("尝新模式已开启")
 
 
-plugin_master = (
-    Service("主人")
-    .document("ATRI的综合性插件的主人专用指令部分")
-    .type(Service.ServiceType.LKPLUGIN)
-    .version(PLUGIN_VERSION)
-    .permission(MASTER)
-)
+plugin_master = Service(
+    "主人",
+    "ATRI的综合性插件的主人专用指令部分",
+    PLUGIN_VERSION,
+    Service.ServiceType.LKPLUGIN,
+).permission(MASTER)
 
 force_change_name = plugin_master.on_command(
     cmd="强制改名",

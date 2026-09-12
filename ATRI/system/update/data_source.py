@@ -18,7 +18,7 @@ class Updater:
             message.text(
                 f"远程版本: {latest_info.version} 更新时间: {latest_info.update_time}"
             )
-            message.text(f"更新信息: {latest_info.update_time}")
+            message.text(f"更新信息: {latest_info.info}")
             return message
         else:
             return message.text("最新版本获取失败")
@@ -53,6 +53,27 @@ class Updater:
             if proc.returncode != 0:
                 return f"更新失败:\n{stderr2.decode(errors='replace')}"
             return "更新完成，请手动重新启动"
+        except Exception as e:
+            log.error(f"更新失败:\n{str_traceback(e)}")
+            return "更新失败"
+
+    @classmethod
+    async def update_to_beta(cls):
+        try:
+            proc = await asyncio.create_subprocess_exec(
+                "git", "fetch", "--all", "-f", stdout=asyncio.subprocess.PIPE
+            )
+            _, stderr1 = await proc.communicate()
+            proc = await asyncio.create_subprocess_exec(
+                "git", "reset", "--hard", "origin/main", stdout=asyncio.subprocess.PIPE
+            )
+            _, stderr2 = await proc.communicate()
+            if stderr1:
+                err = stderr1
+                if stderr2:
+                    err += f"\n{stderr2}"
+                return f"更新失败:\n{err}"
+            return "更新完成，请重新启动"
         except Exception as e:
             log.error(f"更新失败:\n{str_traceback(e)}")
             return "更新失败"

@@ -9,6 +9,7 @@ __pycache__/
 /.idea/
 /.vscode/
 *.pyc
+/.env.prod
 !/plugins/rss/
 /plugins/rss/*
 !/plugins/rss/__init__.py

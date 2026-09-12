@@ -73,6 +73,7 @@ class ReplyFunctionCallingManager(FunctionCallingManager):
 
 def register_function_calling():
     FunctionCallingManager.clear_all()
+    ReplyFunctionCallingManager.clear_all()
 
     class LoveChangeFunctionCalling(FunctionCalling):
         @staticmethod
@@ -301,63 +302,57 @@ def register_function_calling():
             ),
         )
 
-        class UserProfileGetFunctionCalling(FunctionCalling):
-            continue_calling = True
+    class UserProfileGetFunctionCalling(FunctionCalling):
+        continue_calling = True
 
-            @staticmethod
-            async def call(data: FunctionCallingData):
-                """
-                获取指定用户的用户画像
-                """
-                user_id = data.data.get("user_id")
-                return UserProfile.get_profile(user_id)
+        @staticmethod
+        async def call(data: FunctionCallingData):
+            """
+            获取指定用户的用户画像
+            """
+            user_id = data.data.get("user_id")
+            return UserProfile.get_profile(user_id)
 
-        FunctionCallingManager.register(
-            "get_user_profile",
-            UserProfileGetFunctionCalling,
-            ChatFunction(
-                function_name="get_user_profile",
-                description="获取指定用户的用户画像，可以多次调用",
-                args=[
-                    ChatFunctionArg(
-                        name="user_id", _type="str", description="目标用户ID"
-                    )
-                ],
-            ),
-        )
+    FunctionCallingManager.register(
+        "get_user_profile",
+        UserProfileGetFunctionCalling,
+        ChatFunction(
+            function_name="get_user_profile",
+            description="获取指定用户的用户画像，可以多次调用",
+            args=[
+                ChatFunctionArg(name="user_id", _type="str", description="目标用户ID")
+            ],
+        ),
+    )
 
-        class UserProfileChangeFunctionCalling(FunctionCalling):
-            @staticmethod
-            async def call(data: FunctionCallingData):
-                """
-                获取指定用户的用户画像
-                """
-                user_id = data.data.get("user_id")
-                profile_change = data.data.get("profile_change")
-                log.info(f"用户 {user_id} 更改画像：{profile_change}")
-                now_user_profile = await UserProfile.change_profile(
-                    user_id, profile_change
-                )
-                log.info(f"用户 {user_id} 画像更改成功: {now_user_profile}")
+    class UserProfileChangeFunctionCalling(FunctionCalling):
+        @staticmethod
+        async def call(data: FunctionCallingData):
+            """
+            修改指定用户的用户画像
+            """
+            user_id = data.data.get("user_id")
+            profile_change = data.data.get("profile_change")
+            log.info(f"用户 {user_id} 更改画像：{profile_change}")
+            now_user_profile = await UserProfile.change_profile(user_id, profile_change)
+            log.info(f"用户 {user_id} 画像更改成功: {now_user_profile}")
 
-        FunctionCallingManager.register(
-            "change_user_profile",
-            UserProfileChangeFunctionCalling,
-            ChatFunction(
-                function_name="change_user_profile",
-                description="更改指定用户的用户画像，用户画像包含客观描写与个人看法，但不是必须都存在的，可以多次调用",
-                args=[
-                    ChatFunctionArg(
-                        name="user_id", _type="str", description="目标用户ID"
-                    ),
-                    ChatFunctionArg(
-                        name="profile_change",
-                        _type="str",
-                        description="如何更改用户画像，除自己以外的人物全都使用用户ID，仅在change操作时需要",
-                    ),
-                ],
-            ),
-        )
+    FunctionCallingManager.register(
+        "change_user_profile",
+        UserProfileChangeFunctionCalling,
+        ChatFunction(
+            function_name="change_user_profile",
+            description="更改指定用户的用户画像，用户画像包含客观描写与个人看法，但不是必须都存在的，可以多次调用",
+            args=[
+                ChatFunctionArg(name="user_id", _type="str", description="目标用户ID"),
+                ChatFunctionArg(
+                    name="profile_change",
+                    _type="str",
+                    description="如何更改用户画像，除自己以外的人物全都使用用户ID，仅在change操作时需要",
+                ),
+            ],
+        ),
+    )
 
 
 register_function_calling()

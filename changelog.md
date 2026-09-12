@@ -24,6 +24,8 @@
   - 移除不再使用的`ATRI.utils.apsheduler`,请用`ATRI.sheduler`代替
   - `lkapi`移除不再使用的`ai`模块及设置,请用`agent.llm.llmmanager`代替
   - `lkbot`的每日更新事件,请用`ATRI.event`的`daily_update`代替
+- Patch1:
+  - `agent`修复功能调用格式错误导致的逻辑错误与回复调用未清空bug
 
 ## Jul 17, 2026
 

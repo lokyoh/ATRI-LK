@@ -26,6 +26,8 @@
   - `lkbot`的每日更新事件,请用`ATRI.event`的`daily_update`代替
 - Patch1:
   - `agent`修复功能调用格式错误导致的逻辑错误与回复调用未清空bug
+- Patch2:
+  - `agent`修复AtMessageSegment方法错误
 
 ## Jul 17, 2026
 

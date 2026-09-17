@@ -149,7 +149,7 @@ class AtMessageSegment(MessageSegment):
     async def get_msg(self, bot):
         return f"[@{await get_name(bot, self.data[0], self.data[1])} id:{self.data[0]}]"
 
-    async def get_msg_str(self):
+    def get_msg_str(self):
         return f"[@{self.data[0]}]"
 
 

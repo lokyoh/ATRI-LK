@@ -6,9 +6,9 @@ from nonebot.adapters.onebot.v11 import Message
 from ATRI.exceptions import str_traceback
 from ATRI.log import log
 
-from ..agent.atri import ATRI
 from ..agent.function_calling import FunctionCallingData, ReplyFunctionCallingManager
-from ..agent.history import chat_history
+from ..agent.history import History
+from ..agent.role import ATRI
 from ..agent.sender import ChatSender, QQChatSender
 from ..agent.user import get_user_info
 from ..agent.util import get_name, get_user_group
@@ -19,8 +19,7 @@ from ..llm.tts import generate_audio
 
 class ReplyModel:
     @staticmethod
-    async def get_prompt(group_id, user_id, user_info, bot):
-        lst_history = chat_history[group_id].get_last_history()
+    async def get_prompt(group_id, user_id, user_info, bot, lst_history: History):
         lst_msg = await lst_history.message.get_message(bot)
         # 对话提示信息
         prompt = f"现在{await get_name(bot, lst_history.sender, group_id)}[id:{user_id}]在{lst_history.time}的消息引起了你的注意\n"
@@ -95,12 +94,15 @@ class ReplyModel:
         thinking_list,
         calling_backs,
         sender: ChatSender,
+        message_history: History,
         with_tts=False,
     ):
         group_id = str(group_id)
         user_id = str(user_id)
         user_info = get_user_info(user_id)
-        prompt = await cls.get_prompt(group_id, user_id, user_info, bot)
+        prompt = await cls.get_prompt(
+            group_id, user_id, user_info, bot, message_history
+        )
         prompt += cls.get_function_prompt(thinking_list, calling_backs)
         resp = await llm_manager.call_model_by_type(ModelType.CHAT, prompt)
         response = await cls.process_resp(resp.content, user_id, group_id)
@@ -108,7 +110,7 @@ class ReplyModel:
         for m in response:
             msg.append(m)
         plain_text = msg.extract_plain_text()
-        chat_history[group_id].add_reply(plain_text)
+        message_history.add_response(plain_text)
         await sender.send(msg)
         if (
             config.tts.enable

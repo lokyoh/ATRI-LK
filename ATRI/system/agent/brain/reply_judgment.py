@@ -1,6 +1,6 @@
 from ATRI.log import log
 
-from ..agent.atri import ATRI
+from ..agent.role import ATRI
 from ..llm import ModelType, llm_manager
 
 

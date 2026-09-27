@@ -1,8 +1,7 @@
+import asyncio
 import base64
 from io import BytesIO
 from pathlib import Path
-from time import sleep
-from typing import Optional, Union, Type
 
 from nonebot.adapters.onebot.v11.message import Message, MessageSegment
 from nonebot.internal.matcher import Matcher
@@ -13,7 +12,7 @@ class MessageBuilder(Message):
     消息构建器，可当作消息发送。
     """
 
-    def at(self, user_id: Union[int, str]) -> "MessageBuilder":
+    def at(self, user_id: int | str) -> "MessageBuilder":
         """
         添加@类型消息。
         :param user_id: @对象
@@ -32,12 +31,12 @@ class MessageBuilder(Message):
         return self
 
     def image(
-            self,
-            file: Union[str, bytes, BytesIO, Path],
-            type_: Optional[str] = None,
-            cache: bool = True,
-            proxy: bool = True,
-            timeout: Optional[int] = None,
+        self,
+        file: str | bytes | BytesIO | Path,
+        type_: str | None = None,
+        cache: bool = True,
+        proxy: bool = True,
+        timeout: int | None = None,
     ) -> "MessageBuilder":
         """
         添加图片类型消息。
@@ -83,7 +82,7 @@ class MessageBuilder(Message):
         转化为纯文本消息。
         :return: 纯文本消息
         """
-        return str().join(map(str, self))
+        return "".join(map(str, self))
 
 
 class MessageGroup:
@@ -91,8 +90,9 @@ class MessageGroup:
     消息组，用于储存消息并分条发送。
     """
 
-    def __init__(self):
+    def __init__(self, matcher: type[Matcher] | None = None):
         self.message_list = []
+        self.matcher = matcher
 
     def add_message(self, message: str | MessageSegment | Message | MessageBuilder):
         """
@@ -103,27 +103,33 @@ class MessageGroup:
         self.message_list.append(message)
         return self
 
-    async def send_message(self, matcher: Type[Matcher]):
+    async def send_message(self, matcher: type[Matcher] | None = None):
         """
         使用指定匹配器逐条发送消息。
         :param matcher: 匹配器
         """
+        if matcher is None:
+            if self.matcher is None:
+                raise RuntimeError("No Matcher Found")
+            matcher = self.matcher
         for m in self.message_list:
             await matcher.send(m)
-            sleep(1)
+            await asyncio.sleep(1)
 
 
 class PageMessage:
     """
     分页消息。
     """
-    def __init__(self,
-                 item_list: list,
-                 header: str = f"标题\n{'-' * 20}\n",
-                 footer: str = f"{'-' * 20}\n页数:{{page}} 共:{{i}}/{{num}}",
-                 content: str = "{i:02d}.{item}",
-                 page_num: int = 20
-                 ):
+
+    def __init__(
+        self,
+        item_list: list,
+        header: str = f"标题\n{'-' * 20}\n",
+        footer: str = f"{'-' * 20}\n页数:{{page}} 共:{{i}}/{{num}}",
+        content: str = "{i:02d}.{item}",
+        page_num: int = 20,
+    ):
         """
         分页消息。
         :param item_list: 需要分页的对象
@@ -140,13 +146,13 @@ class PageMessage:
         for item in item_list:
             if i == page * page_num:
                 self._ml.add_message(temp_msg + footer.format(page=page, i=i, num=num))
-                temp_msg = ''
+                temp_msg = ""
                 page += 1
             i += 1
-            temp_msg += content.format(i=i, item=item) + '\n'
+            temp_msg += content.format(i=i, item=item) + "\n"
         self._ml.add_message(temp_msg + footer.format(page=page, i=i, num=num))
 
-    async def send_message(self, matcher: Type[Matcher]):
+    async def send_message(self, matcher: type[Matcher]):
         """
         使用指定匹配器逐条发送消息。
         :param matcher: 匹配器
@@ -190,8 +196,8 @@ def rec_msg_from_path(path: str | Path) -> MessageSegment:
     """
     with open(path, "rb") as audio_file:
         audio_data = audio_file.read()
-    base64_encoded_audio = base64.b64encode(audio_data).decode('utf-8')
-    return rec_msg(f'base64://{base64_encoded_audio}')
+    base64_encoded_audio = base64.b64encode(audio_data).decode("utf-8")
+    return rec_msg(f"base64://{base64_encoded_audio}")
 
 
 def file_msg(name: str, data: bytes):
@@ -202,9 +208,6 @@ def file_msg(name: str, data: bytes):
     :return: 可被直接发送的消息
     """
     return MessageSegment(
-        'file',
-        {
-            "name": name,
-            "file": f'base64://{base64.b64encode(data).decode('utf-8')}'
-        }
+        "file",
+        {"name": name, "file": f"base64://{base64.b64encode(data).decode('utf-8')}"},
     )

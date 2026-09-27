@@ -2,12 +2,11 @@ import datetime
 import json
 
 from ATRI.dir import SYS_CONFIG_DIR
-from ATRI.event import Priority, daily_update
 from ATRI.log import log
 from ATRI.utils.datetime import now, now_time, today
 
 from ..llm import ModelType, llm_manager
-from .atri import ATRI
+from .role import ATRI
 
 
 class NowSchedule:
@@ -100,11 +99,20 @@ class ATRISchedule:
 
     async def generate_schedule(self, date: str):
         """生成最新的日程"""
-        # 当获取更多当前聊天消息时再更新历史日程获取,不然用处不大 his_sch = self.get_all_schedule_text()
+        from .memory.manage import memory_manager
+
+        memory_date = (
+            datetime.date.fromisoformat(date) - datetime.timedelta(days=1)
+        ).isoformat()
+        memory = await memory_manager.get_memories_by_date(memory_date)
+        if memory:
+            memory = "\n".join(m["content"] for m in memory)
+        else:
+            memory = None
         prompt = (
             self.before_prompt
-            # + f"\n\n### 人物简介\n{ATRI.get_role_prompt()}\n\n### 历史日程\n{his_sch}\n\n"
             + f"\n\n### 人物简介\n{ATRI.get_role_prompt()}\n\n"
+            + f"{'### 昨日记忆\n{memory}\n\n' if memory else ''}"
             + self.after_prompt
         )
         try:
@@ -131,13 +139,13 @@ class ATRISchedule:
 
     async def get_today_schedule(self):
         """获取今天的日程"""
-        today = self.get_now_date()
-        if today not in self.schedule_data:
-            await self.generate_schedule(today)
+        _today = self.get_now_date()
+        if _today not in self.schedule_data:
+            await self.generate_schedule(_today)
         try:
-            return TodaySchedule(self.schedule_data[today])
+            return TodaySchedule(self.schedule_data[_today])
         except Exception:
-            del self.schedule_data[today]
+            self.schedule_data.pop(_today, None)
             log.warning("日程生成不符合规范，已删除，如果多次遇到请考虑更换模型。")
             return None
 
@@ -153,7 +161,6 @@ class ATRISchedule:
             return (today() - datetime.timedelta(days=1)).strftime("%Y-%m-%d")
 
 
-@daily_update(priority=Priority.LOW)
 async def generate_schedule():
     log.info("开始更新亚托莉日程...")
     await ATRISchedule().generate_schedule(today().strftime("%Y-%m-%d"))

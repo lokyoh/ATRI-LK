@@ -4,6 +4,7 @@ import threading
 import time
 from typing import Any
 
+from ATRI.utils.datetime import date_fromtimestamp
 from ATRI.utils.sqlite import DataBase
 
 # Default values
@@ -268,3 +269,12 @@ class MemoryDB:
     def all_memories(self) -> list[dict[str, Any]]:
         rows = self._table.select_all()
         return [self._row_to_dict(r) for r in rows]
+
+    def memories_by_date(self, date: str) -> list[dict[str, Any]]:
+        rows = self._table.select_all()
+        return [
+            memory
+            for row in rows
+            if (memory := self._row_to_dict(row))
+            and date_fromtimestamp(memory["created_at"]).isoformat() == date
+        ]

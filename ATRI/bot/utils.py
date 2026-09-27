@@ -68,6 +68,8 @@ class BotUtils:
         """
         user_id = str(user_id) if user_id else None
         group_id = str(group_id) if group_id else None
+        if user_id is None and group_id is None:
+            raise ValueError("参数错误,请确保传入用户ID或群ID")
         if GlobalStatus.is_blocked(user_id=user_id, group_id=group_id):
             log.debug(
                 f"Target is blocked, skip sending message. user_id={user_id}, group_id={group_id}"
@@ -97,7 +99,7 @@ class BotUtils:
             error_message = str_traceback(e)
             track_id = save_error(prompt, error_message)
             log.error(f"{service} send_message ActionFailed:\n{error_message}")
-            raise e
+            raise
         finally:
             manual_add_server_statistic(
                 bot=bot,

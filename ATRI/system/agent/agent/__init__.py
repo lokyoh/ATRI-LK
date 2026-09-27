@@ -1,178 +1,41 @@
-import time
-from asyncio import Lock
-from typing import ClassVar
-
-from nonebot.adapters.onebot.v11 import Bot, Message
-
-from ATRI.log import log
-from ATRI.utils.datetime import now
-
-from ..basic.chat import chat_model
-from ..brain import (
-    ActionModel,
-    JudgmentModel,
-    ReplyModel,
-    SensoryAnalyzer,
-    ThinkingModel,
+from . import database, explanations, user, util
+from .chat_chain import ATRIAgent
+from .function_calling import (
+    ChatFunction,
+    ChatFunctionArg,
+    FunctionCalling,
+    FunctionCallingData,
+    FunctionCallingManager,
+    ReplyFunctionCallingManager,
 )
-from ..llm import ModelType, llm_manager
-from .history import ChatHistory, History, ImageHistory, chat_history, img_history
-from .sender import ChatSender
+from .history import ChatHistoryManager
+from .memes import FaceManager
+from .memory.manage import MemoryManager
+from .role import Role, RoleManager
+from .schedule import ATRISchedule, generate_schedule
+from .sender import ChatSender, QQChatSender
+from .user_profile import UserProfile
 
-
-class ChatMessage:
-    def __init__(self, message: History | None, user_id: str, s_c, s_j):
-        self.message = message
-        self.user_id = user_id
-        self.force_chat = not s_c and s_j
-        self.time_stamp = time.time()
-
-    def check_time(self):
-        return time.time() - self.time_stamp <= 180
-
-
-class ATRIAgent:
-    waiting_num = 0
-    temp_messages: ClassVar[dict[str, list[ChatMessage]]] = {}
-    chat_lock = Lock()
-    temp_lock: ClassVar[dict[str, Lock]] = {}
-
-    @classmethod
-    async def chat(
-        cls,
-        bot: Bot,
-        chat_sender: ChatSender,
-        chat_id,
-        user_id,
-        message: Message,
-        skip_chat=False,
-        skip_judgment=True,
-    ):
-        user_id = str(user_id)
-        chat_id = str(chat_id)
-        if chat_id not in cls.temp_lock:
-            cls.temp_lock[chat_id] = Lock()
-        t_m = ChatMessage(None, user_id, skip_chat, skip_judgment)
-        async with cls.temp_lock[chat_id]:
-            if chat_id not in cls.temp_messages:
-                cls.temp_messages[chat_id] = []
-            t_m.message = await History.create(bot.self_id, user_id, chat_id, message)
-            cls.temp_messages[chat_id].append(t_m)
-        if skip_chat:
-            return
-        if cls.waiting_num and not skip_judgment:
-            return
-        cls.waiting_num += 1
-        await cls.chat_lock.acquire()
-        if not t_m.force_chat and not t_m.check_time():
-            cls.waiting_num -= 1
-            cls.chat_lock.release()
-            return
-        try:
-            if cls.temp_messages[chat_id]:
-                async with cls.temp_lock[chat_id]:
-                    while True:
-                        if not cls.temp_messages[chat_id]:
-                            break
-                        m = cls.temp_messages[chat_id].pop(0)
-                        if chat_id not in chat_history:
-                            chat_history[chat_id] = ChatHistory()
-                        if m.message is None:
-                            continue
-                        await chat_history[chat_id].add_history(
-                            bot.self_id, m.user_id, chat_id, m.message
-                        )
-                        if m.force_chat:
-                            break
-            await cls._chat(
-                bot, chat_sender, chat_id, user_id, message, skip_chat, skip_judgment
-            )
-        except Exception:  # noqa: TRY203
-            raise
-        finally:
-            cls.waiting_num -= 1
-            cls.chat_lock.release()
-
-    @classmethod
-    async def _chat(
-        cls,
-        bot,
-        chat_sender: ChatSender,
-        chat_id,
-        user_id,
-        message: Message,
-        skip_chat=False,
-        skip_judgment=True,
-    ):
-        chat_id = str(chat_id)
-        user_id = str(user_id)
-        if chat_id not in chat_history:
-            chat_history[chat_id] = ChatHistory()
-        if chat_id not in img_history:
-            img_history[chat_id] = ImageHistory()
-        c_h = chat_history[chat_id]
-        i_h = img_history[chat_id]
-        this_msg = c_h.get_last_history()
-        if skip_chat:
-            return
-        if not llm_manager.has_type(ModelType.CHAT):
-            log.warning("没有配置chat类型的模型")
-            return
-        if not llm_manager.has_type(ModelType.TOOL):
-            log.warning("没有配置tool类型的模型")
-            if skip_judgment:
-                await chat_model.reply(bot, chat_id, user_id, chat_sender)
-        plain_text = message.extract_plain_text()
-        now_time = now().time()
-        if not skip_judgment and (plain_text == "" or 2 <= now_time.hour < 6):
-            return
-        msg = await this_msg.get_message(bot)
-        msg_his = ""
-        history_list = list(c_h.get_history()[:-1])
-        if history_list:
-            messages = [await h.get_message(bot) for h in history_list]
-            msg_his += "\n".join(messages)
-        else:
-            msg_his += "无历史聊天记录"
-        img_his = i_h.get_history()
-        sensory = await SensoryAnalyzer.analyze(f"{img_his}\n\n{msg_his}", msg)
-        str_sensory = (
-            f"整体情感:{sensory.get('sensory', {}).get('total', '未知')} "
-            f"强度:{sensory.get('sensory', {}).get('strength', '未知')} "
-            f"具体情感:{','.join(sensory.get('sensory', {}).get('tag', ['未知']))}\n"
-            f"当前对话主题:{sensory.get('theme', '未知')} "
-            f"对方需求:{','.join(sensory.get('demand', ['未知']))}"
-        )
-        log.info(f"情感分析:{str_sensory}")
-        if not skip_judgment and not await JudgmentModel.analyze(
-            f"{img_his}\n\n{msg_his}", msg, str_sensory
-        ):
-            return
-        thinking, functions_data = await ThinkingModel.thinking(
-            bot, chat_id, user_id, str_sensory
-        )
-        thinking_list = [thinking]
-        times = 0
-        calling_backs = []
-        while True:
-            times += 1
-            continue_chat, calling_back = await ActionModel.do_action(
-                functions_data, user_id, chat_id
-            )
-            calling_backs += calling_back
-            if continue_chat:
-                thinking, functions_data = await ThinkingModel.continue_thinking(
-                    bot, chat_id, user_id, calling_backs, times >= 15
-                )
-                thinking_list.append(thinking)
-            else:
-                break
-        await ReplyModel.reply(
-            bot,
-            chat_id,
-            user_id,
-            thinking_list,
-            calling_backs,
-            chat_sender,
-            with_tts=skip_judgment,
-        )
+__all__ = [
+    "ATRIAgent",
+    "ATRISchedule",
+    "ChatFunction",
+    "ChatFunctionArg",
+    "ChatHistoryManager",
+    "ChatSender",
+    "FaceManager",
+    "FunctionCalling",
+    "FunctionCallingData",
+    "FunctionCallingManager",
+    "MemoryManager",
+    "QQChatSender",
+    "ReplyFunctionCallingManager",
+    "Role",
+    "RoleManager",
+    "UserProfile",
+    "database",
+    "explanations",
+    "generate_schedule",
+    "user",
+    "util",
+]

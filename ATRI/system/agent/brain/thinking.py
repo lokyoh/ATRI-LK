@@ -1,10 +1,10 @@
 import json
 import re
 
-from ..agent.atri import ATRI
 from ..agent.explanations import get_top_explanations
 from ..agent.function_calling import FunctionCallingManager
-from ..agent.history import ChatHistory, ImageHistory, chat_history, img_history
+from ..agent.history import History, get_history_messages
+from ..agent.role import ATRI
 from ..agent.schedule import ATRISchedule
 from ..agent.user import get_user_info
 from ..agent.util import get_name, get_user_group
@@ -13,25 +13,25 @@ from ..llm import ModelType, llm_manager
 
 class ThinkingModel:
     @staticmethod
-    async def get_history_prompt(group_id, bot):
-        if group_id not in img_history:
-            img_history[group_id] = ImageHistory()
-        if group_id not in chat_history:
-            chat_history[group_id] = ChatHistory()
-        history_list = list(chat_history[group_id].get_history()[:-1])
+    async def get_history_prompt(
+        bot,
+        history_list: list[History],
+        image_history: str,
+        fallback_history: list[str],
+        processing_messages_prompt: str,
+    ):
         # 历史聊天记录
-        history_prompt = "#历史聊天记录\n"
-        if history_list:
-            messages = [await h.get_message(bot) for h in history_list]
-            history_prompt += "\n".join(messages)
-        else:
-            history_prompt += "无历史聊天记录"
-        img_prompt = img_history[group_id].get_history()
-        return f"{img_prompt}\n\n{history_prompt}\n#聊天记录结束\n\n"
+        messages = await get_history_messages(bot, history_list, fallback_history)
+        history_prompt = "#历史聊天记录\n" + (
+            "\n".join(messages) if messages else "无历史聊天记录"
+        )
+        return (
+            f"{image_history}\n\n{history_prompt}\n#聊天记录结束\n\n"
+            f"{processing_messages_prompt}\n"
+        )
 
     @staticmethod
-    async def get_prompt(group_id, user_id, user_info, bot):
-        lst_history = chat_history[group_id].get_last_history()
+    async def get_prompt(group_id, user_id, user_info, bot, lst_history: History):
         lst_msg = await lst_history.message.get_message(bot)
         # 对话提示信息
         prompt = f"现在{await get_name(bot, lst_history.sender, group_id)}[id:{user_id}]在{lst_history.time}的消息引起了你的注意\n"
@@ -125,10 +125,29 @@ class ThinkingModel:
     ```"""
 
     @classmethod
-    async def thinking(cls, bot, group_id, user_id, str_sensory) -> tuple[str, list]:
+    async def thinking(
+        cls,
+        bot,
+        group_id,
+        user_id,
+        str_sensory,
+        current_history: History,
+        history_list: list[History],
+        image_history: str,
+        fallback_history: list[str],
+        chat_message,
+    ) -> tuple[str, list]:
         user_info = get_user_info(user_id)
-        prompt = await cls.get_history_prompt(group_id, bot)
-        prompt += await cls.get_prompt(group_id, user_id, user_info, bot)
+        prompt = await cls.get_history_prompt(
+            bot,
+            history_list,
+            image_history,
+            fallback_history,
+            await chat_message.get_processing_messages_prompt(bot),
+        )
+        prompt += await cls.get_prompt(
+            group_id, user_id, user_info, bot, current_history
+        )
         prompt += f"#语境分析:\n{str_sensory}\n\n"
         prompt += cls.get_function_prompt()
         prompt += cls.get_resp_prompt()
@@ -137,10 +156,20 @@ class ThinkingModel:
 
     @classmethod
     async def continue_thinking(
-        cls, bot, group_id, user_id, function_calling_data, stop_calling
+        cls,
+        bot,
+        group_id,
+        user_id,
+        function_calling_data,
+        stop_calling,
+        current_history: History,
+        chat_message,
     ) -> tuple[str, list]:
         user_info = get_user_info(user_id)
-        prompt = await cls.get_prompt(group_id, user_id, user_info, bot)
+        prompt = await cls.get_prompt(
+            group_id, user_id, user_info, bot, current_history
+        )
+        prompt += await chat_message.get_processing_messages_prompt(bot)
         prompt += "\n\n".join(function_calling_data)
         prompt += "\n"
         if stop_calling:

@@ -1,5 +1,3 @@
-from typing import Optional
-
 from nonebot.adapters.onebot.v11 import (
     ActionFailed,
     Bot,
@@ -37,8 +35,8 @@ async def add_message(bot: Bot, event: Event):
     bot_id = bot.self_id
     user_id = event.get_user_id()
     group_id = None
-    if hasattr(event, "group_id") and event.group_id:  # type: ignore
-        group_id = str(event.group_id)  # type: ignore
+    if hasattr(event, "group_id") and event.group_id:
+        group_id = str(event.group_id)
     if isinstance(event, PokeNotifyEvent):
         message_type = "poke"
         content = f"{event.user_id} poke {event.target_id}{f' from {event.group_id}' if event.group_id else ''}"
@@ -74,8 +72,8 @@ def add_server_statistic(
             bot_id = bot.self_id
             target_id = event.get_user_id()
             target_type = "private"
-            if hasattr(event, "group_id") and event.group_id:  # type: ignore
-                target_id = event.group_id  # type: ignore
+            if hasattr(event, "group_id") and event.group_id:
+                target_id = event.group_id
                 target_type = "group"
             TEMP_LIST.append(
                 ServiceStatistics(
@@ -120,7 +118,7 @@ def manual_add_server_statistic(
 
 
 @run_postprocessor
-async def _(bot: Bot, event, matcher: Matcher, exception: Optional[Exception]):  # type: ignore
+async def _(bot: Bot, event, matcher: Matcher, exception: Exception | None):
     need_statistic = True
     if matcher.type == "notice" and not isinstance(event, PokeNotifyEvent):
         """过滤除poke外的notice"""
@@ -183,9 +181,9 @@ async def _(bot: Bot, event, matcher: Matcher, exception: Optional[Exception]): 
 async def save_temp():
     try:
         call_list = TEMP_LIST.copy()
-        TEMP_LIST.clear()
         if call_list:
             await ServiceStatistics.bulk_create(call_list)
+            del TEMP_LIST[: len(call_list)]
             log.debug(f"批量添加调用记录 {len(call_list)} 条")
     except Exception as e:
         log.error(f"定时批量添加调用记录发生错误:{str_traceback(e)}")

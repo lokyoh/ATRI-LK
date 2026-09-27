@@ -1,4 +1,4 @@
-from typing import Any, Dict
+from typing import Any
 
 from fastapi import APIRouter, Query
 from fastapi.responses import JSONResponse
@@ -134,12 +134,14 @@ async def _(payload: InstallDependenciesPayload) -> Result:
 @router.get(
     "/get_plugin_config",
     dependencies=[authentication()],
-    response_model=Result[Dict[str, Any]],
+    response_model=Result[dict[str, Any]],
     response_class=JSONResponse,
     description="获取插件详情",
 )
-async def _(service: str) -> Result[Dict[str, Any]]:
+async def _(service: str) -> Result[dict[str, Any]]:
     try:
+        if service == "agent":
+            return Result.fail("agent 插件请使用专用配置页面")
         if service not in ServiceTools.service_list:
             raise ValueError("插件不存在")
         s = ServiceTools.service_list[service]

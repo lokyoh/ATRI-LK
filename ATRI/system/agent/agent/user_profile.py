@@ -24,7 +24,7 @@ class UserProfile:
     async def change_profile(cls, user_id, profile_change):
         user_info = get_user_info(user_id)
         o_profile = user_info.profile
-        prompt = cls.prompt.format(o_profile, profile_change)
+        prompt = cls.prompt.format(o_profile=o_profile, profile_change=profile_change)
         try:
             profile = await llm_manager.call_model_by_type(ModelType.TOOL, prompt)
         except Exception:

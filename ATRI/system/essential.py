@@ -1,5 +1,4 @@
 import asyncio
-from pathlib import Path
 from random import choice, randint
 
 from nonebot.adapters.onebot.v11 import (
@@ -11,16 +10,17 @@ from nonebot.adapters.onebot.v11 import (
 
 from ATRI import conf
 from ATRI.message import MessageBuilder
+from ATRI.rule import check_event_type
 from ATRI.service import Service
 
-__ESSENTIAL_DIR = Path(".") / "data" / "plugins" / "essential"
-__TEMP_DIR = Path(".") / "data" / "temp"
-__ESSENTIAL_DIR.mkdir(parents=True, exist_ok=True)
-__TEMP_DIR.mkdir(parents=True, exist_ok=True)
+plugin = Service("基础部件", "对基础请求进行处理", "1.0.3", Service.ServiceType.HIDDEN)
 
-plugin = Service("基础部件", "对基础请求进行处理", "1.0.2", Service.ServiceType.HIDDEN)
 
-group_member_event = plugin.on_notice("群成员变动", "群成员变动检测")
+group_member_event = plugin.on_notice(
+    "群成员变动",
+    "群成员变动检测",
+    rule=check_event_type((GroupIncreaseNoticeEvent, GroupDecreaseNoticeEvent)),
+)
 
 
 @group_member_event.handle()
@@ -43,7 +43,11 @@ async def _(event: GroupDecreaseNoticeEvent):
     await group_member_event.finish("呜——有人跑了...")
 
 
-group_admin_event = plugin.on_notice("群管理变动", "群管理变动检测")
+group_admin_event = plugin.on_notice(
+    "群管理变动",
+    "群管理变动检测",
+    rule=check_event_type(GroupAdminNoticeEvent),
+)
 
 
 @group_admin_event.handle()
@@ -58,7 +62,11 @@ async def _(event: GroupAdminNoticeEvent):
         await group_admin_event.finish("有的人超能力到期了 :(")
 
 
-group_ban_event = plugin.on_notice("群禁言变动", "群禁言变动检测")
+group_ban_event = plugin.on_notice(
+    "群禁言变动",
+    "群禁言变动检测",
+    rule=check_event_type(GroupBanNoticeEvent),
+)
 
 
 @group_ban_event.handle()

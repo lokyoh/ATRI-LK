@@ -28,6 +28,11 @@
   - `agent`修复功能调用格式错误导致的逻辑错误与回复调用未清空bug
 - Patch2:
   - `agent`修复AtMessageSegment方法错误
+- Patch3:
+  - `agent`重构代码,修复一处数据类型错误,优化处理逻辑,生成日程现在参考昨日记忆
+  - `webapi`安全更新
+  - `lkchat`适配新版agent
+  - 修复`essential`调用记录异常的问题
 
 ## Jul 17, 2026
 

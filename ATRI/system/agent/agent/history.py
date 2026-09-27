@@ -3,6 +3,7 @@ import io
 import json
 import os
 from sqlite3 import Error as SQLiteError
+from typing import ClassVar
 
 from nonebot.adapters.onebot.v11 import Message
 from nonebot.adapters.onebot.v11 import MessageSegment as OnebotMessageSegment
@@ -165,7 +166,7 @@ class ImageMessageSegment(MessageSegment):
 
 
 class LLMMessage:
-    def __init__(self, group_id, message: str | None = None, reply: str = ""):
+    def __init__(self, group_id, message: list | None = None, reply: str = ""):
         self.message = [] if message is None else message
         self.group_id = group_id
         self.reply = reply
@@ -173,8 +174,6 @@ class LLMMessage:
     @classmethod
     async def create(cls, self_id, message: Message, mid, group_id):
         instance = cls(group_id)
-        if group_id not in img_history:
-            img_history[group_id] = ImageHistory()
         img_count = 0
         for segment in message:
             if segment.type == "text":
@@ -196,9 +195,9 @@ class LLMMessage:
                 url = segment.data.get("url", "")
                 file_size = segment.data.get("file_size", 0)
                 if url:
-                    result, desp = await img_history[group_id].add_image(
-                        mid, url, file_name, file_size
-                    )
+                    result, desp = await ChatHistoryManager.get_img_history(
+                        group_id
+                    ).add_image(mid, url, file_name, file_size)
                     instance.message.append(ImageMessageSegment(result, desp))
                 img_count += 1
             elif segment.type == "video":
@@ -214,7 +213,9 @@ class LLMMessage:
                         if json_meta["title"] == "哔哩哔哩":
                             now_type = "哔哩哔哩"
                             title = json_meta["title"]
-                            instance.message.append(f"[B站分享:{title}]")
+                            instance.message.append(
+                                MessageSegment(f"[B站分享:{title}]")
+                            )
                             continue
                     log.info("存在未支持的json消息类型")
                     log.debug(f"消息内容：{segment.data}")
@@ -228,7 +229,7 @@ class LLMMessage:
                 msg_his = []
                 for msg in content:
                     msg_type = msg.get("message_format", "")
-                    if msg_type in ("array"):
+                    if msg_type == "array":
                         try:
                             sender = msg["sender"]
                             f_msg = msg["message"]
@@ -293,7 +294,7 @@ class LLMMessage:
                             "user_id": reply_data.sender.user_id,
                             "nickname": reply_data.sender.nickname,
                         }
-                    reply_msg: LLMTempMessage = await LLMTempMessage.create(
+                    reply_msg = await LLMTempMessage.create(
                         self_id,
                         reply_message,
                         group_id,
@@ -386,6 +387,20 @@ class History:
         history_logger.add_history(None, self.group_id, self.response)
 
 
+async def get_history_messages(
+    bot,
+    history_list: list[History],
+    fallback_history: list[str],
+    get_reply: bool = True,
+) -> list[str]:
+    messages = list(fallback_history)
+    messages.extend(
+        [await history.get_message(bot, get_reply) for history in history_list]
+    )
+    history_limit = max(0, config.max_history - 1)
+    return messages[-history_limit:] if history_limit else []
+
+
 class HistoryNode(BaseModel):
     sender: int | None
     time: str
@@ -406,7 +421,8 @@ class HistoryLogger:
         if not self.path.exists():
             self.path.mkdir(parents=True, exist_ok=True)
 
-    def get_today_date(self):
+    @staticmethod
+    def get_today_date():
         return now().strftime("%Y-%m-%d")
 
     def add_history(self, user_id, group_id, history: History | str):
@@ -419,10 +435,12 @@ class HistoryLogger:
             history_model = HistoryModel.read_from_file(file_path)
         h_time = now().strftime("%H:%M")
         if user_id is None:
+            history: str
             history_model.history.append(
                 HistoryNode(sender=None, time=h_time, message=history)
             )
         else:
+            history: History
             history_model.history.append(
                 HistoryNode(
                     sender=user_id,
@@ -442,12 +460,41 @@ class HistoryLogger:
         history_model = HistoryModel.read_from_file(file_path)
         return history_model
 
+    def get_recent_messages(self, group_id, limit: int = 20) -> list[str]:
+        if limit <= 0:
+            return []
+        group_path = self.path / str(group_id)
+        if not group_path.exists():
+            return []
+
+        recent_messages = []
+        for file_path in sorted(group_path.glob("*.json"), reverse=True):
+            try:
+                history_model = HistoryModel.read_from_file(file_path)
+            except Exception as e:
+                log.warning(f"读取聊天历史失败：{file_path}: {e}")
+                continue
+            for node in reversed(history_model.history):
+                sender_label = (
+                    f"用户{node.sender}" if node.sender is not None else "ATRI"
+                )
+                recent_messages.append(
+                    f"{file_path.stem} {node.time} {sender_label}: {node.message}"
+                )
+                if len(recent_messages) >= limit:
+                    return list(reversed(recent_messages))
+        return list(reversed(recent_messages))
+
 
 class ChatHistory:
     def __init__(self):
         self.history = LimitedQueue(config.max_history)
+        self.fallback_history: list[str] = []
+        self.fallback_history_loaded = False
 
-    async def add_history(self, self_id, user_id, group_id, message: Message | History):
+    async def add_history(
+        self, self_id, user_id, group_id, message: Message | History
+    ) -> History | None:
         if isinstance(message, Message):
             h = await History.create(self_id, user_id, group_id, message)
             if h is None:
@@ -456,10 +503,7 @@ class ChatHistory:
             h = message
         history_logger.add_history(user_id, group_id, h)
         if h := self.history.add(h):
-            if group_id not in img_history:
-                img_history[group_id] = ImageHistory()
-            else:
-                img_history[group_id].remove(h.mid)
+            ChatHistoryManager.remove_history(group_id, h.mid)
         return h
 
     def get_history(self) -> list[History]:
@@ -472,6 +516,26 @@ class ChatHistory:
         self.get_last_history().add_response(reply)
 
 
+class ChatHistoryManager:
+    chat_history: ClassVar[dict[str, ChatHistory]] = {}
+    img_history: ClassVar[dict[str, ImageHistory]] = {}
+
+    @classmethod
+    def get_history(cls, chat_id) -> ChatHistory:
+        if chat_id not in cls.chat_history:
+            cls.chat_history[chat_id] = ChatHistory()
+        return cls.chat_history[chat_id]
+
+    @classmethod
+    def get_img_history(cls, chat_id) -> ImageHistory:
+        if chat_id not in cls.img_history:
+            cls.img_history[chat_id] = ImageHistory()
+        return cls.img_history[chat_id]
+
+    @classmethod
+    def remove_history(cls, chat_id, mid):
+        i_h = cls.get_img_history(chat_id)
+        i_h.remove(mid)
+
+
 history_logger = HistoryLogger()
-chat_history: dict[str, ChatHistory] = {}
-img_history: dict[str, ImageHistory] = {}

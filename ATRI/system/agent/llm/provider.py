@@ -1,4 +1,7 @@
+from typing import ClassVar
+
 import yaml
+from pydantic import Field
 
 from ATRI.utils.model import BaseModel
 
@@ -25,7 +28,7 @@ class LLMProvider(BaseModel):
     provider_type: str = ""
     url: str = ""
     api_key: str = ""
-    models: list[LLMModel] = []
+    models: list[LLMModel] = Field(default_factory=list)
 
 
 class ProviderManager:
@@ -33,7 +36,7 @@ class ProviderManager:
     模型提供商管理器
     """
 
-    providers: dict[str, LLMProvider] = {}
+    providers: ClassVar[dict[str, LLMProvider]] = {}
 
     @classmethod
     def register(cls, provider: LLMProvider):
@@ -47,7 +50,7 @@ class ProviderManager:
 
     @classmethod
     def get_provider_list(cls) -> list[LLMProvider]:
-        return list(cls.providers.values())
+        return [provider.model_copy(deep=True) for provider in cls.providers.values()]
 
     @classmethod
     def del_provider(cls, provider_name: str):

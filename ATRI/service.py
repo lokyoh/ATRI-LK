@@ -312,7 +312,16 @@ class Service:
         )
         return matcher
 
-    def on_notice(self, name: str, docs: str, block: bool = True) -> type[Matcher]:
+    def on_notice(
+        self,
+        name: str,
+        docs: str,
+        block: bool = True,
+        rule: Rule | T_RuleChecker | None = None,
+    ) -> type[Matcher]:
+        if not rule:
+            rule = self._rule
+
         name = name + "-onntc"
         self._cmd_list[name] = CommandInfo(
             type="notice", docs=docs, aliases=[]
@@ -320,7 +329,7 @@ class Service:
 
         matcher = Matcher.new(
             "notice",
-            Rule() & self._rule,
+            Rule() & rule,
             Permission(),
             module=ModuleType(self.service),
             temp=self._temp,

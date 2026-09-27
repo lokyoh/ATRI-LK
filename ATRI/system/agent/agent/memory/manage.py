@@ -1,9 +1,9 @@
+import datetime
 import hashlib
 import os
 import re
 from typing import Any
 
-from ATRI.event import Priority, daily_update
 from ATRI.log import log
 from ATRI.utils.datetime import today
 
@@ -81,6 +81,15 @@ class MemoryManager:
         return self.database.query_by_vector(
             vector, top_k=top_k, min_similarity=min_similarity
         )
+
+    async def get_memories_by_date(self, date: str) -> list[dict[str, Any]]:
+        try:
+            parsed_date = datetime.date.fromisoformat(date)
+        except (TypeError, ValueError):
+            return []
+        if parsed_date.isoformat() != date:
+            return []
+        return self.database.memories_by_date(date)
 
     async def access_memory(
         self, memory: dict[str, Any], reinforce: float = 0.1
@@ -189,7 +198,6 @@ def _write_last_summary_time(group_path, summary_date: str) -> None:
     temporary_path.replace(path)
 
 
-@daily_update(priority=Priority.LOW)
 async def summarize_memories():
     log.info("开始遗忘记忆")
     try:

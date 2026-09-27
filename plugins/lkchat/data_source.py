@@ -12,6 +12,7 @@ from ATRI.exceptions import str_traceback
 from ATRI.log import log
 from ATRI.message import img_msg_from_path, rec_msg_from_path
 from ATRI.system.agent.agent import ATRIAgent
+from ATRI.system.agent.agent.model import ChatArgs
 from ATRI.system.agent.agent.sender import QQChatSender
 from ATRI.system.lkapi.bot import util as lk_util
 from ATRI.utils.datetime import now
@@ -54,51 +55,40 @@ REPLY_MESSAGE = [
     "喂(#`O′) 戳我干嘛！",
 ]
 VOICE_PATTERN = {
-    r".*萝卜子.*": [
-        "萝卜子是对机器人的蔑称！.mp3",
-        "啊，不准说这个词！.mp3"
-    ],
+    r".*萝卜子.*": ["萝卜子是对机器人的蔑称！.mp3", "啊，不准说这个词！.mp3"],
     r".*(?:看看你|我看看).*": [
         "摆……摆出这幅表情也没有用。不给你看，很害羞的.mp3",
         "不可以看.mp3",
         "不可以看的哦.mp3",
-        "真是的～，不都说了不可以看了么。我要根据机器人保护法对你进行铁拳制裁！.mp3"
+        "真是的～，不都说了不可以看了么。我要根据机器人保护法对你进行铁拳制裁！.mp3",
     ],
     r".*摸+.*[胸屁奶奈乃熊bB逼].*": [
         "啊呜呜，不要来回来去地摸～～.mp3",
-        "这是性骚扰！根据机器人保护法要处以罚款。这下欠款又增加了.mp3"
+        "这是性骚扰！根据机器人保护法要处以罚款。这下欠款又增加了.mp3",
     ],
     r".*摸+.*[头脸].*": ["啊呜呜，不要来回来去地摸～～.mp3"],
-    r"不[要行好]?!?$": [
-        "为什么呢？.mp3",
-        "为什么啊！？.mp3",
-        "？　为什么呢？.mp3"
-    ],
-    r"安慰我!?$|我怕怕!?$": [
-        "乖……已经没事了.mp3",
-        "乖乖乖.mp3"
-    ],
+    r"不[要行好]?!?$": ["为什么呢？.mp3", "为什么啊！？.mp3", "？　为什么呢？.mp3"],
+    r"安慰我!?$|我怕怕!?$": ["乖……已经没事了.mp3", "乖乖乖.mp3"],
     r"(?:一起|陪)?睡觉?吧?[!?？]?$": [
         "今天一定要一起睡哦！.mp3",
         "嗯哼哼～，睡吧♪ 就像平常一样安眠吧.mp3",
         "我懂我懂，想抱着我睡觉对吧。真拿你没办法呀～.mp3",
         "我无论何时都是YES！.mp3",
         "来吧，来吧，来吧！！.mp3",
-        "真是个小撒娇鬼呢.mp3"
+        "真是个小撒娇鬼呢.mp3",
     ],
     r"(?:真是)?太好了!?$": ["太好了呢.mp3"],
     r"为什么[?？]?$": ["我才不管。哼.mp3"],
     r"你是谁?[\?？]?$": ["我叫亚托莉。（鞠躬）.mp3"],
-    r"早(?:上好|安)?!?$": [
-        "早上好.mp3",
-        "早上好……脸好近呢.mp3"
-    ],
+    r"早(?:上好|安)?!?$": ["早上好.mp3", "早上好……脸好近呢.mp3"],
     r"来?一?发?火箭拳!?$": ["火箭拳——————————！！！！.mp3"],
     r"(?:我要?)?膝枕!?$": ["膝枕……只是膝枕的话，也不是不能给你做…….mp3"],
 }
 IMG_PATTERN = [
-    (r"好不好|行不行|可以吗|要不要|[行好](?:吗[?？]?|[?？])",
-     lambda: choice(["YES.png", choice(["NO.jpg", "NO1.jpg"])])),
+    (
+        r"好不好|行不行|可以吗|要不要|[行好](?:吗[?？]?|[?？])",
+        lambda: choice(["YES.png", choice(["NO.jpg", "NO1.jpg"])]),
+    ),
     (r"啊这", "AZ.jpg"),
     (r"无情", "WQ.jpg"),
     (r"^[?？]+$", lambda: choice(["WH.jpg", None])),
@@ -113,7 +103,7 @@ IMG_PATTERN = [
 
 class PreChatEvent(BaseEvent):
     def __init__(self, matcher: Matcher, event: GroupMessageEvent):
-        super().__init__('聊天预处理事件')
+        super().__init__("聊天预处理事件")
         self.matcher: Matcher = matcher
         self.message_event: GroupMessageEvent = event
 
@@ -139,12 +129,19 @@ async def on_birthday(event: PreChatEvent):
         for a_b in a_b_p:
             if a_b in text:
                 await event.matcher.finish(
-                    choice(["哇~谢谢你。鞠躬", "啊、多谢", img_msg_from_path(IMG_DIR / "atri_" / "SR.gif")]))
+                    choice(
+                        [
+                            "哇~谢谢你。鞠躬",
+                            "啊、多谢",
+                            img_msg_from_path(IMG_DIR / "atri_" / "SR.gif"),
+                        ]
+                    )
+                )
 
 
 def get_atri_memery(mem):
     md_text = "# 亚托莉对你的记忆\n\n"
-    md_text += "\n".join(f'- {i}:{item}' for i, item in enumerate(mem, 1))
+    md_text += "\n".join(f"- {i}:{item}" for i, item in enumerate(mem, 1))
     md_text += "\n\n> 输入`/聊天.删除记忆 [标号]`来删除指定记忆,[标号]为数字,例如:`/聊天.删除记忆 1`"
     return md_text
 
@@ -185,7 +182,8 @@ async def call_agent(event: GroupMessageEvent, matcher: Matcher, bot: Bot):
         if event.reply:
             msg_seg = MessageSegment("atri_reply", event.reply)
             message.append(msg_seg)
-        await ATRIAgent.chat(bot, sender, group_id, sender_id, message, skip_chat, skip_judgment)
+        args = ChatArgs(bot, group_id, sender_id, skip_chat, skip_judgment)
+        await ATRIAgent.chat(sender, message, args)
     except FinishedException:
         raise
     except Exception as e:

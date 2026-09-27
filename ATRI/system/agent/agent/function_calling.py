@@ -3,6 +3,7 @@ from typing import ClassVar
 from ATRI.utils.datetime import now
 
 from ..config import config
+from ..event import AgentEventBus
 from ..utils import log, request
 from .memes import FaceManager
 from .memory.manage import memory_manager
@@ -353,6 +354,8 @@ def register_function_calling():
             ],
         ),
     )
+
+    AgentEventBus.publish_sync(event_type="regist_FC", source="agent")
 
 
 register_function_calling()

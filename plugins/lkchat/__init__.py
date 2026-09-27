@@ -18,7 +18,7 @@ from ATRI.system.htmlrender import md_to_pic
 from .config import LKChatConfig
 
 plugin = Service(
-    "聊天", "ATRI进行聊天处理的插件", "0.8.1", Service.ServiceType.ENTERTAINMENT
+    "聊天", "ATRI进行聊天处理的插件", "0.8.2", Service.ServiceType.ENTERTAINMENT
 ).main_cmd("聊天")
 config: LKChatConfig = plugin.add_plugin_config(LKChatConfig).config()
 
@@ -33,15 +33,6 @@ from .data_source import (
     pre_chat_event,
 )
 
-_lmt_notice = [
-    "慢...慢一..点❤",
-    "冷静1下",
-    "歇会歇会~~",
-    "呜呜...别急",
-    "太快了...受不了",
-    "不要这么快呀",
-]
-
 on_talk = plugin.on_message(
     "机器人聊天", "和亚托莉愉快的聊天、交流吧", priority=990, block=False
 )
@@ -50,20 +41,20 @@ on_talk = plugin.on_message(
 @on_talk.handle()
 async def _(event: GroupMessageEvent, matcher: Matcher, bot: Bot):
     group_id = str(event.group_id)
-    if not config.chat_switch:
-        await pre_chat_event.notify(PreChatEvent(matcher, event))
-        text = event.get_message().extract_plain_text()
-        if event.to_me:
-            voice = match_atri_voice(text)
-            if voice:
-                await on_talk.send(voice[0])
-                await on_talk.finish(voice[1])
-        else:
-            img = match_atri_img(text)
-            if img:
-                await on_talk.finish(img)
-    elif group_id in config.whit_list:
+    if config.chat_switch and group_id in config.whit_list:
         await call_agent(event, matcher, bot)
+        return
+    await pre_chat_event.notify(PreChatEvent(matcher, event))
+    text = event.get_message().extract_plain_text()
+    if event.to_me:
+        voice = match_atri_voice(text)
+        if voice:
+            await on_talk.send(voice[0])
+            await on_talk.finish(voice[1])
+    else:
+        img = match_atri_img(text)
+        if img:
+            await on_talk.finish(img)
 
 
 word_add = plugin.cmd_as_group(

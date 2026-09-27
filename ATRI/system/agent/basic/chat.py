@@ -6,10 +6,10 @@ from nonebot.adapters.onebot.v11 import Message
 from ATRI.exceptions import str_traceback
 from ATRI.log import log
 
-from ..agent.atri import ATRI
 from ..agent.explanations import get_top_explanations
 from ..agent.function_calling import FunctionCallingData, FunctionCallingManager
-from ..agent.history import ChatHistory, ImageHistory, chat_history, img_history
+from ..agent.history import History, get_history_messages
+from ..agent.role import ATRI
 from ..agent.sender import ChatSender, QQChatSender
 from ..agent.user import get_user_info
 from ..agent.util import get_name, get_user_group
@@ -23,25 +23,23 @@ class ChatModel:
         self.rater = {}
 
     @staticmethod
-    async def get_history_prompt(group_id, bot):
-        if group_id not in img_history:
-            img_history[group_id] = ImageHistory()
-        if group_id not in chat_history:
-            chat_history[group_id] = ChatHistory()
-        history_list = list(chat_history[group_id].get_history()[:-1])
+    async def get_history_prompt(
+        bot,
+        history_list: list[History],
+        image_history: str,
+        fallback_history: list[str],
+    ):
         # 历史聊天记录
-        history_prompt = "#历史聊天记录\n"
-        if history_list:
-            messages = [await h.get_message(bot, False) for h in history_list]
-            history_prompt += "\n".join(messages)
-        else:
-            history_prompt += "无历史聊天记录"
-        img_prompt = img_history[group_id].get_history()
-        return f"{img_prompt}\n\n{history_prompt}\n\n"
+        messages = await get_history_messages(
+            bot, history_list, fallback_history, get_reply=False
+        )
+        history_prompt = "#历史聊天记录\n" + (
+            "\n".join(messages) if messages else "无历史聊天记录"
+        )
+        return f"{image_history}\n\n{history_prompt}\n\n"
 
     @staticmethod
-    async def get_prompt(group_id, user_id, user_info, bot):
-        lst_history = chat_history[group_id].get_last_history()
+    async def get_prompt(group_id, user_id, user_info, bot, lst_history: History):
         lst_msg = await lst_history.message.get_message(bot)
         # 对话提示信息
         prompt = f"现在{await get_name(bot, lst_history.sender, group_id)}在{lst_history.time}的消息引起了你的注意\n"
@@ -105,12 +103,28 @@ class ChatModel:
 ]
 ```"""
 
-    async def reply(self, bot, group_id, user_id, sender: ChatSender):
+    async def reply(
+        self,
+        bot,
+        group_id,
+        user_id,
+        sender: ChatSender,
+        current_history: History,
+        history_list: list[History],
+        image_history: str,
+        fallback_history: list[str],
+        chat_message,
+    ):
         group_id = str(group_id)
         user_id = str(user_id)
         user_info = get_user_info(user_id)
-        prompt = await self.get_history_prompt(group_id, bot)
-        prompt += await self.get_prompt(group_id, user_id, user_info, bot)
+        prompt = await self.get_history_prompt(
+            bot, history_list, image_history, fallback_history
+        )
+        prompt += await chat_message.get_processing_messages_prompt(bot)
+        prompt += await self.get_prompt(
+            group_id, user_id, user_info, bot, current_history
+        )
         prompt += self.get_function_prompt()
         resp = await llm_manager.call_model_by_type(ModelType.CHAT, prompt)
         response, continue_chat, calling_back = await self.process_resp(
@@ -120,7 +134,7 @@ class ChatModel:
         for m in response:
             msg.append(m)
         plain_text = msg.extract_plain_text()
-        chat_history[group_id].add_reply(plain_text)
+        current_history.add_response(plain_text)
         await sender.send(msg)
         if continue_chat:
             times = 1
@@ -129,7 +143,10 @@ class ChatModel:
             while True:
                 try:
                     user_info = get_user_info(user_id)
-                    prompt = await self.get_prompt(group_id, user_id, user_info, bot)
+                    prompt = await self.get_prompt(
+                        group_id, user_id, user_info, bot, current_history
+                    )
+                    prompt += await chat_message.get_processing_messages_prompt(bot)
                     prompt += "\n\n".join(function_calling_data)
                     prompt += "\n\n请继续回复"
                     if times == 5:
@@ -144,7 +161,7 @@ class ChatModel:
                     for m in response:
                         msg.append(m)
                     plain_text = msg.extract_plain_text()
-                    chat_history[group_id].add_reply(plain_text)
+                    current_history.add_response(plain_text)
                     await sender.send(msg)
                     if not continue_chat or times >= 5:
                         break

@@ -1,5 +1,3 @@
-from typing import List
-
 from fastapi import APIRouter
 from fastapi.responses import JSONResponse
 
@@ -23,7 +21,11 @@ router = APIRouter(prefix="/agent")
 )
 async def _() -> Result[AgentConfig]:
     try:
-        return Result.ok(config_manager.config(), "拿到信息啦!")
+        agent_config: AgentConfig = config_manager.config().model_copy(deep=True)
+        agent_config.embedding.api_key = ""
+        agent_config.search.api_key = ""
+        agent_config.tts.api_key = ""
+        return Result.ok(agent_config, "拿到信息啦!")
     except Exception as e:
         log.error(f"{router.prefix}/get_settings 调用错误:{str_traceback(e)}")
         return Result.fail(f"发生了一点错误捏 {type(e)}: {e}")
@@ -38,6 +40,14 @@ async def _() -> Result[AgentConfig]:
 )
 async def _(settings: AgentConfig) -> Result:
     try:
+        current_settings: AgentConfig = config_manager.config()
+        settings.search.api_key = (
+            settings.search.api_key or current_settings.search.api_key
+        )
+        settings.tts.api_key = settings.tts.api_key or current_settings.tts.api_key
+        settings.embedding.api_key = (
+            settings.embedding.api_key or current_settings.embedding.api_key
+        )
         config_manager.change_config(settings)
         return Result.ok(info="设置成功!")
     except Exception as e:
@@ -48,13 +58,16 @@ async def _(settings: AgentConfig) -> Result:
 @router.get(
     "/get_providers",
     dependencies=[authentication()],
-    response_model=Result[List[LLMProvider]],
+    response_model=Result[list[LLMProvider]],
     response_class=JSONResponse,
     description="获取所有的llm provider",
 )
-async def _() -> Result[List[LLMProvider]]:
+async def _() -> Result[list[LLMProvider]]:
     try:
-        return Result.ok(ProviderManager.get_provider_list(), "拿到信息啦!")
+        p_list = ProviderManager.get_provider_list()
+        for p in p_list:
+            p.api_key = ""
+        return Result.ok(p_list, "拿到信息啦!")
     except Exception as e:
         log.error(f"{router.prefix}/get_providers 调用错误:{str_traceback(e)}")
         return Result.fail(f"发生了一点错误捏 {type(e)}: {e}")
@@ -103,6 +116,9 @@ async def _(provider_name: str) -> Result:
 )
 async def _(provider_name, provider: LLMProvider) -> Result:
     try:
+        current_provider = ProviderManager.providers.get(provider_name)
+        if current_provider and not provider.api_key:
+            provider.api_key = current_provider.api_key
         ProviderManager.set_provider(provider_name, provider)
         return Result.ok(info="设置成功!")
     except Exception as e:

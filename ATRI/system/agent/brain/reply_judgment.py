@@ -37,7 +37,11 @@ class JudgmentModel:
 {chat_content}"""
 
     @classmethod
-    async def analyze(cls, history: str, chat_content: str, sensory: str) -> bool:
+    async def analyze(
+        cls, history: str, chat_content: str, sensory: str | None
+    ) -> bool:
+        if sensory is None:
+            sensory = "无"
         try:
             response = await llm_manager.call_model_by_type(
                 ModelType.TOOL,

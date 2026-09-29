@@ -41,6 +41,7 @@ class AgentConfig(BaseModel):
     """
 
     max_history: int = 20
+    max_thinking_times: int = 15
     search: SearchConfig = SearchConfig()
     tts: TTSConfig = TTSConfig()
     embedding: EmbeddingConfig = EmbeddingConfig()

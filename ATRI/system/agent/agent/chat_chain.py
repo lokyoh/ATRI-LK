@@ -5,7 +5,6 @@ from nonebot.adapters.onebot.v11 import Message
 from ATRI.log import log
 from ATRI.utils.datetime import now
 
-from ..basic.chat import chat_model
 from ..brain import (
     ActionModel,
     JudgmentModel,
@@ -43,8 +42,6 @@ class ATRIAgent:
                     await cls._chat(chat_sender, message, args, chat_message)
                 finally:
                     TempHisManager.stop_processing(chat_message)
-        except Exception:  # noqa: TRY203
-            raise
         finally:
             cls.waiting_num -= 1
 
@@ -60,25 +57,16 @@ class ATRIAgent:
         user_id = args.user_id
         this_msg = chat_message.message
         history_list = chat_message.history[:-1]
+        no_tool_model = False
         if args.skip_chat:
             return
         if not llm_manager.has_type(ModelType.CHAT):
             log.warning("没有配置chat类型的模型")
             return
         if not llm_manager.has_type(ModelType.TOOL):
-            log.warning("没有配置tool类型的模型")
-            if args.skip_judgment:
-                await chat_model.reply(
-                    args.bot,
-                    chat_id,
-                    user_id,
-                    chat_sender,
-                    this_msg,
-                    history_list,
-                    chat_message.image_history,
-                    chat_message.fallback_history,
-                    chat_message,
-                )
+            if not args.skip_judgment:
+                return
+            no_tool_model = True
         plain_text = message.extract_plain_text()
         now_time = now().time()
         if not args.skip_judgment and (plain_text == "" or 2 <= now_time.hour < 6):
@@ -89,19 +77,25 @@ class ATRIAgent:
         )
         msg_his = "\n".join(messages) if messages else "无历史聊天记录"
         img_his = chat_message.image_history
-        sensory = await SensoryAnalyzer.analyze(f"{img_his}\n\n{msg_his}", msg)
-        str_sensory = (
-            f"整体情感:{sensory.get('sensory', {}).get('total', '未知')} "
-            f"强度:{sensory.get('sensory', {}).get('strength', '未知')} "
-            f"具体情感:{','.join(sensory.get('sensory', {}).get('tag', ['未知']))}\n"
-            f"当前对话主题:{sensory.get('theme', '未知')} "
-            f"对方需求:{','.join(sensory.get('demand', ['未知']))}"
-        )
-        log.info(f"情感分析:{str_sensory}")
-        if not args.skip_judgment and not await JudgmentModel.analyze(
-            f"{img_his}\n\n{msg_his}", msg, str_sensory
-        ):
-            return
+        if not no_tool_model:
+            try:
+                sensory = await SensoryAnalyzer.analyze(f"{img_his}\n\n{msg_his}", msg)
+                str_sensory = (
+                    f"整体情感:{sensory.get('sensory', {}).get('total', '未知')} "
+                    f"强度:{sensory.get('sensory', {}).get('strength', '未知')} "
+                    f"具体情感:{','.join(sensory.get('sensory', {}).get('tag', ['未知']))}\n"
+                    f"当前对话主题:{sensory.get('theme', '未知')} "
+                    f"对方需求:{','.join(sensory.get('demand', ['未知']))}"
+                )
+                log.info(f"情感分析:{str_sensory}")
+            except Exception:
+                str_sensory = None
+            if not args.skip_judgment and not await JudgmentModel.analyze(
+                f"{img_his}\n\n{msg_his}", msg, str_sensory
+            ):
+                return
+        else:
+            str_sensory = None
         thinking, functions_data = await ThinkingModel.thinking(
             args.bot,
             chat_id,
@@ -123,12 +117,14 @@ class ATRIAgent:
             )
             calling_backs += calling_back
             if continue_chat:
+                from ..config import config
+
                 thinking, functions_data = await ThinkingModel.continue_thinking(
                     args.bot,
                     chat_id,
                     user_id,
                     calling_backs,
-                    times >= 15,
+                    times >= config.max_thinking_times,
                     this_msg,
                     chat_message,
                 )

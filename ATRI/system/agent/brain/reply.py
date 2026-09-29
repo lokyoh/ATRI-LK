@@ -42,7 +42,7 @@ class ReplyModel:
     @staticmethod
     def get_function_prompt(thinking_list, calling_backs):
         return f"""
-你有以下功能，请不要调用你没拥有的功能:
+可用功能:
 {
             "\n".join(
                 f'''{f.function_name}:
@@ -53,28 +53,36 @@ class ReplyModel:
             )
         }
 
-需要使用功能时生成以下json结构:
-{{
-    "function": "功能名",
-    "data": {{
-        "参数": 参数值
-    }}
-}}
-
-#思考器输出
+思考器输出:
 {"\n".join(thinking_list)}
 
-#思考器功能调用回应
+功能回应:
 {"\n".join(calling_backs)}
 
-你需要根据思考器思考的过程与回复指导来输出回复，同时根据自己的功能调用列表调用对应功能。
-请注意回复尽量简洁，只需能表达自己的意思即可，回复风格参考贴吧百度，不要在此出现功能调用，不要带有代码段与调试信息。
-功能调用时请严格使用json结构，请勿使用其他格式。
+请直接给出回复。
+要求：
+1. 回复短、自然、像群聊。
+2. 不解释、不写调试信息。
+3. 正文不要出现功能调用。
+4. 需要调用功能时，在正文后追加 JSON 代码块。
+5. 不需要调用功能时，只输出正文。
+
+功能调用格式：
+```json
+[
+    {{
+        "function": "功能名",
+        "data": {{
+            "参数": 参数值
+        }}
+    }}
+]
+```
 
 输出结构示例:
 你也早上好呀!
 
-```
+``` json
 [
     {{
         "function": "send_face",
@@ -157,6 +165,8 @@ class ReplyModel:
         # 确保 functions 是列表
         if isinstance(functions_data, dict):
             functions_data = [functions_data]
+        if not isinstance(functions_data, list):
+            functions_data = []
         # 处理功能调用
         msg = []
         for func in functions_data:

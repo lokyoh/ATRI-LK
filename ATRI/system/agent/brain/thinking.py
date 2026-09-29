@@ -65,7 +65,7 @@ class ThinkingModel:
     @staticmethod
     def get_function_prompt():
         return f"""
-你有以下功能:
+你可以调用以下功能，禁止调用未列出的功能:
 {
             "\n".join(
                 f'''{f.function_name}:
@@ -76,7 +76,7 @@ class ThinkingModel:
             )
         }
 
-需要使用功能时生成以下json结构:
+需要调用功能时，只输出 JSON，不要输出其他解释:
 {{
     "function": "功能名",
     "data": {{
@@ -84,16 +84,28 @@ class ThinkingModel:
     }}
 }}
 
+多个功能用 JSON 数组表示。
 """
 
     @staticmethod
     def get_resp_prompt():
-        return """你需要输出思考过程与功能调用的列表。
-思考过程首先分析你的聊天对象与聊天时间，再分析聊天历史总结发生了什么，然后根据当前对话分析需要调用的功能，最后再指导如何回复。
-功能调用时请严格使用json结构，请勿使用其他格式。
+        return """请先简短思考，再给出功能调用。
 
-输出结构示例:
-此处替换思考过程。
+思考必须包含：
+1. 聊天对象与时间
+2. 历史聊天总结
+3. 当前是否需要调用功能
+4. 应该如何回复
+
+要求：
+- 思考要短，不要展开成长篇分析。
+- 功能调用必须是合法 JSON。
+- 不需要调用功能时，输出空数组 []。
+- 不要输出无关解释。
+
+输出格式：
+简短思考过程。
+
 ```json
 [
     {
@@ -107,22 +119,28 @@ class ThinkingModel:
 
     @staticmethod
     def get_continue_resp_prompt():
-        return """你需要输出再思考过程与功能调用的列表。
-    再思考过程首先分析现在需要新调用的功能，最后再重新指导如何回复。
-    功能调用时请严格使用json结构，请勿使用其他格式。
+        return """请进行简短再思考，并给出新增功能调用。
 
-    输出结构示例:
-    此处替换再思考过程。
-    ```json
-    [
-        {
-            "function": "love_change",
-            "data": {
-                "num": 1
-            }
+要求：
+- 只分析现在还需要调用什么新功能。
+- 不要重复已经调用过的功能。
+- 最后重新给出回复指导。
+- 功能调用必须是合法 JSON。
+- 不需要新增功能时，输出空数组 []。
+
+输出格式：
+简短再思考过程。
+
+```json
+[
+    {
+        "function": "love_change",
+        "data": {
+            "num": 1
         }
-    ]
-    ```"""
+    }
+]
+```"""
 
     @classmethod
     async def thinking(
@@ -148,7 +166,8 @@ class ThinkingModel:
         prompt += await cls.get_prompt(
             group_id, user_id, user_info, bot, current_history
         )
-        prompt += f"#语境分析:\n{str_sensory}\n\n"
+        if not str_sensory is None:
+            prompt += f"#语境分析:\n{str_sensory}\n\n"
         prompt += cls.get_function_prompt()
         prompt += cls.get_resp_prompt()
         resp = await llm_manager.call_model_by_type(ModelType.CHAT, prompt)

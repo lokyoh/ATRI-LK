@@ -112,7 +112,7 @@ class ATRISchedule:
         prompt = (
             self.before_prompt
             + f"\n\n### 人物简介\n{ATRI.get_role_prompt()}\n\n"
-            + f"{'### 昨日记忆\n{memory}\n\n' if memory else ''}"
+            + f"{f'### 昨日记忆\n{memory}\n\n' if memory else ''}"
             + self.after_prompt
         )
         try:

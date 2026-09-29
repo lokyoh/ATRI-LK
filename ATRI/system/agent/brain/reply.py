@@ -40,7 +40,7 @@ class ReplyModel:
         return prompt
 
     @staticmethod
-    def get_function_prompt(thinking_list, calling_backs):
+    def get_function_prompt(thinking_list):
         return f"""
 可用功能:
 {
@@ -55,9 +55,6 @@ class ReplyModel:
 
 思考器输出:
 {"\n".join(thinking_list)}
-
-功能回应:
-{"\n".join(calling_backs)}
 
 请直接给出回复。
 要求：
@@ -100,7 +97,6 @@ class ReplyModel:
         group_id,
         user_id,
         thinking_list,
-        calling_backs,
         sender: ChatSender,
         message_history: History,
         with_tts=False,
@@ -111,7 +107,7 @@ class ReplyModel:
         prompt = await cls.get_prompt(
             group_id, user_id, user_info, bot, message_history
         )
-        prompt += cls.get_function_prompt(thinking_list, calling_backs)
+        prompt += cls.get_function_prompt(thinking_list)
         resp = await llm_manager.call_model_by_type(ModelType.CHAT, prompt)
         response = await cls.process_resp(resp.content, user_id, group_id)
         msg = Message()

@@ -136,7 +136,6 @@ class ATRIAgent:
             chat_id,
             user_id,
             thinking_list,
-            calling_backs,
             chat_sender,
             this_msg,
             with_tts=args.skip_judgment,

@@ -7,12 +7,12 @@ from ATRI.service import Service
 from .config import HelpConfig
 
 plugin = Service(
-    "帮助", "ATRI 的食用指南~", "2.0.1", Service.ServiceType.SYSTEM
+    "帮助", "ATRI 的食用指南~", "2.1.0", Service.ServiceType.SYSTEM
 ).allow_switch(False)
 
 help_config: HelpConfig = plugin.add_plugin_config(HelpConfig).config()
 
-from .data_source import Helper, help_type  # noqa: E402
+from .data_source import Helper, help_type
 
 plugin.on_startup(lambda: Helper().init_services())
 

@@ -1,21 +1,6 @@
 <!DOCTYPE html>
-{% macro switch_type(type_value, default_class='type-default') -%}
-    {% set type_data = {
-        'message':   {'text': 'msg', 'class': 'type-msg'},
-        'notice': {'text': 'ntc', 'class': 'type-ntc'},
-        'request':     {'text': 'req', 'class': 'type-req'},
-        'command':   {'text': 'cmd', 'class': 'type-cmd'},
-        'keyword':   {'text': 'kw', 'class': 'type-kw'},
-        'regex':   {'text': 'rgx', 'class': 'type-rgx'}
-    } %}
-
-    {% set display = type_data.get(type_value) %}
-
-    <span class="{{ display.class if display else default_class }}">
-        {{ display.text if display else type_value }}
-    </span>
-{%- endmacro %}
 <html lang="zh">
+
 <head>
     <meta charset="UTF-8">
     <title>ATRI 服务列表</title>
@@ -27,204 +12,278 @@
             --text-dark: #4a4a4a;
             --text-light: #6c6c6c;
             --bg-color: #e3f0e8;
-            --card-bg: rgba(255, 255, 255, 0.85);
-            --border-radius: 6px;
+            --card-bg: rgba(255, 255, 255, 0.9);
+            --border-radius: 8px;
+        }
+
+        * {
+            box-sizing: border-box;
         }
 
         body {
-            font-family: 'Segoe UI', 'PingFang SC', sans-serif;
-            max-width: 700px;
+            font-family: 'Segoe UI', 'PingFang SC', 'Microsoft YaHei', sans-serif;
+            width: 100%;
+            max-width: 800px;
             margin: 0 auto;
-            padding: 15px;
+            padding: 16px;
             background-color: var(--bg-color);
             color: var(--text-dark);
-            line-height: 1.5;
+            line-height: 1.6;
+            font-size: 14px;
         }
 
         h1 {
             text-align: center;
             color: var(--text-dark);
-            margin-bottom: 20px;
-            font-size: 1.5em;
+            margin: 0 0 20px;
+            font-size: 1.6em;
+            font-weight: 600;
+            padding-bottom: 10px;
+            border-bottom: 2px solid var(--primary-color);
         }
 
         .category-container {
-            margin-bottom: 20px;
+            margin-bottom: 24px;
         }
 
         .category-title {
             background: var(--primary-color);
             color: #fff;
-            padding: 8px 12px;
+            padding: 8px 14px;
             border-radius: var(--border-radius);
-            font-size: 1.1em;
-            margin-bottom: 10px;
+            font-size: 1.15em;
+            font-weight: 600;
+            margin: 0 0 12px;
         }
 
         .service-grid {
             display: grid;
-            grid-template-columns: repeat (auto-fill, minmax(200px, 1fr));
-            gap: 10px;
+            grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
+            gap: 12px;
         }
 
         .service-card {
             background: var(--card-bg);
             border: 1px solid #d1e0d7;
             border-radius: var(--border-radius);
-            padding: 10px;
-            box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
+            padding: 12px 14px;
+            box-shadow: 0 1px 3px rgba(0, 0, 0, 0.06);
+            display: flex;
+            flex-direction: column;
+            gap: 6px;
+        }
+
+        .service-card.is-disabled {
+            opacity: 0.6;
         }
 
         .service-header {
             display: flex;
             justify-content: space-between;
-            margin-bottom: 5px;
+            align-items: flex-start;
+            gap: 8px;
         }
 
         .service-name {
             font-weight: 600;
             color: var(--accent-color);
-            font-size: 0.95em;
+            font-size: 1em;
+            word-break: break-all;
+        }
+
+        .service-meta {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 4px;
+            flex-shrink: 0;
         }
 
         .meta-badge {
-            background: rgba(52, 152, 219, 0.1);
+            background: rgba(109, 139, 138, 0.12);
             color: var(--secondary-color);
-            padding: 2px 5px;
-            border-radius: 3px;
-            font-size: 0.7em;
+            padding: 2px 6px;
+            border-radius: 4px;
+            font-size: 0.75em;
+            white-space: nowrap;
+        }
+
+        .status-usable {
+            color: #2e7d32;
+            background: rgba(46, 125, 50, 0.12);
+            padding: 2px 6px;
+            border-radius: 4px;
+            font-size: 0.75em;
+            white-space: nowrap;
+        }
+
+        .status-disabled {
+            color: #c62828;
+            background: rgba(198, 40, 40, 0.12);
+            padding: 2px 6px;
+            border-radius: 4px;
+            font-size: 0.75em;
+            white-space: nowrap;
         }
 
         .service-desc {
             color: var(--text-light);
-            font-size: 0.8em;
-            margin: 3px 0;
+            font-size: 0.85em;
+            margin: 0;
+            word-break: break-word;
+        }
+
+        .service-docs {
+            color: var(--text-light);
+            font-size: 0.82em;
+            margin: 0;
+            word-break: break-word;
+            display: -webkit-box;
+            -webkit-line-clamp: 3;
+            -webkit-box-orient: vertical;
+            overflow: hidden;
         }
 
         .command-container {
             display: flex;
             flex-wrap: wrap;
-            gap: 5px;
-            margin-top: 8px;
+            gap: 6px;
+            margin-top: 6px;
+            padding-top: 8px;
+            border-top: 1px dashed #d1e0d7;
         }
 
         .command-item {
-            background: rgba(218, 231, 225, 0.7);
-            border-radius: 3px;
-            padding: 3px 6px;
-            font-size: 0.6em;
-            display: flex;
+            background: rgba(218, 231, 225, 0.75);
+            border-radius: 4px;
+            padding: 3px 8px;
+            font-size: 0.78em;
+            display: inline-flex;
             align-items: center;
+            gap: 4px;
             white-space: nowrap;
         }
 
         .command-name {
             font-weight: 500;
             color: var(--secondary-color);
-            margin-right: 3px;
+            font-family: 'Consolas', 'Menlo', monospace;
         }
 
-        .status-usable {
-            color: #5a8f7b;
-        }
-
-        .status-disabled {
-            color: #c17d6e;
-            background: rgba(231, 76, 60, 0.1);
+        .type-tag {
+            padding: 1px 6px;
+            border-radius: 4px;
+            font-size: 0.9em;
+            line-height: 1.4;
         }
 
         .type-default {
             background: #f5f5f5;
             color: #9e9e9e;
-            padding: 2px 6px;
-            border-radius: 4px;
-            font-size: 0.8em;
         }
 
         .type-msg {
-            background-color: #e3f2fd;
+            background: #e3f2fd;
             color: #1565c0;
-            padding: 2px 6px;
-            border-radius: 4px;
-            font-size: 0.8em;
         }
 
         .type-ntc {
-            background-color: #fff8e1;
+            background: #fff8e1;
             color: #ff8f00;
-            padding: 2px 6px;
-            border-radius: 4px;
-            font-size: 0.8em;
         }
 
         .type-req {
-            background-color: #e8f5e9;
+            background: #e8f5e9;
             color: #2e7d32;
-            padding: 2px 6px;
-            border-radius: 4px;
-            font-size: 0.8em;
         }
 
         .type-cmd {
-            background-color: #f3e5f5;
+            background: #f3e5f5;
             color: #7b1fa2;
-            padding: 2px 6px;
-            border-radius: 4px;
-            font-size: 0.8em;
         }
 
         .type-kw {
-            background-color: #e0f7fa;
+            background: #e0f7fa;
             color: #00838f;
-            padding: 2px 6px;
-            border-radius: 4px;
-            font-size: 0.8em;
         }
 
         .type-rgx {
-            background-color: #ffebee;
+            background: #ffebee;
             color: #c62828;
-            padding: 2px 6px;
-            border-radius: 4px;
-            font-size: 0.8em;
+        }
+
+        .empty-tip {
+            text-align: center;
+            color: var(--text-light);
+            padding: 40px 0;
+            font-size: 1em;
         }
     </style>
 </head>
+
 <body>
-<h1>ATRI 服务帮助</h1>
+    <h1>ATRI 服务帮助</h1>
 
-{% for category in categories %}
-<div class="category-container">
-    <h2 class="category-title">{{ category }}</h2>
-    <div class="service-grid">
-        {% for service in categories[category] %}
-        <div class="service-card">
-            <div class="service-header">
-                <span class="service-name">{{ service.service }}</span>
-                <div>
-                    <span class="meta-badge">v{{ service.version }}</span>
-                    <span class="{% if service.usable %}status-usable{% else %}status-disabled{% endif %}">
-                        {% if service.usable %}可用{% else %}禁用{% endif %}
-                    </span>
+    {% set type_map = {
+    'message': {'text': 'msg', 'class': 'type-msg'},
+    'notice': {'text': 'ntc', 'class': 'type-ntc'},
+    'request': {'text': 'req', 'class': 'type-req'},
+    'command': {'text': 'cmd', 'class': 'type-cmd'},
+    'keyword': {'text': 'kw', 'class': 'type-kw'},
+    'regex': {'text': 'rgx', 'class': 'type-rgx'}
+    } %}
+
+    {% if categories %}
+    {% for category in categories %}
+    <div class="category-container">
+        <h2 class="category-title">{{ category }}</h2>
+        <div class="service-grid">
+            {% for service in categories[category] %}
+            <div class="service-card{% if not service.usable %} is-disabled{% endif %}">
+                <div class="service-header">
+                    <span class="service-name">{{ service.service }}</span>
+                    <div class="service-meta">
+                        <span class="meta-badge">v{{ service.version }}</span>
+                        {% if service.usable %}
+                        <span class="status-usable">可用</span>
+                        {% else %}
+                        <span class="status-disabled">禁用</span>
+                        {% endif %}
+                    </div>
                 </div>
-            </div>
 
-            <div class="service-desc">权限: {{ service.permission }}</div>
+                {% if service.permission %}
+                <p class="service-desc">权限: {{ service.permission }}</p>
+                {% endif %}
 
-            {% if service.cmd_list %}
-            <div class="command-container">
-                {% for cmd in service.cmd_list %}
-                <div class="command-item">
-                    <span class="command-name">{{ cmd_str if service.cmd_list[cmd].type == "command" else "" }}{{ cmd }}</span>
-                    {{ switch_type(service.cmd_list[cmd].type) }}
+                {% if service.docs %}
+                <p class="service-docs">{{ service.docs }}</p>
+                {% endif %}
+
+                {% if service.cmd_list %}
+                <div class="command-container">
+                    {% for cmd in service.cmd_list %}
+                    {% set cmd_info = service.cmd_list[cmd] %}
+                    {% set cmd_type = cmd_info.get('type', '') if cmd_info is mapping else '' %}
+                    {% set type_display = type_map.get(cmd_type) %}
+                    <div class="command-item">
+                        <span class="command-name">
+                            {% if cmd_type == 'command' %}{{ cmd_str }}{% endif %}{{ cmd }}
+                        </span>
+                        <span class="type-tag {{ type_display.class if type_display else 'type-default' }}">
+                            {{ type_display.text if type_display else (cmd_type or '?') }}
+                        </span>
+                    </div>
+                    {% endfor %}
                 </div>
-                {% endfor %}
+                {% endif %}
             </div>
-            {% endif %}
+            {% endfor %}
         </div>
-        {% endfor %}
     </div>
-</div>
-{% endfor %}
+    {% endfor %}
+    {% else %}
+    <div class="empty-tip">暂无可用服务</div>
+    {% endif %}
 </body>
+
 </html>

@@ -31,9 +31,9 @@ class ChatFunction:
 
 
 class FunctionCallingData:
-    def __init__(self, sender_id, group_id, data: dict):
+    def __init__(self, sender_id, chat_id, data: dict):
         self.sender_id = sender_id
-        self.group_id = group_id
+        self.chat_id = chat_id
         self.data = data
 
 

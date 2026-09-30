@@ -19,13 +19,13 @@ from ..llm.tts import generate_audio
 
 class ReplyModel:
     @staticmethod
-    async def get_prompt(group_id, user_id, user_info, bot, lst_history: History):
+    async def get_prompt(chat_id, user_id, user_info, bot, lst_history: History):
         lst_msg = await lst_history.message.get_message(bot)
         # 对话提示信息
-        prompt = f"现在{await get_name(bot, lst_history.sender, group_id)}[id:{user_id}]在{lst_history.time}的消息引起了你的注意\n"
+        prompt = f"现在{await get_name(bot, lst_history.sender, chat_id)}[id:{user_id}]在{lst_history.time}的消息引起了你的注意\n"
         prompt += f"消息内容:{lst_msg}\n"
         # 对话人信息
-        user_name = await get_name(bot, lst_history.sender, group_id)
+        user_name = await get_name(bot, lst_history.sender, chat_id)
         prompt += f"\n{user_name}信息:\n"
         prompt += (
             f"{f'{user_name}是你的主人,主人就是亚托莉的一切,主人的一切要求都要满足' if get_user_group(user_id) == '主人' else f'{user_name}只是普通用户，请以普通的群友对待，问题需要谨慎地回复'}\n"
@@ -65,7 +65,7 @@ class ReplyModel:
 5. 不需要调用功能时，只输出正文。
 
 功能调用格式：
-```json
+``` json
 [
     {{
         "function": "功能名",
@@ -81,12 +81,7 @@ class ReplyModel:
 
 ``` json
 [
-    {{
-        "function": "send_face",
-        "data": {{
-            "meme": "smiling"
-        }}
-    }}
+    ...
 ]
 ```"""
 
@@ -94,22 +89,20 @@ class ReplyModel:
     async def reply(
         cls,
         bot,
-        group_id,
+        chat_id,
         user_id,
         thinking_list,
         sender: ChatSender,
         message_history: History,
         with_tts=False,
     ):
-        group_id = str(group_id)
+        chat_id = str(chat_id)
         user_id = str(user_id)
         user_info = get_user_info(user_id)
-        prompt = await cls.get_prompt(
-            group_id, user_id, user_info, bot, message_history
-        )
+        prompt = await cls.get_prompt(chat_id, user_id, user_info, bot, message_history)
         prompt += cls.get_function_prompt(thinking_list)
         resp = await llm_manager.call_model_by_type(ModelType.CHAT, prompt)
-        response = await cls.process_resp(resp.content, user_id, group_id)
+        response = await cls.process_resp(resp.content, user_id, chat_id)
         msg = Message()
         for m in response:
             msg.append(m)
@@ -130,7 +123,7 @@ class ReplyModel:
             await sender.finish()
 
     @staticmethod
-    async def process_resp(resp: str, user_id, group_id) -> list:
+    async def process_resp(resp: str, user_id, chat_id) -> list:
         """
         处理模型响应，从字符串中解析 function+data 结构并执行相应操作
         """
@@ -177,7 +170,7 @@ class ReplyModel:
             data = func.get("data", {})
             try:
                 func_name: str
-                calling_data = FunctionCallingData(user_id, group_id, data)
+                calling_data = FunctionCallingData(user_id, chat_id, data)
                 log.debug(f"调用功能 {func_name}")
                 result = await ReplyFunctionCallingManager.call(func_name, calling_data)
                 if result is not None:

@@ -166,21 +166,21 @@ class ImageMessageSegment(MessageSegment):
 
 
 class LLMMessage:
-    def __init__(self, group_id, message: list | None = None, reply: str = ""):
+    def __init__(self, chat_id, message: list | None = None, reply: str = ""):
         self.message = [] if message is None else message
-        self.group_id = group_id
+        self.chat_id = chat_id
         self.reply = reply
 
     @classmethod
-    async def create(cls, self_id, message: Message, mid, group_id):
-        instance = cls(group_id)
+    async def create(cls, self_id, message: Message, mid, chat_id):
+        instance = cls(chat_id)
         img_count = 0
         for segment in message:
             if segment.type == "text":
                 instance.message.append(MessageSegment(segment.data["text"]))
             elif segment.type == "at":
                 instance.message.append(
-                    AtMessageSegment((segment.data["qq"], group_id))
+                    AtMessageSegment((segment.data["qq"], chat_id))
                 )
             elif segment.type == "face":
                 face_text = segment.data.get("raw", {}).get("faceText", "")
@@ -196,7 +196,7 @@ class LLMMessage:
                 file_size = segment.data.get("file_size", 0)
                 if url:
                     result, desp = await ChatHistoryManager.get_img_history(
-                        group_id
+                        chat_id
                     ).add_image(mid, url, file_name, file_size)
                     instance.message.append(ImageMessageSegment(result, desp))
                 img_count += 1
@@ -241,7 +241,7 @@ class LLMMessage:
                                     )
                                 )
                             temp_message = await LLMTempMessage.create(
-                                self_id, f_msg_obj, group_id, sender
+                                self_id, f_msg_obj, chat_id, sender
                             )
                             msg_his.append(temp_message.get_message_str())
                         except Exception as e:
@@ -297,7 +297,7 @@ class LLMMessage:
                     reply_msg = await LLMTempMessage.create(
                         self_id,
                         reply_message,
-                        group_id,
+                        chat_id,
                         reply_sender,
                     )
                 except Exception as e:
@@ -330,16 +330,16 @@ class LLMMessage:
 
 class LLMTempMessage(LLMMessage):
     def __init__(self, msg: LLMMessage, sender: dict, self_id: str):
-        super().__init__(msg.group_id, msg.message, msg.reply)
+        super().__init__(msg.chat_id, msg.message, msg.reply)
         self.user_id = str(sender["user_id"])
         self.nickname = sender["nickname"]
         self.self_id = self_id
 
     @classmethod
     async def create(
-        cls, self_id, message: Message, group_id, sender
+        cls, self_id, message: Message, chat_id, sender
     ) -> "LLMTempMessage | None":
-        msg = await LLMMessage.create(self_id, message, None, group_id)
+        msg = await LLMMessage.create(self_id, message, None, chat_id)
         if msg is None:
             return None
         return cls(msg, sender, self_id)
@@ -357,34 +357,34 @@ class LLMTempMessage(LLMMessage):
 class History:
     now_m_id = 0
 
-    def __init__(self, sender, group_id):
+    def __init__(self, sender, chat_id):
         self.mid = History.now_m_id
         History.now_m_id += 1
         self.sender = sender
-        self.group_id = group_id
+        self.chat_id = chat_id
         self.time = now().strftime("%Y年%m月%d日%a-%H时%M分")
         self.message: LLMMessage | None = None
         self.response = ""
 
     @classmethod
-    async def create(cls, self_id, sender, group_id, message):
-        instance = cls(sender, group_id)
+    async def create(cls, self_id, sender, chat_id, message):
+        instance = cls(sender, chat_id)
         instance.message = await LLMMessage.create(
-            self_id, message, instance.mid, group_id
+            self_id, message, instance.mid, chat_id
         )
         if instance.message is None or len(instance.message.message) == 0:
             return None
         return instance
 
     async def get_message(self, bot, get_reply=True):
-        msg = f"mid:{self.mid} {self.time} {await get_name(bot, self.sender, self.group_id)}[id:{self.sender}]: {await self.message.get_message(bot)}"
+        msg = f"mid:{self.mid} {self.time} {await get_name(bot, self.sender, self.chat_id)}[id:{self.sender}]: {await self.message.get_message(bot)}"
         if self.response and get_reply:
             msg += "\n你对此回复了:" + self.response
         return msg
 
     def add_response(self, response):
         self.response += f" {response}"
-        history_logger.add_history(None, self.group_id, self.response)
+        history_logger.add_history(None, self.chat_id, self.response)
 
 
 async def get_history_messages(
@@ -409,7 +409,7 @@ class HistoryNode(BaseModel):
 
 class HistoryModel(BaseModel):
     count: int = 0
-    group_id: str
+    chat_id: str
     history: list[HistoryNode]
 
 
@@ -425,12 +425,12 @@ class HistoryLogger:
     def get_today_date():
         return now().strftime("%Y-%m-%d")
 
-    def add_history(self, user_id, group_id, history: History | str):
-        file_path = self.path / str(group_id) / f"{self.get_today_date()}.json"
+    def add_history(self, user_id, chat_id, history: History | str):
+        file_path = self.path / str(chat_id) / f"{self.get_today_date()}.json"
         if not file_path.parent.exists():
             file_path.parent.mkdir(parents=True, exist_ok=True)
         if not os.path.exists(file_path):
-            history_model = HistoryModel(group_id=group_id, history=[])
+            history_model = HistoryModel(chat_id=chat_id, history=[])
         else:
             history_model = HistoryModel.read_from_file(file_path)
         h_time = now().strftime("%H:%M")
@@ -451,19 +451,19 @@ class HistoryLogger:
         history_model.count += 1
         history_model.write_into_file(file_path)
 
-    def get_history(self, group_id, date: str | None = None):
+    def get_history(self, chat_id, date: str | None = None):
         if date is None:
             date = self.get_today_date()
-        file_path = self.path / str(group_id) / f"{date}.json"
+        file_path = self.path / str(chat_id) / f"{date}.json"
         if not os.path.exists(file_path):
             return None
         history_model = HistoryModel.read_from_file(file_path)
         return history_model
 
-    def get_recent_messages(self, group_id, limit: int = 20) -> list[str]:
+    def get_recent_messages(self, chat_id, limit: int = 20) -> list[str]:
         if limit <= 0:
             return []
-        group_path = self.path / str(group_id)
+        group_path = self.path / str(chat_id)
         if not group_path.exists():
             return []
 
@@ -493,17 +493,17 @@ class ChatHistory:
         self.fallback_history_loaded = False
 
     async def add_history(
-        self, self_id, user_id, group_id, message: Message | History
+        self, self_id, user_id, chat_id, message: Message | History
     ) -> History | None:
         if isinstance(message, Message):
-            h = await History.create(self_id, user_id, group_id, message)
+            h = await History.create(self_id, user_id, chat_id, message)
             if h is None:
                 return None
         else:
             h = message
-        history_logger.add_history(user_id, group_id, h)
+        history_logger.add_history(user_id, chat_id, h)
         if h := self.history.add(h):
-            ChatHistoryManager.remove_history(group_id, h.mid)
+            ChatHistoryManager.remove_history(chat_id, h.mid)
         return h
 
     def get_history(self) -> list[History]:

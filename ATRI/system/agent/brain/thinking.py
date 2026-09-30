@@ -31,10 +31,10 @@ class ThinkingModel:
         )
 
     @staticmethod
-    async def get_prompt(group_id, user_id, user_info, bot, lst_history: History):
+    async def get_prompt(chat_id, user_id, user_info, bot, lst_history: History):
         lst_msg = await lst_history.message.get_message(bot)
         # 对话提示信息
-        prompt = f"现在{await get_name(bot, lst_history.sender, group_id)}[id:{user_id}]在{lst_history.time}的消息引起了你的注意\n"
+        prompt = f"现在{await get_name(bot, lst_history.sender, chat_id)}[id:{user_id}]在{lst_history.time}的消息引起了你的注意\n"
         prompt += f"消息内容:{lst_msg}\n"
         # 对话中词语解释
         exp = get_top_explanations(lst_msg)
@@ -42,7 +42,7 @@ class ThinkingModel:
             prompt += "其中词语解释:\n"
             prompt += "\n".join(exp)
         # 对话人信息
-        user_name = await get_name(bot, lst_history.sender, group_id)
+        user_name = await get_name(bot, lst_history.sender, chat_id)
         prompt += f"\n{user_name}信息:\n"
         prompt += (
             f"{f'{user_name}是你的主人,主人就是亚托莉的一切,主人的一切要求都要满足' if get_user_group(user_id) == '主人' else f'{user_name}只是普通用户，请以普通的群友对待，问题需要谨慎地回复'}\n"
@@ -76,15 +76,17 @@ class ThinkingModel:
             )
         }
 
-需要调用功能时，只输出 JSON，不要输出其他解释:
-{{
-    "function": "功能名",
-    "data": {{
-        "参数": 参数值
+功能调用格式：
+``` json
+[
+    {{
+        "function": "功能名",
+        "data": {{
+            "参数": 参数值
+        }}
     }}
-}}
-
-多个功能用 JSON 数组表示。
+]
+```
 """
 
     @staticmethod
@@ -108,12 +110,7 @@ class ThinkingModel:
 
 ```json
 [
-    {
-        "function": "love_change",
-        "data": {
-            "num": 1
-        }
-    }
+    ...
 ]
 ```"""
 
@@ -133,12 +130,7 @@ class ThinkingModel:
 
 ```json
 [
-    {
-        "function": "love_change",
-        "data": {
-            "num": 1
-        }
-    }
+    ...
 ]
 ```"""
 
@@ -146,7 +138,7 @@ class ThinkingModel:
     async def thinking(
         cls,
         bot,
-        group_id,
+        chat_id,
         user_id,
         str_sensory,
         current_history: History,
@@ -164,7 +156,7 @@ class ThinkingModel:
             await chat_message.get_processing_messages_prompt(bot),
         )
         prompt += await cls.get_prompt(
-            group_id, user_id, user_info, bot, current_history
+            chat_id, user_id, user_info, bot, current_history
         )
         if not str_sensory is None:
             prompt += f"#语境分析:\n{str_sensory}\n\n"
@@ -177,7 +169,7 @@ class ThinkingModel:
     async def continue_thinking(
         cls,
         bot,
-        group_id,
+        chat_id,
         user_id,
         function_calling_data,
         stop_calling,
@@ -185,9 +177,7 @@ class ThinkingModel:
         chat_message,
     ) -> tuple[str, list]:
         user_info = get_user_info(user_id)
-        prompt = await cls.get_prompt(
-            group_id, user_id, user_info, bot, current_history
-        )
+        prompt = await cls.get_prompt(chat_id, user_id, user_info, bot, current_history)
         prompt += await chat_message.get_processing_messages_prompt(bot)
         prompt += "\n\n".join(function_calling_data)
         prompt += "\n"

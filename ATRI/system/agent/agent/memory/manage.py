@@ -31,13 +31,13 @@ MEMORY_PROMPT = """你是聊天记录记忆提取器。请从下面这一段群�
 4. 不要提取问候、寒暄、情绪宣泄、临时状态、普通问答、单次闲聊、重复内容或没有后续价值的消息。
 5. 每条必须是独立、简短、客观的中文句子；不要把原聊天逐句改写成记忆。
 6. 为每条记忆评估重要度，范围为 0.0 到 1.0：长期稳定且未来有用的信息接近 1.0，一般事实接近 0.5。
-7. 每条记忆必须原样包含重要度、人物标记和群标记，格式必须是
-    [重要度:0.0到1.0] [人物ID:人物id] [群ID:群id] 记忆内容
-8. 人物 ID 必须来自消息前的 sender；群 ID 使用本段记录的 group_id。
+7. 每条记忆必须原样包含重要度、人物标记和聊天ID标记，格式必须是
+    [重要度:0.0到1.0] [人物ID:人物id] [聊天ID:聊天id] 记忆内容
+8. 人物 ID 必须来自消息前的 sender；聊天 ID 使用本段记录的 chat_id
 9. 不要猜测记录中没有出现的 ID，不要把多个人物或多个事实合并成一条。
 10. 如果没有符合条件的内容，只输出：无
 
-本段群 ID：{group_id}
+本段群 ID：{chat_id}
 聊天记录：
 {history}
 """
@@ -99,7 +99,7 @@ class MemoryManager:
             return None
         return self.database.access_memory(int(memory_id), reinforce)
 
-    async def add_memory(self, group_id, memory, importance=DEFAULT_MEMORY_IMPORTANCE):
+    async def add_memory(self, chat_id, memory, importance=DEFAULT_MEMORY_IMPORTANCE):
         memory = memory.strip()
         if not memory:
             return None
@@ -124,19 +124,19 @@ class MemoryManager:
             content=memory,
             embedding=vector,
             importance=importance,
-            metadata={"group_id": str(group_id), "source": "daily_summary"},
+            metadata={"chat_id": str(chat_id), "source": "daily_summary"},
         )
 
-    async def summarize(self, group_id, history):
+    async def summarize(self, chat_id, history):
         if not llm_manager.has_type(ModelType.TOOL):
             log.warning("没有配置tool类型的模型，跳过记忆总结")
             return 0
         history_text = "\n".join(
             f"[人物ID:{node.sender if node.sender is not None else 'bot'}] "
-            f"[群ID:{history.group_id}] {node.time} {node.message}"
+            f"[聊天ID:{history.chat_id}] {node.time} {node.message}"
             for node in history.history
         )
-        prompt = MEMORY_PROMPT.format(group_id=group_id, history=history_text)
+        prompt = MEMORY_PROMPT.format(chat_id=chat_id, history=history_text)
         response = await llm_manager.call_model_by_type(ModelType.TOOL, prompt)
         count = 0
         seen = set()
@@ -156,7 +156,7 @@ class MemoryManager:
             if memory in seen or count >= MAX_MEMORIES_PER_BATCH:
                 continue
             seen.add(memory)
-            await self.add_memory(group_id, memory, importance)
+            await self.add_memory(chat_id, memory, importance)
             count += 1
         return count
 
@@ -209,13 +209,13 @@ async def summarize_memories():
         return
     paths = history_logger.path
     log.info("开始总结记忆")
-    for group_id in os.listdir(paths):
-        group_path = paths / group_id
+    for chat_id in os.listdir(paths):
+        group_path = paths / chat_id
         if not group_path.is_dir():
             continue
         last_summary_time = _read_last_summary_time(group_path)
         for summary_date in _get_summary_dates(group_path, last_summary_time):
-            history = history_logger.get_history(group_id, summary_date)
+            history = history_logger.get_history(chat_id, summary_date)
             if history is None:
                 _write_last_summary_time(group_path, summary_date)
                 continue
@@ -235,9 +235,9 @@ async def summarize_memories():
                     update={"history": history.history[start:end]}
                 )
                 try:
-                    await memory_manager.summarize(group_id, batch)
+                    await memory_manager.summarize(chat_id, batch)
                 except (ModelRequestError, OSError, RuntimeError, ValueError) as exc:
-                    log.error(f"群 {group_id} 的记忆总结失败：{exc}")
+                    log.error(f"聊天 {chat_id} 的记忆总结失败：{exc}")
                     succeeded = False
                     break
                 if end == total:

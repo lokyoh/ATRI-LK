@@ -93,13 +93,13 @@ class TempHisManager:
     @classmethod
     def start_processing(cls, chat_message: ChatMessage) -> None:
         if chat_message.message is not None:
-            cls.processing_messages[chat_message.message.group_id] = chat_message
+            cls.processing_messages[chat_message.message.chat_id] = chat_message
 
     @classmethod
     def stop_processing(cls, chat_message: ChatMessage) -> None:
         if (
             chat_message.message is not None
-            and cls.processing_messages.get(chat_message.message.group_id)
+            and cls.processing_messages.get(chat_message.message.chat_id)
             is chat_message
         ):
-            del cls.processing_messages[chat_message.message.group_id]
+            del cls.processing_messages[chat_message.message.chat_id]

@@ -6,7 +6,7 @@ from ..agent.function_calling import FunctionCallingData, FunctionCallingManager
 
 class ActionModel:
     @staticmethod
-    async def do_action(functions_data: list, user_id, group_id) -> tuple[bool, list]:
+    async def do_action(functions_data: list, user_id, chat_id) -> tuple[bool, list]:
         continue_chat = False
         calling_back = []
         for func in functions_data:
@@ -22,7 +22,7 @@ class ActionModel:
             try:
                 func_name: str
                 # 使用 FunctionCallingManager 统一处理功能调用
-                calling_data = FunctionCallingData(user_id, group_id, data)
+                calling_data = FunctionCallingData(user_id, chat_id, data)
                 log.debug(f"调用功能 {func_name}")
                 result = await FunctionCallingManager.call(func_name, calling_data)
                 if result is not None:

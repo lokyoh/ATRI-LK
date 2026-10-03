@@ -131,11 +131,12 @@ def load_system():
 
 def load_atri():
     from ATRI import conf
+    from ATRI.bot.statistics import delete_outdated_statistics
+    from ATRI.service import driver_startup
     from ATRI.utils.datetime import set_timezone
 
     set_timezone(conf.BotConfig.timezone)
     load_system()
     load_plugins()
-    from ATRI.service import driver_startup
-
+    driver().on_startup(delete_outdated_statistics)
     driver().on_startup(driver_startup)

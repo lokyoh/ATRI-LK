@@ -33,6 +33,14 @@
   - `webapi`安全更新
   - `lkchat`适配新版agent
   - 修复`essential`调用记录异常的问题
+- Patch4:
+  - `帮助`修复`html`显示错误与硬编码未替换bug,同时进行性能优化
+  - `agent`变更`group_id`为`chat_id`,聊天存储改`group`为`chat`,来为以后适配更多场景,新增服务查询、目录查询、文件读取功能调用;删除旧的对话兼容;更新提示词并新增最大思考次数配置`max_thinking_times`;新增清理图片描述与聊天历史清理
+  - `lkapi`的`mq通知`新增本地存储
+  - `sqlite`更新
+  - `ATRI`新增统计清理
+  - 修复bug[#13](https://github.com/lokyoh/ATRI-LK/issues/13)
+  - 修复一些问题
 
 ## Jul 17, 2026
 

@@ -9,7 +9,7 @@ from ATRI.log import log
 from ..agent.function_calling import FunctionCallingData, ReplyFunctionCallingManager
 from ..agent.history import History
 from ..agent.role import ATRI
-from ..agent.sender import ChatSender, QQChatSender
+from ..agent.sender import ChatSender
 from ..agent.user import get_user_info
 from ..agent.util import get_name, get_user_group
 from ..config import config
@@ -119,8 +119,6 @@ class ReplyModel:
             from ATRI.message import rec_msg_from_path
 
             await sender.send(rec_msg_from_path(path))
-        if isinstance(sender, QQChatSender):
-            await sender.finish()
 
     @staticmethod
     async def process_resp(resp: str, user_id, chat_id) -> list:

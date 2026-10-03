@@ -19,12 +19,34 @@ from ATRI.exceptions import (
 from ATRI.log import log
 from ATRI.message import MessageBuilder
 from ATRI.utils import Limiter
+from ATRI.utils.datetime import now
 
 from .model import MessageStatistics, ServiceStatistics
 
 TEMP_LIST = []
 
 limiter = Limiter(3, 600)
+
+
+async def delete_outdated_statistics():
+    current_time = now()
+    target_year = current_time.year - 2
+    start_of_year = current_time.replace(
+        year=target_year, month=1, day=1, hour=0, minute=0, second=0, microsecond=0
+    )
+    start_of_next_year = start_of_year.replace(year=target_year + 1)
+
+    message_count = await MessageStatistics.filter(
+        created_at__gte=start_of_year, created_at__lt=start_of_next_year
+    ).delete()
+    service_count = await ServiceStatistics.filter(
+        created_at__gte=start_of_year, created_at__lt=start_of_next_year
+    ).delete()
+    if message_count != 0 or service_count != 0:
+        log.info(
+            f"已删除 {target_year} 年统计数据：消息 {message_count} 条，服务调用 {service_count} 条"
+        )
+    return message_count, service_count
 
 
 @event_postprocessor

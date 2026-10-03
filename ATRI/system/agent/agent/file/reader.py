@@ -37,6 +37,8 @@ BLACKLIST_FILES = {
     "passwd",
     "agent_config.json",
     "provider.yml",
+    "config.yml",
+    "config_backup.yml",
 }
 
 # 3. 敏感扩展名（后缀匹配）

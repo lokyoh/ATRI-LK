@@ -19,7 +19,12 @@ default_ignore_dirs = {
     ".pytest_cache",
     ".venv",
 }
-default_ignore_files = {"provider.yml", "agent_config.json"}
+default_ignore_files = {
+    "provider.yml",
+    "agent_config.json",
+    "config.yml",
+    "config_backup.yml",
+}
 
 # 需要统计行数的后缀
 COUNT_LINES_EXTS = {

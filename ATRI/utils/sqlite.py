@@ -4,41 +4,55 @@ from ATRI.database.db import DB_DIR
 
 
 class Cursor:
-    def __init__(self, conn, table_name):
+    def __init__(self, conn: Connection, table_name: str):
         self.conn = conn
         self.cursor = conn.cursor()
         self.table_name = table_name
 
-    def insert(self, content: str | tuple | list | dict, value: str | tuple | list | None = None):
+    def insert(
+        self,
+        content: str | tuple | list | dict,
+        value: str | tuple | list | None = None,
+    ):
         if isinstance(content, dict):
-            contents = ', '.join(content.keys())
+            contents = ", ".join(content.keys())
             values = tuple(content.values())
-            placeholder = ', '.join(f'?' for _ in values)
-            self.cursor.execute(f"INSERT INTO {self.table_name} ({contents}) VALUES ({placeholder})", values)
+            placeholder = ", ".join("?" for _ in values)
+            self.cursor.execute(
+                f"INSERT INTO {self.table_name} ({contents}) VALUES ({placeholder})",
+                values,
+            )
         else:
             if isinstance(content, str):
                 pass
             elif isinstance(content, (tuple, list)):
-                content = ', '.join(content)
+                content = ", ".join(content)
             else:
                 raise TypeError
             if isinstance(value, str):
-                self.cursor.execute(f"INSERT INTO {self.table_name} ({content}) VALUES ({value})")
+                self.cursor.execute(
+                    f"INSERT INTO {self.table_name} ({content}) VALUES ({value})"
+                )
             elif isinstance(value, (tuple, list)):
-                placeholder = ', '.join(f'?' for _ in value)
-                self.cursor.execute(f"INSERT INTO {self.table_name} ({content}) VALUES ({placeholder})", value)
+                placeholder = ", ".join("?" for _ in value)
+                self.cursor.execute(
+                    f"INSERT INTO {self.table_name} ({content}) VALUES ({placeholder})",
+                    value,
+                )
             else:
                 raise TypeError
 
-    def update(self, content: str | tuple | list | dict, req: str | tuple | list | dict):
+    def update(
+        self, content: str | tuple | list | dict, req: str | tuple | list | dict
+    ):
         values = ()
         if isinstance(req, str):
             condition = req
         elif isinstance(req, (tuple, list)):
-            condition = 'AND '.join(f'{c} = ?' for c in req[0])
+            condition = "AND ".join(f"{c} = ?" for c in req[0])
             values = req[1]
         elif isinstance(req, dict):
-            condition = 'AND '.join(f'{c} = ?' for c in req.keys())
+            condition = "AND ".join(f"{c} = ?" for c in req)
             values = tuple(req.values())
         else:
             raise TypeError
@@ -46,16 +60,20 @@ class Cursor:
             pass
         elif isinstance(content, (tuple, list)):
             values = (*content[1], *values)
-            content = ', '.join(f'{c} = ?' for c in content[0])
+            content = ", ".join(f"{c} = ?" for c in content[0])
         elif isinstance(content, dict):
             values = (*content.values(), *values)
-            content = ', '.join(f'{c} = ?' for c in content.keys())
+            content = ", ".join(f"{c} = ?" for c in content)
         else:
             raise TypeError
         if values:
-            self.cursor.execute(f"UPDATE {self.table_name} SET {content} WHERE {condition}", values)
+            self.cursor.execute(
+                f"UPDATE {self.table_name} SET {content} WHERE {condition}", values
+            )
         else:
-            self.cursor.execute(f"UPDATE {self.table_name} SET {content} WHERE {condition}")
+            self.cursor.execute(
+                f"UPDATE {self.table_name} SET {content} WHERE {condition}"
+            )
 
     def delete(self, req: str | tuple | list | dict):
         if isinstance(req, str):
@@ -67,8 +85,10 @@ class Cursor:
             else:
                 condition = req[0]
                 values = req[1]
-            self.cursor.execute(f"DELETE FROM {self.table_name} WHERE {', '.join(f'{c} = ?' for c in condition)}",
-                                values)
+            self.cursor.execute(
+                f"DELETE FROM {self.table_name} WHERE {', '.join(f'{c} = ?' for c in condition)}",
+                values,
+            )
         else:
             raise TypeError
 
@@ -90,26 +110,28 @@ class Cursor:
 
 
 class DBTable:
-    def __init__(self, connection: Connection, table_name):
+    def __init__(self, connection: Connection, table_name: str):
         self._conn = connection
         self.table_name = table_name
 
     def get_cursor(self):
+        """获取游标对象"""
         return Cursor(self._conn, self.table_name)
 
-    def select_all(self, content='*'):
+    def select_all(self, content="*"):
+        """查询表中所有内容"""
         cursor = self._conn.cursor()
-        result = cursor.execute(f'''SELECT {content} FROM {self.table_name}''')
-        content = []
-        for row in result:
-            content.append(row)
+        result = cursor.execute(f"""SELECT {content} FROM {self.table_name}""")
+        content = list(result)
         cursor.close()
         return content
 
     def select(self, content: str, req: str | tuple | list | dict):
         cursor = self._conn.cursor()
         if isinstance(req, str):
-            result = cursor.execute(f"SELECT {content} FROM {self.table_name} WHERE {req}")
+            result = cursor.execute(
+                f"SELECT {content} FROM {self.table_name} WHERE {req}"
+            )
         elif isinstance(req, (tuple, list, dict)):
             if isinstance(req, dict):
                 condition = req.keys()
@@ -118,26 +140,33 @@ class DBTable:
                 condition = req[0]
                 values = req[1]
             result = cursor.execute(
-                f"SELECT {content} FROM {self.table_name} WHERE {' AND '.join(f'{c} = ?' for c in condition)}", values)
+                f"SELECT {content} FROM {self.table_name} WHERE {' AND '.join(f'{c} = ?' for c in condition)}",
+                values,
+            )
         else:
             raise TypeError
-        content = []
-        for row in result:
-            content.append(row)
+        content = list(result)
         cursor.close()
         return content
 
-    def insert(self, content: str | tuple | list | dict, value: str | tuple | list | None = None):
+    def insert(
+        self,
+        content: str | tuple | list | dict,
+        value: str | tuple | list | None = None,
+    ):
         with self.get_cursor() as cursor:
             cursor.insert(content, value)
 
-    def update(self, content: str | tuple | list | dict, req: str | tuple | list | dict):
+    def update(
+        self, content: str | tuple | list | dict, req: str | tuple | list | dict
+    ):
         with self.get_cursor() as cursor:
             cursor.update(content, req)
 
-    def delete(self, req: str | tuple | list | dict):
+    def delete(self, req: str | tuple | list | dict) -> int:
         with self.get_cursor() as cursor:
             cursor.delete(req)
+            return cursor.cursor.rowcount
 
 
 class DataBase:
@@ -145,36 +174,49 @@ class DataBase:
         self._connection = connect(f"{DB_DIR}/{database_name}")
         self._table_list = []
         cursor = self._connection.cursor()
-        cursor.execute(f"CREATE TABLE IF NOT EXISTS TABLEVERSION ( TABLENAME TEXT, VERSION INTEGER );")
+        cursor.execute(
+            "CREATE TABLE IF NOT EXISTS TABLEVERSION ( TABLENAME TEXT, VERSION INTEGER );"
+        )
         self._connection.commit()
         cursor.close()
 
-    def get_table(self, table_name: str, table_content: str, table_version: int, update_dp=None) -> DBTable:
+    def get_table(
+        self, table_name: str, table_content: str, table_version: int, update_dp=None
+    ) -> DBTable:
+        """获取表，如果不存在则创建，并检查版本号，版本号不同时调用 update_dp 更新表结构"""
         if table_name in self._table_list:
             raise ValueError(f"表 {table_name} 已经存在")
         self._table_list.append(table_name)
         cursor = self._connection.cursor()
-        cursor.execute(f'''CREATE TABLE IF NOT EXISTS {table_name} ( {table_content} );''')
+        cursor.execute(
+            f"""CREATE TABLE IF NOT EXISTS {table_name} ( {table_content} );"""
+        )
         self._connection.commit()
-        cursor.execute(f"SELECT VERSION FROM TABLEVERSION WHERE TABLENAME = '{table_name}'")
-        result = []
-        for row in cursor:
-            result.append(row)
+        cursor.execute(
+            f"SELECT VERSION FROM TABLEVERSION WHERE TABLENAME = '{table_name}'"
+        )
+        result = list(cursor)
         if len(result) > 0:
             now_version = result[0][0]
             if now_version != table_version:
                 if update_dp is not None:
                     update_dp(self._connection, now_version)
-                cursor.execute(f"UPDATE TABLEVERSION SET VERSION = {table_version} WHERE TABLENAME = '{table_name}'")
+                cursor.execute(
+                    f"UPDATE TABLEVERSION SET VERSION = {table_version} WHERE TABLENAME = '{table_name}'"
+                )
                 self._connection.commit()
         else:
-            cursor.execute(f"INSERT INTO TABLEVERSION (TABLENAME, VERSION) VALUES ('{table_name}', {table_version})")
+            cursor.execute(
+                f"INSERT INTO TABLEVERSION (TABLENAME, VERSION) VALUES ('{table_name}', {table_version})"
+            )
             self._connection.commit()
         cursor.close()
         return DBTable(self._connection, table_name)
 
-    def get_exist_table(self, table_name: str):
+    def get_exist_table(self, table_name: str) -> DBTable:
+        """获取已存在的表"""
         return DBTable(self._connection, table_name)
 
     def disconnect(self):
+        """关闭数据库连接"""
         self._connection.close()

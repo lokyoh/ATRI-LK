@@ -44,6 +44,10 @@ class ImageHistory:
             )
             if cached_images and cached_images[0][0]:
                 text = cached_images[0][0]
+                img_table.update(
+                    {"UPDATE_AT": now_timestamp()},
+                    {"FILE_NAME": file_name, "FILE_SIZE": file_size},
+                )
                 log.info(f"使用图片描述缓存：{file_name}")
 
         # 下载图片
@@ -58,6 +62,10 @@ class ImageHistory:
                 )
                 if cached_images and cached_images[0][0]:
                     text = cached_images[0][0]
+                    img_table.update(
+                        {"UPDATE_AT": now_timestamp()},
+                        {"HASH": image_hash, "FILE_SIZE": image_size},
+                    )
                     log.info(f"使用图片哈希描述缓存：{image_hash}")
                 if text is not None:
                     image_bytes = None
@@ -179,9 +187,7 @@ class LLMMessage:
             if segment.type == "text":
                 instance.message.append(MessageSegment(segment.data["text"]))
             elif segment.type == "at":
-                instance.message.append(
-                    AtMessageSegment((segment.data["qq"], chat_id))
-                )
+                instance.message.append(AtMessageSegment((segment.data["qq"], chat_id)))
             elif segment.type == "face":
                 face_text = segment.data.get("raw", {}).get("faceText", "")
                 if face_text:
@@ -417,7 +423,7 @@ class HistoryLogger:
     def __init__(self):
         from ..service import plugin
 
-        self.path = plugin.get_path() / "group"
+        self.path = plugin.get_path() / "chat"
         if not self.path.exists():
             self.path.mkdir(parents=True, exist_ok=True)
 
@@ -432,7 +438,11 @@ class HistoryLogger:
         if not os.path.exists(file_path):
             history_model = HistoryModel(chat_id=chat_id, history=[])
         else:
-            history_model = HistoryModel.read_from_file(file_path)
+            try:
+                history_model = HistoryModel.read_from_file(file_path)
+            except Exception:
+                log.warning(f"读取聊天历史失败：{file_path}")
+                history_model = HistoryModel(chat_id=chat_id, history=[])
         h_time = now().strftime("%H:%M")
         if user_id is None:
             history: str
@@ -457,7 +467,11 @@ class HistoryLogger:
         file_path = self.path / str(chat_id) / f"{date}.json"
         if not os.path.exists(file_path):
             return None
-        history_model = HistoryModel.read_from_file(file_path)
+        try:
+            history_model = HistoryModel.read_from_file(file_path)
+        except Exception as e:
+            log.warning(f"读取聊天历史失败：{file_path}: {e}")
+            return None
         return history_model
 
     def get_recent_messages(self, chat_id, limit: int = 20) -> list[str]:

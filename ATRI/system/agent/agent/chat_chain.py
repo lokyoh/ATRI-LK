@@ -15,7 +15,7 @@ from ..brain import (
 from ..llm import ModelType, llm_manager
 from .history import get_history_messages
 from .model import ChatArgs
-from .sender import ChatSender
+from .sender import ChatSender, QQChatSender
 from .temp_his import ChatMessage, TempHisManager
 
 
@@ -140,3 +140,5 @@ class ATRIAgent:
             this_msg,
             with_tts=args.skip_judgment,
         )
+        if isinstance(chat_sender, QQChatSender):
+            await chat_sender.finish()

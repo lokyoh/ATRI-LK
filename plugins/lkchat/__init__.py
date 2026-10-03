@@ -22,7 +22,7 @@ plugin = Service(
 ).main_cmd("聊天")
 config: LKChatConfig = plugin.add_plugin_config(LKChatConfig).config()
 
-from .data_source import (
+from .data_source import (  # noqa: E402
     REPLY_MESSAGE,
     PreChatEvent,
     call_agent,
@@ -59,7 +59,7 @@ async def _(event: GroupMessageEvent, matcher: Matcher, bot: Bot):
 
 word_add = plugin.cmd_as_group(
     "添加解释",
-    "为词语添加解释，用法：chat.添加解释 词语 解释 重要度(0-100越大越重要)",
+    "为词语添加解释，用法：/聊天.添加解释 词语 解释 重要度(0-100越大越重要)",
     permission=MASTER,
 )
 

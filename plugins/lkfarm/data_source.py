@@ -169,16 +169,16 @@ class FarmSystem:
             and date_fromtimestamp(os.path.getmtime(f_path_img)) == today()
             and f_path_hash.exists()
         ):
-            async with anyio.open_file(f_path_hash, "r") as f:
+            async with await anyio.open_file(f_path_hash, "r") as f:
                 old_hash = await f.read()
             if old_hash == f_hash:
-                async with anyio.open_file(f_path_img, "rb") as f:
+                async with await anyio.open_file(f_path_img, "rb") as f:
                     return await f.read()
         FARM_TEMP_PATH.mkdir(parents=True, exist_ok=True)
-        async with anyio.open_file(f_path_hash, "w") as f:
+        async with await anyio.open_file(f_path_hash, "w") as f:
             await f.write(f_hash)
         f_bytes = await md_to_pic(farm_md)
-        async with anyio.open_file(f_path_img, "wb") as f:
+        async with await anyio.open_file(f_path_img, "wb") as f:
             await f.write(f_bytes)
         return f_bytes
 
@@ -198,11 +198,11 @@ class FarmSystem:
                 for i in range(start_x, end_x + 1):
                     for j in range(start_y, end_y + 1):
                         p = chr(i) + chr(j)
-                        if not p in p_list:
+                        if p not in p_list:
                             p_list.append(p)
             p_match = re.findall(r"[A-D][1-8]", position)
             for p in p_match:
-                if not p in p_list:
+                if p not in p_list:
                     p_list.append(p)
         return p_list
 
@@ -215,7 +215,11 @@ class FarmSystem:
             return f"没有物品 {crop} 的物品数据"
         if item.get_item_type() != ItemType.SEED:
             return f"{crop} 的类型是 {item.get_item_type()} 不是种子"
-        crop = re.match(r"(.*)种子", crop)[1]
+        match = re.match(r"(.*)种子", crop)
+        if match:
+            crop = match[1]
+        else:
+            return f"{crop}匹配失败"
         r, m = f_user_data.seeding(row, line, crop, user_data)
         if r:
             return None

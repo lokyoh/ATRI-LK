@@ -1,13 +1,13 @@
 import copy
-from datetime import date
 import os
+from datetime import date
 from random import randint
 
 from ATRI.log import log
 from ATRI.system.lkapi.entity.item import items
 from ATRI.system.lkapi.entity.user import UserData
 
-from .crop import crop_data_list, CropData
+from .crop import CropData, crop_data_list
 
 
 class FieldData:
@@ -34,12 +34,10 @@ class FieldData:
         return days
 
     def can_harvest(self, days: int) -> bool:
-        if days >= self.get_growth_days():
-            return True
-        return False
+        return days >= self.get_growth_days()
 
 
-from .fertilizer import fertilizer_data_list
+from .fertilizer import fertilizer_data_list  # noqa: E402
 
 
 class FarmField:
@@ -63,19 +61,21 @@ class FarmField:
             "water_date": self.water_date,
             "crop": self.crop,
             "days": self.days,
-            "fertilizer": self.fertilizer
+            "fertilizer": self.fertilizer,
         }
 
     def is_out_season(self, is_cross_seasonal: bool = False):
         if is_cross_seasonal:
-            self.fertilizer = ''
-        if self.state != 0:
-            if self.crop in crop_data_list:
-                if not crop_data_list[self.crop].growable(date.today().month):
-                    self.water = 0
-                    self.crop = ""
-                    self.data = FieldData()
-                    return True
+            self.fertilizer = ""
+        if (
+            self.state != 0
+            and self.crop in crop_data_list
+            and not crop_data_list[self.crop].growable(date.today().month)
+        ):
+            self.water = 0
+            self.crop = ""
+            self.data = FieldData()
+            return True
         return False
 
     def water_change(self, rainy: bool):
@@ -83,7 +83,12 @@ class FarmField:
             self.water = 0
             if self.crop != "":
                 self.days += 1
-        elif self.crop == "" and self.fertilizer == "" and self.state == 1 and randint(1, 100) < 51:
+        elif (
+            self.crop == ""
+            and self.fertilizer == ""
+            and self.state == 1
+            and randint(1, 100) < 51
+        ):
             self.state = 0
         if rainy and self.state != 0:
             self.watering()
@@ -132,7 +137,7 @@ class FarmField:
             return False
         return self.data.can_harvest(self.days)
 
-    def to_md(self):
+    def to_md(self, with_pic: bool = True):
         if self.state == 0:
             return "`未锄地`"
         content = ""
@@ -144,7 +149,10 @@ class FarmField:
                 name = crop_data_list[self.crop].get_crop_name()
                 stage = self.get_state()
                 url = f"{url}\\{name}\\{name}_Stage_{stage}.png"
-            content += f'<img width="48px" src="{url}"/>'
+            if with_pic:
+                content += f'<img width="48px" src="{url}"/>'
+            else:
+                content += f"{self.crop}<br/>阶段:{stage}"
         if self.water == 0:
             content += "<br/>`未浇水`"
         else:
@@ -161,25 +169,25 @@ class FarmField:
             fertilizer_data_list[self.fertilizer].get_effect(self.data)
 
     def _get_item_quality(self, item, level) -> str:
-        quality = ''
-        if items.has_item(f'{item}-银'):
+        quality = ""
+        if items.has_item(f"{item}-银"):
             r_q = randint(1, 110)
             r_q += randint(0, level * 6)
             r_q += self.data.quality
             if r_q > 300:
-                quality = '铱'
+                quality = "铱"
             elif r_q > 200:
-                quality = '金'
+                quality = "金"
             elif r_q > 100:
-                quality = '银'
-        if quality and items.has_item(f'{item}-{quality}'):
-            return f'{item}-{quality}'
+                quality = "银"
+        if quality and items.has_item(f"{item}-{quality}"):
+            return f"{item}-{quality}"
         else:
             if quality:
-                log.warning(f'{item}缺失品质{quality}')
+                log.warning(f"{item}缺失品质{quality}")
             return item
 
     def __setattr__(self, key, value):
-        if not key.startswith('_'):
+        if not key.startswith("_"):
             self._modify = True
         super().__setattr__(key, value)

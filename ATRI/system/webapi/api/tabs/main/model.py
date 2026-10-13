@@ -3,6 +3,8 @@ from nonebot.compat import model_dump
 from nonebot.config import Config
 from pydantic import BaseModel
 
+from ATRI.bot.status import Statu
+
 
 class BotManageUpdateParam(BaseModel):
     """bot更新参数"""
@@ -20,6 +22,15 @@ class BotStatusParam(BaseModel):
     """bot id"""
     status: bool
     """状态"""
+
+
+class BotStatusConfigParam(BaseModel):
+    """机器人专项状态配置参数"""
+
+    bot_id: str
+    """机器人 ID"""
+    config: Statu
+    """机器人规则配置"""
 
 
 class BotBlockModule(BaseModel):

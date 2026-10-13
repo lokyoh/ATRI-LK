@@ -18,7 +18,7 @@ async def agent_cleanup_task():
     log.info("执行 Agent 清理任务")
     from datetime import date, timedelta
 
-    from ATRI.utils.datetime import now_timestamp, today
+    from ATRI.utils.datetime import now, now_timestamp, today
     from ATRI.utils.sqlite import DataBase
 
     from ..service import plugin
@@ -45,6 +45,23 @@ async def agent_cleanup_task():
             removed_files += 1
     if removed_files > 0:
         log.info(f"清理了 {removed_files} 个聊天历史文件")
+
+    current_time = now()
+    target_year = current_time.year - 2
+    start_of_year = current_time.replace(
+        year=target_year, month=1, day=1, hour=0, minute=0, second=0, microsecond=0
+    )
+    start_of_next_year = start_of_year.replace(year=target_year + 1)
+    usage_db = DataBase("agent.db")
+    try:
+        deleted_usage_rows = usage_db.get_exist_table("tokens").delete(
+            "created_at >= "
+            f"{start_of_year.timestamp()} AND created_at < {start_of_next_year.timestamp()}"
+        )
+    finally:
+        usage_db.disconnect()
+    if deleted_usage_rows > 0:
+        log.info(f"已删除 {target_year} 年模型 Token 使用记录：{deleted_usage_rows} 条")
 
 
 def init():

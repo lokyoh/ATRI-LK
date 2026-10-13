@@ -18,9 +18,9 @@ from ATRI.system.htmlrender import md_to_pic
 from .config import LKChatConfig
 
 plugin = Service(
-    "聊天", "ATRI进行聊天处理的插件", "0.8.2", Service.ServiceType.ENTERTAINMENT
+    "聊天", "ATRI进行聊天处理的插件", "0.8.3", Service.ServiceType.ENTERTAINMENT
 ).main_cmd("聊天")
-config: LKChatConfig = plugin.add_plugin_config(LKChatConfig).config()
+config: LKChatConfig = plugin.add_plugin_config(LKChatConfig)
 
 from .data_source import (  # noqa: E402
     REPLY_MESSAGE,
@@ -41,7 +41,7 @@ on_talk = plugin.on_message(
 @on_talk.handle()
 async def _(event: GroupMessageEvent, matcher: Matcher, bot: Bot):
     group_id = str(event.group_id)
-    if config.chat_switch and group_id in config.whit_list:
+    if config.get("chat_switch") and group_id in config.get("whit_list", []):
         await call_agent(event, matcher, bot)
         return
     await pre_chat_event.notify(PreChatEvent(matcher, event))

@@ -1,9 +1,10 @@
-from ATRI.utils.model import BaseModel
+from ATRI.configs import Field, PluginConfig
 
 
-class SignInConfig(BaseModel):
+class SignInConfig(PluginConfig):
     """
     signin设置:
     """
-    base_source: str = 'local'
-    unique_source: str = 'lolicon'
+
+    base_source = Field(str, "local", "默认图片源")
+    unique_source = Field(str, "lolicon", "特殊图片源")

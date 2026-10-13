@@ -26,7 +26,9 @@ class UserProfile:
         o_profile = user_info.profile
         prompt = cls.prompt.format(o_profile=o_profile, profile_change=profile_change)
         try:
-            profile = await llm_manager.call_model_by_type(ModelType.TOOL, prompt)
+            profile = await llm_manager.call_model_by_type(
+                ModelType.TOOL, prompt, "Agent-用户画像生成"
+            )
         except Exception:
             return
         user_info.profile = profile.content

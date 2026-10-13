@@ -1,5 +1,4 @@
 import datetime
-import hashlib
 import os
 import re
 from typing import Any
@@ -7,9 +6,7 @@ from typing import Any
 from ATRI.log import log
 from ATRI.utils.datetime import today
 
-from ...config import config
 from ...llm import ModelRequestError, ModelType, llm_manager
-from ...llm.rag import embedding
 from ..history import history_logger
 from .database import MemoryDB
 
@@ -43,41 +40,37 @@ MEMORY_PROMPT = """你是聊天记录记忆提取器。请从下面这一段群�
 """
 
 
+def _has_embedding_model() -> bool:
+    return llm_manager.has_type(ModelType.EMBEDDING)
+
+
 class MemoryManager:
     def __init__(self):
         self.database = MemoryDB()
-
-    @staticmethod
-    def _fallback_embedding(text: str, size: int = 64) -> list[float]:
-        values = [0.0] * size
-        for token in re.findall(r"[\w\u4e00-\u9fff]+", text):
-            digest = hashlib.sha256(token.encode("utf-8")).digest()
-            index = int.from_bytes(digest[:4], "big") % size
-            values[index] += 1.0
-        return values
 
     async def get_memories(
         self, query: str, top_k: int, min_similarity: float | None = None
     ) -> list[dict]:
         query = query.strip()
-        if not query:
+        if not query or not _has_embedding_model():
             return []
-        if config.embedding.enable and config.embedding.url:
-            try:
-                vectors = await embedding(query)
-                vector = vectors[0]
-            except (
-                IndexError,
-                KeyError,
-                OSError,
-                RuntimeError,
-                TypeError,
-                ValueError,
-            ) as exc:
-                log.warning(f"记忆查询 embedding 生成失败，使用本地向量：{exc}")
-                vector = self._fallback_embedding(query)
-        else:
-            vector = self._fallback_embedding(query)
+        try:
+            vectors = (
+                await llm_manager.call_model_by_type(
+                    ModelType.EMBEDDING, query, "查询记忆"
+                )
+            ).content
+            vector = vectors[0]
+        except (
+            IndexError,
+            KeyError,
+            OSError,
+            RuntimeError,
+            TypeError,
+            ValueError,
+        ) as exc:
+            log.warning(f"记忆查询 embedding 生成失败，跳过检索：{exc}")
+            return []
         return self.database.query_by_vector(
             vector, top_k=top_k, min_similarity=min_similarity
         )
@@ -101,25 +94,26 @@ class MemoryManager:
 
     async def add_memory(self, chat_id, memory, importance=DEFAULT_MEMORY_IMPORTANCE):
         memory = memory.strip()
-        if not memory:
+        if not memory or not _has_embedding_model():
             return None
         importance = min(1.0, max(0.0, float(importance)))
-        if config.embedding.enable and config.embedding.url:
-            try:
-                vectors = await embedding(memory)
-                vector = vectors[0]
-            except (
-                IndexError,
-                KeyError,
-                OSError,
-                RuntimeError,
-                TypeError,
-                ValueError,
-            ) as exc:
-                log.warning(f"记忆 embedding 生成失败，使用本地向量：{exc}")
-                vector = self._fallback_embedding(memory)
-        else:
-            vector = self._fallback_embedding(memory)
+        try:
+            vectors = (
+                await llm_manager.call_model_by_type(
+                    ModelType.EMBEDDING, memory, "添加记忆"
+                )
+            ).content
+            vector = vectors[0]
+        except (
+            IndexError,
+            KeyError,
+            OSError,
+            RuntimeError,
+            TypeError,
+            ValueError,
+        ) as exc:
+            log.warning(f"记忆 embedding 生成失败，跳过写入：{exc}")
+            raise RuntimeError("记忆 embedding 生成失败，无法写入记忆") from exc
         return self.database.add_memory(
             content=memory,
             embedding=vector,
@@ -128,8 +122,11 @@ class MemoryManager:
         )
 
     async def summarize(self, chat_id, history):
+        if not _has_embedding_model():
+            log.info("没有配置 embedding 模型，跳过记忆总结")
+            return 0
         if not llm_manager.has_type(ModelType.TOOL):
-            log.warning("没有配置tool类型的模型，跳过记忆总结")
+            log.info("没有配置tool类型的模型，跳过记忆总结")
             return 0
         history_text = "\n".join(
             f"[人物ID:{node.sender if node.sender is not None else 'bot'}] "
@@ -137,7 +134,9 @@ class MemoryManager:
             for node in history.history
         )
         prompt = MEMORY_PROMPT.format(chat_id=chat_id, history=history_text)
-        response = await llm_manager.call_model_by_type(ModelType.TOOL, prompt)
+        response = await llm_manager.call_model_by_type(
+            ModelType.TOOL, prompt, "Agent-记忆总结"
+        )
         count = 0
         seen = set()
         for line in response.content.splitlines():
@@ -146,7 +145,7 @@ class MemoryManager:
                 r"\[重要度\s*:\s*(0(?:\.\d+)?|1(?:\.0+)?)\]", memory
             )
             if not importance_match or not re.search(
-                r"\[人物ID:[^\]]+\].*\[群ID:[^\]]+\]", memory
+                r"\[人物ID:[^\]]+\].*\[聊天ID:[^\]]+\]", memory
             ):
                 continue
             importance = float(importance_match.group(1))
@@ -164,10 +163,10 @@ class MemoryManager:
 memory_manager = MemoryManager()
 
 
-def _get_summary_dates(group_path, last_summary_time: str | None) -> list[str]:
+def _get_summary_dates(chat_path, last_summary_time: str | None) -> list[str]:
     today_string = today().strftime("%Y-%m-%d")
     dates = []
-    for path in group_path.glob("*.json"):
+    for path in chat_path.glob("*.json"):
         if (
             path.stem != path.name[:-5]
             or not HISTORY_DATE_PATTERN.fullmatch(path.stem)
@@ -179,49 +178,52 @@ def _get_summary_dates(group_path, last_summary_time: str | None) -> list[str]:
     return sorted(dates)
 
 
-def _read_last_summary_time(group_path) -> str | None:
-    path = group_path / LAST_SUMMARY_TIME_FILE
+def _read_last_summary_time(chat_path) -> str | None:
+    path = chat_path / LAST_SUMMARY_TIME_FILE
     try:
         value = path.read_text(encoding="utf-8").strip()
     except FileNotFoundError:
         return None
     if not HISTORY_DATE_PATTERN.fullmatch(value):
-        log.warning(f"群目录 {group_path} 的总结时间无效，重新扫描历史记录")
+        log.warning(f"聊天目录 {chat_path} 的总结时间无效，重新扫描历史记录")
         return None
     return value
 
 
-def _write_last_summary_time(group_path, summary_date: str) -> None:
-    path = group_path / LAST_SUMMARY_TIME_FILE
-    temporary_path = group_path / f"{LAST_SUMMARY_TIME_FILE}.tmp"
+def _write_last_summary_time(chat_path, summary_date: str) -> None:
+    path = chat_path / LAST_SUMMARY_TIME_FILE
+    temporary_path = chat_path / f"{LAST_SUMMARY_TIME_FILE}.tmp"
     temporary_path.write_text(summary_date, encoding="utf-8")
     temporary_path.replace(path)
 
 
 async def summarize_memories():
+    if not _has_embedding_model():
+        log.info("没有配置 embedding 模型，跳过记忆总结")
+        return
     log.info("开始遗忘记忆")
     try:
         memory_manager.database.decay_all()
     except (OSError, RuntimeError, ValueError) as exc:
         log.warning(f"记忆遗忘失败：{exc}")
     if not llm_manager.has_type(ModelType.TOOL):
-        log.warning("没有配置tool类型的模型，跳过记忆总结")
+        log.info("没有配置tool类型的模型，跳过记忆总结")
         return
     paths = history_logger.path
     log.info("开始总结记忆")
     for chat_id in os.listdir(paths):
-        group_path = paths / chat_id
-        if not group_path.is_dir():
+        chat_path = paths / chat_id
+        if not chat_path.is_dir():
             continue
-        last_summary_time = _read_last_summary_time(group_path)
-        for summary_date in _get_summary_dates(group_path, last_summary_time):
+        last_summary_time = _read_last_summary_time(chat_path)
+        for summary_date in _get_summary_dates(chat_path, last_summary_time):
             history = history_logger.get_history(chat_id, summary_date)
             if history is None:
-                _write_last_summary_time(group_path, summary_date)
+                _write_last_summary_time(chat_path, summary_date)
                 continue
             total = len(history.history)
             if total == 0:
-                _write_last_summary_time(group_path, summary_date)
+                _write_last_summary_time(chat_path, summary_date)
                 continue
             start = 0
             succeeded = True
@@ -245,4 +247,4 @@ async def summarize_memories():
                 start += MEMORY_STEP
             if not succeeded:
                 break
-            _write_last_summary_time(group_path, summary_date)
+            _write_last_summary_time(chat_path, summary_date)

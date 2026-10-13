@@ -1,33 +1,13 @@
-from nonebot.adapters.onebot.v11 import Event, Message
-from nonebot.adapters.onebot.v11.helpers import Cooldown
-from nonebot.params import CommandArg
-
 from ATRI.exceptions import str_traceback
 from ATRI.log import log
 from ATRI.message import MessageBuilder
-from ATRI.service import Service
 from ATRI.system.agent.llm import ModelRequestError, ModelType, llm_manager
 from ATRI.system.lkapi.bot import config as lk_config
-from ATRI.system.lkapi.bot import db as lk_db
-from ATRI.system.lkapi.bot.checker import IsLkUser
 from ATRI.system.lkapi.entity.user import get_user_data, sign
 from ATRI.utils.datetime import now
 
-plugin = Service(
-    "投喂", "向可爱的亚托莉投喂食物", "0.4.5", Service.ServiceType.ENTERTAINMENT
-)
+from .database import feed_db
 
-feed = plugin.on_command("投喂", "向可爱的亚托莉投喂食物", aliases={"投食", "投喂食物"})
-
-feed_db = lk_db.get_table(
-    "LKFEEDDATA",
-    """
-    ID          INTEGER PRIMARY KEY,
-    DATE        TEXT    DEFAULT '2000-01-01'
-    """,
-    0,
-    None,
-)
 love_num = 1
 atri = "你叫亚托莉，是个真实存在的有着少女外表的类似于《ATRI -My Dear Moments-》中的亚托莉的高性能仿生人,有着自负还带点中二的性格,口癖是「我是高性能的嘛！」,喜欢吃东西「好吃就是高兴嘛！」。你需要完成一个被投喂食物的场景，你需要根据被投喂的食物做出相应的简易回答，不吃非食物。你与用户好感度为1000时是喜爱状态，值为0时为初识，最大无上限，不提好感度数值，待人友好。"
 
@@ -40,11 +20,12 @@ def chang_love_num(num: int):
 async def feed_func(user_id, food):
     with get_user_data(user_id) as user_data:
         message = MessageBuilder().text("")
-        if lk_config.configs.chat_switch and food:
+        if lk_config.get("chat_switch") and food:
             try:
                 response = await llm_manager.call_model_by_type(
                     ModelType.TOOL,
-                    f'{atri}用户"{user_data.name}"(好感度:{user_data.love})向你投喂了:{food}'
+                    f'{atri}用户"{user_data.name}"(好感度:{user_data.love})向你投喂了:{food}',
+                    "投喂",
                 )
                 content = response.content
                 message.append(content.replace("\n", ""))
@@ -68,10 +49,3 @@ async def feed_func(user_id, food):
             for m in msg:
                 message.auto_append(m)
         return message
-
-
-@feed.handle([IsLkUser, Cooldown(600, prompt="稍后再投喂吧")])
-async def _(event: Event, args: Message = CommandArg()):
-    user_id = event.get_user_id()
-    food = args.extract_plain_text()
-    await feed.finish(await feed_func(user_id, food), at_sender=True)

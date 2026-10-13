@@ -4,6 +4,9 @@ from datetime import datetime, timedelta
 
 import nonebot
 from nonebot.adapters import Bot
+from nonebot.adapters.onebot.v11 import Bot as OneBot
+from nonebot.adapters.qq import Bot as QQBot
+from nonebot.adapters.qq.models import User as QQUser
 from nonebot.drivers import Driver
 from tortoise.expressions import RawSQL
 from tortoise.functions import Count
@@ -45,14 +48,22 @@ class ApiDataSource:
             BotInfo: Bot信息
         """
         now = datetime.now()
-        platform = "qq"
-        if platform == "qq":
+        platform = "Unknow"
+        nickname = bot.self_id
+        ava_url = ""
+        if isinstance(bot, OneBot):
+            platform = "onebot11"
             login_info = await bot.get_login_info()
             nickname = login_info["nickname"]
-            ava_url = BotUtils.get_user_avatar_url(bot.self_id, "qq")
-        else:
-            nickname = bot.self_id
-            ava_url = ""
+            ava_url = BotUtils.get_user_avatar_url(bot.self_id, platform)
+        if isinstance(bot, QQBot):
+            platform = "qq"
+            try:
+                login_info: QQUser = await bot.me()
+                nickname = login_info.username
+                ava_url = login_info.avatar if login_info.avatar else ""
+            except Exception:
+                log.warning("QQ获取信息失败")
         bot_info = BotInfo(
             self_id=bot.self_id, nickname=nickname, ava_url=ava_url, platform=platform
         )

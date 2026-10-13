@@ -48,7 +48,7 @@ class TodaySchedule:
 class ATRISchedule:
     """亚托莉的日程表"""
 
-    before_prompt = """请生成亚托莉物在虚构世界中的一日详细日程，时间跨度为当日 **06:00** 至次日 **02:00**。  
+    before_prompt = """请生成亚托莉物在虚构世界中的一日详细日程，时间跨度为当日 **06:00** 至次日 **02:00**。
 你需要严格按照以下要求输出结果：
 1. **输出格式**：必须为纯 JSON，不包含任何额外的解释、说明或 Markdown 代码块标记。
 2. JSON 中需包含两个字段：
@@ -82,7 +82,7 @@ class ATRISchedule:
     def _load_data(self):
         """加载日程数据"""
         if self.data_file.exists():
-            with open(self.data_file, "r", encoding="utf-8") as f:
+            with open(self.data_file, encoding="utf-8") as f:
                 self.schedule_data = json.load(f)
             keys = list(self.schedule_data.keys())
             for s in keys:
@@ -105,10 +105,7 @@ class ATRISchedule:
             datetime.date.fromisoformat(date) - datetime.timedelta(days=1)
         ).isoformat()
         memory = await memory_manager.get_memories_by_date(memory_date)
-        if memory:
-            memory = "\n".join(m["content"] for m in memory)
-        else:
-            memory = None
+        memory = "\n".join(m["content"] for m in memory) if memory else None
         prompt = (
             self.before_prompt
             + f"\n\n### 人物简介\n{ATRI.get_role_prompt()}\n\n"
@@ -116,7 +113,9 @@ class ATRISchedule:
             + self.after_prompt
         )
         try:
-            schedule = await llm_manager.call_model_by_type(ModelType.TOOL, prompt)
+            schedule = await llm_manager.call_model_by_type(
+                ModelType.TOOL, prompt, "Agent-ATRI日程生成"
+            )
             s_data = json.loads(schedule.content)
         except Exception as e:
             log.error(f"日程生成失败：{e}")

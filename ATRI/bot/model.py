@@ -9,6 +9,7 @@ class UserSex(Enum):
 
     UserSex，性别
     """
+
     FEMALE = "female"
     MALE = "male"
     UNKNOWN = "unknown"
@@ -16,6 +17,7 @@ class UserSex(Enum):
 
 class User(BaseModel):
     """User"""
+
     """昵称"""
     nickname: str
     """用户ID"""
@@ -52,6 +54,7 @@ class User(BaseModel):
 
 class Group(BaseModel):
     """Group"""
+
     """群全员禁言"""
     group_all_shut: int
     """群号"""
@@ -64,3 +67,25 @@ class Group(BaseModel):
     max_member_count: int
     """成员数量"""
     member_count: int
+
+
+class PanelItem(BaseModel):
+    name: str
+    desc: str
+    type: str | None = None
+    only_admin: bool = False
+    link: str | None = None
+
+
+class Panel(BaseModel):
+    items: list[PanelItem]
+    remark: str | None = None
+    version: int | None = None
+
+
+class NewPanel(BaseModel):
+    scope: str
+    target_type: str | None = None
+    user_openids: list[str] | None = None
+    group_openids: list[str] | None = None
+    panel: Panel

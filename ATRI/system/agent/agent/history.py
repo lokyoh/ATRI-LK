@@ -22,7 +22,8 @@ from .util import get_name
 
 class ImageHistory:
     def __init__(self):
-        self.images: dict[str, list] = {}
+        self.images: dict[str, list[str]] = {}
+        self.image_ids: dict[str, tuple[int, str]] = {}
         self.index = 0
 
     async def add_image(self, mid, url, file_name, file_size=0):
@@ -38,25 +39,33 @@ class ImageHistory:
             return "[图片]"
 
         text = None
-        if file_name and file_size:
-            cached_images = img_table.select(
-                "DESP", {"FILE_NAME": file_name, "FILE_SIZE": file_size}
-            )
-            if cached_images and cached_images[0][0]:
-                text = cached_images[0][0]
-                img_table.update(
-                    {"UPDATE_AT": now_timestamp()},
-                    {"FILE_NAME": file_name, "FILE_SIZE": file_size},
-                )
-                log.info(f"使用图片描述缓存：{file_name}")
+        image_hash = None
+        image_size = file_size
+        image_bytes = None
+        try:
+            response = await request.get(url)
+            image_bytes = response.content
+            image_hash = hashlib.sha256(image_bytes).hexdigest()
+            image_size = file_size or len(image_bytes)
 
-        # 下载图片
-        if text is None:
-            try:
-                response = await request.get(url)
-                image_bytes = response.content
-                image_hash = hashlib.sha256(image_bytes).hexdigest()
-                image_size = file_size or len(image_bytes)
+            if image_hash in self.image_ids:
+                image_id, text = self.image_ids[image_hash]
+                self._add_image_reference(mid, image_id, text)
+                return f"[图片{image_id}]", text
+
+            if file_name and file_size:
+                cached_images = img_table.select(
+                    "DESP", {"FILE_NAME": file_name, "FILE_SIZE": file_size}
+                )
+                if cached_images and cached_images[0][0]:
+                    text = cached_images[0][0]
+                    img_table.update(
+                        {"UPDATE_AT": now_timestamp()},
+                        {"FILE_NAME": file_name, "FILE_SIZE": file_size},
+                    )
+                    log.info(f"使用图片描述缓存：{file_name}")
+
+            if text is None:
                 cached_images = img_table.select(
                     "DESP", {"HASH": image_hash, "FILE_SIZE": image_size}
                 )
@@ -67,74 +76,95 @@ class ImageHistory:
                         {"HASH": image_hash, "FILE_SIZE": image_size},
                     )
                     log.info(f"使用图片哈希描述缓存：{image_hash}")
-                if text is not None:
-                    image_bytes = None
-                if text is None:
-                    from PIL import Image
 
-                    # 视觉模型的图片 Token 主要取决于分辨率，统一压缩比仅处理大文件更省 Token。
-                    with Image.open(io.BytesIO(image_bytes)) as image:
-                        image.thumbnail((1536, 1536), Image.Resampling.LANCZOS)
-                        compressed_image = io.BytesIO()
-                        image.convert("RGB").save(
-                            compressed_image,
-                            format="JPEG",
-                            quality=75,
-                            optimize=True,
-                        )
-                        image_bytes = compressed_image.getvalue()
+            if text is not None:
+                image_bytes = None
+            else:
+                from PIL import Image
 
-                    # 转换为 base64
-                    import base64
-
-                    base64_str = base64.b64encode(image_bytes).decode("utf-8")
-                    image_base64 = f"data:image/jpeg;base64,{base64_str}"
-                    # 构建 LLMContents
-                    contents = LLMContents()
-                    contents.image(image_base64)
-                    # 添加文本提示词
-                    contents.text(
-                        "请用中文描述这张图片的内容。如果有文字，请把文字描述概括出来，请留意其主题，直观感受，输出为一段平文本，请注意不要分点，就输出一段文本"
+                # 视觉模型的图片 Token 主要取决于分辨率，统一压缩比仅处理大文件更省 Token。
+                with Image.open(io.BytesIO(image_bytes)) as image:
+                    image.thumbnail((1536, 1536), Image.Resampling.LANCZOS)
+                    compressed_image = io.BytesIO()
+                    image.convert("RGB").save(
+                        compressed_image,
+                        format="JPEG",
+                        quality=75,
+                        optimize=True,
                     )
-                    # 调用 IMAGE 模型
-                    try:
-                        result = await llm_manager.call_model_by_type(
-                            ModelType.IMAGE, contents
-                        )
-                        text = result.content
-                        if file_name and image_size and text:
-                            try:
-                                img_table.insert(
-                                    {
-                                        "FILE_NAME": file_name,
-                                        "HASH": image_hash,
-                                        "FILE_SIZE": image_size,
-                                        "DESP": text,
-                                        "UPDATE_AT": now_timestamp(),
-                                    }
-                                )
-                            except SQLiteError as e:
-                                log.warning(f"保存图片描述缓存失败：{e}")
-                    except ModelRequestError:
-                        text = "图片内容获取失败"
-            except Exception as e:
-                log.error(f"图片描述失败：{e}")
-                text = "图片内容获取失败"
+                    image_bytes = compressed_image.getvalue()
+
+                import base64
+
+                base64_str = base64.b64encode(image_bytes).decode("utf-8")
+                image_base64 = f"data:image/jpeg;base64,{base64_str}"
+                contents = LLMContents()
+                contents.image(image_base64)
+                contents.text(
+                    "请用中文描述这张图片的内容。如果有文字，请把文字描述概括出来，请留意其主题，直观感受，输出为一段平文本，请注意不要分点，就输出一段文本"
+                )
+                try:
+                    result = await llm_manager.call_model_by_type(
+                        ModelType.IMAGE, contents, "Agent-图片识别"
+                    )
+                    text = result.content
+                    if file_name and image_size and text:
+                        try:
+                            img_table.insert(
+                                {
+                                    "FILE_NAME": file_name,
+                                    "HASH": image_hash,
+                                    "FILE_SIZE": image_size,
+                                    "DESP": text,
+                                    "UPDATE_AT": now_timestamp(),
+                                }
+                            )
+                        except SQLiteError as e:
+                            log.warning(f"保存图片描述缓存失败：{e}")
+                except ModelRequestError:
+                    text = "图片内容获取失败"
+        except Exception as e:
+            log.error(f"图片描述失败：{e}")
+            text = "图片内容获取失败"
         log.info(f"获取图片描述：{text}")
         if mid is None:
             return f"[图片:{text}]", text
-        if mid not in self.images:
-            self.images[mid] = []
-        self.images[mid].append(f"图片{self.index}: {text}")
+        image_id = self.index
+        if image_hash is not None:
+            self.image_ids[image_hash] = (image_id, text)
+        self._add_image_reference(mid, image_id, text)
         self.index += 1
-        return f"[图片{self.index - 1}]", text
+        return f"[图片{image_id}]", text
+
+    def _add_image_reference(self, mid, image_id: int, text: str) -> None:
+        if mid is None:
+            return
+        self.images.setdefault(mid, []).append(f"图片{image_id}: {text}")
 
     def remove(self, mid):
         if mid in self.images:
             del self.images[mid]
+        active_ids = {
+            image.partition(":")[0]
+            for images in self.images.values()
+            for image in images
+        }
+        self.image_ids = {
+            image_hash: image
+            for image_hash, image in self.image_ids.items()
+            if f"图片{image[0]}" in active_ids
+        }
 
     def get_history(self):
-        return "\n".join(["\n".join(v) for v in self.images.values()]) or ""
+        image_history = []
+        seen_ids = set()
+        for images in self.images.values():
+            for image in images:
+                image_id = image.partition(":")[0]
+                if image_id not in seen_ids:
+                    seen_ids.add(image_id)
+                    image_history.append(image)
+        return "\n".join(image_history)
 
     def get_desc(self, mid):
         return self.images.get(mid, None)
@@ -194,7 +224,7 @@ class LLMMessage:
                     face_text = face_text.replace("[", "[表情:", 1)
                     instance.message.append(MessageSegment(face_text))
             elif segment.type == "image":
-                if img_count >= 3:
+                if img_count >= 10:
                     log.warning("图片数量过多，已忽略")
                     continue
                 file_name = segment.data.get("file", "")
@@ -267,7 +297,7 @@ class LLMMessage:
                                 f"{forward_history}"
                             )
                             summary = await llm_manager.call_model_by_type(
-                                ModelType.TOOL, summary_prompt
+                                ModelType.TOOL, summary_prompt, "Agent-转发总结"
                             )
                             instance.message.append(
                                 MessageSegment(f"[转发消息摘要:{summary.content}]")
@@ -370,7 +400,7 @@ class History:
         self.chat_id = chat_id
         self.time = now().strftime("%Y年%m月%d日%a-%H时%M分")
         self.message: LLMMessage | None = None
-        self.response = ""
+        self.reply_to_mid: int | None = None
 
     @classmethod
     async def create(cls, self_id, sender, chat_id, message):
@@ -382,28 +412,32 @@ class History:
             return None
         return instance
 
-    async def get_message(self, bot, get_reply=True):
+    async def get_message(self, bot):
+        if self.reply_to_mid is not None:
+            return (
+                f"你在{self.time}回复[mid:{self.reply_to_mid}]: "
+                f"{await self.message.get_message(bot)}"
+            )
         msg = f"mid:{self.mid} {self.time} {await get_name(bot, self.sender, self.chat_id)}[id:{self.sender}]: {await self.message.get_message(bot)}"
-        if self.response and get_reply:
-            msg += "\n你对此回复了:" + self.response
         return msg
 
     def add_response(self, response):
-        self.response += f" {response}"
-        history_logger.add_history(None, self.chat_id, self.response)
+        reply_history = History(None, self.chat_id)
+        reply_history.reply_to_mid = self.mid
+        reply_history.message = LLMMessage(self.chat_id, [MessageSegment(response)])
+        ChatHistoryManager.get_history(self.chat_id).add_agent_message(
+            reply_history, response
+        )
 
 
 async def get_history_messages(
     bot,
     history_list: list[History],
     fallback_history: list[str],
-    get_reply: bool = True,
 ) -> list[str]:
     messages = list(fallback_history)
-    messages.extend(
-        [await history.get_message(bot, get_reply) for history in history_list]
-    )
-    history_limit = max(0, config.max_history - 1)
+    messages.extend([await history.get_message(bot) for history in history_list])
+    history_limit = max(0, config.get("max_history") - 1)
     return messages[-history_limit:] if history_limit else []
 
 
@@ -502,7 +536,7 @@ class HistoryLogger:
 
 class ChatHistory:
     def __init__(self):
-        self.history = LimitedQueue(config.max_history)
+        self.history = LimitedQueue(config.get("max_history"))
         self.fallback_history: list[str] = []
         self.fallback_history_loaded = False
 
@@ -528,6 +562,11 @@ class ChatHistory:
 
     def add_reply(self, reply: str):
         self.get_last_history().add_response(reply)
+
+    def add_agent_message(self, history: History, message: str):
+        history_logger.add_history(None, history.chat_id, message)
+        if removed_history := self.history.add(history):
+            ChatHistoryManager.remove_history(history.chat_id, removed_history.mid)
 
 
 class ChatHistoryManager:

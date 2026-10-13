@@ -1,20 +1,31 @@
 import re
 
-from nonebot.adapters.onebot.v11 import GroupMessageEvent, Message
+from nonebot.adapters.onebot.v11 import MessageEvent
+from nonebot.adapters.qq import MessageEvent as QQMessageEvent
 from nonebot.params import CommandArg
 
 from ATRI.bot import BotUtils
-from ATRI.message import img_msg
+from ATRI.message import QQMessage, img_msg
 from ATRI.permission import ADMIN
 from ATRI.service import Service
 from ATRI.system.lkapi.entity.user import get_user_data
 
 from .config import LKFarmConfig
 
-plugin = Service(
-    "农场", "ATRI的农场插件", "0.4.2", Service.ServiceType.ENTERTAINMENT
-).main_cmd("农场")
+plugin = Service("农场", "ATRI的农场插件", "0.5.0", Service.ServiceType.GAME).main_cmd(
+    "农场"
+)
 config = plugin.add_plugin_config(LKFarmConfig)
+weather_forecast_groups = config.get("weather_forecast_group", [])
+if isinstance(weather_forecast_groups, list):
+    normalized_groups = [
+        str(group_id)
+        if isinstance(group_id, int) and not isinstance(group_id, bool)
+        else group_id
+        for group_id in weather_forecast_groups
+    ]
+    if normalized_groups != weather_forecast_groups:
+        config.set("weather_forecast_group", normalized_groups)
 
 from .data_source import CheckFarmUser, farm_system  # noqa: E402
 from .system.farm_user import get_user_farm_data  # noqa: E402
@@ -25,8 +36,15 @@ my_farm = plugin.on_command("我的农场", "查看自己的农场")
 
 
 @my_farm.handle([CheckFarmUser])
-async def _(event: GroupMessageEvent):
-    await my_farm.finish(img_msg(await farm_system.farm_info(event.user_id)))
+async def _(event: MessageEvent):
+    await my_farm.finish(img_msg(await farm_system.farm_info(event.get_user_id())))
+
+
+@my_farm.handle([CheckFarmUser])
+async def _(event: QQMessageEvent):
+    await my_farm.finish(
+        QQMessage.md_msg(await farm_system.md_farm_info(event.get_user_id()))
+    )
 
 
 seeding = plugin.on_command(
@@ -37,7 +55,7 @@ seeding = plugin.on_command(
 
 
 @seeding.handle([CheckFarmUser])
-async def _(event: GroupMessageEvent, arg: Message = CommandArg()):
+async def _(event: MessageEvent | QQMessageEvent, arg=CommandArg()):
     text = arg.extract_plain_text().upper()
     match = re.match(r"((?: ?[A-D][1-8][-_][A-D][1-8]| ?[A-D][1-8])+) (.*)$", text)
     if not match:
@@ -51,18 +69,20 @@ async def _(event: GroupMessageEvent, arg: Message = CommandArg()):
         resp = "开始操作:"
         r_l = {}
         user_id = event.get_user_id()
-        with get_user_data(user_id) as user_data:
-            with get_user_farm_data(user_id) as f_user_data:
-                for p in p_list:
-                    r = farm_system.seeding(f_user_data, p, crop, user_data)
-                    if r:
-                        if r not in r_l.keys():
-                            r_l[r] = []
-                        r_l[r].append(p)
+        with (
+            get_user_data(user_id) as user_data,
+            get_user_farm_data(user_id) as f_user_data,
+        ):
+            for p in p_list:
+                r = farm_system.seeding(f_user_data, p, crop, user_data)
+                if r:
+                    if r not in r_l:
+                        r_l[r] = []
+                    r_l[r].append(p)
         if r_l == {}:
             resp += "\n种植成功"
         else:
-            for m in r_l.keys():
+            for m in r_l:
                 resp += "\n"
                 for p in r_l[m]:
                     resp += f"{p[0]}{p[1]} "
@@ -77,23 +97,23 @@ hoeing = plugin.on_command(
 
 
 @hoeing.handle([CheckFarmUser])
-async def _(event: GroupMessageEvent, arg: Message = CommandArg()):
+async def _(event: MessageEvent | QQMessageEvent, arg=CommandArg()):
     location = arg.extract_plain_text().upper()
     p_list = farm_system.get_positions(location)
     if len(p_list) > 0:
         resp = "开始操作:"
         r_l = {}
-        with get_user_farm_data(event.user_id) as f_user_data:
+        with get_user_farm_data(event.get_user_id()) as f_user_data:
             for p in p_list:
                 r = farm_system.hoeing(f_user_data, p)
                 if r:
-                    if r not in r_l.keys():
+                    if r not in r_l:
                         r_l[r] = []
                     r_l[r].append(p)
         if r_l == {}:
             resp += "\n锄地成功"
         else:
-            for m in r_l.keys():
+            for m in r_l:
                 resp += "\n"
                 for p in r_l[m]:
                     resp += f"{p[0]}{p[1]} "
@@ -108,23 +128,23 @@ watering = plugin.on_command(
 
 
 @watering.handle([CheckFarmUser])
-async def _(event: GroupMessageEvent, arg: Message = CommandArg()):
+async def _(event: MessageEvent | QQMessageEvent, arg=CommandArg()):
     location = arg.extract_plain_text().upper()
     p_list = farm_system.get_positions(location)
     if len(p_list) > 0:
         resp = "开始操作:"
         r_l = {}
-        with get_user_farm_data(event.user_id) as f_user_data:
+        with get_user_farm_data(event.get_user_id()) as f_user_data:
             for p in p_list:
                 r = farm_system.watering(f_user_data, p)
                 if r:
-                    if r not in r_l.keys():
+                    if r not in r_l:
                         r_l[r] = []
                     r_l[r].append(p)
         if r_l == {}:
             resp += "\n浇水成功"
         else:
-            for m in r_l.keys():
+            for m in r_l:
                 resp += "\n"
                 for p in r_l[m]:
                     resp += f"{p[0]}{p[1]} "
@@ -139,25 +159,27 @@ harvesting = plugin.on_command(
 
 
 @harvesting.handle([CheckFarmUser])
-async def _(event: GroupMessageEvent, arg: Message = CommandArg()):
+async def _(event: MessageEvent | QQMessageEvent, arg=CommandArg()):
     location = arg.extract_plain_text().upper()
     p_list = farm_system.get_positions(location)
     if len(p_list) > 0:
         resp = "开始操作:"
         r_l = {}
         user_id = event.get_user_id()
-        with get_user_data(user_id) as user_data:
-            with get_user_farm_data(user_id) as f_user_data:
-                for p in p_list:
-                    r = farm_system.harvesting(f_user_data, p, user_data)
-                    if r:
-                        if r not in r_l.keys():
-                            r_l[r] = []
-                        r_l[r].append(p)
+        with (
+            get_user_data(user_id) as user_data,
+            get_user_farm_data(user_id) as f_user_data,
+        ):
+            for p in p_list:
+                r = farm_system.harvesting(f_user_data, p, user_data)
+                if r:
+                    if r not in r_l:
+                        r_l[r] = []
+                    r_l[r].append(p)
         if r_l == {}:
             resp += "\n收获成功"
         else:
-            for m in r_l.keys():
+            for m in r_l:
                 resp += "\n"
                 for p in r_l[m]:
                     resp += f"{p[0]}{p[1]} "
@@ -172,7 +194,7 @@ fertilization = plugin.on_command(
 
 
 @fertilization.handle([CheckFarmUser])
-async def _(event: GroupMessageEvent, arg: Message = CommandArg()):
+async def _(event: MessageEvent | QQMessageEvent, arg=CommandArg()):
     text = arg.extract_plain_text().upper()
     match = re.match(r"((?: ?[A-D][1-8][-_][A-D][1-8]| ?[A-D][1-8])+) (.*)$", text)
     if not match:
@@ -186,18 +208,20 @@ async def _(event: GroupMessageEvent, arg: Message = CommandArg()):
         resp = "开始操作:"
         r_l = {}
         user_id = event.get_user_id()
-        with get_user_data(user_id) as user_data:
-            with get_user_farm_data(user_id) as f_user_data:
-                for p in p_list:
-                    r = farm_system.fertilization(f_user_data, p, fertilizer, user_data)
-                    if r:
-                        if r not in r_l.keys():
-                            r_l[r] = []
-                        r_l[r].append(p)
+        with (
+            get_user_data(user_id) as user_data,
+            get_user_farm_data(user_id) as f_user_data,
+        ):
+            for p in p_list:
+                r = farm_system.fertilization(f_user_data, p, fertilizer, user_data)
+                if r:
+                    if r not in r_l:
+                        r_l[r] = []
+                    r_l[r].append(p)
         if r_l == {}:
             resp += "\n施肥成功"
         else:
-            for m in r_l.keys():
+            for m in r_l:
                 resp += "\n"
                 for p in r_l[m]:
                     resp += f"{p[0]}{p[1]} "
@@ -212,23 +236,23 @@ c_remove = plugin.cmd_as_group(
 
 
 @c_remove.handle([CheckFarmUser])
-async def _(event: GroupMessageEvent, arg: Message = CommandArg()):
+async def _(event: MessageEvent | QQMessageEvent, arg=CommandArg()):
     location = arg.extract_plain_text().upper()
     p_list = farm_system.get_positions(location)
     if len(p_list) > 0:
         resp = "开始操作:"
         r_l = {}
-        with get_user_farm_data(event.user_id) as f_user_data:
+        with get_user_farm_data(event.get_user_id()) as f_user_data:
             for p in p_list:
                 r = farm_system.c_remove(f_user_data, p)
                 if r:
-                    if r not in r_l.keys():
+                    if r not in r_l:
                         r_l[r] = []
                     r_l[r].append(p)
         if r_l == {}:
             resp += "\n铲除成功"
         else:
-            for m in r_l.keys():
+            for m in r_l:
                 resp += "\n"
                 for p in r_l[m]:
                     resp += f"{p[0]}{p[1]} "
@@ -243,16 +267,16 @@ weather_forecast = plugin.cmd_as_group(
 
 
 @weather_forecast.handle()
-async def _(event: GroupMessageEvent):
-    group_id = event.group_id
-    conf = config.config()
-    if group_id in conf.weather_forecast_group:
-        conf.weather_forecast_group.remove(group_id)
-        config.change_config(conf)
+async def _(event: MessageEvent | QQMessageEvent):
+    group_id = str(event.group_id)
+    groups = config.get("weather_forecast_group", [])
+    if group_id in groups:
+        groups.remove(group_id)
+        config.set("weather_forecast_group", groups)
         msg = "已取消了本群的农场天气预报"
     else:
-        conf.weather_forecast_group.append(group_id)
-        config.change_config(conf)
+        groups.append(group_id)
+        config.set("weather_forecast_group", groups)
         msg = "已为本群订阅了农场天气预报"
     await weather_forecast.send(msg)
 
@@ -261,9 +285,11 @@ easy_operation = plugin.cmd_as_group("一键操作", "为田锄地、浇水与�
 
 
 @easy_operation.handle()
-async def _(event: GroupMessageEvent):
+async def _(event: MessageEvent | QQMessageEvent):
     user_id = event.get_user_id()
-    with get_user_data(user_id) as user_data:
-        with get_user_farm_data(user_id) as f_user_data:
-            farm_system.easy_operation(f_user_data, user_data)
+    with (
+        get_user_data(user_id) as user_data,
+        get_user_farm_data(user_id) as f_user_data,
+    ):
+        farm_system.easy_operation(f_user_data, user_data)
     await easy_operation.finish("一键操作完成", at_sender=True)

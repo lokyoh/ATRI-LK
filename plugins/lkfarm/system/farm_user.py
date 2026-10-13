@@ -1,10 +1,9 @@
 import json
 from datetime import date, datetime, timedelta
 from random import choices, randint
-from typing import List
 
 from ATRI.log import log
-from ATRI.system.lkapi.entity.user import UserData
+from ATRI.system.lkapi.entity.user import UserData, user_manager
 from ATRI.utils.lock import GroupLock
 
 from .crop import CropData, crop_data_list
@@ -22,16 +21,16 @@ class UserFarmData:
         self.endurance = data[2]
         self.lucky = data[3]
         self.exp = data[4]
-        self.fields: List[FarmField] = []
+        self.fields: list[FarmField] = []
         for i in range(5, len(data), 1):
             self.fields.append(FarmField(json.loads(data[i])))
         self._modify = False
 
     def endurance_change(self, num) -> bool:
-        num = self.endurance + num
-        if num < 0:
+        endurance = self.endurance + num
+        if endurance < 0:
             return False
-        self.endurance = num
+        self.endurance = endurance
         log.debug(f"用户{self.id}体力变化{num},现值{self.endurance}")
         return True
 
@@ -164,7 +163,7 @@ class UserFarmData:
         self.lucky = randint(-100, 100)
         user_table.update(
             f"DATE = '{date.today()}', ENDURANCE = {self.endurance}, LUCKY = {self.lucky}",
-            f"ID = {self.id}",
+            {"ID": self.id},
         )
         is_cross_seasonal = False
         if Month(date.today().month).to_season() != Month(day.month).to_season():
@@ -196,10 +195,7 @@ class UserFarmData:
         user_farm_datas.save_user_data(self)
 
     def _check_fields_modify(self) -> bool:
-        for field in self.fields:
-            if field.is_modify():
-                return True
-        return False
+        return any(field.is_modify() for field in self.fields)
 
     def is_modify(self) -> bool:
         return self._modify or self._check_fields_modify()
@@ -281,7 +277,7 @@ class UserFarmDataManager:
         return False
 
     def new_farm_user(self, user_id) -> bool:
-        user_id = str(user_id)
+        user_id = user_manager.resolve_user_id()
         if user_id in self._user_list:
             return False
         else:
@@ -291,9 +287,9 @@ class UserFarmDataManager:
         return True
 
     def get_farm_data(self, user_id) -> UserFarmData:
-        user_id = str(user_id)
+        user_id = user_manager.resolve_user_id(user_id)
         self.has_user(user_id)
-        data = user_table.select("*", f"ID = {user_id}")
+        data = user_table.select("*", {"ID": user_id})
         user_date = data[0][1]
         farm_data = UserFarmData(data[0])
         farm_data.update(user_date, self.weather)
@@ -315,7 +311,7 @@ class UserFarmDataManager:
 
     @staticmethod
     def save_user_data(user_data: UserFarmData):
-        user_table.update(user_data.to_dict(), f"ID = {user_data.id}")
+        user_table.update(user_data.to_dict(), {"ID": user_data.id})
 
 
 user_farm_datas = UserFarmDataManager()

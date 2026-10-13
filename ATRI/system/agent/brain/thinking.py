@@ -1,213 +1,269 @@
-import json
+import ast
 import re
+from typing import Any
+
+from ATRI.exceptions import str_traceback
 
 from ..agent.explanations import get_top_explanations
-from ..agent.function_calling import FunctionCallingManager
+from ..agent.function_calling import FunctionCallingData, FunctionCallingManager
 from ..agent.history import History, get_history_messages
 from ..agent.role import ATRI
 from ..agent.schedule import ATRISchedule
+from ..agent.temp_his import ChatMessage
 from ..agent.user import get_user_info
 from ..agent.util import get_name, get_user_group
-from ..llm import ModelType, llm_manager
+from ..config import config
+from ..llm import (
+    LLMContents,
+    LLMMessage,
+    LLMMessages,
+    ModelType,
+    llm_manager,
+)
+from ..utils import log
+
+
+class StopThinkingError(Exception):
+    pass
 
 
 class ThinkingModel:
+    def __init__(self):
+        self.messages = LLMMessages()
+
     @staticmethod
     async def get_history_prompt(
         bot,
         history_list: list[History],
         image_history: str,
         fallback_history: list[str],
-        processing_messages_prompt: str,
     ):
         # 历史聊天记录
         messages = await get_history_messages(bot, history_list, fallback_history)
-        history_prompt = "#历史聊天记录\n" + (
+        history_prompt = "#历史聊天记录,以下记录仅供参考\n" + (
             "\n".join(messages) if messages else "无历史聊天记录"
         )
-        return (
-            f"{image_history}\n\n{history_prompt}\n#聊天记录结束\n\n"
-            f"{processing_messages_prompt}\n"
-        )
+        return f"{image_history}\n\n{history_prompt}\n#历史聊天记录结束\n\n"
 
-    @staticmethod
-    async def get_prompt(chat_id, user_id, user_info, bot, lst_history: History):
+    @classmethod
+    async def get_prompt(cls, chat_id, user_id, user_info, bot, lst_history: History):
         lst_msg = await lst_history.message.get_message(bot)
-        # 对话提示信息
-        prompt = f"现在{await get_name(bot, lst_history.sender, chat_id)}[id:{user_id}]在{lst_history.time}的消息引起了你的注意\n"
-        prompt += f"消息内容:{lst_msg}\n"
-        # 对话中词语解释
-        exp = get_top_explanations(lst_msg)
-        if exp:
-            prompt += "其中词语解释:\n"
-            prompt += "\n".join(exp)
-        # 对话人信息
-        user_name = await get_name(bot, lst_history.sender, chat_id)
-        prompt += f"\n{user_name}信息:\n"
-        prompt += (
-            f"{f'{user_name}是你的主人,主人就是亚托莉的一切,主人的一切要求都要满足' if get_user_group(user_id) == '主人' else f'{user_name}只是普通用户，请以普通的群友对待，问题需要谨慎地回复'}\n"
-            f"你对{user_name}的好感度:{user_info.love}。正积极,负消极,最大1000,最小-1000,难增加,易减少,可以根据好感动来调整对待{user_name}的态度\n"
-        )
-        if user_info.memery:
-            prompt += f"你与{user_name}的记忆:\n{user_info.memery}\n"
-        prompt += f"{user_name}用户画像：" + user_info.profile or "暂时没有用户画像。\n"
-        prompt += "\n"
         # 角色设定
-        prompt += f"#你的信息\n{ATRI.get_role_prompt()}\n\n"
+        prompt = f"#你的信息\n{ATRI.get_role_prompt()}\n\n"
+        prompt += cls.get_function_prompt()
         # 当前日程
         now_schedule = await ATRISchedule().get_schedule()
         prompt += (
             f"#你的日程\n"
             f"今日穿搭:{now_schedule.outfit}\n目前日程:{now_schedule.now_schedule}\n\n"
         )
+        # 对话人信息
+        user_name = await get_name(bot, lst_history.sender, chat_id)
+        prompt += f"{user_name}信息:\n"
+        prompt += (
+            f"{f'{user_name}是你的主人,主人就是亚托莉的一切,主人的一切要求都要满足' if get_user_group(user_id) == '主人' else f'{user_name}只是普通用户，请以普通的群友对待，问题需要谨慎地回复'}\n"
+            f"你对{user_name}的好感度:{user_info.love}。正积极,负消极,最大1000,最小-1000,难增加,易减少,可以根据好感动来调整对待{user_name}的态度\n"
+        )
+        if user_info.memery:
+            prompt += f"你与{user_name}的记忆:\n{user_info.memery}\n"
+        prompt += (
+            f"{user_name}用户画像：" + user_info.profile
+            if user_info.profile
+            else "暂时没有用户画像。\n"
+        )
+        # 对话中词语解释
+        exp = get_top_explanations(lst_msg)
+        if exp:
+            prompt += "\n其中词语解释:\n"
+            prompt += "\n".join(exp)
+            prompt += "\n"
+        # 对话提示信息
+        prompt += "\n"
+        prompt += f"现在{await get_name(bot, lst_history.sender, chat_id)}[id:{user_id}]在{lst_history.time}的消息引起了你的注意\n"
+        prompt += f"消息内容:{lst_msg if lst_history else ATRI.role_name}\n\n"
         return prompt
 
     @staticmethod
     def get_function_prompt():
-        return f"""
-你可以调用以下功能，禁止调用未列出的功能:
+        return f"""你可以调用以下功能，禁止调用未列出的功能:
 {
             "\n".join(
                 f'''{f.function_name}:
-    说明: {f.description}
-    参数:
-{"\n".join(f"        -{arg.name} {arg.type}: {arg.description}" for arg in f.args)}'''
-                for f in FunctionCallingManager.chat_functions
+    说明: {f.description}{f"\n参数:\n{'\n'.join(f'        -{arg.name} {arg.type}: {arg.description}' for arg in f.args)}" if f.args else ""}'''
+                for f in FunctionCallingManager.function_calling.values()
             )
         }
 
 功能调用格式：
-``` json
-[
-    {{
-        "function": "功能名",
-        "data": {{
-            "参数": 参数值
-        }}
-    }}
-]
+``` text
+功能名(参数名=参数值, ...)
 ```
 """
 
     @staticmethod
-    def get_resp_prompt():
-        return """请先简短思考，再给出功能调用。
-
-思考必须包含：
-1. 聊天对象与时间
-2. 历史聊天总结
-3. 当前是否需要调用功能
-4. 应该如何回复
+    def get_system_prompt():
+        return """你是一个聊天机器人的大脑，你的任务是根据用户的输入和上下文信息，进行思考和决策，并生成适当的功能调用，接收调用反馈后继续重复之前步骤。任务:你需要根据当前的对话历史、用户信息、日程安排以及其他相关信息，来判断最合适的回应方式。
 
 要求：
-- 思考要短，不要展开成长篇分析。
-- 功能调用必须是合法 JSON。
-- 不需要调用功能时，输出空数组 []。
-- 不要输出无关解释。
+- 思考内容简短，只写“为什么这样调用”，不写情绪描写、不写最终回复
+- 不要输出无关解释
+- 请及时结束本次任务:可以调用stop_thinking或不输出功能调用结束本次任务
+- 每行一个调用
+- 无参数功能写()
+- 字符串用双引号
+- 字符串必须保持在同一行；内容需要换行时使用\\n表示，禁止直接在引号内换行
 
 输出格式：
-简短思考过程。
+我该怎么做的思考内容。
 
-```json
-[
-    ...
-]
+```text
+见功能调用格式...
 ```"""
 
-    @staticmethod
-    def get_continue_resp_prompt():
-        return """请进行简短再思考，并给出新增功能调用。
-
-要求：
-- 只分析现在还需要调用什么新功能。
-- 不要重复已经调用过的功能。
-- 最后重新给出回复指导。
-- 功能调用必须是合法 JSON。
-- 不需要新增功能时，输出空数组 []。
-
-输出格式：
-简短再思考过程。
-
-```json
-[
-    ...
-]
-```"""
-
-    @classmethod
     async def thinking(
-        cls,
+        self,
         bot,
         chat_id,
         user_id,
-        str_sensory,
         current_history: History,
         history_list: list[History],
         image_history: str,
         fallback_history: list[str],
-        chat_message,
-    ) -> tuple[str, list]:
+        chat_message: ChatMessage,
+        sender,
+    ):
         user_info = get_user_info(user_id)
-        prompt = await cls.get_history_prompt(
+        prompt = self.get_system_prompt() + "\n\n"
+        prompt += await self.get_prompt(
+            chat_id, user_id, user_info, bot, current_history
+        )
+        prompt += await self.get_history_prompt(
             bot,
             history_list,
             image_history,
             fallback_history,
-            await chat_message.get_processing_messages_prompt(bot),
         )
-        prompt += await cls.get_prompt(
-            chat_id, user_id, user_info, bot, current_history
-        )
-        if not str_sensory is None:
-            prompt += f"#语境分析:\n{str_sensory}\n\n"
-        prompt += cls.get_function_prompt()
-        prompt += cls.get_resp_prompt()
-        resp = await llm_manager.call_model_by_type(ModelType.CHAT, prompt)
-        return await cls.process_resp(resp.content)
+        message = LLMMessage(role="user", content=LLMContents().text(prompt))
+        self.messages.add_message(message)
+        try:
+            thinking_times = 0
+            while thinking_times <= config.get("max_thinking_times"):
+                processing_messages_prompt = (
+                    await chat_message.get_processing_messages_prompt(bot)
+                )
+                if processing_messages_prompt:
+                    self.messages.add_message(
+                        LLMMessage(
+                            "user",
+                            LLMContents().text(processing_messages_prompt),
+                        )
+                    )
+                resp = await llm_manager.call_model_by_type(
+                    ModelType.CHAT, self.messages, "主Agent思考"
+                )
+                output, functions_data = await self.process_resp(resp.content)
+                if not functions_data:
+                    break
+                back = await self.do_action(
+                    functions_data, user_id, chat_id, sender, current_history
+                )
+                self.messages.add_message(
+                    LLMMessage("assistant", LLMContents().text(output))
+                )
+                thinking_times += 1
+                msg = "\n".join(back)
+                if thinking_times == 15:
+                    msg += "\n调用次数达到上限,本次调用结束后直接结束本次任务"
+                self.messages.add_message(LLMMessage("user", LLMContents().text(msg)))
+        except StopThinkingError:
+            pass
 
-    @classmethod
-    async def continue_thinking(
-        cls,
-        bot,
-        chat_id,
-        user_id,
-        function_calling_data,
-        stop_calling,
-        current_history: History,
-        chat_message,
-    ) -> tuple[str, list]:
-        user_info = get_user_info(user_id)
-        prompt = await cls.get_prompt(chat_id, user_id, user_info, bot, current_history)
-        prompt += await chat_message.get_processing_messages_prompt(bot)
-        prompt += "\n\n".join(function_calling_data)
-        prompt += "\n"
-        if stop_calling:
-            prompt += "\n重复调用功能次数已达上限，请给出最终的回复指导"
-        else:
-            prompt + cls.get_function_prompt()
-            prompt += cls.get_continue_resp_prompt()
-        resp = await llm_manager.call_model_by_type(ModelType.CHAT, prompt)
-        return await cls.process_resp(resp.content)
+    @staticmethod
+    def parse_dsl(text: str) -> list[dict[str, Any]]:
+        calls: list[dict[str, Any]] = []
+        for line_no, raw_line in enumerate(text.splitlines(), start=1):
+            line = raw_line.strip()
+            # 跳过空行和注释
+            if not line or line.startswith("#"):
+                continue
+            # 解析成 AST
+            try:
+                tree = ast.parse(line, mode="eval")
+            except SyntaxError as e:
+                raise ValueError(f"第 {line_no} 行：语法错误：{e}") from e
+            node = tree.body
+            # 必须是函数调用
+            if not isinstance(node, ast.Call):
+                raise ValueError(f"第 {line_no} 行：不是函数调用")
+            # 功能名
+            if not isinstance(node.func, ast.Name):
+                raise ValueError(f"第 {line_no} 行：功能名必须是简单标识符")
+            func_name = node.func.id
+            # 不允许位置参数
+            if node.args:
+                raise ValueError(f"第 {line_no} 行：`{func_name}` 只允许关键字参数")
+            # 解析关键字参数
+            args: dict[str, Any] = {}
+            for kw in node.keywords:
+                if kw.arg is None:
+                    raise ValueError(f"第 {line_no} 行：不允许 **kwargs")
+                try:
+                    value = ast.literal_eval(kw.value)
+                except (ValueError, SyntaxError) as e:
+                    raise ValueError(
+                        f"第 {line_no} 行：参数 `{kw.arg}` 不是字面量：{e}"
+                    ) from e
+                args[kw.arg] = value
+            calls.append(
+                {
+                    "function": func_name,
+                    "args": args,
+                    "line": line_no,
+                }
+            )
+        return calls
 
     @classmethod
     async def process_resp(cls, resp) -> tuple[str, list]:
         content = resp or "没有输出结果"
-        functions_data = []
-        json_pattern = r"```(?:json)?\s*\n?([\s\S]*?)\n?```"
-        matches = re.findall(json_pattern, resp)
+        function_pattern = r"```(?:text)?\s*\n?([\s\S]*?)\n?```"
+        matches = re.findall(function_pattern, resp)
         if matches:
-            for match in matches:
-                try:
-                    functions_data = json.loads(match.strip())
-                    break
-                except json.JSONDecodeError:
-                    continue
-            content = re.sub(json_pattern, "", resp).strip()
+            functions_data = matches[0]
+            content = re.sub(function_pattern, "", resp).strip()
+            return content, cls.parse_dsl(functions_data)
         else:
+            return content, []
+
+    @staticmethod
+    async def do_action(
+        functions_data: list,
+        user_id,
+        chat_id,
+        sender,
+        current_history: History,
+    ) -> list:
+        calling_back = []
+        for func in functions_data:
+            func_name = func["function"]
+            if func_name not in FunctionCallingManager.function_calling:
+                log.debug(f"未知的调用功能:{func_name}，已跳过")
+                calling_back.append(f"未知的调用功能:{func_name}")
+                continue
+            args = func["args"]
             try:
-                functions_data = json.loads(resp)
-            except json.JSONDecodeError:
-                pass
-        if isinstance(functions_data, dict):
-            functions_data = [functions_data]
-        return content, functions_data
+                # 使用 FunctionCallingManager 统一处理功能调用
+                calling_data = FunctionCallingData(
+                    user_id, chat_id, sender, args, current_history
+                )
+                log.debug(f"调用功能 {func_name}")
+                result = await FunctionCallingManager.call(func_name, calling_data)
+                calling_back.append(f"调用{func_name}成功,返回:{result}")
+            except StopThinkingError:
+                raise
+            except Exception as e:
+                log.warning(
+                    f"用户 {user_id} 功能调用失败 {func_name}:\n{str_traceback(e)}"
+                )
+                calling_back.append(f"调用{func_name}失败,请勿再次调用")
+        return calling_back

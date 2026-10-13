@@ -1,34 +1,33 @@
 import os
 import time
 from datetime import UTC, datetime
-from typing import Tuple
 
 import psutil
 from nonebot import get_bot
 from nonebot.adapters.onebot.v11 import MessageSegment
 
+from ATRI.configs import Field, PluginConfig
 from ATRI.exceptions import BaseBotException
 from ATRI.log import log
 from ATRI.service import Service
 from ATRI.system.lkbot.tools.get_pic import local_image
 from ATRI.utils import Limiter
 from ATRI.utils.img_editor import IMGEditor
-from ATRI.utils.model import BaseModel
 
-plugin = Service("状态", "检查 ATRI 状态", "1.1.2", Service.ServiceType.SYSTEM)
+plugin = Service("状态", "检查 ATRI 状态", "1.1.3", Service.ServiceType.SYSTEM)
 
 
 class GetStatusError(BaseBotException):
     prompt = "获取状态失败"
 
 
-class StatusConfig(BaseModel):
-    check_status: bool = True
-    hours: int = 1
-    minutes: int = 0
+class StatusConfig(PluginConfig):
+    check_status = Field(bool, True, "启用定时状态检查")
+    hours = Field(int, 1, "检查间隔小时", min=0)
+    minutes = Field(int, 0, "检查间隔分钟", min=0, max=59)
 
 
-config: StatusConfig = plugin.add_plugin_config(StatusConfig).config()
+config: StatusConfig = plugin.add_plugin_config(StatusConfig)
 
 ping = plugin.on_command("ping", "检测 ATRI 是否存活")
 
@@ -95,17 +94,17 @@ def add_check_job():
         check_status,
         "状态检查",
         trigger="interval",
-        hours=config.hours,
-        minutes=config.minutes,
+        hours=config.get("hours"),
+        minutes=config.get("minutes"),
         misfire_grace_time=15,
     )
 
 
-if config.check_status:
+if config.get("check_status"):
     add_check_job()
 
 
-def get_status() -> Tuple[MessageSegment, bool]:
+def get_status() -> tuple[MessageSegment, bool]:
     try:
         cpu = psutil.cpu_percent(interval=1)
         mem = psutil.virtual_memory().percent
@@ -128,8 +127,8 @@ def get_status() -> Tuple[MessageSegment, bool]:
             datetime.fromtimestamp(now, UTC).replace(microsecond=0)
             - datetime.fromtimestamp(b, UTC).replace(microsecond=0)
         )
-    except Exception:
-        raise GetStatusError("Failed to get status.")
+    except Exception as e:
+        raise GetStatusError("Failed to get status.") from e
 
     msg = "アトリは、高性能ですから！"
     if cpu > 90:
@@ -148,7 +147,7 @@ def get_status() -> Tuple[MessageSegment, bool]:
         is_ok = True
 
     # 720 * 1280
-    b_mem = "%.1f%%" % b_mem
+    b_mem = f"{b_mem:.1f}%"
     inte_send = f"{round(inte_send / 1024, 2)}GB"
     inte_recv = f"{round(inte_recv / 1024, 2)}GB"
     img = (

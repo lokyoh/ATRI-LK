@@ -9,13 +9,14 @@ from typing import ClassVar
 import anyio
 from jinja2 import Environment, FileSystemLoader
 from nonebot.adapters.onebot.v11 import GroupMessageEvent, MessageSegment
+from nonebot.adapters.qq import GroupMessageCreateEvent
 from PIL import Image
 
 from ATRI import IMG_DIR, RES_DIR, __sub_version__, __version__, conf
 from ATRI.bot import BotUtils
 from ATRI.exceptions import ServiceNotFoundError
 from ATRI.log import log
-from ATRI.message import MessageBuilder, img_msg, img_msg_from_path
+from ATRI.message import MessageBuilder, QQMessage, img_msg, img_msg_from_path
 from ATRI.permission import MASTER_LIST
 from ATRI.service import Service, ServiceTools
 from ATRI.system.htmlrender import html_to_pic
@@ -116,12 +117,19 @@ class Helper:
         )
 
     @staticmethod
+    def qq_menu() -> str:
+        return f"""# 哦呀？~需要帮助？
+- {QQMessage.cmd(f"{CMD_PREFIX}关于")} -查看bot基本信息
+- {QQMessage.cmd(f"{CMD_PREFIX}服务列表")} -查看所有可用服务
+- {QQMessage.cmd(f"{CMD_PREFIX}帮助", f"{CMD_PREFIX}帮助 (服务)")} -查看对应服务帮助"""
+
+    @staticmethod
     def about() -> str:
         raw_nickname = conf.BotConfig.nickname
         if raw_nickname is None:
             nicknames = "ATRI"
         elif isinstance(raw_nickname, str):
-            nicknames = raw_nickname
+            nicknames = [raw_nickname]
         else:
             try:
                 nicknames = "、".join(str(n) for n in raw_nickname)
@@ -133,7 +141,6 @@ class Helper:
             .text(f"型号是：{__version__} {__sub_version__}")
             .text("想进一步了解:")
             .text("项目地址:https://github.com/lokyoh/ATRI-LK")
-            .text("原项目地址:https://github.com/Kyomotoi/ATRI")
             .done()
         )
 
@@ -240,7 +247,7 @@ class Helper:
     def init_services(cls) -> None:
         if SERVICES_PATH.exists():
             try:
-                with open(SERVICES_PATH, "r", encoding="utf-8") as f:
+                with open(SERVICES_PATH, encoding="utf-8") as f:
                     content = f.read()
                 data = json.loads(content)
                 if not isinstance(data, dict):
@@ -449,7 +456,7 @@ class Helper:
         # 走统一 TTL 节流，保证 service_dict 在一个刷新窗口内是冻结的
         cls.get_typed_services()
         level = 0
-        user_id = str(event.user_id)
+        user_id = str(event.get_user_id())
         if user_id in MASTER_LIST:
             level = 2
         elif isinstance(event, GroupMessageEvent) and event.sender.role in [
@@ -457,7 +464,9 @@ class Helper:
             "owner",
         ]:
             level = 1
-        group_id = str(event.group_id) if isinstance(event, GroupMessageEvent) else ""
+        group_id = (
+            str(event.get_user_id()) if isinstance(event, GroupMessageEvent) else ""
+        )
         # 轻量缓存键：不依赖完整服务数据
         signature_data = json.dumps(
             {
@@ -483,9 +492,7 @@ class Helper:
         # 先查缓存：命中则完全跳过服务遍历
         if json_path.exists() and img_path.exists():
             try:
-                async with await anyio.open_file(
-                    json_path, "r", encoding="utf-8"
-                ) as f:
+                async with await anyio.open_file(json_path, "r", encoding="utf-8") as f:
                     content = await f.read()
                 cache_data = json.loads(content)
             except (json.JSONDecodeError, OSError, ValueError):
@@ -561,23 +568,96 @@ class Helper:
             await anyio.to_thread.run_sync(cls._cleanup_cache)
         return img_msg(img_data)
 
+    @classmethod
+    def get_md_help(cls, event) -> str:
+        """生成 Markdown 格式的服务列表，按权限过滤。"""
+        # 走统一 TTL 节流
+        cls.get_typed_services()
+        level = 0
+        user_id = str(event.get_user_id())
+        if user_id in MASTER_LIST:
+            level = 2
+        elif isinstance(
+            event, GroupMessageCreateEvent
+        ) and event.author.member_role in [
+            "admin",
+            "owner",
+        ]:
+            level = 1
+        group_id = (
+            str(event.group_id) if isinstance(event, GroupMessageCreateEvent) else ""
+        )
+        # 收集服务，按类型分组
+        services: dict[str, list] = {}
+        for _type in Service.ServiceType:
+            services[_type.value] = []
+        s_l = list(ServiceTools.service_list.keys())
+        s_l.sort()
+        for s in s_l:
+            _s: Service = ServiceTools.service_list[s]
+            info = _s.get_info()
+            _type = info.type
+            if _type == Service.ServiceType.HIDDEN.value:
+                continue
+            if info.permission == "Master" and level < 2:
+                continue
+            if info.permission == "Admin" and level < 1:
+                continue
+            # 判定可用性
+            usable = False
+            snapshot_entry = cls._service_snapshot.get(s)
+            if snapshot_entry is not None:
+                sc = snapshot_entry[2]
+            else:
+                try:
+                    sc = ServiceTools(s).load_service_config()
+                except Exception:
+                    sc = None
+            if sc is not None and sc.enabled:
+                usable = True
+                if user_id in sc.disable_user or (
+                    isinstance(event, GroupMessageCreateEvent)
+                    and group_id in sc.disable_group
+                ):
+                    usable = False
+            si = info.model_dump()
+            si["usable"] = usable
+            services[_type].append(si)
+        # 组装 Markdown
+        lines: list[str] = ["# 咱搭载了以下服务~", ""]
+        for type_name, items in services.items():
+            if not items:
+                continue
+            lines.append(f"## {type_name}")
+            lines.append("")
+            for si in items:
+                name = si.get("service", "未知服务")
+                docs = si.get("docs", "")
+                usable = si.get("usable", False)
+                mark = "✅" if usable else "❌"
+                if docs:
+                    lines.append(f"- {mark} **{name}**：{docs}")
+                else:
+                    lines.append(f"- {mark} **{name}**")
+            lines.append("")
+
+        lines.append(f"> Tip: `{CMD_PREFIX}帮助 (服务) (命令)` 以查看对应命令详细信息")
+        return "\n".join(lines)
+
     @staticmethod
     def service_info(service: str) -> str:
         try:
             data = ServiceTools(service).load_service()
             s_conf = ServiceTools(service).load_service_config()
         except ServiceNotFoundError:
-            return f"请检查是否输入错误呢...{CMD_PREFIX}帮助 (服务)"
-
+            return f"请检查是否输入错误呢...\n{CMD_PREFIX}帮助 (服务)\n通过{CMD_PREFIX}服务列表 来查询服务"
         service_name = data.service
         service_docs = data.docs
         service_enabled = s_conf.enabled
-
         service_cmd_list = "\n".join(
             f"{CMD_PREFIX}{name}" if cmd.get("type") == "command" else name
             for name, cmd in data.cmd_list.items()
         )
-
         repo = _SERVICE_INFO_FORMAT.format(
             service=service_name,
             docs=service_docs,
@@ -588,12 +668,34 @@ class Helper:
         return repo
 
     @staticmethod
+    def service_info_md(service: str) -> str:
+        try:
+            data = ServiceTools(service).load_service()
+            s_conf = ServiceTools(service).load_service_config()
+        except ServiceNotFoundError:
+            return f"请检查是否输入错误呢...\n{QQMessage.cmd(f'{CMD_PREFIX}帮助', f'{CMD_PREFIX}帮助 (服务)')}\n通过{QQMessage.cmd(f'{CMD_PREFIX}服务列表')} 来查询服务"
+        service_name = data.service
+        service_docs = data.docs
+        service_enabled = s_conf.enabled
+        service_cmd_list = "\n".join(
+            f"- {QQMessage.cmd(f'{CMD_PREFIX}{name}')}"
+            for name, cmd in data.cmd_list.items()
+            if cmd.get("type") == "command"
+        )
+        repo = f"""# 服务名：{service_name}
+说明：{service_docs}
+可用命令：
+{service_cmd_list}
+是否全局启用：{service_enabled}
+> Tip:{QQMessage.cmd(f"{CMD_PREFIX}帮助", f"{CMD_PREFIX}帮助 (服务) (命令)")} 以查看对应命令详细信息"""
+        return repo
+
+    @staticmethod
     def cmd_info(service: str, cmd: str) -> str:
         try:
             data = ServiceTools(service).load_service()
         except ServiceNotFoundError:
-            return f"请检查是否输入错误...{CMD_PREFIX}帮助 (服务) (命令)"
-
+            return f"请检查是否输入错误...\n{CMD_PREFIX}帮助 (服务) (命令)"
         cmd_list: dict = data.cmd_list
         cmd_info = cmd_list.get(cmd, {})
         if not cmd_info:
@@ -601,18 +703,40 @@ class Helper:
         cmd_type = cmd_info.get("type", "ignore")
         docs = cmd_info.get("docs", "ignore")
         aliases = cmd_info.get("aliases", "ignore")
-
         repo = _COMMAND_INFO_FORMAT.format(
-            cmd=cmd, cmd_type=cmd_type, docs=docs, aliases=aliases
+            cmd=f"{CMD_PREFIX}{cmd}" if cmd_type == "command" else cmd,
+            cmd_type=cmd_type,
+            docs=docs,
+            aliases=aliases,
         )
+        return repo
+
+    @staticmethod
+    def cmd_info_md(service: str, cmd: str) -> str:
+        try:
+            data = ServiceTools(service).load_service()
+        except ServiceNotFoundError:
+            return f"请检查是否输入错误...\n{QQMessage.cmd(f'{CMD_PREFIX}帮助', f'{CMD_PREFIX}帮助 (服务) (命令)')}"
+        cmd_list: dict = data.cmd_list
+        cmd_info = cmd_list.get(cmd, {})
+        if not cmd_info:
+            return "请检查命令是否输入错误..."
+        cmd_type = cmd_info.get("type", "ignore")
+        docs = cmd_info.get("docs", "ignore")
+        aliases = cmd_info.get("aliases", "ignore")
+        repo = f"""# 命令：{f"{QQMessage.cmd(f'{CMD_PREFIX}{cmd}', cmd)}" if cmd_type == "command" else cmd}
+类型：{cmd_type}
+说明：{docs}
+更多触发方式：{" ".join(f"{QQMessage.cmd(f'{CMD_PREFIX}{a}', a)}" for a in aliases) if cmd_type == "command" else aliases}"""
         return repo
 
     @classmethod
     async def get_service_list(cls, event):
-        handler = help_type.get(help_config.help_type)
+        configured_help_type = help_config.get("help_type")
+        handler = help_type.get(configured_help_type)
         if handler is None:
             log.warning(
-                f"未知的 help_type 配置: {help_config.help_type!r}，"
+                f"未知的 help_type 配置: {configured_help_type!r}，"
                 f"可用值: {list(help_type.keys())}"
             )
             handler = help_type["text"]
@@ -683,3 +807,4 @@ class Helper:
 help_type["text"] = Helper.get_text_list
 help_type["image"] = Helper.get_image_list
 help_type["html"] = Helper.get_html_help
+help_type["md"] = Helper.get_md_help

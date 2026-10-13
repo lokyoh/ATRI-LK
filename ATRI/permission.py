@@ -1,12 +1,14 @@
 import json
+from typing import ClassVar
 
 from nonebot.adapters import Bot, Event
-from nonebot.permission import Permission as _Permission
 from nonebot.adapters.onebot.v11 import GroupMessageEvent
+from nonebot.adapters.qq import GroupMessageCreateEvent
+from nonebot.permission import Permission as _Permission
 
 from ATRI import conf
-from ATRI.utils import FileDealer
 from ATRI.dir import SYS_CONFIG_DIR
+from ATRI.utils import FileDealer
 
 MASTER_FILE_PATH = SYS_CONFIG_DIR / "master.json"
 MASTER_FILE = FileDealer(MASTER_FILE_PATH)
@@ -15,7 +17,7 @@ MASTER_LIST = set()
 
 def __create_master_file():
     if not MASTER_FILE_PATH.is_file():
-        data = dict()
+        data = {}
         for i in conf.BotConfig.superusers:
             data[i] = {"is_conf": True}
 
@@ -86,11 +88,13 @@ class Admin:
 
     __slots__ = ()
 
-    GROUP_ADMIN = ["admin", "owner"]
+    GROUP_ADMIN: ClassVar = ["admin", "owner"]
 
     async def __call__(self, bot: Bot, event: Event) -> bool:
         if isinstance(event, GroupMessageEvent):
-            return event.sender.role in ["admin", "owner"] or is_master(bot, event)
+            return event.sender.role in self.GROUP_ADMIN or is_master(bot, event)
+        if isinstance(event, GroupMessageCreateEvent):
+            return event.author.member_role in self.GROUP_ADMIN or is_master(bot, event)
         else:
             return False
 

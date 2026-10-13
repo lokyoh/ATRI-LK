@@ -270,8 +270,8 @@ class Service:
         )
         try:
             data.write_into_file(path)
-        except Exception:
-            raise WriteFileError("Write service config failed")
+        except Exception as e:
+            raise WriteFileError("Write service config failed") from e
 
     def on_message(
         self,
@@ -574,15 +574,15 @@ class Service:
         获取服务的插件设置。
         :return: PluginConfig对象
         """
-        return PluginConfig.get(self.service)
+        return PluginConfig.get_config(self.service)
 
-    def add_plugin_config(self, model: type[BaseModel]) -> PluginConfig:
+    def add_plugin_config(self, model: type[PluginConfig]) -> PluginConfig:
         """
         添加服务的插件设置。
         :param model: 插件设置模型
         :return: PluginConfig对象
         """
-        return PluginConfig(self.service, model)
+        return model(self.service)
 
 
 class ServiceTools:

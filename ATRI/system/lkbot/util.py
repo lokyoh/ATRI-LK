@@ -17,7 +17,7 @@ from .data.shop import shops
 from .data.user import UserData, users
 from .tools.get_pic import set_local_image_func
 
-PLUGIN_VERSION = "0.11.3"
+PLUGIN_VERSION = "0.12.0"
 """lkbot插件版本"""
 PLUGIN_DIR = Path(".") / "data" / "plugins" / "lkbot"
 """lkbot插件数据路径"""
@@ -40,14 +40,14 @@ class BaseFunc:
         """检查群聊是否是测试模式的群聊"""
         if type(group_id) is int:
             group_id = str(group_id)
-        return group_id in config.test_groups
+        return group_id in config.get("test_groups")
 
     @staticmethod
     def is_safe_mode_group(group_id: str | int) -> bool:
         """检查群聊是否是安全模式群聊"""
         if type(group_id) is int:
             group_id = str(group_id)
-        return not group_id in config.r18_groups
+        return group_id not in config.get("r18_groups")
 
     @staticmethod
     def is_master(user_id: str | int) -> bool:
@@ -183,7 +183,11 @@ class BaseFunc:
         for bot_name in self.bot_names:
             if bot_name in name:
                 return False
-        return not re.search(r"爸|妈|爷|父|母|奶|father|mother|papa|mama|grand|主人|爹|娘", name, re.IGNORECASE)
+        return not re.search(
+            r"爸|妈|爷|父|母|奶|father|mother|papa|mama|grand|主人|爹|娘",
+            name,
+            re.IGNORECASE,
+        )
 
     def get_trans_text(self, o_message: Message) -> str:
         """

@@ -2,8 +2,8 @@ import inspect
 
 from nonebot.exception import FinishedException
 
+from ATRI.exceptions import EventRuntimeError, str_traceback
 from ATRI.log import log
-from ATRI.exceptions import str_traceback, EventRuntimeError
 
 
 class BaseEvent:
@@ -59,10 +59,10 @@ class InnerListener(BaseListener):
     def __init__(self, func):
         super().__init__(func.__name__)
         self.func = func
-        if hasattr(self.func, '__code__'):
+        if hasattr(self.func, "__code__"):
             code = self.func.__code__
             self.param = code.co_argcount
-        elif hasattr(self.func, '__func__'):
+        elif hasattr(self.func, "__func__"):
             code = self.func.__func__.__code__
             self.param = code.co_argcount
         else:
@@ -80,7 +80,7 @@ class BaseEvents:
     一个基础事件。
     """
 
-    def __init__(self, stop_when_error: bool=False):
+    def __init__(self, stop_when_error: bool = False):
         self.listeners = {}
         self.stop_when_error = stop_when_error
 
@@ -106,7 +106,9 @@ class BaseEvents:
                     listeners.remove(listener)
                     return
 
-    def notify(self, event: BaseEvent) -> BaseEvent:
+    def notify(
+        self, event: BaseEvent, ignore_error: bool = True, should_break: bool = False
+    ) -> BaseEvent:
         """
         触发该事件。
         :param event: 事件体
@@ -122,16 +124,24 @@ class BaseEvents:
                     event.error_listeners.append(listener.listener_name)
                     tb = str_traceback(e)
                     exceptions[listener.listener_name] = tb
-                    log.error(tb)
                     if self.stop_when_error:
                         break_sign = True
                         break
-            if break_sign:
+            if break_sign and should_break:
                 break
         if event.error:
-            formatted_str = "\n".join([f"\n{key}:{value}" for key, value in exceptions.items()])
-            key_str = ",".join([key for key in exceptions])
-            raise EventRuntimeError(f"事件{event.event_name}在执行{key_str}时出现错误", formatted_str)
+            formatted_str = "\n".join(
+                [f"\n{key}:{value}" for key, value in exceptions.items()]
+            )
+            key_str = ",".join(list(exceptions))
+            if not ignore_error:
+                raise EventRuntimeError(
+                    f"事件{event.event_name}在执行{key_str}时出现错误", formatted_str
+                )
+            else:
+                log.error(
+                    f"事件{event.event_name}在执行{key_str}时出现错误", formatted_str
+                )
         return event
 
     def handle(self, priority: int = 10):
@@ -140,10 +150,10 @@ class BaseEvents:
         """
 
         def wrapper(func):
-            if func.__name__ == '_':
-                raise ValueError('请不要使用`_`作为函数名')
+            if func.__name__ == "_":
+                raise ValueError("请不要使用`_`作为函数名")
             if inspect.iscoroutinefunction(func):
-                raise ValueError('不支持异步方法')
+                raise ValueError("不支持异步方法")
             self.subscribe(InnerListener(func), priority)
             return func
 
@@ -173,7 +183,9 @@ class AsyncBaseEvents(BaseEvents):
     def __init__(self, stop_when_error=False):
         super().__init__(stop_when_error)
 
-    async def notify(self, event: BaseEvent) -> BaseEvent:
+    async def notify(
+        self, event: BaseEvent, ignore_error: bool = False, should_break: bool = False
+    ) -> BaseEvent:
         """
         触发该事件。
         :param event: 事件体
@@ -194,16 +206,24 @@ class AsyncBaseEvents(BaseEvents):
                     event.error_listeners.append(listener.listener_name)
                     tb = str_traceback(e)
                     exceptions[listener.listener_name] = tb
-                    log.error(tb)
                     if self.stop_when_error:
                         break_sign = True
                         break
-            if break_sign:
+            if break_sign and should_break:
                 break
         if event.error:
-            formatted_str = "\n".join([f"\n{key}:{value}" for key, value in exceptions.items()])
-            key_str = ",".join([key for key in exceptions])
-            raise EventRuntimeError(f"事件{event.event_name}在执行{key_str}时出现错误", formatted_str)
+            formatted_str = "\n".join(
+                [f"\n{key}:{value}" for key, value in exceptions.items()]
+            )
+            key_str = ",".join(list(exceptions))
+            if not ignore_error:
+                raise EventRuntimeError(
+                    f"事件{event.event_name}在执行{key_str}时出现错误", formatted_str
+                )
+            else:
+                log.error(
+                    f"事件{event.event_name}在执行{key_str}时出现错误", formatted_str
+                )
         return event
 
     def handle(self, priority: int = 10):
@@ -212,8 +232,8 @@ class AsyncBaseEvents(BaseEvents):
         """
 
         def wrapper(func):
-            if func.__name__ == '_':
-                raise ValueError('请不要使用`_`作为函数名')
+            if func.__name__ == "_":
+                raise ValueError("请不要使用`_`作为函数名")
             if inspect.iscoroutinefunction(func):
                 self.subscribe(AsyncInnerListener(func), priority)
             else:

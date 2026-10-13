@@ -21,6 +21,7 @@ class ChatMessage:
         self.image_history = image_history
         self.fallback_history = fallback_history
         self.messages_during_processing: list[Future[History | None]] = []
+        self.processing_message_ids: set[int] = set()
         self.user_id = args.user_id
         self.force_chat = args.is_force_chat()
         self.time_stamp = time.time()
@@ -29,19 +30,26 @@ class ChatMessage:
         return time.time() - self.time_stamp <= 180
 
     async def get_processing_messages_prompt(self, bot) -> str:
-        pending_messages = list(self.messages_during_processing)
+        pending_messages, self.messages_during_processing = (
+            self.messages_during_processing,
+            [],
+        )
         histories = await gather(*pending_messages) if pending_messages else []
-        messages = [
-            await history.get_message(bot)
-            for history in histories
-            if history is not None
-        ]
-        content = "\n".join(messages) if messages else "本次处理期间暂无新消息。"
+        messages = []
+        for history in histories:
+            if history is None or history.mid in self.processing_message_ids:
+                continue
+            self.processing_message_ids.add(history.mid)
+            if str(history.sender) == str(bot.self_id):
+                continue
+            messages.append(await history.get_message(bot))
+        if not messages:
+            return ""
+        content = "\n".join(messages)
         return (
             "#本次处理期间收到的新消息\n"
-            "以下消息是在当前任务开始处理后到达的，按接收顺序排列；"
-            "这些消息仍会分别保留在聊天历史中。\n"
-            f"{content}\n"
+            "以下消息是在当前任务开始处理后到达的，按接收顺序排列\n"
+            f"{content}"
         )
 
 
@@ -76,7 +84,7 @@ class TempHisManager:
             if not chat_history.fallback_history_loaded:
                 if not chat_history.get_history():
                     chat_history.fallback_history = history_logger.get_recent_messages(
-                        args.chat_id, config.max_history
+                        args.chat_id, config.get("max_history")
                     )
                 chat_history.fallback_history_loaded = True
             await chat_history.add_history(

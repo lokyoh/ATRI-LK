@@ -9,6 +9,7 @@ from nonebot.config import Config
 from starlette.websockets import WebSocket, WebSocketDisconnect, WebSocketState
 from websockets.exceptions import ConnectionClosedError, ConnectionClosedOK
 
+from ATRI.bot.status import BotStatus, GlobalStatus, Statu
 from ATRI.bot.utils import BotUtils
 from ATRI.exceptions import str_traceback
 from ATRI.log import log
@@ -24,6 +25,7 @@ from .model import (
     BaseInfo,
     BotBlockModule,
     BotManageUpdateParam,
+    BotStatusConfigParam,
     BotStatusParam,
     HotPlugin,
     NonebotData,
@@ -202,6 +204,70 @@ async def _(param: BotStatusParam):
         return Result.ok(info="修改bot全局开关成功！")
     except (ValueError, KeyError):
         return Result.fail("Bot未初始化...")
+
+
+@router.get(
+    "/get_bot_config",
+    dependencies=[authentication()],
+    response_model=Result[Statu],
+    response_class=JSONResponse,
+    description="获取机器人专项配置",
+)
+async def get_bot_config(bot_id: str) -> Result[Statu]:
+    try:
+        return Result.ok(BotStatus.get_bot_statu(bot_id))
+    except Exception as e:
+        log.error(f"{router.prefix}/get_bot_config 调用错误:{str_traceback(e)}")
+        return Result.fail(f"获取机器人配置失败: {e}")
+
+
+@router.post(
+    "/update_bot_config",
+    dependencies=[authentication()],
+    response_model=Result,
+    response_class=JSONResponse,
+    description="更新机器人专项配置",
+)
+async def update_bot_config(param: BotStatusConfigParam) -> Result:
+    try:
+        BotStatus.set_bot_status(param.bot_id, param.config)
+        return Result.ok(info="机器人专项配置已保存")
+    except Exception as e:
+        log.error(f"{router.prefix}/update_bot_config 调用错误:{str_traceback(e)}")
+        return Result.fail(f"保存机器人配置失败: {e}")
+
+
+@router.get(
+    "/get_global_config",
+    dependencies=[authentication()],
+    response_model=Result[Statu],
+    response_class=JSONResponse,
+    description="获取机器人全局配置",
+)
+async def get_global_config() -> Result[Statu]:
+    try:
+        GlobalStatus.read_from_file()
+        return Result.ok(GlobalStatus.status)
+    except Exception as e:
+        log.error(f"{router.prefix}/get_global_config 调用错误:{str_traceback(e)}")
+        return Result.fail(f"获取全局配置失败: {e}")
+
+
+@router.post(
+    "/update_global_config",
+    dependencies=[authentication()],
+    response_model=Result,
+    response_class=JSONResponse,
+    description="更新机器人全局配置",
+)
+async def update_global_config(config: Statu) -> Result:
+    try:
+        GlobalStatus.status = config
+        GlobalStatus.save_to_file()
+        return Result.ok(info="机器人全局配置已保存")
+    except Exception as e:
+        log.error(f"{router.prefix}/update_global_config 调用错误:{str_traceback(e)}")
+        return Result.fail(f"保存全局配置失败: {e}")
 
 
 @router.get(

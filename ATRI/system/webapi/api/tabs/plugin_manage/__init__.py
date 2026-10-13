@@ -3,6 +3,7 @@ from typing import Any
 from fastapi import APIRouter, Query
 from fastapi.responses import JSONResponse
 
+from ATRI.configs.plugin_config import PluginConfig
 from ATRI.exceptions import str_traceback
 from ATRI.log import log
 from ATRI.service import ServiceTools
@@ -142,13 +143,18 @@ async def _(service: str) -> Result[dict[str, Any]]:
     try:
         if service == "agent":
             return Result.fail("agent 插件请使用专用配置页面")
+        if service == "LK插件":
+            detail = PluginConfig.get_config("LK插件")
+            if detail is None:
+                return Result.fail("插件配置不存在")
+            return Result.ok(detail.describe(), "获取成功!")
         if service not in ServiceTools.service_list:
             raise ValueError("插件不存在")
         s = ServiceTools.service_list[service]
         p_c = s.plugin_config()
         if p_c is None:
             return Result.fail("插件配置不存在")
-        detail = p_c.config().model_dump()
+        detail = p_c.describe()
         return Result.ok(detail, "获取成功!")
     except (ValueError, KeyError):
         return Result.fail("插件数据不存在...")
@@ -166,14 +172,23 @@ async def _(service: str) -> Result[dict[str, Any]]:
 )
 async def _(param: UpdatePlugin) -> Result:
     try:
+        if param.service == "LK插件":
+            p_c = PluginConfig.get_config("LK插件")
+            if p_c is None:
+                return Result.fail("插件配置不存在")
+            if param.configs is None:
+                raise ValueError("插件配置不能为空")
+            p_c.update(param.configs)
+            return Result.ok(info="已经帮你写好啦!")
         if param.service not in ServiceTools.service_list:
             raise ValueError("插件不存在")
         s = ServiceTools.service_list[param.service]
         p_c = s.plugin_config()
         if p_c is None:
             return Result.fail("插件配置不存在")
-        config = p_c.model.model_validate(param.configs)
-        p_c.change_config(config)
+        if param.configs is None:
+            raise ValueError("插件配置不能为空")
+        p_c.update(param.configs)
         return Result.ok(info="已经帮你写好啦!")
     except (ValueError, KeyError):
         return Result.fail("插件数据不存在...")

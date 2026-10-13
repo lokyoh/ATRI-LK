@@ -1,21 +1,63 @@
-from typing import ClassVar
+from typing import Any, ClassVar
 
 import yaml
-from pydantic import Field
+from pydantic import Field, field_validator
 
 from ATRI.utils.model import BaseModel
+
+
+def normalize_model_type(value: str | list[str] | None) -> list[str]:
+    """规范化模型类型，兼容单值字符串与列表配置。"""
+    if value is None:
+        return []
+    if isinstance(value, str):
+        value = [value]
+    if isinstance(value, (tuple, set, list)):
+        normalized = []
+        for item in value:
+            if isinstance(item, str):
+                item = item.strip()
+                if item:
+                    normalized.append(item)
+        return normalized
+    return []
 
 
 class LLMModel(BaseModel):
     """
     llm模型配置:
 
+    设计上遵循 provider + model 的组合方式：
+    - provider 负责连接信息和鉴权
+    - model 负责具体模型的名称、温度和类型
     """
 
     name: str = ""
     model: str = ""
     temperature: float = 0.7
     type: str | list[str] = ""
+    data: dict[str, Any] = Field(default_factory=dict)
+
+    @field_validator("temperature", mode="before")
+    @classmethod
+    def validate_temperature(cls, value: Any) -> float:
+        if value is None:
+            return 0.7
+        try:
+            temperature = float(value)
+        except (TypeError, ValueError) as exc:
+            raise ValueError("temperature 必须是数字") from exc
+        if temperature < 0:
+            raise ValueError("temperature 不能小于 0")
+        return temperature
+
+    @field_validator("type", mode="before")
+    @classmethod
+    def validate_type(cls, value: Any) -> str | list[str]:
+        normalized = normalize_model_type(value)
+        if not normalized:
+            return ""
+        return normalized[0] if len(normalized) == 1 else normalized
 
 
 class LLMProvider(BaseModel):
@@ -77,7 +119,10 @@ class ProviderManager:
 
     @classmethod
     def save_provider_config(cls):
-        from ATRI.system.agent.config import PROVIDER_CONFIG_FILE
+        from ATRI.system.agent.config import (
+            PROVIDER_CONFIG_FILE,
+            load_provider_from_config,
+        )
 
         provider_data = {
             provider.provider_name: provider.model_dump()
@@ -91,6 +136,7 @@ class ProviderManager:
                 default_flow_style=False,
                 sort_keys=False,
             )
+        load_provider_from_config()
 
 
 default_provider = LLMProvider(

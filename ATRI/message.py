@@ -3,7 +3,18 @@ import base64
 from io import BytesIO
 from pathlib import Path
 
+from nonebot.adapters import Event
+from nonebot.adapters import Message as BaseMessage
 from nonebot.adapters.onebot.v11.message import Message, MessageSegment
+from nonebot.adapters.qq import MessageEvent as QQMessageEvent
+from nonebot.adapters.qq import MessageSegment as QQMessageSegment
+from nonebot.adapters.qq.message import Markdown, MessageMarkdown
+from nonebot.adapters.qq.models import (
+    Button,
+    InlineKeyboard,
+    InlineKeyboardRow,
+    MessageKeyboard,
+)
 from nonebot.internal.matcher import Matcher
 
 
@@ -90,7 +101,7 @@ class MessageGroup:
     消息组，用于储存消息并分条发送。
     """
 
-    def __init__(self, matcher: type[Matcher] | None = None):
+    def __init__(self, matcher: Matcher | None = None):
         self.message_list = []
         self.matcher = matcher
 
@@ -103,7 +114,7 @@ class MessageGroup:
         self.message_list.append(message)
         return self
 
-    async def send_message(self, matcher: type[Matcher] | None = None):
+    async def send_message(self, matcher: Matcher | None = None):
         """
         使用指定匹配器逐条发送消息。
         :param matcher: 匹配器
@@ -211,3 +222,56 @@ def file_msg(name: str, data: bytes):
         "file",
         {"name": name, "file": f"base64://{base64.b64encode(data).decode('utf-8')}"},
     )
+
+
+class QQMessage:
+    @staticmethod
+    def md_msg(markdown: str | MessageMarkdown) -> Markdown:
+        return QQMessageSegment.markdown(markdown)
+
+    @staticmethod
+    def cmd(text: str, show: str | None = None, reference: bool = False) -> str:
+        return f'<qqbot-cmd-input text="{text}"{f' show="{show}"' if show else " "} reference="{"true" if reference else "false"}" />'
+
+    @staticmethod
+    def keyboard(
+        keyboard: MessageKeyboard | None = None,
+        id: str | None = None,
+        content: InlineKeyboard | InlineKeyboardRow | Button | None = None,
+    ):
+        if keyboard is None:
+            if id is not None:
+                keyboard = MessageKeyboard(id=id)
+            elif content is not None:
+                if isinstance(content, Button):
+                    content = InlineKeyboardRow(buttons=[content])
+                if isinstance(content, InlineKeyboardRow):
+                    content = InlineKeyboard(rows=[content])
+                keyboard = MessageKeyboard(content=content)
+        return QQMessageSegment.keyboard(keyboard)
+
+
+class ATRIMessage(BaseMessage):
+    def __init__(self, mtype: int | Event | None = None):
+        """
+        0:onebotv11\n
+        1:qq
+        """
+        if isinstance(mtype, Event):
+            if isinstance(mtype, QQMessageEvent):
+                self.mtype = 1
+            self.mtype = 0
+        elif isinstance(mtype, int):
+            self.mtype = mtype
+        else:
+            self.mtype = 0
+
+    async def md(self, md: str):
+        if self.mtype == 1:
+            self.append(QQMessage.md_msg(md))
+            return self
+        else:
+            from ATRI.system.htmlrender.data_source import md_to_pic
+
+            self.append(img_msg(await md_to_pic(md)))
+            return self

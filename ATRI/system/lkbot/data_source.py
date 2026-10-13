@@ -1,10 +1,16 @@
-from ATRI.message import MessageGroup, img_msg, MessageBuilder, PageMessage
-from ATRI.system.htmlrender import md_to_pic
+from ATRI.bot import BotUtils
+from ATRI.message import (
+    ATRIMessage,
+    MessageBuilder,
+    MessageGroup,
+    PageMessage,
+    QQMessage,
+)
 
-from .util import lk_util, user_info_events, UserInfoEvent
-from .data.user import users, user_level_manager
 from .data.item import items
 from .data.shop import shops
+from .data.user import user_level_manager, users
+from .util import UserInfoEvent, lk_util, user_info_events
 
 
 class LKBot:
@@ -12,10 +18,12 @@ class LKBot:
     def get_info(user_id):
         with users.get_user_data(user_id) as user:
             event = UserInfoEvent(user)
-            event.add_result(f'用户 {user.name}:', 5)
-            event.add_result(f'等级:{user.lvl} 升级还需要{user.get_lvl_exp() - user.left_exp}经验', 5)
-            event.add_result(f'ATRI币:{user.money}', 5)
-            event.add_result(f'好感:{user.love}', 5)
+            event.add_result(f"用户 {user.name}:", 5)
+            event.add_result(
+                f"等级:{user.lvl} 升级还需要{user.get_lvl_exp() - user.left_exp}经验", 5
+            )
+            event.add_result(f"ATRI币:{user.money}", 5)
+            event.add_result(f"好感:{user.love}", 5)
             msg = MessageBuilder()
             for r in user_info_events.notify(event).get_result():
                 msg.auto_append(r)
@@ -37,24 +45,47 @@ class LKBot:
         if not items.has_item(item_name):
             return f"找不到指定物品 {item_name}"
         item = items.get_item_by_name(item_name)
-        return f'''{item_name}:
+        return f"""{item_name}:
 {item.get_item_info()}
 类型:{item.get_item_type().value}
 价值:{item.get_item_price_dis()}
-可使用:{item.item_can_use()}'''
+可使用:{item.item_can_use()}"""
 
     @staticmethod
     def bind(user_id, name):
         name = lk_util.clean_str(name)
-        if len(name) > 10 or name == '':
-            return "那个...名称字数超出限制10或为空"
+        if len(name) > 64 or name == "":
+            return "那个...名称字数超出限制64或为空"
         if lk_util.is_valid_user(user_id):
             return f"那个...{user_id} 已绑定名称 {lk_util.get_name(user_id)} 啦"
         if not lk_util.is_valid_name(name):
             return "那个...这个名字不太合适吧"
         if users.add_user(user_id, name):
-            return f"好欸！{user_id} 绑定名称 {name} 成功，咱又多了个新的朋友"
+            return f"好欸！绑定名称 {name} 成功，咱又多了个新的朋友"
         return "那个...此名称已经被使用了，换个名字吧"
+
+    @staticmethod
+    def get_binding_secret(user_id):
+        secret = users.create_binding_secret(user_id)
+        if secret is None:
+            return "请先绑定名称并创建主账号，再获取绑定密钥"
+        return f"绑定密钥：{secret}\n有效期：1小时，成功绑定后立即失效"
+
+    @staticmethod
+    def bind_existing_account(user_id, secret):
+        return users.bind_account_with_secret(user_id, secret)
+
+    @staticmethod
+    def unbind_account(user_id):
+        return users.unbind_account(user_id)
+
+    @staticmethod
+    def force_bind_account(user_id, master_user_id):
+        return users.force_bind_account(user_id, master_user_id)
+
+    @staticmethod
+    def force_unbind_account(user_id):
+        return users.force_unbind_account(user_id)
 
     @staticmethod
     def get_shop_list():
@@ -62,13 +93,14 @@ class LKBot:
         message_list = PageMessage(
             shop_l,
             header=f"商店列表:\n{'-' * 20}\n",
-            footer=f"{'-' * 20}\n页数:{{page}} 商店总数:{{i}}/{{num}}"
+            footer=f"{'-' * 20}\n页数:{{page}} 商店总数:{{i}}/{{num}}",
         )
         return message_list
 
     @staticmethod
-    async def get_goods_list(shop_name):
+    async def get_goods_list(shop_name, mtype: int = 0):
         message = MessageGroup()
+        am = ATRIMessage(mtype)
         if not shops.has_shop(shop_name):
             return message.add_message(f"找不到商店名 {shop_name}")
         shop = shops.get_shop_by_name(shop_name)
@@ -80,17 +112,25 @@ class LKBot:
         for item_name in item_list:
             if i == j * 20:
                 resp += f"\n> 页数:{j} 商品总数:{i}/{num}"
-                message.add_message(img_msg(await md_to_pic(resp)))
-                resp = '|编号|商品名称|货币|价格|限制|\n|:-:|:-:|:-:|:-:|:-:|\n'
+                message.add_message(await am.md(resp))
+                resp = "|编号|商品名称|货币|价格|限制|\n|:-:|:-:|:-:|:-:|:-:|\n"
                 j += 1
             i += 1
             index = shop.get_goods_index(item_name)
             limit = str(shop.get_goods_limit_by_index(index))
-            if limit == '0':
+            if limit == "0":
                 limit = "无限制"
-            resp += f'|{i}|{item_name}|{shop.get_goods_coin_type_by_index(index)}|{shop.get_goods_price_by_index(index)}|{limit}|\n'
+            item_labe = (
+                item_name
+                if mtype != 1
+                else QQMessage.cmd(
+                    f"{BotUtils.get_command_start()}购买 {shop_name} {item_name}",
+                    item_name,
+                )
+            )
+            resp += f"|{i}|{item_labe}|{shop.get_goods_coin_type_by_index(index)}|{shop.get_goods_price_by_index(index)}|{limit}|\n"
         resp += f"\n> 页数:{j} 商品总数:{i}/{num}"
-        message.add_message(img_msg(await md_to_pic(resp)))
+        message.add_message(await am.md(resp))
         return message
 
     @staticmethod
@@ -98,13 +138,13 @@ class LKBot:
         member_list = await bot.get_group_member_list(group_id=group_id)
         members = []
         for member in member_list:
-            user_id = str(member['user_id'])
+            user_id = str(member["user_id"])
             if lk_util.is_valid_user(user_id):
                 members.append(f"{lk_util.get_name(user_id)}:{user_id}")
         message_list = PageMessage(
             members,
             header="本群用户列表:\n",
-            footer=f"页数:{{page}} 用户总数:{{i}}/{{num}}"
+            footer="页数:{{page}} 用户总数:{{i}}/{{num}}",
         )
         return message_list
 
@@ -117,23 +157,29 @@ class LKBot:
         message_list = PageMessage(
             members,
             header="所有用户列表:\n",
-            footer=f"页数:{{page}} 用户总数:{{i}}/{{num}}"
+            footer="页数:{{page}} 用户总数:{{i}}/{{num}}",
         )
         return message_list
 
     @classmethod
     async def get_rank(cls, rank_name: str):
-        if rank_name == '经验':
+        if rank_name == "经验":
             with users.sql.get_cursor() as cursor:
-                r = cursor.execute("SELECT NAME, EXP FROM USERINFO ORDER BY EXP DESC LIMIT 10")
+                r = cursor.execute(
+                    "SELECT NAME, EXP FROM USERINFO ORDER BY EXP DESC LIMIT 10"
+                )
                 return f"经验排行榜:\n{'\n'.join(f'{i:02d}:{d[0]} - {user_level_manager.to_lvl(d[1])}级{user_level_manager.get_left_exp(d[1])}经验' for i, d in enumerate(r, 1))}"
-        elif rank_name == '好感':
+        elif rank_name == "好感":
             with users.sql.get_cursor() as cursor:
-                r = cursor.execute("SELECT NAME, LOVE FROM USERINFO ORDER BY LOVE DESC LIMIT 10")
+                r = cursor.execute(
+                    "SELECT NAME, LOVE FROM USERINFO ORDER BY LOVE DESC LIMIT 10"
+                )
                 return f"好感排行榜:\n{'\n'.join(f'{i:02d}:{d[0]} - {d[1]}好感' for i, d in enumerate(r, 1))}"
-        elif rank_name == 'ATRI币':
+        elif rank_name == "ATRI币":
             with users.sql.get_cursor() as cursor:
-                r = cursor.execute("SELECT NAME, MONEY FROM USERINFO ORDER BY MONEY DESC LIMIT 10")
+                r = cursor.execute(
+                    "SELECT NAME, MONEY FROM USERINFO ORDER BY MONEY DESC LIMIT 10"
+                )
                 return f"ATRI币排行榜:\n{'\n'.join(f'{i:02d}:{d[0]} - {d[1]}ATRI币' for i, d in enumerate(r, 1))}"
         else:
             return "没有指定的排行榜"

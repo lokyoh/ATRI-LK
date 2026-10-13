@@ -1,10 +1,14 @@
-from nonebot.adapters.onebot.v11 import Bot, Message
+from nonebot.adapters import Bot
+from nonebot.adapters.onebot.v11 import Bot as OneBot
+from nonebot.adapters.onebot.v11 import Message
+from nonebot.adapters.qq import Bot as QQBot
+from nonebot.drivers import Request
 
 from ATRI import conf
 from ATRI.exceptions import save_error, str_traceback
 from ATRI.log import log
 
-from .model import Group, User
+from .model import Group, NewPanel, Panel, User
 from .statistics import manual_add_server_statistic
 from .status import BotStatus, GlobalStatus
 
@@ -20,12 +24,12 @@ class BotUtils:
         :param platform: 平台
         :param appid: 官qid
         """
-        if platform != "qq":
-            return None
-        if user_id.isdigit():
-            return f"http://q1.qlogo.cn/g?b=qq&nk={user_id}&s=640"
-        else:
-            return f"https://q.qlogo.cn/qqapp/{appid}/{user_id}/640"
+        if platform == "onebot11":
+            if user_id.isdigit():
+                return f"http://q1.qlogo.cn/g?b=qq&nk={user_id}&s=640"
+            else:
+                return f"https://q.qlogo.cn/qqapp/{appid}/{user_id}/640"
+        return None
 
     @classmethod
     async def get_friend_list(cls, bot: Bot) -> list[User]:
@@ -34,9 +38,11 @@ class BotUtils:
         :param bot: Bot对象
         :return: 好友列表
         """
-        raw_friend_list = await bot.get_friend_list()
-        friend_list = [User.model_validate(f) for f in raw_friend_list]
-        return friend_list
+        if isinstance(bot, OneBot):
+            raw_friend_list = await bot.get_friend_list()
+            friend_list = [User.model_validate(f) for f in raw_friend_list]
+            return friend_list
+        return []
 
     @classmethod
     async def get_group_list(cls, bot: Bot) -> list[Group]:
@@ -45,9 +51,11 @@ class BotUtils:
         :param bot: Bot对象
         :return: 群列表
         """
-        raw_group_list = await bot.get_group_list()
-        group_list = [Group.model_validate(g) for g in raw_group_list]
-        return group_list
+        if isinstance(bot, OneBot):
+            raw_group_list = await bot.get_group_list()
+            group_list = [Group.model_validate(g) for g in raw_group_list]
+            return group_list
+        return []
 
     @classmethod
     async def send_message(
@@ -113,3 +121,29 @@ class BotUtils:
     @classmethod
     def get_command_start(cls) -> str:
         return conf.BotConfig.command_start[0] if conf.BotConfig.command_start else ""
+
+    @staticmethod
+    async def add_qq_panel(bot: QQBot, panel: NewPanel) -> None:
+        request = Request(
+            "POST",
+            bot.adapter.get_api_base().joinpath("v2", "panels"),
+            json=panel.model_dump(),
+        )
+        return await bot._request(request)
+
+    @staticmethod
+    async def set_qq_panel(bot: QQBot, pid: str, panel: Panel) -> None:
+        request = Request(
+            "PUT",
+            bot.adapter.get_api_base().joinpath("v2", "panels", pid),
+            json={"panel": panel.model_dump()},
+        )
+        return await bot._request(request)
+
+    @staticmethod
+    async def get_qq_panel(bot: QQBot, pid: str) -> None:
+        request = Request(
+            "GET",
+            bot.adapter.get_api_base().joinpath("v2", "panels", pid),
+        )
+        return await bot._request(request)

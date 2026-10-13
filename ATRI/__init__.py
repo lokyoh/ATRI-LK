@@ -23,10 +23,14 @@ def driver():
 
 
 def init():
-    nonebot.init(**conf_m.get_runtime_conf())
+    conf = conf_m.get_runtime_conf()
+    conf.setdefault("driver", "~fastapi+~websockets+~httpx")
+    nonebot.init(**conf)
     from nonebot.adapters.onebot.v11 import Adapter
+    from nonebot.adapters.qq import Adapter as QQAdapter
 
     driver().register_adapter(Adapter)
+    driver().register_adapter(QQAdapter)
     from ATRI.load import load_atri
 
     load_atri()

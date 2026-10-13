@@ -1,15 +1,15 @@
 import json
 
-from ATRI.utils.lock import GroupLock
 from ATRI.system.lkapi.entity.item import ToolItemStack
-from ATRI.system.lkapi.entity.user import get_user_data, BackPack
+from ATRI.system.lkapi.entity.user import BackPack, get_user_data, user_manager
+from ATRI.utils.lock import GroupLock
 
+from ..database import AchievementData, User, fishing_table
 from .achievement import check_achievement
-from .bait import bait_dict, Bait
-from .exception import NoFishingRod, NoBait, FishingException
-from .fishing_rod import fishing_rod_dict, FishingRod
-from .fishing_tackle import fishing_tackle_dict, FishingTackle
-from ..database import fishing_table, User, AchievementData
+from .bait import Bait, bait_dict
+from .exception import FishingException, NoBait, NoFishingRod
+from .fishing_rod import FishingRod, fishing_rod_dict
+from .fishing_tackle import FishingTackle, fishing_tackle_dict
 
 fishing_user_lock = GroupLock()
 
@@ -50,26 +50,40 @@ class FishingUser:
 
     def __str__(self):
         p = None
-        if self.position == 'lake':
-            p = '湖'
-        elif self.position == 'river':
-            p = '河'
-        elif self.position == 'ocean':
-            p = '海'
+        if self.position == "lake":
+            p = "湖"
+        elif self.position == "river":
+            p = "河"
+        elif self.position == "ocean":
+            p = "海"
         return (
-            f'钓鱼等级:{self.level} 经验:{self.xp}\n'
-            f'当前位置:{p}\n'
-            f'装备:\n'
-            f'鱼竿:{'未装备' if self.fishing_rod is None or self.fishing_rod.durable <= self.fishing_rod_damage else
-            f'{self.fishing_rod.name} [{self.fishing_rod.durable - self.fishing_rod_damage}/{self.fishing_rod.durable}]'}\n'
-            f'鱼饵:{'未装备' if self.bait is None or self.bait_num <= 0 else
-            f'{self.bait.name}*{self.bait_num}'}\n'
-            f'鱼具:{'未装备' if self.fishing_tackle is None or self.fishing_tackle.durable <= self.fishing_tackle_damage else
-            f'{self.fishing_tackle.name} [{self.fishing_tackle.durable - self.fishing_tackle_damage}/{self.fishing_tackle.durable}]'}'
+            f"钓鱼等级:{self.level} 经验:{self.xp}\n"
+            f"当前位置:{p}\n"
+            f"装备:\n"
+            f"鱼竿:{
+                '未装备'
+                if self.fishing_rod is None
+                or self.fishing_rod.durable <= self.fishing_rod_damage
+                else f'{self.fishing_rod.name} [{self.fishing_rod.durable - self.fishing_rod_damage}/{self.fishing_rod.durable}]'
+            }\n"
+            f"鱼饵:{
+                '未装备'
+                if self.bait is None or self.bait_num <= 0
+                else f'{self.bait.name}*{self.bait_num}'
+            }\n"
+            f"鱼具:{
+                '未装备'
+                if self.fishing_tackle is None
+                or self.fishing_tackle.durable <= self.fishing_tackle_damage
+                else f'{self.fishing_tackle.name} [{self.fishing_tackle.durable - self.fishing_tackle_damage}/{self.fishing_tackle.durable}]'
+            }"
         )
 
     def get_fishing_rod(self) -> FishingRod | None:
-        if self.fishing_rod is None or self.fishing_rod.durable <= self.fishing_rod_damage:
+        if (
+            self.fishing_rod is None
+            or self.fishing_rod.durable <= self.fishing_rod_damage
+        ):
             self.fishing_rod = None
             self.fishing_rod_damage = 0
             raise NoFishingRod()
@@ -119,8 +133,9 @@ class FishingUser:
         if self.fishing_rod and self.fishing_rod.durable > self.fishing_rod_damage:
             bp = user_data.backpack
             bp.set_item_with_stack(
-                ToolItemStack(bp.get_item_stack(self.fishing_rod.name), self.fishing_rod.durable)
-                .add_used_tool(self.fishing_rod_damage)
+                ToolItemStack(
+                    bp.get_item_stack(self.fishing_rod.name), self.fishing_rod.durable
+                ).add_used_tool(self.fishing_rod_damage)
             )
             self.fishing_rod = None
             self.fishing_rod_damage = 0
@@ -132,11 +147,16 @@ class FishingUser:
             self.bait_num = 0
 
     def remove_tackle(self, user_data):
-        if self.fishing_tackle and self.fishing_tackle.durable > self.fishing_tackle_damage:
+        if (
+            self.fishing_tackle
+            and self.fishing_tackle.durable > self.fishing_tackle_damage
+        ):
             bp = user_data.backpack
             bp.set_item_with_stack(
-                ToolItemStack(bp.get_item_stack(self.fishing_tackle.name), self.fishing_tackle.durable)
-                .add_used_tool(self.fishing_tackle_damage)
+                ToolItemStack(
+                    bp.get_item_stack(self.fishing_tackle.name),
+                    self.fishing_tackle.durable,
+                ).add_used_tool(self.fishing_tackle_damage)
             )
             self.fishing_tackle = None
             self.fishing_tackle_damage = 0
@@ -192,36 +212,53 @@ class FishingUser:
         data = self.achievement.fish_data
         if name not in data:
             data[name] = {}
-        data[name]['times'] = data[name].get('times', 0) + 1
-        if (not data[name].get('max', False)) and fish_data.length and fish_data.length > data[name].get('length', 0):
-            data[name]['length'] = fish_data.length
-            if fish_data.length == fish_data.fish.size['max']:
-                data[name]['max'] = True
-        self.achievement.achievement_data['times'] = self.achievement.achievement_data.get('times', 0) + 1
+        data[name]["times"] = data[name].get("times", 0) + 1
+        if (
+            (not data[name].get("max", False))
+            and fish_data.length
+            and fish_data.length > data[name].get("length", 0)
+        ):
+            data[name]["length"] = fish_data.length
+            if fish_data.length == fish_data.fish.size["max"]:
+                data[name]["max"] = True
+        self.achievement.achievement_data["times"] = (
+            self.achievement.achievement_data.get("times", 0) + 1
+        )
         check_achievement(self.achievement, fish_data, msg)
         return msg
 
     def to_dict(self):
         return {
-            'user_id': self.user_id,
-            'fishing_rod': f'{self.fishing_rod.name}' if self.fishing_rod is not None else '',
-            'fishing_rod_damage': self.fishing_rod_damage,
-            'bait': f'{self.bait.name}' if self.bait is not None else '',
-            'bait_num': self.bait_num,
-            'fishing_tackle': f'{self.fishing_tackle}' if self.fishing_tackle is not None else '',
-            'fishing_tackle_damage': self.fishing_tackle_damage,
-            'position': self.position,
-            'xp': self.xp,
-            'level': self.level
+            "user_id": self.user_id,
+            "fishing_rod": f"{self.fishing_rod.name}"
+            if self.fishing_rod is not None
+            else "",
+            "fishing_rod_damage": self.fishing_rod_damage,
+            "bait": f"{self.bait.name}" if self.bait is not None else "",
+            "bait_num": self.bait_num,
+            "fishing_tackle": f"{self.fishing_tackle}"
+            if self.fishing_tackle is not None
+            else "",
+            "fishing_tackle_damage": self.fishing_tackle_damage,
+            "position": self.position,
+            "xp": self.xp,
+            "level": self.level,
         }
 
     def save_data(self):
         fishing_table.update(
-            (('DATA', 'ACHI'), (json.dumps(self.to_dict(), ensure_ascii=False), self.achievement.model_dump_json()),),
-            f"ID={self.user_id}")
+            (
+                ("DATA", "ACHI"),
+                (
+                    json.dumps(self.to_dict(), ensure_ascii=False),
+                    self.achievement.model_dump_json(),
+                ),
+            ),
+            f"ID={self.user_id}",
+        )
 
     def __setattr__(self, key, value):
-        if not key.startswith('_'):
+        if not key.startswith("_"):
             self._modify = True
         super().__setattr__(key, value)
 
@@ -236,14 +273,21 @@ class FishingUser:
         return False
 
 
-def get_fish_user_data(user_id: int) -> FishingUser:
+def get_fish_user_data(user_id: int | str) -> FishingUser:
+    user_id = user_manager.resolve_user_id(user_id)
     data = fishing_table.select("DATA, ACHI", f"ID={user_id}")
     if len(data) == 0:
         user = User()
         achi = AchievementData()
-        fishing_table.insert("ID, DATA, ACHI", (int(user_id), user.model_dump_json(), achi.model_dump_json()))
+        fishing_table.insert(
+            "ID, DATA, ACHI",
+            (user_id, user.model_dump_json(), achi.model_dump_json()),
+        )
         user_info = FishingUser(user_id, user, achi)
     else:
-        user_info = FishingUser(user_id, User.model_validate_json(data[0][0]),
-                                AchievementData.model_validate_json(data[0][1]))
+        user_info = FishingUser(
+            user_id,
+            User.model_validate_json(data[0][0]),
+            AchievementData.model_validate_json(data[0][1]),
+        )
     return user_info

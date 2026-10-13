@@ -1,7 +1,15 @@
 from ATRI.exceptions import str_traceback
 
 from ..utils import log
-from .contents import LLMContent, LLMContents
+from .contents import (
+    LLMContent,
+    LLMContents,
+    LLMMessage,
+    LLMMessages,
+    Sys1Content,
+    Sys1Question,
+)
+from .embedding import create_embedding_model
 from .gemini import create_gemini_model
 from .model import (
     ALL_MODEL_RESP_ERR,
@@ -12,11 +20,16 @@ from .model import (
     ModelType,
 )
 from .openai import create_openai_model
-from .provider import ProviderManager
+from .provider import LLMModel, LLMProvider, ProviderManager
+from .system_one import SystemOneModel, create_sys1_model
+from .tts import create_tts_model
 
 provider_type = {
     "openai": create_openai_model,
     "gemini": create_gemini_model,
+    "embedding": create_embedding_model,
+    "tts": create_tts_model,
+    "sys1": create_sys1_model,
 }
 
 llm_manager = LLMManager()
@@ -30,12 +43,13 @@ def load_models_from_config():
     for _provider in ProviderManager.providers.values():
         if _provider.provider_type in provider_type:
             for m in _provider.models:
-                if isinstance(m.type, str):
-                    _type = [m.type]
-                else:
-                    _type = m.type
-                for t in _type:
-                    if t in ModelType:
+                type_ = [m.type] if isinstance(m.type, str) else m.type
+                type_ = [t for t in type_ if t]
+                if not type_:
+                    log.warning(f"{m.name}没有配置模型类型，已跳过")
+                    continue
+                for t in type_:
+                    if t in {model_type.value for model_type in ModelType}:
                         try:
                             llm_manager.register_model(
                                 model=provider_type[_provider.provider_type](
@@ -44,6 +58,7 @@ def load_models_from_config():
                                     endpoint=_provider.url,
                                     api_key=_provider.api_key,
                                     temperature=m.temperature,
+                                    data=m.data,
                                 ),
                                 model_type=t,
                             )
@@ -61,11 +76,21 @@ __all__ = [
     "LLMContent",
     "LLMContents",
     "LLMManager",
+    "LLMMessage",
+    "LLMMessages",
+    "LLMModel",
+    "LLMProvider",
     "LLMResponse",
     "ModelRequestError",
     "ModelType",
+    "Sys1Content",
+    "Sys1Question",
+    "SystemOneModel",
+    "create_embedding_model",
     "create_gemini_model",
     "create_openai_model",
+    "create_sys1_model",
+    "create_tts_model",
     "llm_manager",
     "load_models_from_config",
     "provider_type",

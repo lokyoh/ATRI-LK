@@ -1,16 +1,10 @@
-from . import bot, entity, utils
-from .bot import PLUGIN_DIR, PLUGIN_VERSION, db, util
-from .bot.config import configs
+from . import bot as bot
+from . import entity as entity
+from . import utils as utils
+from .bot import PLUGIN_DIR as PLUGIN_DIR
+from .bot import PLUGIN_VERSION as PLUGIN_VERSION
+from .bot import config as config
+from .bot import lk_db as lk_db
+from .bot import lk_util as lk_util
 
-__all__ = [
-    "PLUGIN_DIR",
-    "PLUGIN_VERSION",
-    "bot",
-    "configs",
-    "db",
-    "entity",
-    "util",
-    "utils",
-]
-
-API_VERSION = 1
+API_VERSION = 2

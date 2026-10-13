@@ -1,10 +1,22 @@
+from pathlib import Path
+
 from fastapi import APIRouter
 from fastapi.responses import JSONResponse
 
+from ATRI.configs import Field
 from ATRI.exceptions import str_traceback
 from ATRI.log import log
-from ATRI.system.agent.config import AgentConfig, config_manager
-from ATRI.system.agent.llm.provider import LLMModel, LLMProvider, ProviderManager
+from ATRI.system.agent.config import config
+from ATRI.system.agent.llm import (
+    LLMModel,
+    LLMProvider,
+    ModelType,
+    ProviderManager,
+    Sys1Content,
+    Sys1Question,
+    provider_type,
+)
+from ATRI.system.agent.llm.token import MTYM, TokenUsageData
 
 from ....base_model import Result
 from ....utils import authentication
@@ -12,20 +24,75 @@ from ....utils import authentication
 router = APIRouter(prefix="/agent")
 
 
+def _flatten_config_updates(
+    values: dict, fields: dict[str, Field], prefix: str = ""
+) -> dict[str, object]:
+    updates: dict[str, object] = {}
+    for key, value in values.items():
+        field = fields.get(key)
+        if field is None:
+            raise ValueError(f"未知的配置字段: {prefix}{key}")
+        if not field.editable:
+            raise ValueError(f"配置字段不可编辑: {prefix}{key}")
+
+        field_path = f"{prefix}{key}"
+        if field.children:
+            if not isinstance(value, dict):
+                raise ValueError(f"配置字段必须是对象: {field_path}")
+            updates.update(
+                _flatten_config_updates(
+                    value,
+                    field.children,
+                    f"{field_path}.",
+                )
+            )
+            continue
+
+        expected_type = field.type_
+        if expected_type is bool:
+            valid_type = isinstance(value, bool)
+        elif expected_type is int:
+            valid_type = isinstance(value, int) and not isinstance(value, bool)
+        elif expected_type is float:
+            valid_type = isinstance(value, (int, float)) and not isinstance(value, bool)
+        else:
+            valid_type = isinstance(value, expected_type)
+        if not valid_type:
+            raise ValueError(f"配置字段类型不正确: {field_path}")
+
+        if (
+            field.item_type
+            and isinstance(value, list)
+            and not all(isinstance(item, field.item_type) for item in value)
+        ):
+            raise ValueError(f"配置列表项类型不正确: {field_path}")
+
+        if field_path.endswith(".api_key") and not value:
+            continue
+        updates[field_path] = value
+    return updates
+
+
 @router.get(
     "/get_settings",
     dependencies=[authentication()],
-    response_model=Result[AgentConfig],
+    response_model=Result[dict],
     response_class=JSONResponse,
     description="获取agent插件配置",
 )
-async def _() -> Result[AgentConfig]:
+async def _() -> Result[dict]:
     try:
-        agent_config: AgentConfig = config_manager.config().model_copy(deep=True)
-        agent_config.embedding.api_key = ""
-        agent_config.search.api_key = ""
-        agent_config.tts.api_key = ""
-        return Result.ok(agent_config, "拿到信息啦!")
+        config_schema = config.describe()
+
+        def redact_api_keys(fields: list[dict]) -> None:
+            for field in fields:
+                if field["key"] == "api_key":
+                    field["value"] = ""
+                if children := field.get("children"):
+                    redact_api_keys(children)
+
+        redact_api_keys(config_schema["fields"])
+        return Result.ok(config_schema, "拿到信息啦!")
     except Exception as e:
         log.error(f"{router.prefix}/get_settings 调用错误:{str_traceback(e)}")
         return Result.fail(f"发生了一点错误捏 {type(e)}: {e}")
@@ -38,18 +105,16 @@ async def _() -> Result[AgentConfig]:
     response_class=JSONResponse,
     description="设置agent插件配置",
 )
-async def _(settings: AgentConfig) -> Result:
+async def _(settings: dict[str, object]) -> Result:
     try:
-        current_settings: AgentConfig = config_manager.config()
-        settings.search.api_key = (
-            settings.search.api_key or current_settings.search.api_key
+        updates = _flatten_config_updates(
+            settings,
+            type(config)._fields,
         )
-        settings.tts.api_key = settings.tts.api_key or current_settings.tts.api_key
-        settings.embedding.api_key = (
-            settings.embedding.api_key or current_settings.embedding.api_key
-        )
-        config_manager.change_config(settings)
+        config.update(updates)
         return Result.ok(info="设置成功!")
+    except ValueError as e:
+        return Result.fail(str(e))
     except Exception as e:
         log.error(f"{router.prefix}/set_settings 调用错误:{str_traceback(e)}")
         return Result.fail(f"发生了一点错误捏 {type(e)}: {e}")
@@ -120,6 +185,7 @@ async def _(provider_name, provider: LLMProvider) -> Result:
         if current_provider and not provider.api_key:
             provider.api_key = current_provider.api_key
         ProviderManager.set_provider(provider_name, provider)
+        ProviderManager.save_provider_config()
         return Result.ok(info="设置成功!")
     except Exception as e:
         log.error(f"{router.prefix}/set_provider 调用错误:{str_traceback(e)}")
@@ -157,4 +223,105 @@ async def _(provider_name: str, model_name: str) -> Result:
         return Result.ok(info="删除成功!")
     except Exception as e:
         log.error(f"{router.prefix}/del_model 调用错误:{str_traceback(e)}")
+        return Result.fail(f"发生了一点错误捏 {type(e)}: {e}")
+
+
+@router.post(
+    "/test_model",
+    dependencies=[authentication()],
+    response_model=Result,
+    response_class=JSONResponse,
+    description="测试指定模型的 API 连通性",
+)
+async def _(provider_name: str, model_name: str) -> Result:
+    provider = ProviderManager.providers.get(provider_name)
+    if not provider:
+        return Result.fail(f"未找到 Provider: {provider_name}", code=404)
+    model_config = next(
+        (model for model in provider.models if model.name == model_name), None
+    )
+    if not model_config:
+        return Result.fail(f"未找到模型: {model_name}", code=404)
+    model_factory = provider_type.get(provider.provider_type)
+    if not model_factory:
+        return Result.fail(
+            f"暂不支持的 Provider 类型: {provider.provider_type}", code=400
+        )
+    test_model = None
+    response = None
+    test_content: str | Sys1Content = "请仅回复 OK。"
+    if provider.provider_type == "sys1":
+        test_content = Sys1Content(
+            state="ATRI 模型 API 连通性测试",
+            questions={
+                "connectivity": Sys1Question(
+                    type="noul",
+                    instructions="确认请求成功，并简短回复 OK。",
+                )
+            },
+        )
+    elif provider.provider_type == "embedding":
+        test_content = "ATRI model API connectivity test"
+    try:
+        test_model = model_factory(
+            name=model_config.name,
+            model=model_config.model,
+            endpoint=provider.url,
+            api_key=provider.api_key,
+            temperature=model_config.temperature,
+            data=model_config.data,
+        )
+        response = await test_model.call(test_content)
+        if response.content is None or response.content == "" or response.content == []:
+            return Result.fail("API 请求成功，但模型未返回有效内容")
+        return Result.ok(info=f"API 测试成功：{provider_name}/{model_name}")
+    except Exception as e:
+        log.error(f"{router.prefix}/test_model 调用错误:{str_traceback(e)}")
+        return Result.fail(f"API 测试失败: {e}")
+    finally:
+        if provider.provider_type == "tts":
+            output_path = getattr(response, "content", None)
+            if isinstance(output_path, Path):
+                try:
+                    output_path.unlink(missing_ok=True)
+                except OSError as e:
+                    log.warning(f"删除 API 测试临时音频失败:{e}")
+
+
+@router.post(
+    "/get_provider_type",
+    dependencies=[authentication()],
+    response_model=Result[list[str]],
+    response_class=JSONResponse,
+    description="获取注册的模型供应商类型",
+)
+async def _() -> Result[list[str]]:
+    p_type = list(provider_type)
+    return Result.ok(info="拿到信息啦!", data=p_type)
+
+
+@router.post(
+    "/get_model_type",
+    dependencies=[authentication()],
+    response_model=Result[list[str]],
+    response_class=JSONResponse,
+    description="获取注册的模型类型",
+)
+async def _() -> Result[list[str]]:
+    m_type = [type_.value for type_ in ModelType]
+    return Result.ok(info="拿到信息啦!", data=m_type)
+
+
+@router.get(
+    "/get_token_usage",
+    dependencies=[authentication()],
+    response_model=Result[dict[str, list[TokenUsageData]]],
+    response_class=JSONResponse,
+    description="获取模型 Token 用量记录",
+)
+async def _() -> Result[dict[str, list[TokenUsageData]]]:
+    try:
+        return Result.ok(data=MTYM.get_all_usage(), info="拿到信息啦!")
+    except Exception as e:
+        log.error(f"{router.prefix}/get_token_usage 调用错误:{str_traceback(e)}")
         return Result.fail(f"发生了一点错误捏 {type(e)}: {e}")

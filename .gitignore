@@ -19,4 +19,4 @@ __pycache__/
 !/plugins/lkpet/
 !/plugins/lkfishing/
 !/plugins/signin/
-!/plugins/feed.py
+!/plugins/feed/

@@ -3,6 +3,9 @@ from datetime import timedelta
 
 import nonebot
 from nonebot.adapters import Bot
+from nonebot.adapters.onebot.v11 import Bot as OneBot
+from nonebot.adapters.qq import Bot as QQBot
+from nonebot.adapters.qq.models import User as QQUser
 from nonebot.drivers import Driver
 from tortoise.functions import Count
 
@@ -16,7 +19,7 @@ from ATRI.service import ServiceTools
 from ATRI.system.manage import BotManager
 from ATRI.utils.datetime import fromtimestamp, now
 
-from ....config import AVA_URL, GROUP_AVA_URL, QueryDateType
+from ....config import GROUP_AVA_URL, QueryDateType
 from .model import (
     ActiveGroup,
     BaseInfo,
@@ -68,16 +71,27 @@ class ApiDataSource:
         返回:
             TemplateBaseInfo: bot信息
         """
-        login_info = None
+        nickname = bot.self_id
+        ava_url = ""
         try:
-            login_info = await bot.get_login_info()
+            if isinstance(bot, OneBot):
+                login_info = await bot.get_login_info()
+                nickname = login_info["nickname"] if login_info else bot.self_id
+                ava_url = BotUtils.get_user_avatar_url(bot.self_id, "onebot11")
+            if isinstance(bot, QQBot):
+                try:
+                    login_info: QQUser = await bot.me()
+                    nickname = login_info.username
+                    ava_url = login_info.avatar
+                except Exception:
+                    log.warning("QQ获取信息失败")
         except Exception as e:
             log.warning(f"调用接口get_login_info失败:{str_traceback(e)}")
         return TemplateBaseInfo(
             bot=bot,
             self_id=bot.self_id,
-            nickname=login_info["nickname"] if login_info else bot.self_id,
-            ava_url=AVA_URL.format(bot.self_id),
+            nickname=nickname,
+            ava_url=ava_url,
         )
 
     @classmethod
@@ -171,10 +185,12 @@ class ApiDataSource:
             created_at__gte=_now - timedelta(hours=_now.hour, minutes=_now.minute)
         ).count()
         week_count = await query.filter(
-            created_at__gte=_now - timedelta(days=7, hours=_now.hour, minutes=_now.minute)
+            created_at__gte=_now
+            - timedelta(days=7, hours=_now.hour, minutes=_now.minute)
         ).count()
         month_count = await query.filter(
-            created_at__gte=_now - timedelta(days=30, hours=_now.hour, minutes=_now.minute)
+            created_at__gte=_now
+            - timedelta(days=30, hours=_now.hour, minutes=_now.minute)
         ).count()
         year_count = await query.filter(
             created_at__gte=_now
@@ -207,10 +223,12 @@ class ApiDataSource:
             created_at__gte=_now - timedelta(hours=_now.hour, minutes=_now.minute)
         ).count()
         week_count = await query.filter(
-            created_at__gte=_now - timedelta(days=7, hours=_now.hour, minutes=_now.minute)
+            created_at__gte=_now
+            - timedelta(days=7, hours=_now.hour, minutes=_now.minute)
         ).count()
         month_count = await query.filter(
-            created_at__gte=_now - timedelta(days=30, hours=_now.hour, minutes=_now.minute)
+            created_at__gte=_now
+            - timedelta(days=30, hours=_now.hour, minutes=_now.minute)
         ).count()
         year_count = await query.filter(
             created_at__gte=_now

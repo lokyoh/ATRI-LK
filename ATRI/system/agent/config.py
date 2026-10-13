@@ -2,10 +2,9 @@ import os
 
 import yaml
 
-from ATRI.configs import PluginConfig
+from ATRI.configs import Field, PluginConfig
 from ATRI.dir import SYS_CONFIG_DIR
 from ATRI.log import log
-from ATRI.utils.model import BaseModel
 
 from ...exceptions import str_traceback
 from .llm.provider import LLMProvider, ProviderManager, default_provider
@@ -14,46 +13,37 @@ from .service import plugin
 PROVIDER_CONFIG_FILE = SYS_CONFIG_DIR / "provider.yml"
 
 
-class SearchConfig(BaseModel):
-    enable: bool = False
-    provider: str = "tavily"
-    api_key: str = ""
+class AgentConfig(PluginConfig):
+    max_history = Field(
+        int,
+        30,
+        "最大历史消息数",
+        "包含Agent自己发送的消息,提高此值可使Agent获取更多历史聊天,但也会消耗更多Token,默认值30",
+        min=10,
+    )
+    max_thinking_times = Field(
+        int,
+        20,
+        "最大思考轮数",
+        "允许Agnet最高思考次数,当遇到需要大量思考情况可提高此值,默认值20",
+        min=5,
+    )
+    search = Field(
+        dict,
+        "搜索API配置",
+        children={
+            "enable": Field(bool, False, "启用联网搜索"),
+            "provider": Field(str, "tavily", "搜索服务"),
+            "api_key": Field(str, "", "搜索 API 密钥"),
+        },
+    )
 
 
-class TTSConfig(BaseModel):
-    enable: bool = False
-    model: str = ""
-    url: str = ""
-    voice_id: str = ""
-    api_key: str = ""
-
-
-class EmbeddingConfig(BaseModel):
-    enable: bool = False
-    model: str = ""
-    url: str = ""
-    api_key: str = ""
-
-
-class AgentConfig(BaseModel):
-    """
-    agent插件设置:
-    """
-
-    max_history: int = 20
-    max_thinking_times: int = 15
-    search: SearchConfig = SearchConfig()
-    tts: TTSConfig = TTSConfig()
-    embedding: EmbeddingConfig = EmbeddingConfig()
-
-
-config_manager: PluginConfig = plugin.add_plugin_config(AgentConfig)
-config: AgentConfig = config_manager.config()
+config: AgentConfig = plugin.add_plugin_config(AgentConfig)
 
 
 def reload_config():
-    global config
-    config = plugin.plugin_config().load_config()
+    config.load()
 
 
 def load_provider_from_config():

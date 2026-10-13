@@ -1,10 +1,12 @@
 import asyncio
 
 from nonebot.adapters.onebot.v11 import Message, MessageEvent
+from nonebot.adapters.qq import MessageEvent as QQMessageEvent
 from nonebot.internal.matcher import Matcher
 from nonebot.internal.params import ArgPlainText
 
-from ATRI.message import img_msg
+from ATRI.bot import BotUtils
+from ATRI.message import ATRIMessage, QQMessage, img_msg
 from ATRI.service import Service
 from ATRI.system.htmlrender import md_to_pic
 from ATRI.system.lkapi.bot import util as lk_util
@@ -18,16 +20,16 @@ from .data.fish import FishData
 from .data.user import get_fish_user_data
 from .data_source import FishingController
 
-plugin = Service(
-    "钓鱼", "ATRI的钓鱼插件", "0.3.3", Service.ServiceType.ENTERTAINMENT
-).main_cmd("钓鱼")
+plugin = Service("钓鱼", "ATRI的钓鱼插件", "0.4.0", Service.ServiceType.GAME).main_cmd(
+    "钓鱼"
+)
 
 player_info = plugin.cmd_as_group("我的信息", "查看自己的个人信息")
 
 
 @player_info.handle([IsLkUser])
-async def _(event: MessageEvent):
-    info = get_fish_user_data(event.user_id)
+async def _(event: MessageEvent | QQMessageEvent):
+    info = get_fish_user_data(event.get_user_id())
     await player_info.finish(str(info))
 
 
@@ -35,17 +37,17 @@ achievement = plugin.cmd_as_group("成就", "查看个人成就")
 
 
 @achievement.handle([IsLkUser])
-async def _(event: MessageEvent):
+async def _(event: MessageEvent | QQMessageEvent):
     a_l = []
     u_a_l = []
-    with get_fish_user_data(event.user_id) as user:
+    with get_fish_user_data(event.get_user_id()) as user:
         achieved = user.achievement.achieve
         for a in achievements:
             if a.name not in achieved:
                 u_a_l.append(f"- {a.name} - {a.description}")
             else:
                 a_l.append(f"- {a.name} - {a.description}")
-    msg = f"# {lk_util.get_name(event.user_id)}的钓鱼成就:\n\n"
+    msg = f"# {lk_util.get_name(event.get_user_id())}的钓鱼成就:\n\n"
     msg += "## 已达成的成就:\n\n"
     if a_l:
         msg += "\n".join(a_l)
@@ -56,31 +58,41 @@ async def _(event: MessageEvent):
         msg += "\n".join(u_a_l)
     else:
         msg += "所有成就都达成了哦!"
-    await achievement.finish(img_msg(await md_to_pic(msg)))
+    await achievement.finish(await ATRIMessage(event).md(msg))
 
 
 through = plugin.on_command("钓鱼", "抛出鱼钩", aliases={"抛钩"})
 
 
 @through.handle([IsLkUser])
-async def _(event: MessageEvent):
-    user_id = event.user_id
+async def _(event: MessageEvent | QQMessageEvent):
+    user_id = event.get_user_id()
     try:
         wait_time = FishingController.add_new_fishing_man(user_id)
         await through.send("🎣中...请等待🐟上钩...")
         await asyncio.sleep(wait_time)
         FishingController.fish_bite(user_id)
-        await through.send("!!!🐟上钩了,快输入[/收线]!!!", at_sender=True)
+        if isinstance(event, QQMessageEvent):
+            await through.send(
+                QQMessage.md_msg(
+                    f"!!!🐟上钩了,快输入[{QQMessage.cmd(f'{BotUtils.get_command_start()}收线')}]!!!"
+                )
+            )
+        else:
+            await through.send(
+                f"!!!🐟上钩了,快输入[{BotUtils.get_command_start()}收线]!!!",
+                at_sender=True,
+            )
     except FishingException as e:
         await through.finish(e.message)
 
 
-take = plugin.on_command("收线", "鱼上钩后收起鱼线")
+take = plugin.on_command("收线", "鱼上钩后收起鱼线", aliases={"收杆"})
 
 
 @take.handle([IsLkUser])
-async def _(event: MessageEvent):
-    user_id = event.user_id
+async def _(event: MessageEvent | QQMessageEvent):
+    user_id = event.get_user_id()
     try:
         fish, msg = FishingController.take_up(user_id)
         if msg:
@@ -108,12 +120,12 @@ async def _(event: MessageEvent):
         await through.finish(e.message)
 
 
-goto = plugin.on_command("前往", "前往不同的钓鱼地点.如:湖、河、海")
+goto = plugin.cmd_as_group("前往", "前往不同的钓鱼地点.如:湖、河、海")
 
 
 @goto.handle([IsLkUser])
-async def _(event: MessageEvent):
-    user_id = event.user_id
+async def _(event: MessageEvent | QQMessageEvent):
+    user_id = event.get_user_id()
     user_data = get_fish_user_data(user_id)
     cmd = event.get_plaintext().split(" ")
     if len(cmd) == 2:
@@ -134,28 +146,53 @@ async def _(event: MessageEvent):
     await goto.finish("请输入地名")
 
 
-equip = plugin.on_command("装备", "装备指定的鱼竿、鱼饵或鱼具")
+equip = plugin.cmd_as_group("装备", "装备指定的鱼竿、鱼饵或鱼具")
 
 
 @equip.handle([IsLkUser])
-async def _(event: MessageEvent, matcher: Matcher):
+async def _(event: MessageEvent | QQMessageEvent, matcher: Matcher):
     cmd = event.get_plaintext().split(" ")
     if len(cmd) == 2:
         matcher.set_arg("equipment", Message().append(cmd[1]))
 
 
 @equip.got("equipment", "请输入要装备的装备名")
-async def _(event: MessageEvent, eq: str = ArgPlainText("equipment")):
-    user_id = event.user_id
+async def _(event: MessageEvent | QQMessageEvent, eq: str = ArgPlainText("equipment")):
+    user_id = event.get_user_id()
     msg = f"装备{eq}成功\n"
-    with get_fish_user_data(user_id) as user:
-        with get_user_data(user_id) as user_data:
-            if (
-                user.equip_rod(eq, user_data)
-                or user.equip_bait(eq, user_data)
-                or user.equip_tackle(eq, user_data)
-            ):
-                msg += str(user)
-            else:
-                msg = f"你没有装备{eq}或者{eq}不能装备"
+    with get_fish_user_data(user_id) as user, get_user_data(user_id) as user_data:
+        if (
+            user.equip_rod(eq, user_data)
+            or user.equip_bait(eq, user_data)
+            or user.equip_tackle(eq, user_data)
+        ):
+            msg += str(user)
+        else:
+            msg = f"你没有装备{eq}或者{eq}不能装备"
     await equip.finish(msg)
+
+
+auto_equip = plugin.cmd_as_group("自动装备", "自动装备可用装备,默认按加载顺序装备")
+
+
+@auto_equip.handle([IsLkUser])
+async def _(event: MessageEvent | QQMessageEvent):
+    from .data.bait import bait_dict
+    from .data.fishing_rod import fishing_rod_dict
+    from .data.fishing_tackle import fishing_tackle_dict
+
+    user_id = event.get_user_id()
+    with get_fish_user_data(user_id) as user, get_user_data(user_id) as user_data:
+        user.remove_rod(user_data)
+        user.remove_bait(user_data)
+        user.remove_tackle(user_data)
+        for rod in fishing_rod_dict:
+            if user.equip_rod(rod, user_data):
+                break
+        for bait in bait_dict:
+            if user.equip_bait(bait, user_data):
+                break
+        for tackle in fishing_tackle_dict:
+            if user.equip_tackle(tackle, user_data):
+                break
+    await auto_equip.finish(f"自动装备完成:\n{user!s}")

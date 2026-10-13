@@ -1,12 +1,10 @@
 from . import database, explanations, user, util
 from .chat_chain import ATRIAgent
 from .function_calling import (
-    ChatFunction,
-    ChatFunctionArg,
     FunctionCalling,
+    FunctionCallingArg,
     FunctionCallingData,
     FunctionCallingManager,
-    ReplyFunctionCallingManager,
 )
 from .history import ChatHistoryManager
 from .memes import FaceManager
@@ -19,17 +17,16 @@ from .user_profile import UserProfile
 __all__ = [
     "ATRIAgent",
     "ATRISchedule",
-    "ChatFunction",
     "ChatFunctionArg",
     "ChatHistoryManager",
     "ChatSender",
     "FaceManager",
     "FunctionCalling",
+    "FunctionCallingArg",
     "FunctionCallingData",
     "FunctionCallingManager",
     "MemoryManager",
     "QQChatSender",
-    "ReplyFunctionCallingManager",
     "Role",
     "RoleManager",
     "UserProfile",

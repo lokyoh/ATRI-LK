@@ -5,7 +5,7 @@ from datetime import timedelta
 from typing import ClassVar
 
 import anyio
-from nonebot.adapters.onebot.v11 import Event
+from nonebot.adapters import Event
 from nonebot.internal.matcher import Matcher
 from nonebot.internal.params import Depends
 
@@ -35,10 +35,12 @@ from .system.fertilizer import add_fertilizer_to_shop, load_fertilizer_data
 from .system.forecast import weather_forecast
 from .system.weather import get_weather
 
-_config = config.config()
-
 plugin.scheduler_jobs().add_job(
-    weather_forecast, "农场天气预报", "cron", hour=_config.hour, minute=_config.minute
+    weather_forecast,
+    "农场天气预报",
+    "cron",
+    hour=config.get("hour"),
+    minute=config.get("minute"),
 )
 
 FARM_RES_PATH = RES_DIR / "data" / "lkfarm"
@@ -134,7 +136,7 @@ class FarmSystem:
 |8|{field[7]}|{field[15]}|{field[23]}|{field[31]}|
 
 > {today_date}
-"""
+"""  # noqa: W291
     WEATHER: ClassVar[list[str]] = ["晴", "雨", "雷雨", "雪"]
 
     @staticmethod
@@ -181,6 +183,25 @@ class FarmSystem:
         async with await anyio.open_file(f_path_img, "wb") as f:
             await f.write(f_bytes)
         return f_bytes
+
+    async def md_farm_info(self, user_id):
+        user_id = str(user_id)
+        fields = []
+        user_data = get_user_farm_data(user_id)
+        for field in user_data.fields:
+            fields.append(field.to_md(with_pic=False))
+        level, level_exp = user_data.get_level_exp()
+        farm_md = self._FARM_MODEL.format(
+            today_date=today(),
+            weather=self.WEATHER[user_farm_datas.weather],
+            next_weather=self.WEATHER[user_farm_datas.next_weather],
+            endur=user_data.endurance,
+            field=fields,
+            name=lk_util.get_name(user_id),
+            level=level,
+            exp=level_exp,
+        )
+        return farm_md
 
     @staticmethod
     def get_positions(text) -> list:

@@ -165,15 +165,15 @@ def match_atri_img(text):
 
 
 def has_key_word(text):
-    return any(key_word in text for key_word in config.key_word)
+    return any(key_word in text for key_word in config.get("key_word", []))
 
 
 async def call_agent(event: GroupMessageEvent, matcher: Matcher, bot: Bot):
     group_id = str(event.group_id)
     sender_id = event.get_user_id()
     message = event.get_message()
-    skip_chat = not config.proactively_chat
-    skip_judgment = not config.proactively_chat
+    skip_chat = not config.get("proactively_chat")
+    skip_judgment = not config.get("proactively_chat")
     if event.to_me or has_key_word(message.extract_plain_text()):
         skip_chat = False
         skip_judgment = True

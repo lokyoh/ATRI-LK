@@ -1,18 +1,21 @@
+from nonebot.adapters import Event
 from nonebot.adapters.onebot.v11 import ActionFailed, MessageEvent
+from nonebot.adapters.qq import MessageEvent as QQMessageEvent
 from nonebot.internal.params import ArgPlainText
 
+from ATRI.message import QQMessage
 from ATRI.permission import MASTER
 from ATRI.service import Service
 
 from .config import HelpConfig
 
 plugin = Service(
-    "帮助", "ATRI 的食用指南~", "2.1.0", Service.ServiceType.SYSTEM
+    "帮助", "ATRI 的食用指南~", "2.2.0", Service.ServiceType.SYSTEM
 ).allow_switch(False)
 
-help_config: HelpConfig = plugin.add_plugin_config(HelpConfig).config()
+help_config: HelpConfig = plugin.add_plugin_config(HelpConfig)
 
-from .data_source import Helper, help_type
+from .data_source import Helper, help_type  # noqa: E402
 
 plugin.on_startup(lambda: Helper().init_services())
 
@@ -20,7 +23,9 @@ menu = plugin.on_command("菜单", "获取食用bot的方法", aliases={"menu"})
 
 
 @menu.handle()
-async def _():
+async def _(event: Event):
+    if isinstance(event, QQMessageEvent):
+        await menu.finish(QQMessage.md_msg(Helper().qq_menu()))
     await menu.finish(Helper().menu())
 
 
@@ -39,6 +44,14 @@ service_list = plugin.on_command("服务列表", "获取服务列表", aliases={
 async def _(event: MessageEvent):
     try:
         await service_list.finish(await Helper().get_service_list(event))
+    except ActionFailed:
+        await service_list.finish(Helper().get_text_list())
+
+
+@service_list.handle()
+async def _(event: QQMessageEvent):
+    try:
+        await service_list.finish(QQMessage.md_msg(Helper().get_md_help(event)))
     except ActionFailed:
         await service_list.finish(Helper().get_text_list())
 
@@ -64,6 +77,24 @@ async def _ready_service_info(event: MessageEvent):
     await service_info.finish(repo)
 
 
+@service_info.handle()
+async def _ready_service_info(event: QQMessageEvent):
+    msg = str(event.get_message()).split(" ")
+    try:
+        service = msg[1]
+    except Exception:
+        service = "master"
+    try:
+        cmd = msg[2]
+    except Exception:
+        cmd = None
+    if not cmd:
+        repo = Helper().service_info_md(service)
+        await service_info.finish(QQMessage.md_msg(repo))
+    repo = Helper().cmd_info_md(service, cmd)
+    await service_info.finish(QQMessage.md_msg(repo))
+
+
 change_type = plugin.on_command("帮助切换形式", "切换帮助的形式", permission=MASTER)
 
 
@@ -73,8 +104,7 @@ change_type = plugin.on_command("帮助切换形式", "切换帮助的形式", p
 )
 async def _(arg: str = ArgPlainText("help_type")):
     if arg in help_type:
-        help_config.help_type = arg
-        plugin.plugin_config().change_config(help_config)
+        help_config.set("help_type", arg)
     else:
         await change_type.finish("请输入正确的类型")
     await change_type.finish("切换成功")

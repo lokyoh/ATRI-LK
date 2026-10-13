@@ -445,7 +445,7 @@ async def get_history_messages(
 
 
 class HistoryNode(BaseModel):
-    sender: int | None
+    sender: str | int | None
     time: str
     message: str
 

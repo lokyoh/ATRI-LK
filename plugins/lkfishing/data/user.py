@@ -275,7 +275,7 @@ class FishingUser:
 
 def get_fish_user_data(user_id: int | str) -> FishingUser:
     user_id = user_manager.resolve_user_id(user_id)
-    data = fishing_table.select("DATA, ACHI", f"ID={user_id}")
+    data = fishing_table.select("DATA, ACHI", f"ID='{user_id}'")
     if len(data) == 0:
         user = User()
         achi = AchievementData()

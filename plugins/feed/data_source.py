@@ -33,14 +33,14 @@ async def feed_func(user_id, food):
                 log.warning(f"获取评价失败:{e}")
             except Exception as e:
                 log.warning(f"获取评价失败:{str_traceback(e)}")
-        content = feed_db.select("DATE", f"ID={user_id}")
+        content = feed_db.select("DATE", f"ID='{user_id}'")
         today = now().strftime("%Y-%m-%d")
         if len(content) == 0:
-            feed_db.insert("ID, DATE", f"{user_id}, '{today}'")
+            feed_db.insert("ID, DATE", (user_id, today))
         else:
             if content[0][0] == today:
                 return message.text("~今天已经投喂过了")
-            feed_db.update(f"DATE = '{today}'", f"ID={user_id}")
+            feed_db.update(f"DATE = '{today}'", f"ID='{user_id}'")
         user_data.love_change(love_num, False)
         message.text(f"~投喂食物成功，获得{love_num}点好感")
         state, msg = sign(user_data)

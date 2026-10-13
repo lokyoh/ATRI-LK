@@ -11,7 +11,7 @@ def update_user_db(connection, version):
     if version < 1:
         cursor.execute("DROP TABLE IF EXISTS `USERDATA_TEMP`")
         cursor.execute(
-            "CREATE TABLE `USERDATA_TEMP` (ID TEXT PRIMARY KEY, DATA TEXT DEFAULT '2000-01-01')"
+            "CREATE TABLE `USERDATA_TEMP` (ID TEXT PRIMARY KEY, DATA TEXT DEFAULT '{}')"
         )
         cursor.execute(
             """

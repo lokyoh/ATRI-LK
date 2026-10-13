@@ -2,6 +2,7 @@ import os
 from datetime import date, datetime
 from random import choice
 
+import anyio
 from nonebot.adapters.onebot.v11 import MessageEvent
 from nonebot.adapters.onebot.v11.helpers import Cooldown
 from nonebot.adapters.qq import MessageEvent as QQMessageEvent
@@ -20,6 +21,17 @@ from plugins.fortune.qq import BTN_FORTUNE
 from .fortune_data import get_fortune
 
 plugin = Service("运势", "亚托莉的运势插件", "0.2.0", Service.ServiceType.ENTERTAINMENT)
+
+
+def is_today_file(path) -> bool:
+    if os.path.exists(path):
+        modification_time = os.path.getmtime(path)
+        modification_date = date.fromtimestamp(modification_time)
+        today_date = date.today()
+        if modification_date == today_date:
+            return True
+    return False
+
 
 today_fortune = plugin.on_command("今日运势", "今日运势", aliases={"运势"})
 
@@ -43,23 +55,33 @@ async def _(event: MessageEvent):
 @today_fortune.handle()
 async def _(event: QQMessageEvent):
     user_id = event.get_user_id()
-    message = MessageBuilder().text("")
-    ft = get_fortune()
-    message.text("# 您的今日运势为:")
-    message.text(f"## {ft['fortune']}")
-    message.text(f"### {'★' * ft['level']}{'☆' * (5 - ft['level'])}")
-    message.text(f"{choice(ft['content'])}")
-    if lk_util.is_valid_user(user_id):
-        state, msg = sign(user_id)
-        if state:
-            message.text("### 今天尚未签到，已自动签到：")
-            for m in msg:
-                message.auto_append(f"- {m}")
+    save_dir = os.path.join(PLUGIN_DIR, "fortune")
+    save_path = os.path.join(save_dir, f"{user_id}.md")
+    md_msg = ""
+    if is_today_file(save_path):
+        async with await anyio.open_file(save_path, "r", encoding="utf-8") as f:
+            md_msg = await f.read()
     else:
-        message.text(f"### {BIND_TIP}才能够自动签到哦!")
-    message.text(f"> 日期: {datetime.now().strftime('%Y年%m月%d日 %H:%M')}")
-    message.text("> 仅供娱乐 相信科学 请勿迷信")
-    md = QQMessage.md_msg(message.done())
+        message = MessageBuilder().text("")
+        ft = get_fortune()
+        message.text("# 您的今日运势为:")
+        message.text(f"## {ft['fortune']}")
+        message.text(f"### {'★' * ft['level']}{'☆' * (5 - ft['level'])}")
+        message.text(f"{choice(ft['content'])}")
+        if lk_util.is_valid_user(user_id):
+            state, msg = sign(user_id)
+            if state:
+                message.text("### 今天尚未签到，已自动签到：")
+                for m in msg:
+                    message.auto_append(f"- {m}")
+        else:
+            message.text(f"### {BIND_TIP}才能够自动签到哦!")
+        message.text(f"> 日期: {datetime.now().strftime('%Y年%m月%d日 %H:%M')}")
+        message.text("> 仅供娱乐 相信科学 请勿迷信")
+        md_msg = message.done()
+        async with await anyio.open_file(save_path, "w", encoding="utf-8") as f:
+            await f.write(md_msg)
+    md = QQMessage.md_msg(md_msg)
     kb = QQMessage.keyboard(content=InlineKeyboardRow(buttons=[BTN_FORTUNE, BTN_MENU]))
     await today_fortune.finish(md + kb)
 
@@ -67,7 +89,7 @@ async def _(event: QQMessageEvent):
 async def get_pic(user_id):
     """获取签到卡片"""
     f = get_fortune()
-    return _to_pic(f)
+    return _to_pic(f, user_id)
 
 
 async def _to_pic(f, user_id):

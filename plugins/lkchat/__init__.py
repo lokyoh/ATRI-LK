@@ -131,6 +131,7 @@ async def _(event: MessageEvent | QQMessageEvent):
             msg.image(await md_to_pic(get_atri_memery(user_info.memery)))
     except Exception:
         await del_mem.finish("输入错误")
+    await del_mem.finish(msg)
 
 
 poke = plugin.on_notice("戳一戳", "处理戳一戳事件")

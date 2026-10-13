@@ -28,21 +28,21 @@ async def get_name(bot: Bot, user_id: str, chat_id: str):
             log.warning(f"获取QQ用户{user_id}在群{group_id}昵称错误")
     if isinstance(bot, QQBot):
         try:
-            if group_id not in members:
-                members[group_id] = {}
-            if user_id not in members[group_id]:
+            if chat_id not in members:
+                members[chat_id] = {}
+            if user_id not in members[chat_id]:
                 member = await bot.get_group_member(
-                    group_openid=group_id, member_openid=user_id
+                    group_openid=chat_id, member_openid=user_id
                 )
-                members[group_id][uid] = member.username
-            return members[group_id][user_id]
+                members[chat_id][user_id] = member.username
+            return members[chat_id][user_id]
         except Exception:
-            log.warning(f"获取官方QQ用户{user_id}在群{group_id}昵称错误")
+            log.warning(f"获取官方QQ用户{user_id}在群{chat_id}昵称错误")
     return str(user_id)
 
 
 def get_user_group(user_id):
-    user_manager.resolve_user_id(user_id)
+    user_id = user_manager.resolve_user_id(user_id)
     user_group = "用户"
     if lk_util.is_master(user_id):
         user_group = "主人"

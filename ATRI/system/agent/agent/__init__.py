@@ -12,6 +12,7 @@ from .memes import FaceManager as FaceManager
 from .memory.manage import MemoryManager as MemoryManager
 from .role import Role as Role
 from .role import RoleManager as RoleManager
+from .schedule import ATRISchedule as ATRISchedule
 from .schedule import generate_schedule as generate_schedule
 from .sender import ChatSender as ChatSender
 from .sender import OneBotChatSender as OneBotChatSender

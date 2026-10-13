@@ -2,6 +2,8 @@ import time
 from asyncio import Future, Lock, gather, get_running_loop
 from typing import ClassVar
 
+from nonebot.adapters import Bot
+
 from ..config import config
 from .history import ChatHistoryManager, History, history_logger
 from .model import ChatArgs
@@ -29,7 +31,7 @@ class ChatMessage:
     def check_time(self) -> bool:
         return time.time() - self.time_stamp <= 180
 
-    async def get_processing_messages_prompt(self, bot) -> str:
+    async def get_processing_messages_prompt(self, bot: Bot) -> str:
         pending_messages, self.messages_during_processing = (
             self.messages_during_processing,
             [],

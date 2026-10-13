@@ -4,16 +4,19 @@ from pathlib import Path
 from random import choice
 
 from nonebot.adapters.onebot.v11 import Bot, GroupMessageEvent, MessageSegment
+from nonebot.adapters.qq import Bot as QQBot
+from nonebot.adapters.qq import GroupAtMessageCreateEvent
 from nonebot.exception import FinishedException
 from nonebot.matcher import Matcher
 
 from ATRI import IMG_DIR, RECORD_DIR
+from ATRI.bot import BotUtils
 from ATRI.exceptions import str_traceback
 from ATRI.log import log
-from ATRI.message import img_msg_from_path, rec_msg_from_path
+from ATRI.message import QQMessage, img_msg_from_path, rec_msg_from_path
 from ATRI.system.agent.agent import ATRIAgent
 from ATRI.system.agent.agent.model import ChatArgs
-from ATRI.system.agent.agent.sender import QQChatSender
+from ATRI.system.agent.agent.sender import OneBotChatSender, QQChatSender
 from ATRI.system.lkapi.bot import util as lk_util
 from ATRI.utils.datetime import now
 from ATRI.utils.event import AsyncBaseEvents, BaseEvent
@@ -99,6 +102,7 @@ IMG_PATTERN = [
     (r"^不对", "BD.jpg"),
     (r"^((可以)|能)?让?我?看(看|(一下))你?的?吗?$", "BYK.jpg"),
 ]
+cmd = BotUtils.get_command_start()
 
 
 class PreChatEvent(BaseEvent):
@@ -139,10 +143,13 @@ async def on_birthday(event: PreChatEvent):
                 )
 
 
-def get_atri_memery(mem):
+def get_atri_memery(mem, mtype: int = 0):
     md_text = "# 亚托莉对你的记忆\n\n"
     md_text += "\n".join(f"- {i}:{item}" for i, item in enumerate(mem, 1))
-    md_text += "\n\n> 输入`/聊天.删除记忆 [标号]`来删除指定记忆,[标号]为数字,例如:`/聊天.删除记忆 1`"
+    if mtype == 1:
+        md_text += f"\n\n> 输入`{QQMessage.cmd(f'{cmd}聊天.删除记忆', f'{cmd}聊天.删除记忆 [标号]')}`来删除指定记忆,[标号]为数字,例如:`{cmd}聊天.删除记忆 1`"
+    else:
+        md_text += f"\n\n> 输入`{cmd}聊天.删除记忆 [标号]`来删除指定记忆,[标号]为数字,例如:`{cmd}聊天.删除记忆 1`"
     return md_text
 
 
@@ -181,7 +188,7 @@ async def call_agent(event: GroupMessageEvent, matcher: Matcher, bot: Bot):
         skip_chat = False
         skip_judgment = True
     try:
-        sender = QQChatSender(matcher)
+        sender = OneBotChatSender(matcher)
         if event.reply:
             msg_seg = MessageSegment("atri_reply", event.reply)
             message.append(msg_seg)
@@ -193,3 +200,23 @@ async def call_agent(event: GroupMessageEvent, matcher: Matcher, bot: Bot):
         log.warning(str_traceback(e))
         if skip_judgment and not skip_chat:
             await matcher.finish(f"真是的，{lk_util.bot_name}被玩坏了，呜呜呜...")
+
+
+async def qq_call_agent(event: GroupAtMessageCreateEvent, matcher: Matcher, bot: QQBot):
+    group_id = str(event.group_id)
+    sender_id = event.get_user_id()
+    message = event.get_plaintext()
+    if not message:
+        return
+    # 仅支持@类型消息
+    skip_chat = False
+    skip_judgment = True
+    try:
+        sender = QQChatSender(matcher)
+        args = ChatArgs(bot, group_id, sender_id, skip_chat, skip_judgment)
+        await ATRIAgent.chat(sender, message, args)
+    except FinishedException:
+        raise
+    except Exception as e:
+        log.warning(str_traceback(e))
+        await matcher.finish(f"思考失败,{lk_util.bot_name}放弃了思考...")

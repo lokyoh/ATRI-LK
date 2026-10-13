@@ -1,4 +1,4 @@
-from nonebot.adapters.onebot.v11 import Bot
+from nonebot.adapters import Bot
 
 
 class ChatArgs:

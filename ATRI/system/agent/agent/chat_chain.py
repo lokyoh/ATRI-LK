@@ -11,7 +11,7 @@ from ..brain import (
 )
 from ..llm import ModelType, llm_manager
 from .model import ChatArgs
-from .sender import ChatSender, QQChatSender
+from .sender import ChatSender, OneBotChatSender, QQChatSender
 from .temp_his import ChatMessage, TempHisManager
 
 
@@ -20,7 +20,9 @@ class ATRIAgent:
     chat_lock = Lock()
 
     @classmethod
-    async def chat(cls, chat_sender: ChatSender, message: Message, args: ChatArgs):
+    async def chat(
+        cls, chat_sender: ChatSender, message: Message | str, args: ChatArgs
+    ):
         chat_message = await TempHisManager.add_message(message, args)
         if chat_message.message is None:
             return
@@ -45,12 +47,10 @@ class ATRIAgent:
     async def _chat(
         cls,
         chat_sender: ChatSender,
-        message: Message,
+        message: Message | str,
         args: ChatArgs,
         chat_message: ChatMessage,
     ):
-        chat_id = args.chat_id
-        user_id = args.user_id
         this_msg = chat_message.message
         history_list = chat_message.history[:-1]
         if args.skip_chat:
@@ -58,7 +58,10 @@ class ATRIAgent:
         if not llm_manager.has_type(ModelType.CHAT):
             log.warning("没有配置chat类型的模型")
             return
-        plain_text = message.extract_plain_text()
+        if isinstance(message, str):
+            plain_text = message
+        else:
+            plain_text = message.extract_plain_text()
         now_time = now().time()
         if not args.skip_judgment and (plain_text == "" or 2 <= now_time.hour < 6):
             log.info("跳过主动聊天")
@@ -68,9 +71,7 @@ class ATRIAgent:
         ):
             return
         await ThinkingModel().thinking(
-            args.bot,
-            chat_id,
-            user_id,
+            args,
             this_msg,
             history_list,
             chat_message.image_history,
@@ -78,5 +79,5 @@ class ATRIAgent:
             chat_message,
             chat_sender,
         )
-        if isinstance(chat_sender, QQChatSender):
+        if isinstance(chat_sender, (QQChatSender, OneBotChatSender)):
             await chat_sender.finish()

@@ -7,6 +7,7 @@ from ATRI.exceptions import str_traceback
 from ..agent.explanations import get_top_explanations
 from ..agent.function_calling import FunctionCallingData, FunctionCallingManager
 from ..agent.history import History, get_history_messages
+from ..agent.model import ChatArgs
 from ..agent.role import ATRI
 from ..agent.schedule import ATRISchedule
 from ..agent.temp_his import ChatMessage
@@ -122,9 +123,7 @@ class ThinkingModel:
 
     async def thinking(
         self,
-        bot,
-        chat_id,
-        user_id,
+        args: ChatArgs,
         current_history: History,
         history_list: list[History],
         image_history: str,
@@ -132,13 +131,13 @@ class ThinkingModel:
         chat_message: ChatMessage,
         sender,
     ):
-        user_info = get_user_info(user_id)
+        user_info = get_user_info(args.user_id)
         prompt = self.get_system_prompt() + "\n\n"
         prompt += await self.get_prompt(
-            chat_id, user_id, user_info, bot, current_history
+            args.chat_id, args.user_id, user_info, args.bot, current_history
         )
         prompt += await self.get_history_prompt(
-            bot,
+            args.bot,
             history_list,
             image_history,
             fallback_history,
@@ -149,7 +148,7 @@ class ThinkingModel:
             thinking_times = 0
             while thinking_times <= config.get("max_thinking_times"):
                 processing_messages_prompt = (
-                    await chat_message.get_processing_messages_prompt(bot)
+                    await chat_message.get_processing_messages_prompt(args.bot)
                 )
                 if processing_messages_prompt:
                     self.messages.add_message(
@@ -165,7 +164,7 @@ class ThinkingModel:
                 if not functions_data:
                     break
                 back = await self.do_action(
-                    functions_data, user_id, chat_id, sender, current_history
+                    functions_data, args.user_id, args.chat_id, sender, current_history
                 )
                 self.messages.add_message(
                     LLMMessage("assistant", LLMContents().text(resp.content))

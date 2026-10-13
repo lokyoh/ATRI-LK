@@ -5,7 +5,7 @@ from typing import ClassVar
 import anyio
 
 from ATRI.exceptions import str_traceback
-from ATRI.message import img_msg, rec_msg_from_path
+from ATRI.message import QQMessage, img_msg, rec_msg_from_path
 from ATRI.system.htmlrender import md_to_pic
 from ATRI.utils.datetime import now
 
@@ -18,7 +18,7 @@ from .file.tree_string import default_ignore_dirs, get_tree_string
 from .history import History
 from .memes import FaceManager
 from .memory.manage import memory_manager
-from .sender import ChatSender
+from .sender import ChatSender, OneBotChatSender, QQChatSender
 from .user import get_user_info, save_user_info
 from .user_profile import UserProfile
 
@@ -35,7 +35,7 @@ class FunctionCallingData:
         self,
         sender_id: str,
         chat_id: str,
-        sender: type[ChatSender],
+        sender: ChatSender,
         data: dict,
         current_history: History | None = None,
     ):
@@ -114,7 +114,9 @@ def register_function_calling():
                 raise RuntimeError("发送消息时缺少关联的聊天历史")
             try:
                 await data.sender.send(msg)
-                if llm_manager.has_type(ModelType.TTS):
+                if llm_manager.has_type(ModelType.TTS) and isinstance(
+                    data.sender, OneBotChatSender
+                ):
                     file = await llm_manager.call_model_by_type(
                         ModelType.TTS, msg, "Agent-语音"
                     )
@@ -149,7 +151,12 @@ def register_function_calling():
                 md_path.parent.mkdir(parents=True, exist_ok=True)
                 async with await anyio.open_file(md_path, "w", encoding="utf-8") as f:
                     await f.write(msg)
-                await data.sender.send(img_msg(await md_to_pic(msg)))
+                if isinstance(data.sender, OneBotChatSender):
+                    await data.sender.send(img_msg(await md_to_pic(msg)))
+                elif isinstance(data.sender, QQChatSender):
+                    await data.sender.send(QQMessage.md_msg(msg))
+                else:
+                    await data.sender.send(msg)
             except Exception as e:
                 log.warning(f"MD发送发生错误:{str_traceback(e)}")
                 return "发送失败,请勿再次尝试"
@@ -216,18 +223,18 @@ def register_function_calling():
 
         @staticmethod
         async def call(data: FunctionCallingData):
-            current_history = data.current_history
-            if current_history is None:
-                raise RuntimeError("发送表情时缺少关联的聊天历史")
-            meme = data.data.get("meme", "")
-            try:
-                face = FaceManager.get_face(meme)
-                if not face:
-                    return "表情不存在"
-                await data.sender.send(face)
-            except Exception:
-                return "发送失败,请勿再次尝试"
-            return "发送成功"
+            if isinstance(data.sender, OneBotChatSender):
+                meme = data.data.get("meme", "")
+                try:
+                    face = FaceManager.get_face(meme)
+                    if not face:
+                        return "表情不存在"
+                    await data.sender.send(face)
+                except Exception:
+                    return "发送失败,请勿再次尝试"
+                return "发送成功"
+            else:
+                return "发送失败,不支持发送表情"
 
     FunctionCallingManager.register(SendFaceFunctionCalling)
 

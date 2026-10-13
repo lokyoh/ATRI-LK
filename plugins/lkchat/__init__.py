@@ -3,12 +3,23 @@ import random
 from random import choice
 
 from nonebot.adapters.onebot.v11 import Bot
-from nonebot.adapters.onebot.v11.event import GroupMessageEvent, PokeNotifyEvent
+from nonebot.adapters.onebot.v11.event import (
+    GroupMessageEvent,
+    MessageEvent,
+    PokeNotifyEvent,
+)
+from nonebot.adapters.qq import Bot as QQBot
+from nonebot.adapters.qq import GroupAtMessageCreateEvent
+from nonebot.adapters.qq import MessageEvent as QQMessageEvent
 from nonebot.matcher import Matcher
 
 from ATRI import IMG_DIR
 from ATRI.log import log
-from ATRI.message import MessageBuilder, img_msg, img_msg_from_path
+from ATRI.message import (
+    ATRIMessage,
+    MessageBuilder,
+    img_msg_from_path,
+)
 from ATRI.permission import MASTER
 from ATRI.service import Service
 from ATRI.system.agent.agent.explanations import add_word
@@ -18,7 +29,7 @@ from ATRI.system.htmlrender import md_to_pic
 from .config import LKChatConfig
 
 plugin = Service(
-    "聊天", "ATRI进行聊天处理的插件", "0.8.3", Service.ServiceType.ENTERTAINMENT
+    "聊天", "ATRI进行聊天处理的插件", "0.9.0", Service.ServiceType.ENTERTAINMENT
 ).main_cmd("聊天")
 config: LKChatConfig = plugin.add_plugin_config(LKChatConfig)
 
@@ -31,6 +42,7 @@ from .data_source import (  # noqa: E402
     match_atri_img,
     match_atri_voice,
     pre_chat_event,
+    qq_call_agent,
 )
 
 on_talk = plugin.on_message(
@@ -57,6 +69,13 @@ async def _(event: GroupMessageEvent, matcher: Matcher, bot: Bot):
             await on_talk.finish(img)
 
 
+@on_talk.handle()
+async def _(event: GroupAtMessageCreateEvent, matcher: Matcher, bot: QQBot):
+    group_id = str(event.group_id)
+    if config.get("chat_switch") and group_id in config.get("whit_list", []):
+        await qq_call_agent(event, matcher, bot)
+
+
 word_add = plugin.cmd_as_group(
     "添加解释",
     "为词语添加解释，用法：/聊天.添加解释 词语 解释 重要度(0-100越大越重要)",
@@ -65,7 +84,7 @@ word_add = plugin.cmd_as_group(
 
 
 @word_add.handle()
-async def _(event: GroupMessageEvent):
+async def _(event: MessageEvent | QQMessageEvent):
     k = event.get_plaintext().split(" ")
     if len(k) != 4:
         await word_add.finish("格式错误")
@@ -73,43 +92,45 @@ async def _(event: GroupMessageEvent):
         add_word(k[1], k[2], int(k[3]))
     except Exception:
         await word_add.finish("输入错误")
-    await word_add.finish("添加成功")
+    await word_add.finish(f"添加{k[1]}:{k[2]}成功")
 
 
 show_mem = plugin.cmd_as_group("查看记忆", "查看亚托莉对你的记忆")
 
 
 @show_mem.handle()
-async def _(event: GroupMessageEvent):
-    if event:
-        user_info = get_user_info(int(event.get_user_id()))
-        mem = user_info.memery
-        if len(mem) == 0:
-            await show_mem.finish("暂时没有对你的记忆哦，快去与亚托莉多多交流吧")
-        await show_mem.finish(img_msg(await md_to_pic(get_atri_memery(mem))))
+async def _(event: MessageEvent | QQMessageEvent):
+    user_id = event.get_user_id()
+    user_info = get_user_info(user_id)
+    mem = user_info.memery
+    if len(mem) == 0:
+        await show_mem.finish("暂时没有对你的记忆哦，快去与亚托莉多多交流吧")
+    if isinstance(event, QQMessageEvent):
+        md_mem = get_atri_memery(mem, 1)
+    else:
+        md_mem = get_atri_memery(mem)
+    await show_mem.finish(await ATRIMessage(event).md(md_mem))
 
 
 del_mem = plugin.cmd_as_group("删除记忆", "删除亚托莉对你的记忆")
 
 
 @del_mem.handle()
-async def _(event: GroupMessageEvent):
+async def _(event: MessageEvent | QQMessageEvent):
     k = event.get_plaintext().split(" ")
     if len(k) != 2:
         await del_mem.finish("格式错误")
     try:
-        user_id = int(event.get_user_id())
+        user_id = event.get_user_id()
         user_info = get_user_info(user_id)
         num = int(k[1])
         user_info.memery.pop(num - 1)
         save_user_info(user_id, user_info)
         msg = MessageBuilder().text("删除成功")
-        if num - 1 > 0:
+        if num - 1 > 0 and isinstance(event, MessageEvent):
             msg.image(await md_to_pic(get_atri_memery(user_info.memery)))
     except Exception:
         await del_mem.finish("输入错误")
-        return
-    await del_mem.finish(msg)
 
 
 poke = plugin.on_notice("戳一戳", "处理戳一戳事件")
@@ -149,7 +170,8 @@ atri_voice = plugin.on_command(cmd="亚托莉语音", docs="随机亚托莉语�
 
 
 @atri_voice.handle()
-async def _():
+async def _(event: MessageEvent):
+    # 只允许ob11机器人
     a_v = get_random_atri()
     if a_v:
         await atri_voice.send(a_v[0])

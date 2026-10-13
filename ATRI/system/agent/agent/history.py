@@ -210,9 +210,12 @@ class LLMMessage:
         self.reply = reply
 
     @classmethod
-    async def create(cls, self_id, message: Message, mid, chat_id):
+    async def create(cls, self_id, message: Message | str, mid, chat_id):
         instance = cls(chat_id)
         img_count = 0
+        if isinstance(message, str):
+            instance.message.append(MessageSegment(message))
+            return instance
         for segment in message:
             if segment.type == "text":
                 instance.message.append(MessageSegment(segment.data["text"]))

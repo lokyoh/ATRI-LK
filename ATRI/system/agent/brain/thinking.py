@@ -161,14 +161,14 @@ class ThinkingModel:
                 resp = await llm_manager.call_model_by_type(
                     ModelType.CHAT, self.messages, "主Agent思考"
                 )
-                output, functions_data = await self.process_resp(resp.content)
+                _, functions_data = await self.process_resp(resp.content)
                 if not functions_data:
                     break
                 back = await self.do_action(
                     functions_data, user_id, chat_id, sender, current_history
                 )
                 self.messages.add_message(
-                    LLMMessage("assistant", LLMContents().text(output))
+                    LLMMessage("assistant", LLMContents().text(resp.content))
                 )
                 thinking_times += 1
                 msg = "\n".join(back)

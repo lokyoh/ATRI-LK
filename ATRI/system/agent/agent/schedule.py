@@ -1,5 +1,6 @@
 import datetime
 import json
+import re
 
 from ATRI.dir import SYS_CONFIG_DIR
 from ATRI.log import log
@@ -7,6 +8,24 @@ from ATRI.utils.datetime import now, now_time, today
 
 from ..llm import ModelType, llm_manager
 from .role import ATRI
+
+
+def extract_json_from_markdown(text):
+    """
+    从带 ```json``` 的文本中提取并解析 JSON
+    自动处理：尾随逗号、换行、语言标识
+    """
+    # 1. 提取代码块
+    match = re.search(r"```(?:json)?\s*(.*?)\s*```", text, re.DOTALL)
+    json_str = match.group(1) if match else text.strip()
+    # 2. 先尝试标准解析
+    try:
+        return json.loads(json_str)
+    except json.JSONDecodeError:
+        pass
+    # 3. 兜底：清洗尾随逗号后再试
+    cleaned = re.sub(r",\s*([}\]])", r"\1", json_str)
+    return json.loads(cleaned)
 
 
 class NowSchedule:
@@ -116,7 +135,7 @@ class ATRISchedule:
             schedule = await llm_manager.call_model_by_type(
                 ModelType.TOOL, prompt, "Agent-ATRI日程生成"
             )
-            s_data = json.loads(schedule.content)
+            s_data = extract_json_from_markdown(schedule.content)
         except Exception as e:
             log.error(f"日程生成失败：{e}")
             return

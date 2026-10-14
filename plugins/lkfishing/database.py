@@ -1,4 +1,4 @@
-from typing import ClassVar
+from pydantic import Field
 
 from ATRI.system.lkapi.bot import db as lk_db
 from ATRI.utils.model import BaseModel
@@ -18,9 +18,9 @@ class User(BaseModel):
 
 
 class AchievementData(BaseModel):
-    fish_data: ClassVar[dict] = {}
-    achieve: ClassVar[list] = []
-    achievement_data: ClassVar[dict] = {}
+    fish_data: dict = Field(default_factory=dict)
+    achieve: list = Field(default_factory=list)
+    achievement_data: dict = Field(default_factory=dict)
 
 
 table_content = """

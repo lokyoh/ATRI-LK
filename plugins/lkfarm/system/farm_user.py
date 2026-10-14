@@ -277,7 +277,7 @@ class UserFarmDataManager:
         return False
 
     def new_farm_user(self, user_id) -> bool:
-        user_id = user_manager.resolve_user_id()
+        user_id = user_manager.resolve_user_id(user_id)
         if user_id in self._user_list:
             return False
         else:

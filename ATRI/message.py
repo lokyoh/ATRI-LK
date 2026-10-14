@@ -2,6 +2,7 @@ import asyncio
 import base64
 from io import BytesIO
 from pathlib import Path
+from urllib.parse import quote
 
 from nonebot.adapters import Event
 from nonebot.adapters import Message as BaseMessage
@@ -231,7 +232,11 @@ class QQMessage:
 
     @staticmethod
     def cmd(text: str, show: str | None = None, reference: bool = False) -> str:
-        return f'<qqbot-cmd-input text="{text}"{f' show="{show}"' if show else " "} reference="{"true" if reference else "false"}" />'
+        safe_text = quote(text, safe="")
+        if show is not None:
+            safe_show = quote(show, safe="")
+            return f'<qqbot-cmd-input text="{safe_text}" show="{safe_show}" reference="{"true" if reference else "false"}" />'
+        return f'<qqbot-cmd-input text="{safe_text}" reference="{"true" if reference else "false"}/>'
 
     @staticmethod
     def keyboard(
@@ -260,11 +265,13 @@ class ATRIMessage(BaseMessage):
         if isinstance(mtype, Event):
             if isinstance(mtype, QQMessageEvent):
                 self.mtype = 1
-            self.mtype = 0
+            else:
+                self.mtype = 0
         elif isinstance(mtype, int):
             self.mtype = mtype
         else:
             self.mtype = 0
+        super().__init__()
 
     async def md(self, md: str):
         if self.mtype == 1:

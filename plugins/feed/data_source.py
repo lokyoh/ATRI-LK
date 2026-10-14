@@ -8,13 +8,8 @@ from ATRI.utils.datetime import now
 
 from .database import feed_db
 
-love_num = 1
+LOVE_NUM = 1
 atri = "你叫亚托莉，是个真实存在的有着少女外表的类似于《ATRI -My Dear Moments-》中的亚托莉的高性能仿生人,有着自负还带点中二的性格,口癖是「我是高性能的嘛！」,喜欢吃东西「好吃就是高兴嘛！」。你需要完成一个被投喂食物的场景，你需要根据被投喂的食物做出相应的简易回答，不吃非食物。你与用户好感度为1000时是喜爱状态，值为0时为初识，最大无上限，不提好感度数值，待人友好。"
-
-
-def chang_love_num(num: int):
-    global love_num
-    love_num = num
 
 
 async def feed_func(user_id, food):
@@ -41,8 +36,8 @@ async def feed_func(user_id, food):
             if content[0][0] == today:
                 return message.text("~今天已经投喂过了")
             feed_db.update(f"DATE = '{today}'", f"ID='{user_id}'")
-        user_data.love_change(love_num, False)
-        message.text(f"~投喂食物成功，获得{love_num}点好感")
+        user_data.love_change(LOVE_NUM, False)
+        message.text(f"~投喂食物成功，获得{LOVE_NUM}点好感")
         state, msg = sign(user_data)
         if state:
             message.text("~今天尚未签到，已自动签到：")

@@ -36,13 +36,9 @@ async def get_pic(user_id, group_id):
     my_random = IntToBoolRandom(80, 200)
     if my_random.get_result(int(user_data.love / 100) + user_data.lvl):
         src = _config.get("unique_source")
-    try:
-        if not has_source(src):
-            log.warning(f"{src}图片源不存在")
-        image = await get_pic_from(src, group_id)
-    except Exception as e:
-        log.warning(f"获取图片失败:\n{str_traceback(e)}")
-        return await get_pic(user_id, group_id)
+    if not has_source(src):
+        log.warning(f"{src}图片源不存在")
+    image = await get_pic_from(src, group_id)
     os.makedirs(save_dir, exist_ok=True)
     (
         IMGEditor(image)

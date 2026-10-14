@@ -332,14 +332,22 @@ LOVEMULCOUNT    INTEGER DEFAULT 0
     def resolve_user_id(self, user_id: str | int) -> str:
         """将绑定账号解析到最终的主账号 ID。"""
         resolved_id = str(user_id)
-        visited = set()
-        while resolved_id not in visited:
-            visited.add(resolved_id)
-            master_user_id = self._bindings.get(resolved_id)
-            if master_user_id is None:
-                return resolved_id
-            resolved_id = master_user_id
-        raise ValueError(f"账号绑定关系存在循环: {user_id}")
+        path: dict[str, str | None] = {}
+        current = resolved_id
+        while current not in path:
+            path[current] = self._bindings.get(current)
+            next_id = path[current]
+            if next_id is None:
+                return current
+            current = next_id
+        cycle = [current]
+        node = path[current]
+        while node != current:
+            cycle.append(node)
+            node = path[node]
+        cycle.append(current)
+        cycle.reverse()
+        raise ValueError(f"账号绑定关系存在循环: {' -> '.join(cycle)}")
 
     def create_binding_secret(self, user_id: str | int) -> str | None:
         """为已注册的主账号创建一小时有效的一次性绑定密钥。"""

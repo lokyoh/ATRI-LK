@@ -32,19 +32,39 @@ class ChatMessage:
         return time.time() - self.time_stamp <= 180
 
     async def get_processing_messages_prompt(self, bot: Bot) -> str:
-        pending_messages, self.messages_during_processing = (
-            self.messages_during_processing,
-            [],
+        pending_messages = self.messages_during_processing
+        histories = (
+            await gather(*pending_messages, return_exceptions=True)
+            if pending_messages
+            else []
         )
-        histories = await gather(*pending_messages) if pending_messages else []
-        messages = []
-        for history in histories:
+        messages: list[str] = []
+        consumed: set[int] = set()
+        for future, history in zip(pending_messages, histories):
+            if isinstance(history, BaseException):
+                history_logger.warning(
+                    f"get_processing_messages_prompt: future failed: {history!r}"
+                )
+                continue
             if history is None or history.mid in self.processing_message_ids:
+                consumed.add(id(future))
                 continue
             self.processing_message_ids.add(history.mid)
             if str(history.sender) == str(bot.self_id):
+                consumed.add(id(future))
                 continue
-            messages.append(await history.get_message(bot))
+            try:
+                messages.append(await history.get_message(bot))
+            except BaseException as e:
+                self.processing_message_ids.discard(history.mid)
+                history_logger.warning(
+                    f"get_processing_messages_prompt: get_message failed: {e!r}"
+                )
+                continue
+            consumed.add(id(future))
+        self.messages_during_processing = [
+            f for f in pending_messages if id(f) not in consumed
+        ]
         if not messages:
             return ""
         content = "\n".join(messages)

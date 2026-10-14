@@ -1,9 +1,28 @@
+import re
 from typing import Any, ClassVar
 
 import yaml
 from pydantic import Field, field_validator
 
 from ATRI.utils.model import BaseModel
+
+_FORBIDDEN_CTRL_RE = re.compile(r"[\x00-\x08\x0a-\x1f\x7f]")
+_API_KEY_RE = re.compile(r"^[A-Za-z0-9._\-:/+=]{1,4096}$")
+
+
+def validate_api_key(value: str) -> str:
+    """校验用户填写的 API key，拒绝控制字符、空白、超长与非法字符。"""
+    if not isinstance(value, str):
+        raise ValueError("api_key 必须是字符串")
+    if value == "":
+        return ""
+    if value != value.strip():
+        raise ValueError("api_key 首尾不允许空白字符")
+    if _FORBIDDEN_CTRL_RE.search(value):
+        raise ValueError("api_key 含有非法控制字符（如换行、回车）")
+    if not _API_KEY_RE.match(value):
+        raise ValueError("api_key 含有不允许的字符")
+    return value
 
 
 def normalize_model_type(value: str | list[str] | None) -> list[str]:
@@ -71,6 +90,28 @@ class LLMProvider(BaseModel):
     url: str = ""
     api_key: str = ""
     models: list[LLMModel] = Field(default_factory=list)
+
+    @field_validator("api_key", mode="before")
+    @classmethod
+    def validate_api_key_field(cls, value: Any) -> str:
+        if value is None:
+            return ""
+        if not isinstance(value, str):
+            raise ValueError("api_key 必须是字符串")
+        return validate_api_key(value)
+
+    @field_validator("url")
+    @classmethod
+    def validate_url(cls, value: str) -> str:
+        if value == "":
+            return value
+        if not isinstance(value, str):
+            raise ValueError("url 必须是字符串")
+        if _FORBIDDEN_CTRL_RE.search(value):
+            raise ValueError("url 含有非法控制字符")
+        if not (value.startswith("http://") or value.startswith("https://")):
+            raise ValueError("url 必须以 http:// 或 https:// 开头")
+        return value.rstrip("/")
 
 
 class ProviderManager:

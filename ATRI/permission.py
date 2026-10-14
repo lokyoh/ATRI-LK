@@ -1,4 +1,6 @@
 import json
+import os
+from threading import Lock
 from typing import ClassVar
 
 from nonebot.adapters import Bot, Event
@@ -12,34 +14,57 @@ from ATRI.utils import FileDealer
 
 MASTER_FILE_PATH = SYS_CONFIG_DIR / "master.json"
 MASTER_FILE = FileDealer(MASTER_FILE_PATH)
-MASTER_LIST = set()
+_superusers = set(conf.BotConfig.superusers)
+MASTER_LIST = set(_superusers)
+_cache_lock = Lock()
+_cached_mtime: float | None = None
+_cached_masters: set[str] = MASTER_LIST
 
 
-def __create_master_file():
+def _ensure_master_file() -> None:
     if not MASTER_FILE_PATH.is_file():
-        data = {}
-        for i in conf.BotConfig.superusers:
-            data[i] = {"is_conf": True}
+        data = {i: {"is_conf": True} for i in _superusers}
+        MASTER_FILE_PATH.parent.mkdir(parents=True, exist_ok=True)
+        tmp = MASTER_FILE_PATH.with_suffix(MASTER_FILE_PATH.suffix + ".tmp")
+        tmp.write_text(json.dumps(data), encoding="utf-8")
+        os.replace(tmp, MASTER_FILE_PATH)
 
-        with open(MASTER_FILE_PATH, "w") as w:
-            w.write(json.dumps(data))
 
-
-def __init_permission():
-    global MASTER_LIST
-    __create_master_file()
-    data = MASTER_FILE.json()
-    MASTER_LIST = set.union(set(data), conf.BotConfig.superusers)
+def _load_masters() -> set[str]:
+    """带 mtime 缓存的权限集合加载，fail-closed。"""
+    global _cached_mtime, _cached_masters, MASTER_LIST
+    try:
+        mtime = MASTER_FILE_PATH.stat().st_mtime
+    except OSError:
+        try:
+            _ensure_master_file()
+            mtime = MASTER_FILE_PATH.stat().st_mtime
+        except OSError:
+            MASTER_LIST = set(_superusers)
+            return MASTER_LIST
+    with _cache_lock:
+        if _cached_mtime == mtime:
+            if MASTER_LIST is not _cached_masters:
+                MASTER_LIST = _cached_masters
+            return _cached_masters
+        try:
+            data = json.loads(MASTER_FILE_PATH.read_text(encoding="utf-8"))
+            masters = set(data) | _superusers
+        except Exception:
+            MASTER_LIST = set(_superusers)
+            return MASTER_LIST
+        _cached_mtime = mtime
+        MASTER_LIST = masters
+        _cached_masters = masters
+        return masters
 
 
 def is_master(bot: Bot, event: Event) -> bool:
-    __init_permission()
     try:
         user_id = event.get_user_id()
     except Exception:
         return False
-
-    return user_id in MASTER_LIST
+    return user_id in _load_masters()
 
 
 async def toggle_master(user_id: str):
@@ -99,6 +124,6 @@ class Admin:
             return False
 
 
-__init_permission()
+_load_masters()
 MASTER = Permission(Master()).set_name("Master")
 ADMIN = Permission(Admin()).set_name("Admin")

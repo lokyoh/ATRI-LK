@@ -254,7 +254,7 @@ class FishingUser:
                     self.achievement.model_dump_json(),
                 ),
             ),
-            f"ID={self.user_id}",
+            f"ID='{self.user_id}'",
         )
 
     def __setattr__(self, key, value):

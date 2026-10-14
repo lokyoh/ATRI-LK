@@ -123,7 +123,7 @@ class BotUtils:
         return conf.BotConfig.command_start[0] if conf.BotConfig.command_start else ""
 
     @staticmethod
-    async def add_qq_panel(bot: QQBot, panel: NewPanel) -> None:
+    async def add_qq_panel(bot: QQBot, panel: NewPanel) -> dict:
         request = Request(
             "POST",
             bot.adapter.get_api_base().joinpath("v2", "panels"),
@@ -132,7 +132,7 @@ class BotUtils:
         return await bot._request(request)
 
     @staticmethod
-    async def set_qq_panel(bot: QQBot, pid: str, panel: Panel) -> None:
+    async def set_qq_panel(bot: QQBot, pid: str, panel: Panel) -> dict:
         request = Request(
             "PUT",
             bot.adapter.get_api_base().joinpath("v2", "panels", pid),
@@ -141,7 +141,7 @@ class BotUtils:
         return await bot._request(request)
 
     @staticmethod
-    async def get_qq_panel(bot: QQBot, pid: str) -> None:
+    async def get_qq_panel(bot: QQBot, pid: str) -> dict:
         request = Request(
             "GET",
             bot.adapter.get_api_base().joinpath("v2", "panels", pid),

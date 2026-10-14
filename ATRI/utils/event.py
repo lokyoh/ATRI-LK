@@ -106,9 +106,7 @@ class BaseEvents:
                     listeners.remove(listener)
                     return
 
-    def notify(
-        self, event: BaseEvent, ignore_error: bool = True, should_break: bool = False
-    ) -> BaseEvent:
+    def notify(self, event: BaseEvent, ignore_error: bool = True) -> BaseEvent:
         """
         触发该事件。
         :param event: 事件体
@@ -127,7 +125,7 @@ class BaseEvents:
                     if self.stop_when_error:
                         break_sign = True
                         break
-            if break_sign and should_break:
+            if break_sign:
                 break
         if event.error:
             formatted_str = "\n".join(
@@ -183,9 +181,7 @@ class AsyncBaseEvents(BaseEvents):
     def __init__(self, stop_when_error=False):
         super().__init__(stop_when_error)
 
-    async def notify(
-        self, event: BaseEvent, ignore_error: bool = False, should_break: bool = False
-    ) -> BaseEvent:
+    async def notify(self, event: BaseEvent, ignore_error: bool = False) -> BaseEvent:
         """
         触发该事件。
         :param event: 事件体
@@ -209,7 +205,7 @@ class AsyncBaseEvents(BaseEvents):
                     if self.stop_when_error:
                         break_sign = True
                         break
-            if break_sign and should_break:
+            if break_sign:
                 break
         if event.error:
             formatted_str = "\n".join(

@@ -6,7 +6,6 @@ from nonebot.params import CommandArg
 from ATRI.service import Service
 from ATRI.system.lkapi.bot.checker import IsLkUser
 
-from .data_source import chang_love_num as chang_love_num
 from .data_source import feed_func
 
 plugin = Service(

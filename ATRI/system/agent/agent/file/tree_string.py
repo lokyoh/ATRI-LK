@@ -1,3 +1,4 @@
+import os
 from datetime import timedelta
 from pathlib import Path
 
@@ -44,7 +45,7 @@ COUNT_LINES_EXTS = {
 def count_lines(path: Path) -> int:
     """统计文本文件行数，失败返回 -1"""
     try:
-        with open(path, "r", encoding="utf-8", errors="replace") as f:
+        with open(path, encoding="utf-8", errors="replace") as f:
             return sum(1 for _ in f)
     except Exception:
         return -1
@@ -109,6 +110,9 @@ def get_tree_string(
         connector = "└── " if is_last else "├── "
 
         if entry.is_dir():
+            real = entry.resolve()
+            if not str(real).startswith(str(root.resolve()) + os.sep):
+                continue
             result.append(f"{prefix}{connector}{entry.name}/")
             extension = "    " if is_last else "│   "
             subtree = get_tree_string(

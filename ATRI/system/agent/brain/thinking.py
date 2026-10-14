@@ -171,7 +171,7 @@ class ThinkingModel:
                 )
                 thinking_times += 1
                 msg = "\n".join(back)
-                if thinking_times == 15:
+                if thinking_times == config.get("max_thinking_times"):
                     msg += "\n调用次数达到上限,本次调用结束后直接结束本次任务"
                 self.messages.add_message(LLMMessage("user", LLMContents().text(msg)))
         except StopThinkingError:

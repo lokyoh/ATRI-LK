@@ -1,0 +1,46 @@
+# 成就目录（预留）。
+#
+# §2 的目录结构列出了本文件，但 §9 只规范了 9.1-9.6，且 §0 的 15 个 Step 里没有
+# 「成就系统」这一步 —— 目前没有任何代码读取本文件。
+# 这里给出一个最小可用的目录格式，等真正的成就系统立项时直接沿用即可。
+#
+# 字段约定：
+#   id          唯一标识，写入 Reincarnation.achievements_unlocked
+#   name        展示名
+#   points      解锁时发放的成就点（记入 Reincarnation.achievement_points）
+#   condition   判定类型 + 阈值；可用类型：
+#                 reincarnations  累计轮回次数
+#                 level           达到过的最高等级
+#                 age_days        单世最长存活天数
+#                 affection       达到过的最高亲密度
+#                 skills          学会的技能总数
+
+achievements:
+  first_cycle:
+    name: 初次轮回
+    points: 10
+    condition: { type: reincarnations, value: 1 }
+  veteran_3:
+    name: 三度轮回
+    points: 30
+    condition: { type: reincarnations, value: 3 }
+  veteran_10:
+    name: 十世轮回
+    points: 100
+    condition: { type: reincarnations, value: 10 }
+  peak_level:
+    name: 登峰造极
+    points: 50
+    condition: { type: level, value: 100 }
+  long_life:
+    name: 寿终正寝
+    points: 30
+    condition: { type: age_days, value: 120 }
+  soulmate:
+    name: 灵魂伴侣
+    points: 40
+    condition: { type: affection, value: 950 }
+  collector:
+    name: 技能收藏家
+    points: 20
+    condition: { type: skills, value: 5 }

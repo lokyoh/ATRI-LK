@@ -17,7 +17,7 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
         with:
-          fetch-depth: 2
+          fetch-depth: 0
 
       - name: Detect ATRI version change
         id: version
@@ -68,6 +68,12 @@ jobs:
               output.write(f'version={current_version}\n')
               output.write(f'sub_version={current_sub_version}\n')
 
+          if current_sub_version.startswith('Pre'):
+              print(f'Pre-release sub-version {current_sub_version}; skipping release.')
+              with open(os.environ['GITHUB_OUTPUT'], 'a', encoding='utf-8') as output:
+                  output.write('skip_release=true\n')
+              sys.exit(0)
+
           if prev_version == current_version and prev_sub_version == current_sub_version:
               print('Version did not change; skipping release.')
               with open(os.environ['GITHUB_OUTPUT'], 'a', encoding='utf-8') as output:
@@ -97,10 +103,30 @@ jobs:
           print(f'TITLE={release_title}')
           PY
 
+      - name: Prepare release notes
+        if: steps.version.outputs.skip_release != 'true'
+        shell: bash
+        env:
+          CURRENT_COMMIT: ${{ github.sha }}
+          RELEASE_TAG: ${{ steps.version.outputs.tag }}
+          GITHUB_REPOSITORY: ${{ github.repository }}
+        run: |
+          cp release.md release_notes.md
+          previous_tag=$(git describe --tags --abbrev=0 "${CURRENT_COMMIT}^") || {
+            echo "No previous release tag found before ${CURRENT_COMMIT}."
+            exit 1
+          }
+          {
+            printf '\n\n## 详细更新:\n\n'
+            printf '详细信息: [Comparing %s...%s · %s](https://github.com/%s/compare/%s...%s)\n' \
+              "${previous_tag}" "${RELEASE_TAG}" "${GITHUB_REPOSITORY}" \
+              "${GITHUB_REPOSITORY}" "${previous_tag}" "${RELEASE_TAG}"
+          } >> release_notes.md
+
       - name: Publish GitHub Release
         if: steps.version.outputs.skip_release != 'true'
         uses: softprops/action-gh-release@v2
         with:
           tag_name: ${{ steps.version.outputs.tag }}
           name: ${{ steps.version.outputs.title }}
-          body: ${{ github.event.head_commit.message }}
+          body_path: release_notes.md

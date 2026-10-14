@@ -1,0 +1,47 @@
+trees:
+  attack:
+    - talent_id: atk_1
+      name: 力量强化
+      max_level: 5
+      effect_per_level: { atk: 2 }
+  defense:
+    - talent_id: def_1
+      name: 铁骨
+      max_level: 5
+      effect_per_level: { def: 2 }
+  speed:
+    - talent_id: spd_1
+      name: 疾风
+      max_level: 5
+      effect_per_level: { spd: 2 }
+  special:
+    - talent_id: hp_1
+      name: 生命强化
+      max_level: 5
+      effect_per_level: { hp: 10 }
+
+talents:
+  atk_1:
+    name: 力量强化
+    branch: attack
+    max_level: 5
+    effect_per_level: { atk: 2 }
+    description: "每级 +2 攻击"
+  def_1:
+    name: 铁骨
+    branch: defense
+    max_level: 5
+    effect_per_level: { def: 2 }
+    description: "每级 +2 防御"
+  spd_1:
+    name: 疾风
+    branch: speed
+    max_level: 5
+    effect_per_level: { spd: 2 }
+    description: "每级 +2 速度"
+  hp_1:
+    name: 生命强化
+    branch: special
+    max_level: 5
+    effect_per_level: { hp: 10 }
+    description: "每级 +10 生命"

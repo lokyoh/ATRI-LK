@@ -1,0 +1,20 @@
+foods:
+  apple:
+    name: 苹果
+    effects: { hunger: 20, mood: 5, affection: 20 }
+    message: "开心地吃掉了苹果"
+  meat:
+    name: 肉
+    effects: { hunger: 40, mood: 10, affection: 30 }
+    message: "大口吃掉了肉"
+  cake:
+    name: 蛋糕
+    effects: { hunger: 15, mood: 20, affection: 50 }
+    message: "幸福地吃掉了蛋糕"
+
+effects:
+  play: { mood: 10, fatigue: 10, affection: 30 }
+  pet: { affection: 20, mood: 3 }
+  bathe: { cleanliness: 30, mood: -5 }
+  train: { gain: 2, fatigue: 15, exp: 30 }
+  rest: { fatigue_recover: 20, mood: 5 }

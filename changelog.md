@@ -1,11 +1,12 @@
 > 此处仅为记录重大更新，修复 BUG/以及其它 请关注[`GitHub commits`](https://github.com/lokyoh/ATRI-LK/commits/main)
 
-## Oct 22, 2026
+## Oct 14, 2026
 
-> - !!!破坏性更新!!! 新增QQ适配器,需更新依赖;完全重构`PluginConfig`会导致一批插件挂掉,请及时更新插件;需重新配置`tts`、`embedding`类型模型
+> !!!破坏性更新!!! 新增QQ适配器,需更新依赖;完全重构`PluginConfig`会导致一批插件挂掉,请及时更新插件;需重新配置`tts`、`embedding`类型模型
 
 - 更新版本至: `YHN-LK0-024`
 - 新增:
+  - 新版`宠物`插件Demo
   - `Agent`新增Token统计
   - `WebAPI`新增与更新接口
   - 部分功能适配QQ官方机器人

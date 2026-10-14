@@ -1,0 +1,32 @@
+max_level: 100
+min_level_for_manual: 30
+
+point_weights:
+  per_level: 2
+  per_100_attr: 1
+  per_skill: 3
+  per_200_affection: 2     # 好感量表 0-1000，每 200 点计一次
+  per_10_days: 1
+  full_lifespan_bonus: 50
+
+perks:
+  bonus_exp:
+    name: 经验加成
+    cost: 50
+    effect: { exp_bonus: 0.1 }
+  bonus_atk:
+    name: 攻击加成
+    cost: 80
+    effect: { atk_bonus: 5 }
+  bonus_hp:
+    name: 生命加成
+    cost: 80
+    effect: { hp_bonus: 20 }
+  start_level_5:
+    name: 初始等级 5
+    cost: 200
+    effect: { start_level_bonus: 4 }
+  start_level_10:
+    name: 初始等级 10
+    cost: 500
+    effect: { start_level_bonus: 9 }

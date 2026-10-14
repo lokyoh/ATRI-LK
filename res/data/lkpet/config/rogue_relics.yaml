@@ -1,0 +1,134 @@
+# 肉鸽遗物（任务书 §12）：**只在本局生效**（存 run 内，结算随 run 清空）。
+# PETROGUE.RELICS 保留作「见过的遗物」图鉴（含 Boss 专属），不再提供加成。
+#
+# rarity 分类：
+#   normal  普通——遗物奖励层三选一从普通池抽取
+#   rare    稀有——商店「稀有」位（原 50 件中效果最强的 15 件升格）
+#   shop    商店专属（20 件）——只在商店出现
+#   event   事件专属（10 件）——由指定事件掉落（rogue_events.yaml 的 effect.relic）
+#   boss_only: true  Boss 专属（15 件）——击杀对应 Boss 获得（roguelike.yaml bosses[].relic）
+#
+# effect 键（只作用于肉鸽，不改养成数据）：
+#   atk / def / spd / mp / max_hp  战斗属性（max_hp 获得时立即抬局内上限并回血）
+#   crit_rate                      暴击率（倍率见 battle.crit_mult）
+#   coins_mult / exp_mult          掉落与经验乘区
+#   shop_discount                  商店价格乘区（<1 更便宜）
+#   start_coins                    获得时立即入账的局内金币
+#   vs_boss_mult                   对首领/精英伤害乘区
+#   boss_heal                      击杀首领后回复的局内生命
+# 价格由 rogue.yaml 的 shop.tier_price 按 rarity 定（normal / rare / shop）。
+
+relics:
+  # ========== 普通 35 件 ==========
+  # 攻击
+  - { id: rel01, name: 微光护符, rarity: normal, desc: 护符里封着一粒不肯熄灭的火星。, effect: { atk: 6 } }
+  - { id: rel13, name: 磨刀石, rarity: normal, desc: 磨过的刀刃会记住疼痛的味道。, effect: { atk: 5 } }
+  - { id: rel21, name: 破甲锤头, rarity: normal, desc: 锤头缺了一角，砸在哪都像砸在骨头上。, effect: { atk: 7, vs_boss_mult: 1.04 } }
+  # 防御
+  - { id: rel02, name: 厚茧盾牌, rarity: normal, desc: 盾面的茧一层叠一层，像老树的年轮。, effect: { def: 8 } }
+  - { id: rel11, name: 铁靴, rarity: normal, desc: 靴底钉着从战场上捡回来的铁片。, effect: { def: 7 } }
+  - { id: rel20, name: 守护肩甲, rarity: normal, desc: 肩甲内侧刻着一个已经没人记得的名字。, effect: { def: 10 } }
+  - { id: rel30, name: 荆棘甲, rarity: normal, desc: 反击的最好方式是让对方先受伤。, effect: { def: 7, atk: 3 } }
+  # 速度
+  - { id: rel03, name: 迅捷羽翎, rarity: normal, desc: 插在发间，脚步就轻得像没有落地。, effect: { spd: 6 } }
+  - { id: rel12, name: 疾风鞋带, rarity: normal, desc: 系上它，风会在你身后推一把。, effect: { spd: 7 } }
+  - { id: rel22, name: 风之结, rarity: normal, desc: 两根绳头打成的结，永远朝顺风的方向飘。, effect: { spd: 8 } }
+  - { id: rel42, name: 影步长靴, rarity: normal, desc: 影子先动，人后动——没人分得清哪一步是真的。, effect: { spd: 6, coins_mult: 1.05 } }
+  # 魔力
+  - { id: rel04, name: 蓄魔水晶, rarity: normal, desc: 晶体里循环着一圈不肯停歇的光。, effect: { mp: 15 } }
+  - { id: rel15, name: 共鸣号角, rarity: normal, desc: 吹响之前，它先替你数清了心跳。, effect: { mp: 12, spd: 3 } }
+  - { id: rel23, name: 法力涌泉, rarity: normal, desc: 掌心藏着一眼不枯的小泉。, effect: { mp: 18, max_hp: 8 } }
+  - { id: rel33, name: 魔力指环, rarity: normal, desc: 戒面内侧刻着一句念不出声的咒。, effect: { mp: 25 } }
+  # 生命
+  - { id: rel05, name: 巨心琥珀, rarity: normal, desc: 琥珀里封着一颗仍在跳动的心。, effect: { max_hp: 10 } }
+  - { id: rel14, name: 血玉髓, rarity: normal, desc: 贴身戴着，久而久之会变成体温的颜色。, effect: { max_hp: 9 } }
+  - { id: rel24, name: 生命树种, rarity: normal, desc: 种子在口袋里发了芽，根须缠住了肋骨。, effect: { max_hp: 12 } }
+  - { id: rel35, name: 心之容器, rarity: normal, desc: 空的容器，专为多出来的心跳准备。, effect: { max_hp: 14 } }
+  # 财富与成长
+  - { id: rel06, name: 财运铃铛, rarity: normal, desc: 铃声一响，硬币自己会找过来。, effect: { coins_mult: 1.1 } }
+  - { id: rel25, name: 幸运硬币, rarity: normal, desc: 每次抛起都落正面——直到你不再需要它。, effect: { coins_mult: 1.08, exp_mult: 1.05 } }
+  - { id: rel36, name: 招财猫, rarity: normal, desc: 断了左爪的那只，招的财格外多。, effect: { coins_mult: 1.15 } }
+  - { id: rel16, name: 赏金猎人证, rarity: normal, desc: 证件上的照片被人划掉了脸。, effect: { coins_mult: 1.08, vs_boss_mult: 1.04 } }
+  - { id: rel07, name: 智慧羽毛, rarity: normal, desc: 羽毛划过的字迹，读一遍就忘不掉。, effect: { exp_mult: 1.1 } }
+  - { id: rel18, name: 学徒笔记, rarity: normal, desc: 写满批注的笔记，页边挤着前人的惊呼。, effect: { exp_mult: 1.08 } }
+  - { id: rel28, name: 熟练手册, rarity: normal, desc: 翻旧的那几页恰好是你常错的招式。, effect: { exp_mult: 1.12 } }
+  # 开局金币
+  - { id: rel09, name: 旧零钱袋, rarity: normal, desc: 袋底粘着上一位主人的运气。, effect: { start_coins: 15 } }
+  - { id: rel19, name: 沉重钱砖, rarity: normal, desc: 沉得没法跑路，但足够解决问题。, effect: { start_coins: 30 } }
+  - { id: rel29, name: 破旧藏宝图, rarity: normal, desc: 缺角的图上标着三个互相矛盾的 X。, effect: { start_coins: 25, coins_mult: 1.05 } }
+  # 交易
+  - { id: rel08, name: 讨价还价券, rarity: normal, desc: 老板看到它就叹气，然后给你让价。, effect: { shop_discount: 0.95 } }
+  - { id: rel17, name: 讨债信, rarity: normal, desc: 信封上画着笑脸，内容一点也不好笑。, effect: { shop_discount: 0.92, coins_mult: 1.06 } }
+  - { id: rel26, name: 商人徽章, rarity: normal, desc: 佩戴者在任何摊位前都像老主顾。, effect: { shop_discount: 0.9, coins_mult: 1.05 } }
+  - { id: rel41, name: 清仓清单, rarity: normal, desc: 采购清单的背面写着老板不肯说的底价。, effect: { shop_discount: 0.94 } }
+  # 对精英/首领
+  - { id: rel10, name: 屠魔尖刃, rarity: normal, desc: 刃口的缺口全是啃怪物啃出来的。, effect: { vs_boss_mult: 1.06 } }
+  - { id: rel27, name: 猎手披风, rarity: normal, desc: 披风内衬绣着一串没有名字的猎物。, effect: { vs_boss_mult: 1.1 } }
+
+  # ========== 稀有 15 件（效果更强 / 复合） ==========
+  - { id: rel31, name: 双手巨剑, rarity: rare, desc: 没有技巧，只有把一切都劈开的重量。, effect: { atk: 14 } }
+  - { id: rel34, name: 石肤鳞, rarity: rare, desc: 皮肤上浮出细密的石纹，摸上去像砂纸。, effect: { def: 16 } }
+  - { id: rel32, name: 滑轮长靴, rarity: rare, desc: 靴跟藏着小小的滑轮，下坡如飞。, effect: { spd: 15 } }
+  - { id: rel43, name: 法力源泉, rarity: rare, desc: 源泉不深，但取之不尽。, effect: { mp: 30 } }
+  - { id: rel44, name: 巨人之心, rarity: rare, desc: 巨人已经死了，心还在替他活着。, effect: { max_hp: 20 } }
+  - { id: rel37, name: 拓印拓片, rarity: rare, desc: 拓片上的字比原碑还清楚。, effect: { exp_mult: 1.2 } }
+  - { id: rel38, name: 折扣券袋, rarity: rare, desc: 一沓券，最旧的那张已经过期三年。, effect: { shop_discount: 0.85 } }
+  - { id: rel39, name: 沉甸金袋, rarity: rare, desc: 金袋底部的补丁缝了又缝。, effect: { start_coins: 55 } }
+  - { id: rel40, name: 斩首之刃, rarity: rare, desc: 为「大的东西」磨了太久的刀。, effect: { vs_boss_mult: 1.15 } }
+  - { id: rel45, name: 黄金罗盘, rarity: rare, desc: 指针不指北，指向下一处便宜。, effect: { coins_mult: 1.15, shop_discount: 0.95 } }
+  - { id: rel46, name: 学者之冠, rarity: rare, desc: 冠冕很轻，压弯的是别人的脖子。, effect: { exp_mult: 1.2 } }
+  - { id: rel47, name: 军官证章, rarity: rare, desc: 别人的命听它调遣。, effect: { vs_boss_mult: 1.1, atk: 12 } }
+  - { id: rel48, name: 百宝箱, rarity: rare, desc: 打开只有一层夹板——好东西都在夹板下面。, effect: { start_coins: 45, shop_discount: 0.9 } }
+  - { id: rel49, name: 幸运星, rarity: rare, desc: 装在玻璃瓶里，白天也看得见。, effect: { coins_mult: 1.15, exp_mult: 1.15 } }
+  - { id: rel50, name: 精锐徽记, rarity: rare, desc: 五域通行的证明，边缘有五道刻痕。, effect: { atk: 8, def: 8, spd: 8 } }
+
+  # ========== 商店专属 20 件（只在商店出现，价格见 rogue.yaml shop.tier_price.shop） ==========
+  - { id: shop01, name: 倒卖账本, rarity: shop, desc: 每页都记着「低买高卖」四个字。, effect: { coins_mult: 1.2, shop_discount: 0.9 } }
+  - { id: shop02, name: 黑市通行证, rarity: shop, desc: 盖着三个已经消失的关防章。, effect: { shop_discount: 0.8 } }
+  - { id: shop03, name: 赝币袋, rarity: shop, desc: 仿真到连铸造者自己都认错的一袋钱。, effect: { start_coins: 60 } }
+  - { id: shop04, name: 狐裘大氅, rarity: shop, desc: 裘皮还带着体温般的柔软。, effect: { def: 14, max_hp: 10 } }
+  - { id: shop05, name: 疾风马刺, rarity: shop, desc: 一踩下去，风就到了身后。, effect: { spd: 16 } }
+  - { id: shop06, name: 淬毒刀刃, rarity: shop, desc: 刃口泛着不祥的幽蓝。, effect: { atk: 13 } }
+  - { id: shop07, name: 典当行凭证, rarity: shop, desc: 凭此票可赊账一次——账记在别人名下。, effect: { shop_discount: 0.88, coins_mult: 1.1 } }
+  - { id: shop08, name: 私酿烈酒, rarity: shop, desc: 喝下去像吞了一口火，然后浑身都暖了。, effect: { max_hp: 14, mp: 16 } }
+  - { id: shop09, name: 走私账单, rarity: shop, desc: 上面的名字比你的名字值钱。, effect: { vs_boss_mult: 1.12 } }
+  - { id: shop10, name: 拍卖槌, rarity: shop, desc: 一槌下去，价格就不再是价格。, effect: { coins_mult: 1.25 } }
+  - { id: shop11, name: 无息欠条, rarity: shop, desc: 「凭此条可预支未来三天的运气。」, effect: { start_coins: 40, shop_discount: 0.95 } }
+  - { id: shop12, name: 佣兵合同, rarity: shop, desc: 乙方栏写着一串已经死掉的名字。, effect: { atk: 10, def: 10 } }
+  - { id: shop13, name: 夜行斗篷, rarity: shop, desc: 斗篷的影子总比人慢半步。, effect: { spd: 13, coins_mult: 1.08 } }
+  - { id: shop14, name: 魔力电池, rarity: shop, desc: 里面封着一场没放完的雷雨。, effect: { mp: 35 } }
+  - { id: shop15, name: 生命抽取器, rarity: shop, desc: 抽的是别人的命，补的是自己的血。, effect: { max_hp: 25, atk: 5 } }
+  - { id: shop16, name: 破誓者之刃, rarity: shop, desc: 所有被它斩断的东西里，包括誓言。, effect: { atk: 14, vs_boss_mult: 1.08 } }
+  - { id: shop17, name: 保险单据, rarity: shop, desc: 受益人一栏空着，等着填。, effect: { shop_discount: 0.9, max_hp: 12 } }
+  - { id: shop18, name: 门路引荐信, rarity: shop, desc: 信上的火漆印来自你还没见过的人。, effect: { exp_mult: 1.2 } }
+  - { id: shop19, name: 黑市骰子, rarity: shop, desc: 五面都是六点——掷的人从不抱怨。, effect: { coins_mult: 1.15, exp_mult: 1.1 } }
+  - { id: shop20, name: 压箱底的金条, rarity: shop, desc: 沉甸甸的，垫在箱底三年没人发现。, effect: { start_coins: 80 } }
+
+  # ========== 事件专属 10 件（由 rogue_events.yaml 中带 effect.relic 的事件掉落） ==========
+  - { id: event01, name: 断剑之魂, rarity: event, desc: 断剑仍在等待能挥动它的人。, effect: { atk: 12, vs_boss_mult: 1.05 } }
+  - { id: event02, name: 营火余温, rarity: event, desc: 掌心里永远揣着一小捧不灭的炭。, effect: { exp_mult: 1.15, start_coins: 15 } }
+  - { id: event03, name: 月井倒影, rarity: event, desc: 井底的月光被封进了玻璃瓶。, effect: { mp: 30, exp_mult: 1.1 } }
+  - { id: event04, name: 封光花粉, rarity: event, desc: 花粉沾上皮肤，会在夜里微微发亮。, effect: { crit_rate: 0.12 } }
+  - { id: event05, name: 赤色结晶, rarity: event, desc: 结晶里裹着一团不肯熄灭的火。, effect: { atk: 16 } }
+  - { id: event06, name: 熔岩蛋壳, rarity: event, desc: 蛋壳内壁还残留着心跳的温度。, effect: { def: 18, max_hp: 12 } }
+  - { id: event07, name: 水晶棺的祝福, rarity: event, desc: 棺中人把祝福留给了后来者。, effect: { max_hp: 24, boss_heal: 60 } }
+  - { id: event08, name: 冰莲莲心, rarity: event, desc: 莲心里冻着一粒不化的春天。, effect: { spd: 18, mp: 24 } }
+  - { id: event09, name: 记忆碎片, rarity: event, desc: 捡起它的人会忘记一件小事，然后想起一件大事。, effect: { exp_mult: 1.3, shop_discount: 0.95 } }
+  - { id: event10, name: 彼岸花, rarity: event, desc: 花叶永不相见，正如你与你的运气。, effect: { vs_boss_mult: 1.2, max_hp: 16 } }
+
+  # ========== Boss 专属 15 件（一个 Boss 对应一件，击杀对应 Boss 获得；boss_only 不进任何抽取池） ==========
+  - { id: rel_b01, name: 傀儡之心, desc: 守塔傀儡的动力核心，蒸汽从指缝间溢出。, boss_only: true, effect: { def_mult: 1.15, max_hp_mult: 1.1 } }
+  - { id: rel_b02, name: 野猪獠牙, desc: 意外顺手的纪念品，还带着冲撞的惯性。, boss_only: true, effect: { atk_mult: 1.05, max_hp_mult: 1.15 } }
+  - { id: rel_b03, name: 蛛丝囊, desc: 采花巨蛛的丝囊，抽出的丝比钢还韧。, boss_only: true, effect: { spd_mult: 1.1, coins_mult: 1.1 } }
+  - { id: rel_b04, name: 雾隐豹瞳, desc: 雾隐豹王的左瞳，凝视时猎物无处遁形。, boss_only: true, effect: { atk_mult: 1.08, spd_mult: 1.12 } }
+  - { id: rel_b05, name: 古树之心, desc: 古树长老的心材，年轮里沉淀着百年的雨。, boss_only: true, effect: { max_hp_mult: 1.18, def_mult: 1.1, boss_heal: 40 } }
+  - { id: rel_b06, name: 蟾皇毒囊, desc: 毒沼蟾皇的腺体，封着一汪荧绿。, boss_only: true, effect: { atk_mult: 1.15, mp_mult: 1.2 } }
+  - { id: rel_b07, name: 熔核, desc: 熔岩巨人胸腔里的核，永远维持着熔点。, boss_only: true, effect: { max_hp_mult: 1.15, atk_mult: 1.12 } }
+  - { id: rel_b08, name: 火蜥逆鳞, desc: 火蜥领主颈下唯一没烧焦的那片鳞。, boss_only: true, effect: { atk_mult: 1.15, spd_mult: 1.1 } }
+  - { id: rel_b09, name: 蝠后翼膜, desc: 灰烬魔蝠后撕下的半张翼膜，抖落的灰不烫手。, boss_only: true, effect: { spd_mult: 1.15, coins_mult: 1.2 } }
+  - { id: rel_b10, name: 狼皇牙, desc: 霜牙狼皇的犬牙，呵气成霜。, boss_only: true, effect: { atk_mult: 1.15, vs_boss_mult: 1.12 } }
+  - { id: rel_b11, name: 骑士徽记, desc: 冰封骑士空甲里唯一的私人物品。, boss_only: true, effect: { def_mult: 1.2, max_hp_mult: 1.1 } }
+  - { id: rel_b12, name: 极光碎片, desc: 极光巫妖袍角的一片，夜里会自己流动。, boss_only: true, effect: { mp_mult: 1.4, exp_mult: 1.15 } }
+  - { id: rel_b13, name: 守望者之瞳, desc: 深渊守望者睁过的无数眼中，最小的那一颗。, boss_only: true, effect: { vs_boss_mult: 1.2, atk_mult: 1.08 } }
+  - { id: rel_b14, name: 吞噬者之牙, desc: 虚空吞噬者没有形体，只有这颗牙是实体。, boss_only: true, effect: { atk_mult: 1.2, max_hp_mult: 1.1 } }
+  - { id: rel_b15, name: 无名之影残片, desc: 与你影子同源的碎片，晒不到光。, boss_only: true, effect: { spd_mult: 1.2, vs_boss_mult: 1.15 } }

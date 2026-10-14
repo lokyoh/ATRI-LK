@@ -1,0 +1,116 @@
+limits:
+    active_slots: 6        # 主动技能槽（4 → 6：为新增主动技能留位）
+    passive_slots: 3        # 被动技能槽（被动在战斗中由 passive_effects 消费）
+    proficiency_gain: 0.01
+    proficiency_max: 1.0
+    proficiency_power_bonus: 0.3
+
+# cooldown 单位 = 计时条周期数：战斗计时条每轮 +10、每满 100 触发一次
+# 「计时条满」事件，届时所有技能的剩余冷却 -1（见 core/roguelike.py 的战斗循环）。
+#
+# 主动技能（type: active）：power 参与伤害系数（/30 基准），mp_cost 消耗局内 MP，
+# effects 支持 { type: heal, amount } 回血与 { type: mp, amount } 回蓝。
+skills:
+  tackle:
+    name: 撞击
+    type: active
+    element: normal
+    power: 30
+    mp_cost: 0
+    cooldown: 0
+    target: single
+    unlock_condition: { level: 1 }
+  fireball:
+    name: 火球术
+    type: active
+    element: fire
+    power: 40
+    mp_cost: 10
+    cooldown: 1
+    target: single
+    unlock_condition: { level: 5 }
+    effects: [{ type: burn, chance: 0.3, duration: 3 }]
+  break_strike:
+    name: 破甲击
+    type: active
+    element: normal
+    power: 38
+    mp_cost: 12
+    cooldown: 1
+    target: single
+    unlock_condition: { level: 8 }
+  heal:
+    name: 治愈术
+    type: active
+    element: light
+    power: 0
+    mp_cost: 15
+    cooldown: 1
+    target: self
+    unlock_condition: { level: 10 }
+    effects: [{ type: heal, amount: 50 }]
+  heavy_slash:
+    name: 重斩
+    type: active
+    element: normal
+    power: 60
+    mp_cost: 22
+    cooldown: 2
+    target: single
+    unlock_condition: { level: 16 }
+  mana_bolt:
+    name: 聚魔弹
+    type: active
+    element: light
+    power: 45
+    mp_cost: 18
+    cooldown: 1
+    target: single
+    unlock_condition: { level: 32 }
+    effects: [{ type: mp, amount: 30 }]   # 施放后回复局内 MP（回蓝上限 = 入场 MP）
+  # 肉鸽专属（§12.2 boss_unlocks "40" 首通解锁）。
+  # level: 999 保证 check_skill_unlock 永远不会自动解锁它，只能由结算写回。
+  rogue_slash:
+    name: 肉鸽斩击
+    type: active
+    element: normal
+    power: 55
+    mp_cost: 12
+    cooldown: 1
+    target: single
+    unlock_condition: { level: 999 }
+
+  # ---- 被动技能（type: passive，占用 passive_slots） ----
+  # 由 core/roguelike.py 的 passive_effects 在战斗入场时消费——effect 键只作用于
+  # **战斗/局内**：atk/def/spd/mp 直接加在入场战斗属性上；max_hp 加在局内生命上限上
+  # （new_run 计算）；crit_rate 为我方输出暴击率（倍率见 roguelike.yaml battle.crit_mult）。
+  iron_will:
+    name: 蛮力
+    type: passive
+    effect: { atk: 6 }
+    unlock_condition: { level: 15 }
+  iron_wall:
+    name: 铁壁
+    type: passive
+    effect: { def: 8 }
+    unlock_condition: { level: 18 }
+  wind_blood:
+    name: 疾风血脉
+    type: passive
+    effect: { spd: 6 }
+    unlock_condition: { level: 22 }
+  mana_spring:
+    name: 魔力源泉
+    type: passive
+    effect: { mp: 20 }
+    unlock_condition: { level: 26 }
+  giant_heart:
+    name: 巨心
+    type: passive
+    effect: { max_hp: 60 }
+    unlock_condition: { level: 30 }
+  battle_instinct:
+    name: 战斗直觉
+    type: passive
+    effect: { crit_rate: 0.15 }
+    unlock_condition: { level: 35 }

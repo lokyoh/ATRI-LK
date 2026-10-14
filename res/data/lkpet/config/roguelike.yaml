@@ -1,0 +1,202 @@
+# 肉鸽爬塔配置（任务书 §12）。全部数值外置；用户可见文案在 texts.yaml 的 rogue 块。
+# 局内资源（局内生命、局内金币、局内增益）只存在于 run 状态里，永不落盘到养成数据。
+# 结构：5 个区域 × 20 层 = 100 层；每区域一个主题，基础数值跨区域成倍跳升（难度差距显著）。
+#   · 区域中点（relic_floor）固定为**遗物奖励层**（三选一）；
+#   · 区域末层为**区域首领**（候选三选一，首通另给首通奖励，击杀掉 Boss 专属遗物）；
+#   · 首领前一层必定刷出**回血补给事件**（supply），同层的战斗路线也必定是精英守门。
+# 事件在 rogue_events.yaml（每区域 30 个）；遗物在 rogue_relics.yaml（普通 ≥50 + Boss 专属 15）。
+
+tower:
+  floors: 100             # 5 区域 × 20 层
+  entry_cost_key: rogue       # 入场行动点，对应 daily.yaml action_points.costs 的键
+  step_cost_key: rogue_step   # 每前进一步的行动点
+  regions:
+    - id: plains
+      name: 青草平原
+      desc: 开阔的草原，风里混着青草与野花的气息——最温和的试炼。
+      start: 1
+      end: 20
+      relic_floor: 10     # 区域中点：固定遗物奖励层
+      boss_floor: 20
+      monster:
+        base: { hp: 40, atk: 8, def: 4, spd: 8 }
+        growth: { hp: 3, atk: 0.6, def: 0.3, spd: 0.2 }
+      monsters: [草原狼, 野猪, 巨眼田鼠, 带刺花妖, 泥潭史莱姆, 风灵, 野蛮蜂群, 强盗野兔, 磷光蝶群, 稻草傀儡]
+      rewards: { coins: 2, coins_per_floor: 1, exp: 20, exp_per_floor: 2 }
+      shop: { heal_mult: 1 }
+      elites:  # 每区域 5 个精英备选（战斗路线按区域 seed 抽，遭遇次数受 elite.max_per_region 限制）
+        - { name: 铁角原牛, desc: 低头犁地的巨牛，一对铁角能掀翻货车。 }
+        - { name: 疾风隼王, desc: 循风而猎的巨隼，俯冲时像一支白羽箭。 }
+        - { name: 毒刺巨蜂, desc: 尾针有小指长，振翅声像锯木头。 }
+        - { name: 断牙头狼, desc: 狼群的王，左犬齿断了一半，从不落单。 }
+        - { name: 禾田稻魔, desc: 稻草束成的人形，夜里在田里自己走路。 }
+    - id: forest
+      name: 迷雾森林
+      desc: 终年不散的浓雾吞掉路径与声音，树影里藏着不属于林地的眼睛。
+      start: 21
+      end: 40
+      relic_floor: 30
+      boss_floor: 40
+      monster:
+        base: { hp: 110, atk: 18, def: 9, spd: 11 }
+        growth: { hp: 5, atk: 1.0, def: 0.5, spd: 0.3 }
+      monsters: [雾影狸, 毒牙蜘蛛, 树精哨兵, 腐化野鹿, 迷途怨灵, 苔藓巨蟾, 藤蔓缠人者, 枯叶刃魔, 夜梟, 蛊惑花]
+      rewards: { coins: 5, coins_per_floor: 1, exp: 60, exp_per_floor: 4 }
+      shop: { heal_mult: 2.5 }
+      elites:
+        - { name: 苔皮巨熊, desc: 背上生满青苔，一掌能拍断百年树干。 }
+        - { name: 织网女巫蛛, desc: 腹部的纹路像一张皱眉的人脸。 }
+        - { name: 腐沼鳄, desc: 潜在浮萍之下，背脊看去只是一截烂木。 }
+        - { name: 巨钳螳螂, desc: 双臂镰刃磨得发亮，专剪经过的脖子。 }
+        - { name: 雾隐枭人, desc: 半人半枭，雾越浓越难被看见。 }
+    - id: lava
+      name: 熔岩洞窟
+      desc: 地面滚烫、岩浆在暗处发亮，呼吸都带着硫磺味的灼热迷宫。
+      start: 41
+      end: 60
+      relic_floor: 50
+      boss_floor: 60
+      monster:
+        base: { hp: 240, atk: 34, def: 16, spd: 14 }
+        growth: { hp: 8, atk: 1.75, def: 0.8, spd: 0.4 }
+      monsters: [熔岩犬, 火甲虫, 灰烬幽魂, 岩浆史莱姆, 烈焰秃鹫, 赤鳞蜥, 硫磺喷兽, 黑曜傀儡, 火苗精灵, 熔岩蟹]
+      rewards: { coins: 10, coins_per_floor: 2, exp: 140, exp_per_floor: 7 }
+      shop: { heal_mult: 5 }
+      elites:
+        - { name: 赤甲火蝎, desc: 尾钩滴落的毒液在石头上烧出小洞。 }
+        - { name: 熔岩蟒, desc: 体内流动着岩浆，爬过的地方留下火痕。 }
+        - { name: 灰烬骑士, desc: 甲胄里空无一人，灰烬从缝隙不断漏出。 }
+        - { name: 火山凶豚, desc: 拱起的背像一块烧红的铁砧。 }
+        - { name: 焰翅蝠王, desc: 翅膜上跳动着细小的火苗。 }
+    - id: frost
+      name: 冰封王座
+      desc: 永冻的宫殿与断裂的冰桥，呼出的白霜会立刻在睫毛上结冰。
+      start: 61
+      end: 80
+      relic_floor: 70
+      boss_floor: 80
+      monster:
+        base: { hp: 500, atk: 66, def: 32, spd: 18 }
+        growth: { hp: 12, atk: 2.75, def: 1.25, spd: 0.5 }
+      monsters: [霜狼, 冰晶傀儡, 雪怪, 冻尸兵, 极地幽魂, 冰锥蝠, 霜花妖, 寒风元素, 白熊, 冰面猎手]
+      rewards: { coins: 18, coins_per_floor: 3, exp: 300, exp_per_floor: 12 }
+      shop: { heal_mult: 9 }
+      elites:
+        - { name: 冰棘猛犸, desc: 象牙结满冰棱，吼一声能冻住呼吸。 }
+        - { name: 霜翼巨鹰, desc: 爪下抓着整块浮冰在空中巡弋。 }
+        - { name: 冻原食人魔, desc: 肩上扛着半截结冰的路牌。 }
+        - { name: 雪腹巨蛛, desc: 白色绒毛与雪地融为一体。 }
+        - { name: 冰镜魅影, desc: 从冰面里坐起来的另一个"你"。 }
+    - id: abyss
+      name: 深渊之巅
+      desc: 塔顶之上的倒悬深渊，星光从脚下坠落，连影子都会背叛你。
+      start: 81
+      end: 100
+      relic_floor: 90
+      boss_floor: 100
+      monster:
+        base: { hp: 1000, atk: 120, def: 60, spd: 24 }
+        growth: { hp: 17, atk: 4.0, def: 1.75, spd: 0.6 }
+      monsters: [虚空之影, 星蚀兽, 坠落守卫, 裂隙爬虫, 回声魔偶, 深渊水母, 虚无信徒, 黑日鸦, 失重骷髅, 命运织蛛]
+      rewards: { coins: 30, coins_per_floor: 4, exp: 560, exp_per_floor: 20 }
+      shop: { heal_mult: 15 }
+      elites:
+        - { name: 虚空之眼, desc: 悬浮的巨眼，瞳孔里倒转着星光。 }
+        - { name: 星坠猎犬, desc: 由陨屑拼成的猎犬，奔跑时拖出火尾。 }
+        - { name: 裂魂双子, desc: 共享一具身体的两个影子，各朝一方拉扯。 }
+        - { name: 深渊灯水母, desc: 伞盖下的光是诱饵，触须垂进虚无。 }
+        - { name: 影噬巨口, desc: 没有身体，只有一张缓缓张开的嘴。 }
+
+elite:
+  chance: 0.3              # 候选层逐层判定的概率（区域级 seed，可复现）
+  max_per_region: 4        # 每区域至多生成 4 次精英遭遇（保底精英计入其中）
+  min_floor_gap: 5         # 区域前 5 层（start…start+4）不生成精英，候选从 start+gap 起
+  guaranteed_offset: 2     # end - offset 层必定精英（首领前一层是纯补给层，故保底在倒数第二层）
+  stats_mult: 1.6          # 精英 = 当层普通公式 × 1.6（介于小怪与首领之间）
+  reward_mult: { coins: 2, exp: 2 }   # 精英掉落倍率（金币/经验）
+
+supply:
+  floor_offset: 1          # end - offset 层（首领前一层）**唯一选项就是回血补给**（不再有三选一）
+  event:
+    id: supply_cache
+    text: >
+      首领战前的补给点：墙龛里堆着绷带、药膏与半壶温热的肉汤——前人留下的应急储备，
+      盖子上用木炭写着「给还活着的人」。
+    choices:
+      - { text: 痛饮热汤回复生命, effect: { run_hp: 60 } }
+      - { text: 仔细包扎处理伤口, effect: { run_hp: 40, exp: 20 } }
+      - { text: 打包带走干粮和药, effect: { coins: 15, run_hp: 20 } }
+
+battle:
+  max_rounds: 50          # 超过回合上限判定战败
+  variance: [0.85, 1.15]  # 伤害浮动区间
+  def_factor: 0.5         # 防御减伤系数：atk - def * def_factor
+  # 攻击条机制（ATB）：取 100 为个人攻击条上限，每轮按速度攒 gauge_rate_mult × spd；
+  # 先满者出击（-100），同轮都满时速度快者先动——速度值决定出击频率。
+  gauge_rate_mult: 5
+  # 战斗计时条：每轮结束固定 +timer_gain，满 100 触发「计时条满」：
+  # 所有技能剩余冷却 -1、计时 Buff 剩余时长 -1（预留），随后计时条清零。
+  timer_gain: 10
+  # 暴击倍率：被动技能 crit_rate 命中时我方输出 × crit_mult
+  crit_mult: 1.8
+
+# 区域首领：每个区域 3 个候选，进入首领层时**三选一**挑战。
+# mult 作用在该区域普通敌人的当层公式结果上；coins/exp 为绝对值。
+# relic = Boss 专属遗物（一个 Boss 对应一件；见 rogue_relics.yaml 的 boss_only 项）。
+bosses:
+  plains:
+    - { name: 守塔傀儡, desc: 铁锈斑驳的傀儡，关节里漏出蒸汽，横在第一块界碑前。, relic: rel_b01, hp_mult: 3.0, atk_mult: 1.6, def_mult: 1.5, spd_mult: 1.0, coins: [25, 35], exp: 150 }
+    - { name: 暴走野猪王, desc: 獠牙犁开草地，红着眼睛只会做一件事：冲撞。, relic: rel_b02, hp_mult: 2.4, atk_mult: 2.0, def_mult: 1.0, spd_mult: 1.3, coins: [20, 45], exp: 160 }
+    - { name: 采花巨蛛, desc: 腿像枯枝，腹部的花纹在阳光下像一朵盛开的花。, relic: rel_b03, hp_mult: 2.0, atk_mult: 1.5, def_mult: 1.2, spd_mult: 1.6, coins: [30, 40], exp: 140 }
+  forest:
+    - { name: 雾隐豹王, desc: 只在雾最浓时现身，爪痕先于它的形体出现。, relic: rel_b04, hp_mult: 3.2, atk_mult: 1.8, def_mult: 1.3, spd_mult: 1.5, coins: [55, 75], exp: 340 }
+    - { name: 古树长老, desc: 树皮皲裂成脸的形状，根须在泥土下缓缓收拢。, relic: rel_b05, hp_mult: 4.0, atk_mult: 1.5, def_mult: 1.8, spd_mult: 0.8, coins: [50, 85], exp: 360 }
+    - { name: 毒沼蟾皇, desc: 鼓胀的喉囊里晃着荧绿毒液，蛙鸣像钝刀刮铁。, relic: rel_b06, hp_mult: 3.0, atk_mult: 2.0, def_mult: 1.4, spd_mult: 1.0, coins: [60, 80], exp: 330 }
+  lava:
+    - { name: 熔岩巨人, desc: 碎石拼成的躯体里裹着赤红岩浆，一步一震。, relic: rel_b07, hp_mult: 4.2, atk_mult: 1.7, def_mult: 1.9, spd_mult: 0.8, coins: [110, 150], exp: 760 }
+    - { name: 火蜥领主, desc: 鳞片下流淌着熔火，吐息能把铁器烧成汁。, relic: rel_b08, hp_mult: 3.0, atk_mult: 2.2, def_mult: 1.3, spd_mult: 1.4, coins: [120, 160], exp: 740 }
+    - { name: 灰烬魔蝠后, desc: 翼膜遮住洞顶的光，粉尘落处寸草不生。, relic: rel_b09, hp_mult: 2.6, atk_mult: 2.0, def_mult: 1.2, spd_mult: 1.7, coins: [100, 170], exp: 780 }
+  frost:
+    - { name: 霜牙狼皇, desc: 狼群在它身后排成一列白影，霜从它的呼吸里长出来。, relic: rel_b10, hp_mult: 3.4, atk_mult: 2.0, def_mult: 1.4, spd_mult: 1.5, coins: [210, 280], exp: 1500 }
+    - { name: 冰封骑士, desc: 铠甲里没有人，只有一团不肯散去的寒雾。, relic: rel_b11, hp_mult: 4.0, atk_mult: 1.8, def_mult: 2.0, spd_mult: 1.1, coins: [220, 300], exp: 1550 }
+    - { name: 极光巫妖, desc: 法袍上的极光缓缓流动，指尖悬着不化的冰晶。, relic: rel_b12, hp_mult: 3.0, atk_mult: 2.4, def_mult: 1.3, spd_mult: 1.3, coins: [230, 290], exp: 1520 }
+  abyss:
+    - { name: 深渊守望者, desc: 无数只眼睛在黑暗里依次睁开，每一只都倒映着你。, relic: rel_b13, hp_mult: 4.5, atk_mult: 2.0, def_mult: 1.8, spd_mult: 1.2, coins: [420, 520], exp: 3000 }
+    - { name: 虚空吞噬者, desc: 它没有形体，只有不断塌陷的轮廓在啃食光线。, relic: rel_b14, hp_mult: 3.6, atk_mult: 2.6, def_mult: 1.4, spd_mult: 1.4, coins: [440, 560], exp: 3100 }
+    - { name: 无名之影, desc: 与你的影子一模一样，只是先一步抬起了手。, relic: rel_b15, hp_mult: 3.2, atk_mult: 2.4, def_mult: 1.6, spd_mult: 1.8, coins: [460, 540], exp: 3200 }
+
+# 商店 = 遗物商店（原道具下架）：
+#   · 每层货架 3 件遗物 = 普通 1 + 稀有 1 + 商店专属 1（本区域/全局池按 seed 抽、排除本局已持有）
+#   · 区域前 5 层不刷出商店（no_before_gap）
+#   · 遗物只在本局生效；价格按 rarity 由 tier_price 统一定
+shop:
+  no_before_gap: 5        # 区域前 5 层（start … start+4）不出现商店
+  stock_tiers: [normal, rare, shop]
+  tier_price: { normal: 25, rare: 60, shop: 50 }
+
+rewards:                  # 成就点（§12.2：按到达层数结算，写入 PETREINCARNATION）
+  per_floor: 2            # 到达每层
+  boss_bonus: 10          # 每通关一个区域首领（不限首通）
+  clear_bonus: 200        # 通关第 100 层的大奖
+  battle_exp: true        # 战斗经验随结算写回宠物 exp
+
+# 区域首领首通解锁的专属奖励（首通记录存 PETROGUE，已解锁的不重复发放）。
+# key = 首领层号（20/40/60/80/100）；skill 必须在 skills.yaml 中且 level: 999（绝不自动解锁）。
+boss_unlocks:
+  "20":
+    type: equipment
+    slot: ring
+    item: { name: 守塔者之戒, bonus: { atk: 5 } }
+  "40":
+    type: skill
+    id: rogue_slash
+  "60":
+    type: equipment
+    slot: armor
+    item: { name: 霜纹胸甲, bonus: { def: 8 } }
+  "80":
+    type: skill
+    id: fireball
+  "100":
+    type: title
+    title: 五域统御

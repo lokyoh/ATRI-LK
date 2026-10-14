@@ -39,9 +39,7 @@ class JudgmentModel:
 
     @classmethod
     async def analyze(cls, bot, this_msg, history_list, chat_message) -> bool:
-        if not llm_manager.has_type(ModelType.TOOL) or not llm_manager.has_type(
-            ModelType.SYSTEMONE
-        ):
+        if not llm_manager.has_type(ModelType.TOOL):
             return False
         chat_content = await this_msg.get_message(bot)
         messages = await get_history_messages(

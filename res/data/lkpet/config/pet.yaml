@@ -1,0 +1,52 @@
+base_attributes:
+  hp: 100
+  atk: 12
+  def: 10
+  spd: 11
+  mp: 20
+  luk: 5
+  cha: 5
+  int: 5
+
+growth:
+  hp: 1.1
+  atk: 1.2
+  def: 1.0
+  spd: 1.1
+  mp: 0.9
+
+default_lifespan_days: 120
+
+personalities:
+  brave:
+    name: 勇敢
+    exp_mod: 1.1
+    battle_ai: aggressive
+  timid:
+    name: 胆小
+    exp_mod: 0.9
+    battle_ai: defensive
+  gentle:
+    name: 温和
+    exp_mod: 1.0
+    battle_ai: balanced
+  cunning:
+    name: 狡猾
+    exp_mod: 1.05
+    battle_ai: trickster
+  loyal:
+    name: 忠诚
+    exp_mod: 1.0
+    battle_ai: protective
+  curious:
+    name: 好奇
+    exp_mod: 1.15
+    battle_ai: explorer
+
+titles:
+  adventurer:
+    name: 冒险者
+    bonus: { atk: 2 }
+  veteran:
+    name: 老兵
+    bonus: { hp: 20, def: 2 }

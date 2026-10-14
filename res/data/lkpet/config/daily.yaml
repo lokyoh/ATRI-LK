@@ -1,0 +1,54 @@
+max_offline_days: 30
+# 离线超过 30 天时，只保留最近 30 条逐日明细；年龄仍按实际经过天数增长，
+# 状态按实际离线天数衰减并钳制到下方下限，不在第 30 天截断。
+
+status_minimums:
+    mood: 0
+    hunger: 0
+    fatigue: 0
+    cleanliness: 0
+    affection: 0
+
+action_points:
+  max_per_day: 10
+  reset_time: "00:00"
+  costs:
+    feed: 1
+    play: 1
+    pet: 0
+    bathe: 1
+    train: 2
+    rest: 0
+    adventure: 3
+    battle: 2
+    rogue: 3        # 肉鸽入场（§12：行动点仅入场时需要）
+    rogue_step: 0   # 每前进一步不消耗（入场后推到哪算哪）
+
+daily_decay:
+  hunger: -5
+  mood: -3
+  cleanliness: -2
+  fatigue: -5
+
+# 亲密度按「照护是否到位」衰减，取代原先的「7 天未互动」规则。
+# 饥饿/心情/清洁低于阈值、疲劳高于阈值，各算一项「未满足」；
+# 未满足 1/2/3/4 项分别乘 multipliers 的 1.0/1.1/1.3/1.5，全部满足则不衰减。
+# 判定所用的是当天状态衰减**之后**的数值。
+affection_decay:
+  base: 10                # 好感已整体放大 10 倍（上限 1000），故基础值为 10
+  thresholds:
+    hunger: 30
+    mood: 30
+    cleanliness: 30
+    fatigue: 80
+  multipliers: [1.0, 1.1, 1.3, 1.5]
+
+daily_flags:
+  - fed
+  - played
+  - petted
+  - bathed
+  - trained
+  - rested
+  - adventured
+  - battled

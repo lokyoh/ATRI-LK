@@ -182,8 +182,8 @@ async def call_agent(event: GroupMessageEvent, matcher: Matcher, bot: Bot):
     p_c = config.get("proactively_chat") and group_id in config.get(
         "proactively_chat_whit_list"
     )
-    skip_chat = p_c
-    skip_judgment = p_c
+    skip_chat = not p_c
+    skip_judgment = not p_c
     if event.to_me or has_key_word(message.extract_plain_text()):
         skip_chat = False
         skip_judgment = True

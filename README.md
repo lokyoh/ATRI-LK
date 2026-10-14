@@ -8,7 +8,8 @@
 
 ATRI-LK 致力于在 QQ/OneBot 即时聊天平台中复现一只功能丰富、表现稳定的机器人。项目基于原 ATRI 开发，并加入更多扩展功能。
 
-> 本项目新版部分功能依赖 [napcatAPI](https://napcat.apifox.cn/)。在非 [NapCatQQ](https://napneko.github.io/) 机器人环境下可能会出现兼容性问题。
+> 本项目新版部分功能依赖 [napcatAPI](https://napcat.apifox.cn/)。在非 [NapCatQQ](https://napneko.github.io/) 机器人环境下可能会出现兼容性问题。  
+> 新增QQ适配器,部分功能已适配。
 
 ## 📌 声明 | Declarations
 
@@ -48,8 +49,6 @@ ATRI-LK 致力于在 QQ/OneBot 即时聊天平台中复现一只功能丰富、�
 - [x] 群聊模式对策
 - [x] 附属-图库
 
-> 附属可移除。
-
 </details>
 
 <details markdown='1'><summary>内置 LK 附属插件</summary>
@@ -65,9 +64,10 @@ ATRI-LK 致力于在 QQ/OneBot 即时聊天平台中复现一只功能丰富、�
 - [x] 聊天
   - [x] AI聊天包含记忆、词语解释
   - [x] 戳一戳ATRI
-- [ ] ~~宠物~~
-  - [x] 新宠物
-  - [x] AI聊天
+- [ ] 宠物(Demo)
+  - [ ] 养成(Demo)
+  - [ ] 爬塔(Demo)
+  - [ ] 跑团(Demo)
 - [ ] 农场
   - [x] 新农场
   - [x] 锄地、浇水、种植、收获、移除

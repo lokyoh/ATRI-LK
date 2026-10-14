@@ -89,7 +89,7 @@ async def _(event: QQMessageEvent):
 async def get_pic(user_id):
     """获取签到卡片"""
     f = get_fortune()
-    return _to_pic(f, user_id)
+    return await _to_pic(f, user_id)
 
 
 async def _to_pic(f, user_id):

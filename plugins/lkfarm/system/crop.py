@@ -4,14 +4,16 @@ from datetime import date
 from enum import Enum
 from pathlib import Path
 from random import randint
+
 import yaml
 
-from ATRI.log import log
-from ATRI.system.lkapi.entity.item import items, Item, ItemType
 from ATRI.exceptions import str_traceback
+from ATRI.log import log
+from ATRI.system.lkapi.entity.item import Item, ItemType, items
 
 from .farm_shop import farm_shop
-from .season import Season, Month
+from .lucky import get_drop_chance
+from .season import Month, Season
 
 
 class CropType(Enum):
@@ -21,9 +23,7 @@ class CropType(Enum):
     SEED = "种子"
 
     def is_seed(self) -> bool:
-        if self == CropType.SEED:
-            return True
-        return False
+        return self == CropType.SEED
 
 
 class CropData:
@@ -42,9 +42,7 @@ class CropData:
     def growable(self, month: Month | int) -> bool:
         if type(month) is int:
             month = Month(month)
-        if month.to_season() in self._season.get_seasons():
-            return True
-        return False
+        return month.to_season() in self._season.get_seasons()
 
     def crop_is_seed(self) -> bool:
         return self._type.is_seed()
@@ -58,13 +56,14 @@ class CropData:
             days += day
         return days
 
-    def get_harvest_list(self) -> list:
+    def get_harvest_list(self, lucky: int = 0) -> list:
         harvest_list = []
         for i in range(len(self._harvest_list[0])):
             item = self._harvest_list[0][i]
-            chance = self._harvest_list[1][i]
+            chance = get_drop_chance(self._harvest_list[1][i], lucky)
             match_plus = re.match(r"(.*)\+$", item)
             if match_plus:
+                chance = min(chance, 50)
                 item = match_plus[1]
                 while randint(1, 100) <= chance:
                     harvest_list.append(item)
@@ -99,20 +98,35 @@ def load_crop_data(loader_name: str, path: Path):
             seed_intro = f"{Season(conf['season']).value}种植，{days}天后收获。"
             if crop_data.crop_is_seed():
                 seed = Item(f"{crop_name}", ItemType.SEED, crop_intro, crop_price)
-                seed2 = Item(f"{crop_name}-银", ItemType.SEED, crop_intro, int(crop_price * 1.25))
-                seed3 = Item(f"{crop_name}-金", ItemType.SEED, crop_intro, int(crop_price * 1.5))
-                seed4 = Item(f"{crop_name}-铱", ItemType.SEED, crop_intro, crop_price * 2)
+                seed2 = Item(
+                    f"{crop_name}-银", ItemType.SEED, crop_intro, int(crop_price * 1.25)
+                )
+                seed3 = Item(
+                    f"{crop_name}-金", ItemType.SEED, crop_intro, int(crop_price * 1.5)
+                )
+                seed4 = Item(
+                    f"{crop_name}-铱", ItemType.SEED, crop_intro, crop_price * 2
+                )
                 items.register(seed).register(seed2).register(seed3).register(seed4)
             else:
                 seed_sell = conf["price"]["seed_sell"]
                 seed = Item(f"{crop_name}种子", ItemType.SEED, seed_intro, seed_sell)
                 _type = ItemType(conf["type"])
                 crop = Item(f"{crop_name}", _type, crop_intro, crop_price)
-                crop2 = Item(f"{crop_name}-银", _type, crop_intro, int(crop_price * 1.25))
-                crop3 = Item(f"{crop_name}-金", _type, crop_intro, int(crop_price * 1.5))
+                crop2 = Item(
+                    f"{crop_name}-银", _type, crop_intro, int(crop_price * 1.25)
+                )
+                crop3 = Item(
+                    f"{crop_name}-金", _type, crop_intro, int(crop_price * 1.5)
+                )
                 crop4 = Item(f"{crop_name}-铱", _type, crop_intro, crop_price * 2)
-                items.register(seed).register(crop).register(crop2).register(crop3).register(crop4)
-            if crop_data.growable(date.today().month) and crop_data.get_seed_price() != 0:
+                items.register(seed).register(crop).register(crop2).register(
+                    crop3
+                ).register(crop4)
+            if (
+                crop_data.growable(date.today().month)
+                and crop_data.get_seed_price() != 0
+            ):
                 farm_shop.add_goods(seed, crop_data.get_seed_price())
                 shop_count += 1
             crop_data_list[crop_name] = crop_data

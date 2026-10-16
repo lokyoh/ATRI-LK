@@ -8,6 +8,7 @@ from ATRI.system.lkapi.entity.item import items
 from ATRI.system.lkapi.entity.user import UserData
 
 from .crop import CropData, crop_data_list
+from .lucky import get_quality_bonus
 
 
 class FieldData:
@@ -104,13 +105,18 @@ class FarmField:
         self.water_date = str(date.today())
 
     def harvesting(self, user_data: UserData, crop_data: CropData, f_user_data):
+        lucky = f_user_data.lucky
+        harvest_list = crop_data.get_harvest_list(lucky)
+        level = f_user_data.get_level_exp()[0]
+        # 品质判定依赖 self.data.quality，需在重置田地数据前完成
+        item_list = [
+            self._get_item_quality(item, level, lucky) for item in harvest_list
+        ]
         self.crop = ""
         self.data = FieldData()
         self.days = 0
-        harvest_list = crop_data.get_harvest_list()
-        level = f_user_data.get_level_exp()[0]
-        for item in harvest_list:
-            user_data.item_num_change(self._get_item_quality(item, level), 1)
+        for item in item_list:
+            user_data.item_num_change(item, 1)
 
     def hoeing(self):
         self.state = 1
@@ -168,12 +174,13 @@ class FarmField:
         if self.crop in crop_data_list and self.fertilizer in fertilizer_data_list:
             fertilizer_data_list[self.fertilizer].get_effect(self.data)
 
-    def _get_item_quality(self, item, level) -> str:
+    def _get_item_quality(self, item, level, lucky: int = 0) -> str:
         quality = ""
         if items.has_item(f"{item}-银"):
             r_q = randint(1, 110)
             r_q += randint(0, level * 6)
             r_q += self.data.quality
+            r_q += get_quality_bonus(lucky)
             if r_q > 300:
                 quality = "铱"
             elif r_q > 200:

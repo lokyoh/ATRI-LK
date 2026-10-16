@@ -12,7 +12,7 @@ from ATRI.system.lkapi.entity.user import get_user_data
 
 from .config import LKFarmConfig
 
-plugin = Service("农场", "ATRI的农场插件", "0.5.0", Service.ServiceType.GAME).main_cmd(
+plugin = Service("农场", "ATRI的农场插件", "0.6.0", Service.ServiceType.GAME).main_cmd(
     "农场"
 )
 config = plugin.add_plugin_config(LKFarmConfig)

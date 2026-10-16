@@ -10,6 +10,7 @@ from .crop import CropData, crop_data_list
 from .datebase import farm_table, user_table
 from .farm_field import FarmField
 from .fertilizer import fertilizer_data_list
+from .lucky import get_lucky_tier
 from .season import Month
 from .weather import get_weather
 
@@ -35,16 +36,17 @@ class UserFarmData:
         return True
 
     def lucky_change(self, num):
+        change = num
         num = self.lucky + num
         if num > 100:
             num = 100
         if num < -100:
             num = -100
         self.lucky = num
-        log.debug(f"用户{self.id}运气变化{num},现值{self.endurance}")
+        log.debug(f"用户{self.id}运气变化{change},现值{self.lucky}")
 
-    def get_trans_lucky(self) -> str:
-        return self.lucky
+    def get_lucky_level(self) -> int:
+        return get_lucky_tier(self.lucky).level
 
     def exp_change(self, num):
         num = self.exp + num

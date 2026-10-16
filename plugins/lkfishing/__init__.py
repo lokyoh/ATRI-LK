@@ -20,7 +20,7 @@ from .data.fish import FishData
 from .data.user import get_fish_user_data
 from .data_source import FishingController
 
-plugin = Service("钓鱼", "ATRI的钓鱼插件", "0.4.0", Service.ServiceType.GAME).main_cmd(
+plugin = Service("钓鱼", "ATRI的钓鱼插件", "0.4.1", Service.ServiceType.GAME).main_cmd(
     "钓鱼"
 )
 

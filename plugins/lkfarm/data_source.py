@@ -33,6 +33,7 @@ from .system.farm_shop import farm_shop, get_farm_shop_info
 from .system.farm_user import UserFarmData, get_user_farm_data, user_farm_datas
 from .system.fertilizer import add_fertilizer_to_shop, load_fertilizer_data
 from .system.forecast import weather_forecast
+from .system.lucky import format_lucky
 from .system.weather import get_weather
 
 plugin.scheduler_jobs().add_job(
@@ -116,13 +117,15 @@ def lkfarm_sign_in(event: SignInEvent):
 def lkfarm_user_info(event: UserInfoEvent):
     user_id = str(event.user_data.id)
     user_farm_datas.has_user(user_id)
-    event.add_result(f"体力:{get_user_farm_data(user_id).endurance}")
+    user_data = get_user_farm_data(user_id)
+    event.add_result(f"体力:{user_data.endurance}")
+    event.add_result(format_lucky(user_data.lucky))
 
 
 class FarmSystem:
     _FARM_MODEL = """# {name}的农场
 > 天气:{weather} 明日:{next_weather}  
-> 等级:{level} 经验:{exp} 体力:{endur}
+> 等级:{level} 经验:{exp} 体力:{endur} {lucky}
 
 |农场|A|B|C|D|
 |:-:|:-:|:-:|:-:|:-:|
@@ -158,6 +161,7 @@ class FarmSystem:
             weather=self.WEATHER[user_farm_datas.weather],
             next_weather=self.WEATHER[user_farm_datas.next_weather],
             endur=user_data.endurance,
+            lucky=format_lucky(user_data.lucky),
             field=fields,
             name=lk_util.get_name(user_id),
             level=level,
@@ -196,6 +200,7 @@ class FarmSystem:
             weather=self.WEATHER[user_farm_datas.weather],
             next_weather=self.WEATHER[user_farm_datas.next_weather],
             endur=user_data.endurance,
+            lucky=format_lucky(user_data.lucky),
             field=fields,
             name=lk_util.get_name(user_id),
             level=level,

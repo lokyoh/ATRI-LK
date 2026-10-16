@@ -245,3 +245,82 @@ def get_bathe_message(pet) -> str:
         return text(
             "messages.bathe.unwilling", f"{pet.name}不太情愿地洗完了澡", name=pet.name
         )
+
+
+async def train(
+    pet,
+    player_id: str | int,
+    *,
+    interactions_config: dict[str, Any] | None = None,
+    daily_config: dict[str, Any] | None = None,
+) -> dict[str, Any]:
+    """训练宠物获取经验；消耗行动点和状态，经验根据肉鸽历史最高层数动态调整。"""
+    from ..database import load_rogue
+    from .leveling import calc_exp_gain, check_level_up
+
+    cfg = (
+        interactions_config
+        if interactions_config is not None
+        else _load_interactions_config()
+    )
+    effects = cfg["effects"]["train"]
+    check_action_point(pet, "train", daily_config=daily_config)
+
+    # 读取肉鸽历史最高层数
+    rogue = load_rogue(player_id)
+    best_floor = rogue.best_floor if rogue else 0
+
+    # 根据最高层数匹配经验档位
+    exp_tiers = effects.get("exp_tiers", [])
+    base_exp = effects.get("exp_base", 500)
+    for tier in sorted(exp_tiers, key=lambda t: t.get("floor", 0), reverse=True):
+        if best_floor >= tier.get("floor", 0):
+            base_exp = tier.get("exp", base_exp)
+            break
+
+    # 消耗状态
+    pet.hunger = clamp_status(pet.hunger + effects.get("hunger", 0), _STATUS_FLOOR)
+    pet.fatigue = clamp_status(pet.fatigue + effects.get("fatigue", 0), _STATUS_FLOOR)
+    pet.mood = clamp_status(pet.mood + effects.get("mood", 0), _STATUS_FLOOR)
+
+    # 计算经验（带状态修正）
+    exp_gain = calc_exp_gain(base_exp, pet)
+    pet.exp += exp_gain
+
+    # 检查升级
+    level_result = check_level_up(pet)
+
+    _mark_interaction(pet, "train_count")
+    consume_action_point(pet, "train", daily_config=daily_config)
+    update_emotion_state(pet)
+    update_health_state(pet)
+
+    return {
+        "name": pet.name,
+        "exp": exp_gain,
+        "level": pet.level,
+        "hunger": pet.hunger,
+        "fatigue": pet.fatigue,
+        "mood": pet.mood,
+        "action_points": pet.action_points,
+        "level_up": level_result.get("level_up", False),
+        "old_level": level_result.get("old_level", pet.level),
+        "new_level": level_result.get("new_level", pet.level),
+        "best_floor": best_floor,
+        "message": _train_message(pet, level_result),
+    }
+
+
+def _train_message(pet, level_result: dict) -> str:
+    from ..utils.texts import text
+
+    if level_result.get("level_up"):
+        return text(
+            "messages.train.level_up",
+            f"{pet.name}升级了！Lv.{level_result['old_level']} → Lv.{level_result['new_level']}",
+            name=pet.name,
+            old_level=level_result["old_level"],
+            new_level=level_result["new_level"],
+        )
+    return text("messages.train.normal", f"{pet.name}完成了训练", name=pet.name)
+

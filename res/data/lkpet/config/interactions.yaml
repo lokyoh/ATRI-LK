@@ -6,6 +6,18 @@ effects:
   play: { mood: 10, fatigue: 10 }
   bathe: { cleanliness: 30, mood: -5 }
   rest: { fatigue_recover: 20, mood: 5 }
+  train:
+    hunger: -15      # 训练消耗饥饿
+    fatigue: 15      # 训练增加疲劳
+    mood: -10        # 训练降低心情
+    exp_base: 500    # 基础经验值
+    exp_tiers:       # 根据肉鸽最高层数动态调整经验
+      - { floor: 0, exp: 500 }
+      - { floor: 21, exp: 1000 }
+      - { floor: 41, exp: 2000 }
+      - { floor: 61, exp: 5000 }
+      - { floor: 81, exp: 10000 }
+      - { floor: 100, exp: 20000 }
 
 affection_roll:
   count: 3

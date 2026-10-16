@@ -35,11 +35,11 @@ tower:
       rewards: { coins: 2, coins_per_floor: 1, exp: 20, exp_per_floor: 2 }
       shop: { heal_mult: 1 }
       elites:  # 每区域 5 个精英备选（战斗路线按区域 seed 抽，遭遇次数受 elite.max_per_region 限制）
-        - { name: 铁角原牛, traits: [strong], desc: 低头犁地的巨牛，一对铁角能掀翻货车。 }
-        - { name: 疾风隼王, traits: [swift], desc: 循风而猎的巨隼，俯冲时像一支白羽箭。 }
-        - { name: 毒刺巨蜂, traits: [crit], desc: 尾针有小指长，振翅声像锯木头。 }
-        - { name: 断牙头狼, traits: [swarm], desc: 狼群的王，左犬齿断了一半，从不落单。 }
-        - { name: 禾田稻魔, traits: [thick], desc: 稻草束成的人形，夜里在田里自己走路。 }
+        - { name: 铁角原牛, traits: [strong], skills: [e_charge_horn], desc: 低头犁地的巨牛，一对铁角能掀翻货车。 }
+        - { name: 疾风隼王, traits: [swift], skills: [e_dive], desc: 循风而猎的巨隼，俯冲时像一支白羽箭。 }
+        - { name: 毒刺巨蜂, traits: [crit], skills: [e_venom_sting], desc: 尾针有小指长，振翅声像锯木头。 }
+        - { name: 断牙头狼, traits: [swarm], skills: [e_summon_wolf], desc: 狼群的王，左犬齿断了一半，从不落单。 }
+        - { name: 禾田稻魔, traits: [thick], skills: [e_root], desc: 稻草束成的人形，夜里在田里自己走路。 }
     - id: forest
       name: 迷雾森林
       desc: 终年不散的浓雾吞掉路径与声音，树影里藏着不属于林地的眼睛。
@@ -64,11 +64,11 @@ tower:
       rewards: { coins: 5, coins_per_floor: 1, exp: 60, exp_per_floor: 4 }
       shop: { heal_mult: 2.5 }
       elites:
-        - { name: 苔皮巨熊, traits: [tough], desc: 背上生满青苔，一掌能拍断百年树干。 }
-        - { name: 织网女巫蛛, traits: [crit], desc: 腹部的纹路像一张皱眉的人脸。 }
-        - { name: 腐沼鳄, traits: [thick], desc: 潜在浮萍之下，背脊看去只是一截烂木。 }
-        - { name: 巨钳螳螂, traits: [swift], desc: 双臂镰刃磨得发亮，专剪经过的脖子。 }
-        - { name: 雾隐枭人, traits: [leech], desc: 半人半枭，雾越浓越难被看见。 }
+        - { name: 苔皮巨熊, traits: [tough], skills: [e_maul], desc: 背上生满青苔，一掌能拍断百年树干。 }
+        - { name: 织网女巫蛛, traits: [crit], skills: [e_web], desc: 腹部的纹路像一张皱眉的人脸。 }
+        - { name: 腐沼鳄, traits: [thick], skills: [e_roll], desc: 潜在浮萍之下，背脊看去只是一截烂木。 }
+        - { name: 巨钳螳螂, traits: [swift], skills: [e_double], desc: 双臂镰刃磨得发亮，专剪经过的脖子。 }
+        - { name: 雾隐枭人, traits: [leech], skills: [e_siphon], phase: ph_swift, desc: 半人半枭，雾越浓越难被看见。 }
     - id: lava
       name: 熔岩洞窟
       desc: 地面滚烫、岩浆在暗处发亮，呼吸都带着硫磺味的灼热迷宫。
@@ -93,11 +93,11 @@ tower:
       rewards: { coins: 10, coins_per_floor: 2, exp: 140, exp_per_floor: 7 }
       shop: { heal_mult: 5 }
       elites:
-        - { name: 赤甲火蝎, traits: [tough], desc: 尾钩滴落的毒液在石头上烧出小洞。 }
-        - { name: 熔岩蟒, traits: [leech], desc: 体内流动着岩浆，爬过的地方留下火痕。 }
-        - { name: 灰烬骑士, traits: [thick], desc: 甲胄里空无一人，灰烬从缝隙不断漏出。 }
-        - { name: 火山凶豚, traits: [strong], desc: 拱起的背像一块烧红的铁砧。 }
-        - { name: 焰翅蝠王, traits: [swarm], desc: 翅膜上跳动着细小的火苗。 }
+        - { name: 赤甲火蝎, traits: [tough], skills: [e_crit_stab], desc: 尾钩滴落的毒液在石头上烧出小洞。 }
+        - { name: 熔岩蟒, traits: [leech], skills: [e_maul], desc: 体内流动着岩浆，爬过的地方留下火痕。 }
+        - { name: 灰烬骑士, traits: [thick], skills: [e_quake], desc: 甲胄里空无一人，灰烬从缝隙不断漏出。 }
+        - { name: 火山凶豚, traits: [strong], skills: [e_slam], desc: 拱起的背像一块烧红的铁砧。 }
+        - { name: 焰翅蝠王, traits: [swarm], skills: [e_summon_bat], phase: ph_swift, desc: 翅膜上跳动着细小的火苗。 }
     - id: frost
       name: 冰封王座
       desc: 永冻的宫殿与断裂的冰桥，呼出的白霜会立刻在睫毛上结冰。
@@ -122,11 +122,11 @@ tower:
       rewards: { coins: 18, coins_per_floor: 3, exp: 300, exp_per_floor: 12 }
       shop: { heal_mult: 9 }
       elites:
-        - { name: 冰棘猛犸, traits: [thorns], desc: 象牙结满冰棱，吼一声能冻住呼吸。 }
-        - { name: 霜翼巨鹰, traits: [swift], desc: 爪下抓着整块浮冰在空中巡弋。 }
-        - { name: 冻原食人魔, traits: [strong], desc: 肩上扛着半截结冰的路牌。 }
-        - { name: 雪腹巨蛛, traits: [swarm], desc: 白色绒毛与雪地融为一体。 }
-        - { name: 冰镜魅影, traits: [leech], desc: 从冰面里坐起来的另一个"你"。 }
+        - { name: 冰棘猛犸, traits: [thorns], skills: [e_quake], desc: 象牙结满冰棱，吼一声能冻住呼吸。 }
+        - { name: 霜翼巨鹰, traits: [swift], skills: [e_ice_lance], desc: 爪下抓着整块浮冰在空中巡弋。 }
+        - { name: 冻原食人魔, traits: [strong], skills: [e_maul], desc: 肩上扛着半截结冰的路牌。 }
+        - { name: 雪腹巨蛛, traits: [swarm], skills: [e_summon_spider], desc: 白色绒毛与雪地融为一体。 }
+        - { name: 冰镜魅影, traits: [leech], skills: [e_frost_nova], phase: ph_undying, desc: 从冰面里坐起来的另一个"你"。 }
     - id: abyss
       name: 深渊之巅
       desc: 塔顶之上的倒悬深渊，星光从脚下坠落，连影子都会背叛你。
@@ -151,11 +151,11 @@ tower:
       rewards: { coins: 30, coins_per_floor: 4, exp: 560, exp_per_floor: 20 }
       shop: { heal_mult: 15 }
       elites:
-        - { name: 虚空之眼, traits: [crit], desc: 悬浮的巨眼，瞳孔里倒转着星光。 }
-        - { name: 星坠猎犬, traits: [swift], desc: 由陨屑拼成的猎犬，奔跑时拖出火尾。 }
-        - { name: 裂魂双子, traits: [swarm], desc: 共享一具身体的两个影子，各朝一方拉扯。 }
-        - { name: 深渊灯水母, traits: [leech], desc: 伞盖下的光是诱饵，触须垂进虚无。 }
-        - { name: 影噬巨口, traits: [thick], desc: 没有身体，只有一张缓缓张开的嘴。 }
+        - { name: 虚空之眼, traits: [crit], skills: [e_void_gaze], desc: 悬浮的巨眼，瞳孔里倒转着星光。 }
+        - { name: 星坠猎犬, traits: [swift], skills: [e_meteor], desc: 由陨屑拼成的猎犬，奔跑时拖出火尾。 }
+        - { name: 裂魂双子, traits: [swarm], skills: [e_summon_shade], desc: 共享一具身体的两个影子，各朝一方拉扯。 }
+        - { name: 深渊灯水母, traits: [leech], skills: [e_drain], desc: 伞盖下的光是诱饵，触须垂进虚无。 }
+        - { name: 影噬巨口, traits: [thick], skills: [e_annihilate], phase: ph_berserk, desc: 没有身体，只有一张缓缓张开的嘴。 }
 
 elite:
   chance: 0.3              # 候选层逐层判定的概率（区域级 seed，可复现）
@@ -210,31 +210,137 @@ battle:
   timer_gain: 10
   # 暴击倍率：被动技能 crit_rate 命中时我方输出 × crit_mult
   crit_mult: 1.8
+  # 逐回合战报：战斗日志最多回放的条数（取最后 N 条；0 = 不输出逐回合战报）
+  log_limit: 12
+  # 场上敌人数量上限（首领本体 + 召唤物）：超过则不再召唤。
+  max_units: 4
+  # 敌方技能资源（仅精英/首领及其召唤物使用）：入场满蓝，计时条每满一次回复 regen。
+  enemy_mp: { base: 50, elite_mult: 1.6, boss_mult: 2.4, minion_mult: 0.6, regen: 8 }
+
+# 敌方技能表：**精英/首领专属**，小怪永远只有普攻。
+# 精英在 elites[] 里用 skill/skills 引用，首领在 bosses[] 里用 skills 引用。
+# 字段说明（未写的字段取默认值 = 无效果）：
+#   name/desc     展示名与描述（内容文本写在 YAML；展示模板在 texts.yaml）
+#   power         威力系数：伤害 = atk × power / 30（除数为 30，与宠物技能同一基准；power 30 = 一次普通攻击，
+#                 普通技能约 1.2-2.0× 敌方攻击，蓄力终极技 2.4-3.0×）
+#   strikes       出击命中次数（每击按 power 独立结算）
+#   crit_rate     该技能附加暴击率（暴击倍率沿用 battle.crit_mult）
+#   leech         吸血比例：造成伤害按比例回复自身（封顶自身生命上限）
+#   heal          自我治疗：回复自身生命上限的比例
+#   self_buff     自身增益乘区 { atk_mult / def_mult / spd_mult }（持续整场）
+#   debuff        削弱我方 { atk_mult / def_mult / spd_mult, rounds }（rounds 单位 = 计时条周期数）
+#   dot           我方持续伤害 { frac, rounds }：按敌方攻击力比例，每轮结算一次、不致死
+#   charge        蓄力轮数：>0 即蓄力终极技，蓄力期间可被打断
+#   interrupt     打断阈值：判定依据是蓄力期间的**累积伤害**，而非单次伤害 —— 某单位蓄力中时，
+#                 我方对它造成的每一次伤害都会累加，累计达到 自身生命上限 × interrupt 即被打断
+#   summon        召唤 { name, desc, count, hp_mult, atk_mult, def_mult, spd_mult, skills }
+#   cooldown      冷却（单位 = 计时条周期数，与宠物技能同口径）
+#   mp_cost       消耗敌方 MP：从敌方自身蓝池（battle.enemy_mp）扣除，越贵的技能越受蓝量自然制约
+#   priority      行动优先级（数值越大越优先；同优先级比 power）
+enemy_skills:
+  # —— 物理猛击系 ——
+  e_maul:        { name: 撕咬猛击, desc: 低头蓄势后的一记重咬。, power: 45, mp_cost: 0, cooldown: 2, priority: 1 }
+  e_slam:        { name: 巨掌拍击, desc: 携全身重量的一掌。, power: 50, mp_cost: 0, cooldown: 2, priority: 1 }
+  e_double:      { name: 双钳连斩, desc: 两只前肢交替劈落。, power: 28, mp_cost: 0, strikes: 2, cooldown: 1, priority: 2 }
+  e_triple:      { name: 狂乱连击, desc: 失去节奏的连续撕抓。, power: 20, mp_cost: 0, strikes: 3, cooldown: 2, priority: 2 }
+  e_crit_stab:   { name: 贯穿突刺, desc: 瞄准要害的一击。, power: 46, mp_cost: 0, cooldown: 3, crit_rate: 0.35, priority: 3 }
+  e_roll:        { name: 死亡翻滚, desc: 咬住后原地翻滚撕扯。, power: 48, mp_cost: 0, cooldown: 3, crit_rate: 0.2, priority: 2 }
+  e_dive:        { name: 疾风俯冲, desc: 借高度换速度的两连扑击。, power: 27, mp_cost: 0, strikes: 2, cooldown: 2, priority: 2 }
+  e_ice_lance:   { name: 寒冰枪, desc: 凝霜成枪，穿透后拖慢脚步。, power: 45, mp_cost: 12, cooldown: 2, priority: 2,
+                   debuff: { spd_mult: 0.85, rounds: 2 } }
+  e_shadow_raid: { name: 影袭, desc: 从影子里递出的一刀。, power: 52, mp_cost: 18, cooldown: 2, crit_rate: 0.3, priority: 3 }
+  e_soul_reap:   { name: 裂魂收割, desc: 镰影掠过，带走一部分生机。, power: 54, mp_cost: 24, cooldown: 3, leech: 0.35, priority: 3 }
+  e_void_gaze:   { name: 虚空凝视, desc: 被注视时力量从指缝漏走。, power: 44, mp_cost: 18, cooldown: 3, priority: 3,
+                   debuff: { atk_mult: 0.8, rounds: 2 } }
+  # —— 蓄力终极技（可打断）——
+  e_charge_horn: { name: 冲锋撞角, desc: 后蹄刨地蓄势，随后全场直撞。, power: 72, mp_cost: 30, charge: 2, interrupt: 0.16, cooldown: 3, priority: 5 }
+  e_quake:       { name: 大地震击, desc: 举拳砸地，裂纹沿地面铺开。, power: 78, mp_cost: 36, charge: 2, interrupt: 0.18, cooldown: 4, priority: 5 }
+  e_meteor:      { name: 陨火坠击, desc: 火雨在头顶聚成一枚坠星。, power: 84, mp_cost: 42, charge: 3, interrupt: 0.2, cooldown: 4, priority: 5 }
+  e_annihilate:  { name: 湮灭之息, desc: 光与声先被吸走，然后才是爆裂。, power: 90, mp_cost: 48, charge: 3, interrupt: 0.22, cooldown: 4, priority: 6 }
+  # —— 状态与削弱系 ——
+  e_venom_sting: { name: 毒刺, desc: 尾针注入的毒会在血管里慢慢走。, power: 27, mp_cost: 8, cooldown: 2, priority: 2,
+                   dot: { frac: 0.05, rounds: 3 } }
+  e_web:         { name: 缚网, desc: 黏丝缠住手脚，动作变得迟钝。, power: 24, mp_cost: 8, cooldown: 2, priority: 3,
+                   debuff: { atk_mult: 0.85, def_mult: 0.85, rounds: 2 } }
+  e_root:        { name: 缠根, desc: 根须破土，绕住脚踝往下拽。, power: 27, mp_cost: 8, cooldown: 2, priority: 2,
+                   debuff: { spd_mult: 0.8, rounds: 2 } }
+  e_frost_nova:  { name: 冰爆领域, desc: 寒气以自身为中心炸开。, power: 27, mp_cost: 15, strikes: 2, cooldown: 3, priority: 3,
+                   debuff: { spd_mult: 0.8, rounds: 2 } }
+  e_siphon:      { name: 血雾汲取, desc: 雾气裹上来，伤口开始回流。, power: 36, mp_cost: 12, cooldown: 2, leech: 0.5, priority: 2 }
+  e_drain:       { name: 暗影汲取, desc: 影子贴上影子，力气被抽走。, power: 39, mp_cost: 14, cooldown: 2, leech: 0.6, priority: 2 }
+  # —— 自我强化系 ——
+  e_mend:        { name: 再生愈合, desc: 断口处重新长出新的组织。, power: 0, mp_cost: 15, heal: 0.06, cooldown: 3, priority: 4 }
+  e_harden:      { name: 坚甲硬化, desc: 表层迅速角质化。, power: 0, mp_cost: 12, cooldown: 3, priority: 3,
+                   self_buff: { def_mult: 1.25 } }
+  e_rage:        { name: 狂怒, desc: 双眼充血，攻势变得更凶。, power: 0, mp_cost: 12, cooldown: 3, priority: 3,
+                   self_buff: { atk_mult: 1.25 } }
+  e_haste:       { name: 疾影, desc: 身形一阵模糊，节奏陡然加快。, power: 0, mp_cost: 12, cooldown: 3, priority: 3,
+                   self_buff: { spd_mult: 1.2 } }
+  # —— 召唤系 ——
+  e_summon_spider: { name: 召唤蛛群, desc: 腹囊抖落出一地幼蛛。, power: 0, mp_cost: 24, cooldown: 4, priority: 6,
+                     summon: { name: 幼蛛, desc: 刚孵化就学会了咬人。, count: 2, hp_mult: 0.06, atk_mult: 0.5, def_mult: 0.5, spd_mult: 1.2 } }
+  e_summon_bat:    { name: 召唤蝠群, desc: 翼影从洞顶泼下来。, power: 0, mp_cost: 30, cooldown: 4, priority: 6,
+                     summon: { name: 灰烬蝠, desc: 抖落的粉尘还带着火星。, count: 3, hp_mult: 0.05, atk_mult: 0.45, def_mult: 0.4, spd_mult: 1.4 } }
+  e_summon_wolf:   { name: 召唤狼群, desc: 长嗥招来同族，白影排开。, power: 0, mp_cost: 30, cooldown: 4, priority: 6,
+                     summon: { name: 霜狼, desc: 呼吸结成白雾的狼。, count: 2, hp_mult: 0.08, atk_mult: 0.6, def_mult: 0.6, spd_mult: 1.3 } }
+  e_summon_eye:    { name: 张开群眼, desc: 黑暗里睁开更多只眼睛。, power: 0, mp_cost: 24, cooldown: 4, priority: 6,
+                     summon: { name: 窥视之眼, desc: 只为注视而生的碎片。, count: 3, hp_mult: 0.04, atk_mult: 0.5, def_mult: 0.3, spd_mult: 1.0 } }
+  e_summon_shade:  { name: 召唤影分身, desc: 影子从脚下剥离，站成了另一个你。, power: 0, mp_cost: 36, cooldown: 5, priority: 6,
+                     summon: { name: 影分身, desc: 与你同形，只是眼神更冷。, count: 1, hp_mult: 0.14, atk_mult: 0.8, def_mult: 0.8, spd_mult: 1.1, skills: [e_shadow_raid] } }
+
+# 敌方形态（阶段）：首领/精英生命跌破 at_hp 比例时触发一次，按顺序检查、各自只触发一次。
+#   name       形态名（战报展示）
+#   at_hp      触发阈值：当前生命 / 生命上限 ≤ at_hp
+#   *_mult     该形态施加的自身属性乘区（永久）
+#   heal       触发时回复自身生命上限的比例
+#   add_skills 追加技能（写入该单位的技能表）
+enemy_phases:
+  ph_enrage:     { name: 暴怒, at_hp: 0.5, atk_mult: 1.25, spd_mult: 1.1, add_skills: [e_rage] }
+  ph_berserk:    { name: 狂乱, at_hp: 0.3, atk_mult: 1.4, def_mult: 0.9, add_skills: [e_triple] }
+  ph_guard:      { name: 坚壁, at_hp: 0.6, def_mult: 1.3, add_skills: [e_harden] }
+  ph_swift:      { name: 疾走, at_hp: 0.5, spd_mult: 1.25, add_skills: [e_haste] }
+  ph_undying:    { name: 不灭, at_hp: 0.25, heal: 0.08, def_mult: 1.2, add_skills: [e_mend] }
+  ph_desperate:  { name: 垂死挣扎, at_hp: 0.2, atk_mult: 1.5, heal: 0.05 }
 
 # 区域首领：每个区域 3 个候选，进入首领层时**三选一**挑战。
 # mult 作用在该区域普通敌人的当层公式结果上；coins/exp 为绝对值。
 # relic = Boss 专属遗物（一个 Boss 对应一件；见 rogue_relics.yaml 的 boss_only 项）。
 bosses:
   plains:
-    - { name: 守塔傀儡, desc: 铁锈斑驳的傀儡，关节里漏出蒸汽，横在第一块界碑前。, relic: rel_b01, hp_mult: 3.0, atk_mult: 1.6, def_mult: 1.5, spd_mult: 1.0, coins: [25, 35], exp: 150 }
-    - { name: 暴走野猪王, desc: 獠牙犁开草地，红着眼睛只会做一件事：冲撞。, relic: rel_b02, hp_mult: 2.4, atk_mult: 2.0, def_mult: 1.0, spd_mult: 1.3, coins: [20, 45], exp: 160 }
-    - { name: 采花巨蛛, desc: 腿像枯枝，腹部的花纹在阳光下像一朵盛开的花。, relic: rel_b03, hp_mult: 2.0, atk_mult: 1.5, def_mult: 1.2, spd_mult: 1.6, coins: [30, 40], exp: 140 }
+    - { name: 守塔傀儡, desc: 铁锈斑驳的傀儡，关节里漏出蒸汽，横在第一块界碑前。, relic: rel_b01, hp_mult: 3.0, atk_mult: 1.6, def_mult: 1.5, spd_mult: 1.0, coins: [25, 35], exp: 150,
+        skills: [e_slam, e_harden], phases: [ph_enrage] }
+    - { name: 暴走野猪王, desc: 獠牙犁开草地，红着眼睛只会做一件事：冲撞。, relic: rel_b02, hp_mult: 2.4, atk_mult: 2.0, def_mult: 1.0, spd_mult: 1.3, coins: [20, 45], exp: 160,
+        skills: [e_charge_horn, e_roll], phases: [ph_berserk] }
+    - { name: 采花巨蛛, desc: 腿像枯枝，腹部的花纹在阳光下像一朵盛开的花。, relic: rel_b03, hp_mult: 2.0, atk_mult: 1.5, def_mult: 1.2, spd_mult: 1.6, coins: [30, 40], exp: 140,
+        skills: [e_web, e_summon_spider], phases: [ph_swift] }
   forest:
-    - { name: 雾隐豹王, desc: 只在雾最浓时现身，爪痕先于它的形体出现。, relic: rel_b04, hp_mult: 3.2, atk_mult: 1.8, def_mult: 1.3, spd_mult: 1.5, coins: [55, 75], exp: 340 }
-    - { name: 古树长老, desc: 树皮皲裂成脸的形状，根须在泥土下缓缓收拢。, relic: rel_b05, hp_mult: 4.0, atk_mult: 1.5, def_mult: 1.8, spd_mult: 0.8, coins: [50, 85], exp: 360 }
-    - { name: 毒沼蟾皇, desc: 鼓胀的喉囊里晃着荧绿毒液，蛙鸣像钝刀刮铁。, relic: rel_b06, hp_mult: 3.0, atk_mult: 2.0, def_mult: 1.4, spd_mult: 1.0, coins: [60, 80], exp: 330 }
+    - { name: 雾隐豹王, desc: 只在雾最浓时现身，爪痕先于它的形体出现。, relic: rel_b04, hp_mult: 3.2, atk_mult: 1.8, def_mult: 1.3, spd_mult: 1.5, coins: [55, 75], exp: 340,
+        skills: [e_shadow_raid, e_haste], phases: [ph_swift, ph_berserk] }
+    - { name: 古树长老, desc: 树皮皲裂成脸的形状，根须在泥土下缓缓收拢。, relic: rel_b05, hp_mult: 4.0, atk_mult: 1.5, def_mult: 1.8, spd_mult: 0.8, coins: [50, 85], exp: 360,
+        skills: [e_root, e_mend], phases: [ph_guard, ph_undying] }
+    - { name: 毒沼蟾皇, desc: 鼓胀的喉囊里晃着荧绿毒液，蛙鸣像钝刀刮铁。, relic: rel_b06, hp_mult: 3.0, atk_mult: 2.0, def_mult: 1.4, spd_mult: 1.0, coins: [60, 80], exp: 330,
+        skills: [e_venom_sting, e_siphon], phases: [ph_enrage] }
   lava:
-    - { name: 熔岩巨人, desc: 碎石拼成的躯体里裹着赤红岩浆，一步一震。, relic: rel_b07, hp_mult: 4.2, atk_mult: 1.7, def_mult: 1.9, spd_mult: 0.8, coins: [110, 150], exp: 760 }
-    - { name: 火蜥领主, desc: 鳞片下流淌着熔火，吐息能把铁器烧成汁。, relic: rel_b08, hp_mult: 3.0, atk_mult: 2.2, def_mult: 1.3, spd_mult: 1.4, coins: [120, 160], exp: 740 }
-    - { name: 灰烬魔蝠后, desc: 翼膜遮住洞顶的光，粉尘落处寸草不生。, relic: rel_b09, hp_mult: 2.6, atk_mult: 2.0, def_mult: 1.2, spd_mult: 1.7, coins: [100, 170], exp: 780 }
+    - { name: 熔岩巨人, desc: 碎石拼成的躯体里裹着赤红岩浆，一步一震。, relic: rel_b07, hp_mult: 4.2, atk_mult: 1.7, def_mult: 1.9, spd_mult: 0.8, coins: [110, 150], exp: 760,
+        skills: [e_quake, e_harden], phases: [ph_guard, ph_enrage] }
+    - { name: 火蜥领主, desc: 鳞片下流淌着熔火，吐息能把铁器烧成汁。, relic: rel_b08, hp_mult: 3.0, atk_mult: 2.2, def_mult: 1.3, spd_mult: 1.4, coins: [120, 160], exp: 740,
+        skills: [e_meteor, e_crit_stab], phases: [ph_berserk] }
+    - { name: 灰烬魔蝠后, desc: 翼膜遮住洞顶的光，粉尘落处寸草不生。, relic: rel_b09, hp_mult: 2.6, atk_mult: 2.0, def_mult: 1.2, spd_mult: 1.7, coins: [100, 170], exp: 780,
+        skills: [e_summon_bat, e_drain], phases: [ph_swift, ph_desperate] }
   frost:
-    - { name: 霜牙狼皇, desc: 狼群在它身后排成一列白影，霜从它的呼吸里长出来。, relic: rel_b10, hp_mult: 3.4, atk_mult: 2.0, def_mult: 1.4, spd_mult: 1.5, coins: [210, 280], exp: 1500 }
-    - { name: 冰封骑士, desc: 铠甲里没有人，只有一团不肯散去的寒雾。, relic: rel_b11, hp_mult: 4.0, atk_mult: 1.8, def_mult: 2.0, spd_mult: 1.1, coins: [220, 300], exp: 1550 }
-    - { name: 极光巫妖, desc: 法袍上的极光缓缓流动，指尖悬着不化的冰晶。, relic: rel_b12, hp_mult: 3.0, atk_mult: 2.4, def_mult: 1.3, spd_mult: 1.3, coins: [230, 290], exp: 1520 }
+    - { name: 霜牙狼皇, desc: 狼群在它身后排成一列白影，霜从它的呼吸里长出来。, relic: rel_b10, hp_mult: 3.4, atk_mult: 2.0, def_mult: 1.4, spd_mult: 1.5, coins: [210, 280], exp: 1500,
+        skills: [e_summon_wolf, e_ice_lance], phases: [ph_swift, ph_berserk] }
+    - { name: 冰封骑士, desc: 铠甲里没有人，只有一团不肯散去的寒雾。, relic: rel_b11, hp_mult: 4.0, atk_mult: 1.8, def_mult: 2.0, spd_mult: 1.1, coins: [220, 300], exp: 1550,
+        skills: [e_ice_lance, e_frost_nova], phases: [ph_guard, ph_undying] }
+    - { name: 极光巫妖, desc: 法袍上的极光缓缓流动，指尖悬着不化的冰晶。, relic: rel_b12, hp_mult: 3.0, atk_mult: 2.4, def_mult: 1.3, spd_mult: 1.3, coins: [230, 290], exp: 1520,
+        skills: [e_annihilate, e_siphon], phases: [ph_guard, ph_berserk] }
   abyss:
-    - { name: 深渊守望者, desc: 无数只眼睛在黑暗里依次睁开，每一只都倒映着你。, relic: rel_b13, hp_mult: 4.5, atk_mult: 2.0, def_mult: 1.8, spd_mult: 1.2, coins: [420, 520], exp: 3000 }
-    - { name: 虚空吞噬者, desc: 它没有形体，只有不断塌陷的轮廓在啃食光线。, relic: rel_b14, hp_mult: 3.6, atk_mult: 2.6, def_mult: 1.4, spd_mult: 1.4, coins: [440, 560], exp: 3100 }
-    - { name: 无名之影, desc: 与你的影子一模一样，只是先一步抬起了手。, relic: rel_b15, hp_mult: 3.2, atk_mult: 2.4, def_mult: 1.6, spd_mult: 1.8, coins: [460, 540], exp: 3200 }
+    - { name: 深渊守望者, desc: 无数只眼睛在黑暗里依次睁开，每一只都倒映着你。, relic: rel_b13, hp_mult: 4.5, atk_mult: 2.0, def_mult: 1.8, spd_mult: 1.2, coins: [420, 520], exp: 3000,
+        skills: [e_void_gaze, e_summon_eye], phases: [ph_guard, ph_enrage] }
+    - { name: 虚空吞噬者, desc: 它没有形体，只有不断塌陷的轮廓在啃食光线。, relic: rel_b14, hp_mult: 3.6, atk_mult: 2.6, def_mult: 1.4, spd_mult: 1.4, coins: [440, 560], exp: 3100,
+        skills: [e_annihilate, e_drain], phases: [ph_enrage, ph_desperate] }
+    - { name: 无名之影, desc: 与你的影子一模一样，只是先一步抬起了手。, relic: rel_b15, hp_mult: 3.2, atk_mult: 2.4, def_mult: 1.6, spd_mult: 1.8, coins: [460, 540], exp: 3200,
+        skills: [e_summon_shade, e_soul_reap, e_shadow_raid], phases: [ph_swift, ph_berserk] }
 
 # 商店 = 遗物商店（原道具下架）：
 #   · 每层货架 3 件遗物 = 普通 1 + 稀有 1 + 商店专属 1（本区域/全局池按 seed 抽、排除本局已持有）

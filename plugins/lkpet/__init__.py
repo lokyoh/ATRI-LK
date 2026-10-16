@@ -11,9 +11,9 @@ from .config import LKPetConfig
 plugin = Service(
     "宠物",
     "赛博宠物插件demo",
-    "0.2.0",
+    "0.2.1",
     Service.ServiceType.GAME,
 ).main_cmd("宠物")
 config: LKPetConfig = plugin.add_plugin_config(LKPetConfig)
 
-from . import handlers  # noqa: E402, F401
+from . import handlers as handlers  # noqa: E402

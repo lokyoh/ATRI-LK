@@ -1,0 +1,138 @@
+"""肉鸽爬塔系统（任务书 §12 的正式实现）。
+
+结构：100 层塔 = 5 区域 × 20 层。普通层三选一（战斗/事件/商店）；区域中点固定
+遗物三选一；首领前一层唯一内容是回血补给；首领层唯一内容是**随机一个候选首领**。
+run 状态持久化在 ``PETROGUE.run_state``，退出可续。局内生命/金币/增益只存在于 run
+状态，**只在结算时刻**（:func:`settle_run`）写回养成数据与轮回成就点——§12.4 红线。
+
+战斗为 **ATB 攻击条**模型：个人攻击条上限 100，每轮按速度攒 ``gauge_rate_mult × spd``，
+先满者出击（速度值决定出击频率）；战斗计时条每轮固定 +10，每满 100 触发一次
+「计时条满」——所有技能剩余冷却 -1、计时 Buff 剩余时长 -1（预留）。
+玩家的决策点在路线、遗物/补给、事件、商店与继续/撤退。所有随机都以
+``floor_rng(seed, floor, purpose)`` 派生，同 seed 同层可复现。
+"""
+
+from ._common import (
+    BASE_SKILL_POWER,
+    ENTRY_COST_KEY,
+    PASSIVE_STAT_KEYS,
+    STEP_COST_KEY,
+    _entry_cost,
+    _find_event,
+    _load_events_config,
+    _load_relics_config,
+    _load_rogue_config,
+    _load_skills_config,
+    _persist,
+    _text,
+    floor_rng,
+    get_or_create_rogue,
+    passive_effects,
+)
+from .battle import BattleResult, BattleSession, _auto_battle, _do_battle
+from .floor import handle_number
+from .relics import (
+    _grant_relic,
+    _relic_display,
+    _run_relics,
+    relic_effect_note,
+    relic_flat,
+    relic_multipliers,
+    relic_offer,
+    relic_specs,
+    relic_stat_bonuses,
+    relic_stat_note,
+)
+from .run_state import (
+    BattleState,
+    EventState,
+    FloorChoiceState,
+    FloorState,
+    NeedAPState,
+    RelicChoiceState,
+    RogueRun,
+    ShopState,
+    _chosen_set,
+    _has_run,
+    _render_pending,
+    advance,
+    progress,
+    resume,
+    retreat,
+    start,
+    state_from_pending,
+)
+from .settle import settle_run
+from .tower import (
+    _enemy_skill_lines,
+    _enemy_skill_note,
+    _gen_monster,
+    _is_elite_floor,
+    _monster_label,
+    _region_events,
+    boss_floor_set,
+    elite_floors,
+    monster_trait_text,
+    region_of,
+)
+
+__all__ = [
+    "BASE_SKILL_POWER",
+    "ENTRY_COST_KEY",
+    "PASSIVE_STAT_KEYS",
+    "STEP_COST_KEY",
+    "BattleResult",
+    "BattleSession",
+    "BattleState",
+    "EventState",
+    "FloorChoiceState",
+    "FloorState",
+    "NeedAPState",
+    "RelicChoiceState",
+    "RogueRun",
+    "ShopState",
+    "_auto_battle",
+    "_chosen_set",
+    "_do_battle",
+    "_enemy_skill_lines",
+    "_enemy_skill_note",
+    "_entry_cost",
+    "_find_event",
+    "_gen_monster",
+    "_grant_relic",
+    "_has_run",
+    "_is_elite_floor",
+    "_load_events_config",
+    "_load_relics_config",
+    "_load_rogue_config",
+    "_load_skills_config",
+    "_monster_label",
+    "_persist",
+    "_region_events",
+    "_relic_display",
+    "_render_pending",
+    "_run_relics",
+    "_text",
+    "advance",
+    "boss_floor_set",
+    "elite_floors",
+    "floor_rng",
+    "get_or_create_rogue",
+    "handle_number",
+    "monster_trait_text",
+    "passive_effects",
+    "progress",
+    "region_of",
+    "relic_effect_note",
+    "relic_flat",
+    "relic_multipliers",
+    "relic_offer",
+    "relic_specs",
+    "relic_stat_bonuses",
+    "relic_stat_note",
+    "resume",
+    "retreat",
+    "settle_run",
+    "start",
+    "state_from_pending",
+]

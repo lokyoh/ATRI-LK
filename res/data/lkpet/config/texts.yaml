@@ -42,6 +42,9 @@ messages:
     willing: "{name}乖乖地让你洗完了澡"
     unwilling: "{name}不太情愿地洗完了澡"
   rest: "{name}美美地睡了一觉"
+  train:
+    normal: "{name}完成了训练"
+    level_up: "{name}升级了！Lv.{old_level} → Lv.{new_level}"
 
 status:
   title: "🐾 {name} 的状态"
@@ -83,6 +86,9 @@ bathe:
 
 rest:
   ok: "{message}\n疲劳：{fatigue} | 亲密：{affection}（+{affection_gain}）\n行动点：{action_points}"
+
+train:
+  ok: "{message}\n经验 +{exp}（等级 {level}）\n饥饿：{hunger} | 疲劳：{fatigue} | 心情：{mood}\n行动点：{action_points}"
 
 skill:
   title: "📚 {name} 的技能（主动 {active_used}/{active_max}，被动 {passive_used}/{passive_max}）"
@@ -258,6 +264,47 @@ rogue:
   battle_loss: "💀 被 {monster} 击败……（{rounds} 回合）我方生命归零，敌方剩余 {monster_hp}/{monster_hp_full}，本局结束，按到达层数结算。"
   battle_draw: "⏱ 与 {monster} 鏖战 {rounds} 回合未分胜负……我方剩余 {hp}/{hp_max}，敌方剩余 {monster_hp}/{monster_hp_full}，本局结束，按到达层数结算。"
   boss_unlock_hint: "🔓 第 {floor} 层首通奖励将于结算时发放。"
+  # —— 精英/首领专属技能与行动机制（敌方技能表见 roguelike.yaml 的 enemy_skills / enemy_phases）——
+  enemy_skills: "📜 {monster} 专属技能：{skills}"
+  enemy_phases: "🌀 形态：{phases}"
+  skill_item: "{name}（{note}）"
+  skill_note_charge: "蓄力 {rounds} 回合，累积伤害可打断"
+  skill_note_summon: "召唤 {count} 只"
+  skill_note_heal: "自我回复"
+  skill_note_buff: "自我强化"
+  skill_note_debuff: "削弱我方"
+  skill_note_dot: "持续伤害"
+  skill_note_leech: "吸血"
+  phase_item: "{name}（生命 ≤{percent}%）"
+  # —— 逐回合战报 ——
+  battle_log_header: "📖 战报（最近 {count} 条）："
+  log_attack: "R{round} {actor} 普攻，造成 {dmg} 伤害。"
+  log_skill: "R{round} {actor} 使用【{skill}】，造成 {dmg} 伤害。"
+  log_skill_hit: "R{round} {actor} 使用【{skill}】，{strikes} 连击共 {dmg} 伤害。"
+  log_skill_buff: "R{round} {actor} 使用【{skill}】，自身强化。"
+  log_skill_debuff: "R{round} {actor} 使用【{skill}】，你的状态被削弱。"
+  log_skill_heal: "R{round} {actor} 使用【{skill}】，回复 {heal} 点生命。"
+  log_skill_dot: "R{round} {actor} 使用【{skill}】，你陷入持续伤害。"
+  log_charge_start: "R{round} {actor} 开始蓄力【{skill}】——打断它！"
+  log_charge_ready: "R{round} {actor} 蓄力完成【{skill}】，即将释放！"
+  log_charge_hit: "R{round} {actor} 释放【{skill}】，造成 {dmg} 伤害！"
+  log_interrupt: "R{round} {actor} 的【{skill}】被打断了！"
+  log_phase: "R{round} {actor} 进入形态【{phase}】！"
+  log_phase_heal: "R{round} {actor} 进入形态【{phase}】，回复 {heal} 点生命！"
+  log_summon: "R{round} {actor} 召唤了 {count} 只 {name}。"
+  log_summon_full: "R{round} {actor} 想召唤 {name}，但场上已满。"
+  log_slain: "R{round} {name} 被击倒。"
+  log_target: "R{round} 你的攻击转向 {name}。"
+  log_leech: "R{round} {actor} 吸血回复 {heal} 点。"
+  log_thorns: "R{round} 棘刺反弹 {dmg} 点伤害。"
+  log_dot_tick: "R{round} 持续伤害造成 {dmg} 点（你剩余 {hp}）。"
+  log_dot_end: "R{round} 持续伤害结束。"
+  log_debuff_end: "R{round} 你身上的削弱效果消退。"
+  log_crit: "（暴击）"
+  log_timer: "R{round} ⏱ 计时条满：双方技能冷却 -1。"
+  log_over: "R{round} 战斗在第 {max} 回合上限处中止。"
+  log_none: "（战斗过于漫长，战报已截断）"
+  battle_skill_hint: "（⚠️ {monster} 会用专属技能，注意蓄力打断）"
   retired: "🏳️ 已撤退。"
   settle_header: "📊 本局结算：到达第 {floor} 层{cleared}"
   settle_cleared: "，通关塔顶！"

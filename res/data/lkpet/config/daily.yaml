@@ -17,6 +17,7 @@ action_points:
     play: 1
     bathe: 1
     rest: 1   # 2026-10-16 起休息也要花行动点
+    train: 2  # 训练消耗 2 行动点
     adventure: 3
     battle: 2
     rogue: 3        # 肉鸽入场（§12：行动点仅入场时需要）

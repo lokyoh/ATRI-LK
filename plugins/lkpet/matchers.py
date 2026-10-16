@@ -45,3 +45,6 @@ pet_chat_matcher = plugin.cmd_as_group("聊天", "与宠物聊天")
 pet_rogue_matcher = plugin.cmd_as_group(
     "肉鸽", "肉鸽爬塔：开始/继续/进度/撤退，局内用编号应答"
 )
+pet_train_matcher = plugin.cmd_as_group(
+    "训练", "训练宠物获取经验（消耗行动点和状态）"
+)

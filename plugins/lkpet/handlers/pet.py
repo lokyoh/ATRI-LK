@@ -62,6 +62,7 @@ from ..matchers import (
     pet_skill_matcher,
     pet_status_matcher,
     pet_talent_matcher,
+    pet_train_matcher,
 )
 from ..utils.formatters import (
     format_biography,
@@ -629,3 +630,19 @@ async def handle_rogue(event: Event, args: Message = CommandArg()):
 
     await pet_core.save_pet(pet)
     await pet_rogue_matcher.finish(_never_empty(msg, _ROGUE_USAGE_HINT))
+
+
+@pet_train_matcher.handle()
+async def handle_train(bot: Bot, event: Event):
+    await _guard(pet_train_matcher)
+    player_id = int(event.get_user_id())
+    pet = await _load_pet(pet_train_matcher, player_id)
+    await _settle(pet_train_matcher, pet, player_id)
+
+    try:
+        result = await interaction.train(pet, player_id)
+    except ValueError as exc:
+        await pet_train_matcher.finish(f"❌ {exc}")
+
+    await pet_core.save_pet(pet)
+    await pet_train_matcher.finish(text("train.ok", result["message"], **result))

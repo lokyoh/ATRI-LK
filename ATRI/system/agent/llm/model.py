@@ -4,6 +4,8 @@ from collections.abc import Awaitable, Callable
 from enum import Enum
 from typing import Any
 
+import httpx
+
 from ATRI.exceptions import str_traceback
 
 from ..utils import log, request
@@ -227,6 +229,21 @@ class LLMManager:
             log.warning(
                 f"调用模型 {model.name} 失败,错误码: {e.status_code},信息: {e.args}"
             )
+            raise
+        except httpx.ConnectError as e:
+            err_str = str(e)
+            if "name resolution" in err_str or "Name or service not known" in err_str:
+                log.warning(
+                    f"调用模型 {model.name} 失败:DNS 解析失败，请检查网络或域名"
+                )
+            else:
+                log.warning(f"调用模型 {model.name} 失败:其他连接错误: {e}")
+            raise
+        except httpx.TimeoutException:
+            log.warning(f"调用模型 {model.name} 失败:请求超时")
+            raise
+        except httpx.HTTPError:
+            log.warning(f"调用模型 {model.name} 失败:HTTP 错误")
             raise
         except Exception as e:
             log.warning(f"调用模型 {model.name} 失败: {str_traceback(e)}")

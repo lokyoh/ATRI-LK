@@ -65,8 +65,8 @@ class ThinkingModel:
             f"{f'{user_name}是你的主人,主人就是亚托莉的一切,主人的一切要求都要满足' if get_user_group(user_id) == '主人' else f'{user_name}只是普通用户，请以普通的群友对待，问题需要谨慎地回复'}\n"
             f"你对{user_name}的好感度:{user_info.love}。正积极,负消极,最大1000,最小-1000,难增加,易减少,可以根据好感动来调整对待{user_name}的态度\n"
         )
-        if user_info.memery:
-            prompt += f"你与{user_name}的记忆:\n{user_info.memery}\n"
+        if user_info.memory:
+            prompt += f"你与{user_name}的记忆:\n{user_info.memory}\n"
         prompt += (
             f"{user_name}用户画像：" + user_info.profile
             if user_info.profile

@@ -36,8 +36,6 @@ from ..core import (
     reincarnation,
     roguelike,
     talents,
-    trpg,
-    trpg_gm,
     tutorial,
 )
 from ..core.affection import get_affection_level
@@ -56,7 +54,6 @@ from ..matchers import (
     pet_log_matcher,
     pet_love_matcher,
     pet_perks_matcher,
-    pet_pet_matcher,
     pet_play_matcher,
     pet_reincarnate_matcher,
     pet_rename_matcher,
@@ -65,8 +62,6 @@ from ..matchers import (
     pet_skill_matcher,
     pet_status_matcher,
     pet_talent_matcher,
-    pet_train_matcher,
-    pet_trpg_matcher,
 )
 from ..utils.formatters import (
     format_biography,
@@ -90,12 +85,9 @@ PAGE_SIZE = 20
 _COOLDOWN_NOTICES = text_list("cooldown.notices", ["冷静一下"])
 """Prompts shown when a command is used faster than its cooldown allows."""
 
-_TRPG_USAGE_HINT = (
-    "用法：/宠物.跑团 建卡｜卡｜重掷｜进度｜检定 <技能>｜开团单人|组队|短团｜结束\n"
-    "团内直接输入行动文字（或编号/技能名）。"
+_ROGUE_USAGE_HINT = (
+    "用法：/宠物.肉鸽 开始｜继续｜进度｜撤退\n进入层数后按提示回复编号应答。"
 )
-_ROGUE_USAGE_HINT = "用法：/宠物.肉鸽 开始｜继续｜进度｜撤退\n进入层数后按提示回复编号应答。"
-_TRPG_NO_CARD_HINT = "还没有跑团卡，先发送「/宠物.跑团 建卡」。"
 
 
 def _never_empty(message: str, fallback: str) -> str:
@@ -239,22 +231,14 @@ async def handle_daily(bot: Bot, event: Event):
 
 
 @pet_feed_matcher.handle()
-async def handle_feed(bot: Bot, event: Event, args: Message = CommandArg()):
+async def handle_feed(bot: Bot, event: Event):
     await _guard(pet_feed_matcher)
     player_id = int(event.get_user_id())
     pet = await _load_pet(pet_feed_matcher, player_id)
 
-    food_id = args.extract_plain_text().strip()
-    if not food_id:
-        from ..config_loader import load_config
-
-        foods = " / ".join(load_config("interactions").get("foods", {}))
-        await pet_feed_matcher.finish(
-            text("feed.usage", "用法：/宠物.喂食 <食物ID>", foods=foods)
-        )
-
     try:
-        result = await interaction.feed(pet, food_id)
+        # 喂食不再区分食物：饥饿恢复固定值（interactions.yaml effects.feed）。
+        result = await interaction.feed(pet)
     except ValueError as exc:
         await pet_feed_matcher.finish(f"❌ {exc}")
 
@@ -283,20 +267,6 @@ async def handle_play(bot: Bot, event: Event):
     )
 
 
-@pet_pet_matcher.handle()
-async def handle_pet(bot: Bot, event: Event):
-    await _guard(pet_pet_matcher)
-    player_id = int(event.get_user_id())
-    pet = await _load_pet(pet_pet_matcher, player_id)
-
-    result = await interaction.pet_pet(pet)
-    hint = await _tutorial_prompt(pet, "first_pet")
-    await pet_core.save_pet(pet)
-    await pet_pet_matcher.finish(
-        _compose(text("pet.ok", result["message"], **result), hint)
-    )
-
-
 @pet_bathe_matcher.handle()
 async def handle_bathe(bot: Bot, event: Event):
     await _guard(pet_bathe_matcher)
@@ -312,45 +282,17 @@ async def handle_bathe(bot: Bot, event: Event):
     await pet_bathe_matcher.finish(text("bathe.ok", result["message"], **result))
 
 
-@pet_train_matcher.handle()
-async def handle_train(bot: Bot, event: Event, args: Message = CommandArg()):
-    await _guard(pet_train_matcher)
-    player_id = int(event.get_user_id())
-    pet = await _load_pet(pet_train_matcher, player_id)
-
-    attribute = args.extract_plain_text().strip().lower()
-    if not attribute:
-        await pet_train_matcher.finish(text("train.usage", "用法：/宠物.训练 <属性>"))
-
-    try:
-        result = await interaction.train(pet, attribute)
-    except ValueError as exc:
-        await pet_train_matcher.finish(f"❌ {exc}")
-
-    level_up = result["level_up"]
-    level_line = None
-    if level_up.get("level_up"):
-        level_line = text(
-            "train.level_up",
-            "",
-            level=level_up["new_level"],
-            talent_points=pet.talent_points,
-        )
-
-    hint = await _tutorial_prompt(pet, "first_train")
-    await pet_core.save_pet(pet)
-    await pet_train_matcher.finish(
-        _compose(text("train.ok", "", **result), level_line, hint)
-    )
-
-
 @pet_rest_matcher.handle()
 async def handle_rest(bot: Bot, event: Event):
     await _guard(pet_rest_matcher)
     player_id = int(event.get_user_id())
     pet = await _load_pet(pet_rest_matcher, player_id)
 
-    result = await interaction.rest(pet)
+    try:
+        result = await interaction.rest(pet)
+    except ValueError as exc:
+        await pet_rest_matcher.finish(f"❌ {exc}")
+
     await pet_core.save_pet(pet)
     await pet_rest_matcher.finish(text("rest.ok", result["message"], **result))
 
@@ -379,19 +321,28 @@ async def handle_talent(bot: Bot, event: Event, args: Message = CommandArg()):
                 format_talent_list(pet, cfg),
                 text(
                     "talent.usage",
-                    "用法：/宠物.天赋 <天赋ID>",
-                    talents=" / ".join(cfg.get("talents", {})),
+                    "用法：/宠物.天赋 <天赋名或ID>",
+                    talents=" / ".join(talents.describe_talents(cfg)),
                 ),
             )
         )
 
     try:
-        result = await talents.allocate_talent(pet, talent_id)
+        # 与性格同惯例：展示用中文名，输入接受中文名或英文键，落库存键。
+        talent_id = talents.resolve_talent(talent_id)
+        # allocate_talent 是同步函数（返回 dict），不能 await——await dict 抛 TypeError。
+        result = talents.allocate_talent(pet, talent_id)
     except ValueError as exc:
         await pet_talent_matcher.finish(f"❌ {exc}")
 
     await pet_core.save_pet(pet)
-    await pet_talent_matcher.finish(text("talent.allocated", "", **result))
+    await pet_talent_matcher.finish(
+        text(
+            "talent.allocated",
+            "{name} 提升到 Lv.{new_level}，剩余 {remaining_points} 点",
+            **result,
+        )
+    )
 
 
 @pet_bio_matcher.handle()
@@ -639,7 +590,7 @@ async def handle_all_list(bot: Bot):
 
 
 # ---------------------------------------------------------------------------
-# 附加玩法（任务书 §12 肉鸽 / §13 跑团）：动作为参数，编号为局内应答。
+# 附加玩法（任务书 §12 肉鸽）：动作为参数，编号为局内应答。
 # ---------------------------------------------------------------------------
 
 
@@ -678,90 +629,3 @@ async def handle_rogue(event: Event, args: Message = CommandArg()):
 
     await pet_core.save_pet(pet)
     await pet_rogue_matcher.finish(_never_empty(msg, _ROGUE_USAGE_HINT))
-
-
-def _parse_trpg_form(raw: str) -> str:
-    if "组队" in raw or "队伍" in raw:
-        return "party"
-    if "短" in raw:
-        return "short"
-    return "solo"
-
-
-def _render_card(pet, summary: dict) -> str:
-    """跑团卡展示（六维 + 技能 + 派生值）。"""
-    lines = [text("trpg.card_header", "🎴 跑团卡", name=pet.name)]
-    for key, label, value in summary.get("attributes", []):
-        lines.append(text("trpg.attr_line", "· {label}：{value}", key=key, label=label, value=value))
-    skills = summary.get("skills", [])
-    if skills:
-        lines.append("技能：" + "｜".join(f"{name} {value}" for name, value in skills))
-    derived = summary.get("derived", {})
-    lines.append(
-        text(
-            "trpg.derived_line",
-            "",
-            hp=derived.get("hp", 0),
-            mp=derived.get("mp", 0),
-            move=derived.get("move", 0),
-        )
-    )
-    return "\n".join(line for line in lines if line)
-
-
-@pet_trpg_matcher.handle()
-async def handle_trpg(event: Event, args: Message = CommandArg()):
-    """``/宠物.跑团 建卡|卡|重掷|进度|检定 <技能>|开团 [形式]|结束|<自由行动>``。"""
-    await _guard(pet_trpg_matcher)
-    player_id = int(event.get_user_id())
-    pet = await _load_pet(pet_trpg_matcher, player_id)
-
-    raw = args.extract_plain_text().strip()
-    if not raw:
-        await pet_trpg_matcher.finish(
-            _never_empty(text("trpg.usage", ""), _TRPG_USAGE_HINT)
-        )
-
-    group_id = getattr(event, "group_id", None)
-    hooks = {
-        "entry_hook": biography.add_biography_entry,
-        "memory_hook": biography.add_memory,
-    }
-
-    try:
-        if raw == "建卡":
-            data = await trpg.create_card(player_id)
-            msg = _render_card(pet, data["summary"]) + "\n" + text(
-                "trpg.reroll_hint", "", rerolls=data["rerolls_left"]
-            )
-        elif raw == "重掷":
-            data = await trpg.create_card(player_id, reroll=True)
-            msg = text("trpg.reroll_done", "", rerolls=data["rerolls_left"]) + "\n" + _render_card(
-                pet, data["summary"]
-            )
-        elif raw == "卡":
-            card = await trpg.get_or_create_card(player_id)
-            if not card.attributes:
-                msg = _never_empty(text("trpg.no_card", ""), _TRPG_NO_CARD_HINT)
-            else:
-                msg = _render_card(pet, trpg.card_summary(card))
-        elif raw == "进度":
-            card = await trpg.get_or_create_card(player_id)
-            msg = trpg_gm.progress_text(card)
-        elif raw.startswith("检定"):
-            msg = await trpg_gm.standalone_check(player_id, raw[2:].strip())
-        elif raw == "结束":
-            msg = await trpg_gm.end_session(player_id, group_id=group_id, **hooks)
-        elif raw.startswith("开团"):
-            msg = await trpg_gm.open_session(
-                player_id, _parse_trpg_form(raw[2:].strip()), group_id=group_id, **hooks
-            )
-        else:
-            msg = await trpg_gm.handle_input(player_id, raw, group_id=group_id, **hooks)
-    except ValueError as exc:
-        await pet_trpg_matcher.finish(f"❌ {exc}")
-    except Exception as exc:  # 未知错误也要给用户回执，不静默吞掉对话
-        log.warning(f"宠物.跑团 处理失败：{exc!r}")
-        await pet_trpg_matcher.finish("❌ 跑团指令执行出错，请查看机器人日志。")
-
-    await pet_trpg_matcher.finish(_never_empty(msg, _TRPG_USAGE_HINT))

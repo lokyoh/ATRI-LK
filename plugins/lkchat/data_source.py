@@ -143,7 +143,7 @@ async def on_birthday(event: PreChatEvent):
                 )
 
 
-def get_atri_memery(mem, mtype: int = 0):
+def get_atri_memory(mem, mtype: int = 0):
     md_text = "# 亚托莉对你的记忆\n\n"
     md_text += "\n".join(f"- {i}:{item}" for i, item in enumerate(mem, 1))
     if mtype == 1:

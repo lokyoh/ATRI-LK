@@ -1,7 +1,7 @@
 """Command matchers for the pet plugin.
 
 The plugin's main command is ``宠物``, so every command lives in that namespace
-(``/宠物.状态``, ``/宠物.喂食``, …).  Generic words such as ``训练`` / ``休息`` /
+(``/宠物.状态``, ``/宠物.喂食``, …).  Generic words such as ``休息`` /
 ``技能`` deliberately do **not** sit at the top level: they would collide with
 any future plugin that wants the same word, and nonebot silently drops the
 second registration of a duplicated command prefix.
@@ -21,9 +21,7 @@ pet_status_matcher = plugin.cmd_as_group("状态", "查看宠物的状态与属�
 pet_daily_matcher = plugin.cmd_as_group("结算", "手动触发日结算")
 pet_feed_matcher = plugin.cmd_as_group("喂食", "喂食宠物（消耗行动点）")
 pet_play_matcher = plugin.cmd_as_group("玩耍", "陪宠物玩耍（消耗行动点）")
-pet_pet_matcher = plugin.cmd_as_group("抚摸", "抚摸宠物，增加亲密度")
 pet_bathe_matcher = plugin.cmd_as_group("洗澡", "给宠物洗澡（消耗行动点）")
-pet_train_matcher = plugin.cmd_as_group("训练", "训练宠物属性（消耗行动点）")
 pet_rest_matcher = plugin.cmd_as_group("休息", "让宠物休息，恢复疲劳")
 pet_skill_matcher = plugin.cmd_as_group("技能", "查看宠物已学会的技能")
 pet_talent_matcher = plugin.cmd_as_group("天赋", "查看或分配天赋点")
@@ -42,11 +40,8 @@ pet_group_list_matcher = plugin.cmd_as_group(
 pet_all_list_matcher = plugin.cmd_as_group("全部", "列出所有宠物", permission=MASTER)
 pet_chat_matcher = plugin.cmd_as_group("聊天", "与宠物聊天")
 
-# ---- 附加玩法（任务书 §12 / §13）：动作作为参数，命令表以 §11 为唯一准 ----
+# ---- 附加玩法（任务书 §12）：动作作为参数，命令表以 §11 为唯一准 ----
 
 pet_rogue_matcher = plugin.cmd_as_group(
     "肉鸽", "肉鸽爬塔：开始/继续/进度/撤退，局内用编号应答"
-)
-pet_trpg_matcher = plugin.cmd_as_group(
-    "跑团", "跑团（COC 风格 d100）：建卡/卡/重掷/开团/检定/进度/结束"
 )

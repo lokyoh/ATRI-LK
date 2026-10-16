@@ -1,4 +1,4 @@
-from pydantic import Field
+from pydantic import Field, model_validator
 
 from ATRI.system.lkapi.entity.user import user_manager
 from ATRI.utils.model import BaseModel
@@ -8,8 +8,17 @@ from .database import user_table
 
 class User(BaseModel):
     love: int = 50
-    memery: list = Field(default_factory=list)
+    memory: list = Field(default_factory=list)
     profile: str = ""
+
+    @model_validator(mode="before")
+    @classmethod
+    def _migrate_legacy_memery(cls, data):
+        """兼容历史数据：该字段曾拼错为 memery，旧记录的 JSON 键需迁移到 memory。"""
+        if isinstance(data, dict) and "memory" not in data and "memery" in data:
+            data = dict(data)
+            data["memory"] = data.pop("memery")
+        return data
 
 
 def get_user_info(user_id: str) -> User:

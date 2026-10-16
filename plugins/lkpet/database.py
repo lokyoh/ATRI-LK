@@ -98,24 +98,13 @@ class Rogue(BaseModel):
     unlocked: list[str] = Field(default_factory=list)
     relics: list[str] = Field(default_factory=list)
     """已收集的遗物 id（跨 run 永久；含 Boss 专属遗物，见 rogue_relics.yaml）。"""
-    run_state: dict[str, Any] = Field(default_factory=dict)
-    updated_at: datetime = Field(default_factory=datetime.now)
+    choices: list[str] = Field(default_factory=list)
+    """历史选过的事件选项，条目为 ``"事件id:选项编号"``（跨 run 永久，仿 RELICS 图鉴）。
 
-
-class Trpg(BaseModel):
-    """跑团卡与会话（任务书 §13）：六维/技能与养成五维互不覆盖。
-
-    组队团的会话不放在成员行里，而是用 ``player_id = "party:<群号>"`` 的
-    专用行存放共享状态；成员自己的 used_skills 也在该行按 player_id 记账。
+    再次遭遇同一事件时，选过的选项会在文本后标注实际效果（见
+    ``core.roguelike._choice_effect_note``）。
     """
-
-    player_id: str
-    attributes: dict[str, int] = Field(default_factory=dict)
-    skills: dict[str, int] = Field(default_factory=dict)
-    chapter_progress: dict[str, Any] = Field(default_factory=dict)
-    session: dict[str, Any] = Field(default_factory=dict)
-    stats: dict[str, Any] = Field(default_factory=dict)
-    created_at: datetime = Field(default_factory=datetime.now)
+    run_state: dict[str, Any] = Field(default_factory=dict)
     updated_at: datetime = Field(default_factory=datetime.now)
 
 
@@ -281,8 +270,9 @@ ENDING         TEXT
 """
 
 
-ROGUE_VERSION = 1
-"""PETROGUE 表结构版本：1 = 新增 RELICS 列（遗物收藏）。
+ROGUE_VERSION = 2
+"""PETROGUE 表结构版本：1 = 新增 RELICS 列（遗物收藏）；
+2 = 新增 CHOICES 列（事件选项历史，跨 run 永久，用于选项效果剧透标注）。
 
 改表结构必须同步提升此版本号，否则已到该版本的库会跳过迁移。
 """
@@ -294,12 +284,14 @@ TOTAL_RUNS     INTEGER NOT NULL DEFAULT 0,
 CLEARS         INTEGER NOT NULL DEFAULT 0,
 UNLOCKED       TEXT NOT NULL DEFAULT '[]',
 RELICS         TEXT NOT NULL DEFAULT '[]',
+CHOICES        TEXT NOT NULL DEFAULT '[]',
 RUN_STATE      TEXT NOT NULL DEFAULT '{}',
 UPDATED_AT     TEXT
 """
 
 ROGUE_MIGRATION_COLUMNS = {
     "RELICS": "TEXT NOT NULL DEFAULT '[]'",
+    "CHOICES": "TEXT NOT NULL DEFAULT '[]'",
 }
 
 
@@ -308,8 +300,7 @@ def update_rogue_db(connection, version: int) -> None:
     cursor = connection.cursor()
     try:
         existing = {
-            str(row[1]).upper()
-            for row in cursor.execute("PRAGMA table_info(PETROGUE)")
+            str(row[1]).upper() for row in cursor.execute("PRAGMA table_info(PETROGUE)")
         }
         with connection:
             for column, definition in ROGUE_MIGRATION_COLUMNS.items():
@@ -317,19 +308,10 @@ def update_rogue_db(connection, version: int) -> None:
                     cursor.execute(
                         f"ALTER TABLE PETROGUE ADD COLUMN {column} {definition}"
                     )
+        if version < 2:
+            cursor.execute("DROP TABLE IF EXISTS `PETTRPG`")
     finally:
         cursor.close()
-
-TRPG_COLUMNS = """
-PLAYER_ID        TEXT PRIMARY KEY,
-ATTRIBUTES       TEXT NOT NULL DEFAULT '{}',
-SKILLS           TEXT NOT NULL DEFAULT '{}',
-CHAPTER_PROGRESS TEXT NOT NULL DEFAULT '{}',
-SESSION          TEXT NOT NULL DEFAULT '{}',
-STATS            TEXT NOT NULL DEFAULT '{}',
-CREATED_AT       TEXT,
-UPDATED_AT       TEXT
-"""
 
 
 pet_table: DBTable = lk_db.get_table(
@@ -342,13 +324,11 @@ biography_table: DBTable = lk_db.get_table("PETBIOGRAPHY", BIOGRAPHY_COLUMNS, 0)
 rogue_table: DBTable = lk_db.get_table(
     "PETROGUE", ROGUE_COLUMNS, ROGUE_VERSION, update_rogue_db
 )
-trpg_table: DBTable = lk_db.get_table("PETTRPG", TRPG_COLUMNS, 0)
 
 PET_KEY_COLUMN = "ID"
 REINCARNATION_KEY_COLUMN = "PLAYER_ID"
 BIOGRAPHY_KEY_COLUMN = "PLAYER_ID"
 ROGUE_KEY_COLUMN = "PLAYER_ID"
-TRPG_KEY_COLUMN = "PLAYER_ID"
 """各表主键列名；模型侧统一叫 ``player_id``。"""
 
 TABLE_FIELD_ALIASES: dict[str, dict[str, str]] = {
@@ -361,7 +341,6 @@ STRING_KEY_FIELDS: dict[str, frozenset[str]] = {
     "Reincarnation": frozenset({"player_id"}),
     "Biography": frozenset({"player_id"}),
     "Rogue": frozenset({"player_id"}),
-    "Trpg": frozenset({"player_id"}),
 }
 """必须按字符串读回的主键字段（见 :func:`_normalize_string_keys`）。"""
 
@@ -476,16 +455,6 @@ def load_rogue(player_id: str | int) -> Rogue | None:
 def save_rogue(rogue: Rogue) -> None:
     """Persist a roguelike progress row (insert or update)."""
     save_model(rogue_table, rogue, ROGUE_KEY_COLUMN)
-
-
-def load_trpg(player_id: str | int) -> Trpg | None:
-    """Read a TRPG card row (player id or ``party:<group>``), or ``None``."""
-    return load_model(trpg_table, Trpg, TRPG_KEY_COLUMN, str(player_id))
-
-
-def save_trpg(card: Trpg) -> None:
-    """Persist a TRPG card row (insert or update)."""
-    save_model(trpg_table, card, TRPG_KEY_COLUMN)
 
 
 def load_all_pets() -> list[Pet]:

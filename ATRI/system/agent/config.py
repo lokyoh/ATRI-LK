@@ -25,7 +25,7 @@ class AgentConfig(PluginConfig):
         int,
         20,
         "最大思考轮数",
-        "允许Agnet最高思考次数,当遇到需要大量思考情况可提高此值,默认值20",
+        "允许Agent最高思考次数,当遇到需要大量思考情况可提高此值,默认值20",
         min=5,
     )
     search = Field(

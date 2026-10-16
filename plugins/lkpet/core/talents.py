@@ -4,6 +4,36 @@ def _load_talent_config() -> dict:
     return load_config("talents")
 
 
+def describe_talents(talent_config: dict | None = None) -> list[str]:
+    """Selectable talents as Chinese names, for usage messages."""
+    config = talent_config if talent_config is not None else _load_talent_config()
+    return [
+        str(item.get("name") or key)
+        for key, item in config.get("talents", {}).items()
+    ]
+
+
+def resolve_talent(value: str, talent_config: dict | None = None) -> str:
+    """Map a player-supplied talent to its config key.
+
+    Accepts both the Chinese name (``力量强化``) and the English key
+    (``atk_1``), mirroring ``pet_core.resolve_personality``: usage texts
+    advertise Chinese, storage keeps keys.
+    """
+    config = talent_config if talent_config is not None else _load_talent_config()
+    talents = config.get("talents", {})
+    wanted = (value or "").strip()
+    options = " / ".join(describe_talents(config))
+    if not wanted:
+        raise ValueError(f"请选择天赋：{options}")
+    lowered = wanted.lower()
+    for key, item in talents.items():
+        candidates = {str(key).lower(), str(item.get("name") or "").strip().lower()}
+        if lowered in candidates:
+            return key
+    raise ValueError(f"无效的天赋：{wanted}（可选：{options}）")
+
+
 def allocate_talent(pet, talent_id: str, talent_config: dict | None = None) -> dict:
     if pet.talent_points <= 0:
         raise ValueError("没有可用的天赋点")
@@ -31,6 +61,7 @@ def allocate_talent(pet, talent_id: str, talent_config: dict | None = None) -> d
     pet.talent_points -= 1
     return {
         "talent_id": talent_id,
+        "name": talent.get("name", talent_id),
         "new_level": new_level,
         "remaining_points": pet.talent_points,
     }

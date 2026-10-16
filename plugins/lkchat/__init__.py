@@ -37,7 +37,7 @@ from .data_source import (  # noqa: E402
     REPLY_MESSAGE,
     PreChatEvent,
     call_agent,
-    get_atri_memery,
+    get_atri_memory,
     get_random_atri,
     match_atri_img,
     match_atri_voice,
@@ -102,13 +102,13 @@ show_mem = plugin.cmd_as_group("查看记忆", "查看亚托莉对你的记忆")
 async def _(event: MessageEvent | QQMessageEvent):
     user_id = event.get_user_id()
     user_info = get_user_info(user_id)
-    mem = user_info.memery
+    mem = user_info.memory
     if len(mem) == 0:
         await show_mem.finish("暂时没有对你的记忆哦，快去与亚托莉多多交流吧")
     if isinstance(event, QQMessageEvent):
-        md_mem = get_atri_memery(mem, 1)
+        md_mem = get_atri_memory(mem, 1)
     else:
-        md_mem = get_atri_memery(mem)
+        md_mem = get_atri_memory(mem)
     await show_mem.finish(await ATRIMessage(event).md(md_mem))
 
 
@@ -124,11 +124,11 @@ async def _(event: MessageEvent | QQMessageEvent):
         user_id = event.get_user_id()
         user_info = get_user_info(user_id)
         num = int(k[1])
-        user_info.memery.pop(num - 1)
+        user_info.memory.pop(num - 1)
         save_user_info(user_id, user_info)
         msg = MessageBuilder().text("删除成功")
         if num - 1 > 0 and isinstance(event, MessageEvent):
-            msg.image(await md_to_pic(get_atri_memery(user_info.memery)))
+            msg.image(await md_to_pic(get_atri_memory(user_info.memory)))
     except Exception:
         await del_mem.finish("输入错误")
     await del_mem.finish(msg)

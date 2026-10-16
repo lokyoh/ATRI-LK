@@ -21,15 +21,25 @@ tower:
       monster:
         base: { hp: 40, atk: 8, def: 4, spd: 8 }
         growth: { hp: 3, atk: 0.6, def: 0.3, spd: 0.2 }
-      monsters: [草原狼, 野猪, 巨眼田鼠, 带刺花妖, 泥潭史莱姆, 风灵, 野蛮蜂群, 强盗野兔, 磷光蝶群, 稻草傀儡]
+      monsters:
+        - { name: 草原狼, traits: [swift] }
+        - { name: 野猪, traits: [strong] }
+        - { name: 巨眼田鼠, traits: [thin] }
+        - { name: 带刺花妖, traits: [thorns] }
+        - { name: 泥潭史莱姆, traits: [leech] }
+        - { name: 风灵, traits: [swift, thin] }
+        - { name: 野蛮蜂群, traits: [swarm] }
+        - { name: 强盗野兔, traits: [crit] }
+        - { name: 磷光蝶群, traits: [swarm, thin] }
+        - { name: 稻草傀儡, traits: [thick, slow] }
       rewards: { coins: 2, coins_per_floor: 1, exp: 20, exp_per_floor: 2 }
       shop: { heal_mult: 1 }
       elites:  # 每区域 5 个精英备选（战斗路线按区域 seed 抽，遭遇次数受 elite.max_per_region 限制）
-        - { name: 铁角原牛, desc: 低头犁地的巨牛，一对铁角能掀翻货车。 }
-        - { name: 疾风隼王, desc: 循风而猎的巨隼，俯冲时像一支白羽箭。 }
-        - { name: 毒刺巨蜂, desc: 尾针有小指长，振翅声像锯木头。 }
-        - { name: 断牙头狼, desc: 狼群的王，左犬齿断了一半，从不落单。 }
-        - { name: 禾田稻魔, desc: 稻草束成的人形，夜里在田里自己走路。 }
+        - { name: 铁角原牛, traits: [strong], desc: 低头犁地的巨牛，一对铁角能掀翻货车。 }
+        - { name: 疾风隼王, traits: [swift], desc: 循风而猎的巨隼，俯冲时像一支白羽箭。 }
+        - { name: 毒刺巨蜂, traits: [crit], desc: 尾针有小指长，振翅声像锯木头。 }
+        - { name: 断牙头狼, traits: [swarm], desc: 狼群的王，左犬齿断了一半，从不落单。 }
+        - { name: 禾田稻魔, traits: [thick], desc: 稻草束成的人形，夜里在田里自己走路。 }
     - id: forest
       name: 迷雾森林
       desc: 终年不散的浓雾吞掉路径与声音，树影里藏着不属于林地的眼睛。
@@ -40,15 +50,25 @@ tower:
       monster:
         base: { hp: 110, atk: 18, def: 9, spd: 11 }
         growth: { hp: 5, atk: 1.0, def: 0.5, spd: 0.3 }
-      monsters: [雾影狸, 毒牙蜘蛛, 树精哨兵, 腐化野鹿, 迷途怨灵, 苔藓巨蟾, 藤蔓缠人者, 枯叶刃魔, 夜梟, 蛊惑花]
+      monsters:
+        - { name: 雾影狸, traits: [fragile, swift] }
+        - { name: 毒牙蜘蛛, traits: [crit] }
+        - { name: 树精哨兵, traits: [thick, slow] }
+        - { name: 腐化野鹿, traits: [strong] }
+        - { name: 迷途怨灵, traits: [leech] }
+        - { name: 苔藓巨蟾, traits: [thick, dull] }
+        - { name: 藤蔓缠人者, traits: [thorns] }
+        - { name: 枯叶刃魔, traits: [swift] }
+        - { name: 夜梟, traits: [thin, crit] }
+        - { name: 蛊惑花, traits: [leech, thin] }
       rewards: { coins: 5, coins_per_floor: 1, exp: 60, exp_per_floor: 4 }
       shop: { heal_mult: 2.5 }
       elites:
-        - { name: 苔皮巨熊, desc: 背上生满青苔，一掌能拍断百年树干。 }
-        - { name: 织网女巫蛛, desc: 腹部的纹路像一张皱眉的人脸。 }
-        - { name: 腐沼鳄, desc: 潜在浮萍之下，背脊看去只是一截烂木。 }
-        - { name: 巨钳螳螂, desc: 双臂镰刃磨得发亮，专剪经过的脖子。 }
-        - { name: 雾隐枭人, desc: 半人半枭，雾越浓越难被看见。 }
+        - { name: 苔皮巨熊, traits: [tough], desc: 背上生满青苔，一掌能拍断百年树干。 }
+        - { name: 织网女巫蛛, traits: [crit], desc: 腹部的纹路像一张皱眉的人脸。 }
+        - { name: 腐沼鳄, traits: [thick], desc: 潜在浮萍之下，背脊看去只是一截烂木。 }
+        - { name: 巨钳螳螂, traits: [swift], desc: 双臂镰刃磨得发亮，专剪经过的脖子。 }
+        - { name: 雾隐枭人, traits: [leech], desc: 半人半枭，雾越浓越难被看见。 }
     - id: lava
       name: 熔岩洞窟
       desc: 地面滚烫、岩浆在暗处发亮，呼吸都带着硫磺味的灼热迷宫。
@@ -59,15 +79,25 @@ tower:
       monster:
         base: { hp: 240, atk: 34, def: 16, spd: 14 }
         growth: { hp: 8, atk: 1.75, def: 0.8, spd: 0.4 }
-      monsters: [熔岩犬, 火甲虫, 灰烬幽魂, 岩浆史莱姆, 烈焰秃鹫, 赤鳞蜥, 硫磺喷兽, 黑曜傀儡, 火苗精灵, 熔岩蟹]
+      monsters:
+        - { name: 熔岩犬, traits: [strong] }
+        - { name: 火甲虫, traits: [tough] }
+        - { name: 灰烬幽魂, traits: [swift, thin] }
+        - { name: 岩浆史莱姆, traits: [leech] }
+        - { name: 烈焰秃鹫, traits: [swift, crit] }
+        - { name: 赤鳞蜥, traits: [thorns] }
+        - { name: 硫磺喷兽, traits: [strong, dull] }
+        - { name: 黑曜傀儡, traits: [thick, slow] }
+        - { name: 火苗精灵, traits: [fragile] }
+        - { name: 熔岩蟹, traits: [thick, tough] }
       rewards: { coins: 10, coins_per_floor: 2, exp: 140, exp_per_floor: 7 }
       shop: { heal_mult: 5 }
       elites:
-        - { name: 赤甲火蝎, desc: 尾钩滴落的毒液在石头上烧出小洞。 }
-        - { name: 熔岩蟒, desc: 体内流动着岩浆，爬过的地方留下火痕。 }
-        - { name: 灰烬骑士, desc: 甲胄里空无一人，灰烬从缝隙不断漏出。 }
-        - { name: 火山凶豚, desc: 拱起的背像一块烧红的铁砧。 }
-        - { name: 焰翅蝠王, desc: 翅膜上跳动着细小的火苗。 }
+        - { name: 赤甲火蝎, traits: [tough], desc: 尾钩滴落的毒液在石头上烧出小洞。 }
+        - { name: 熔岩蟒, traits: [leech], desc: 体内流动着岩浆，爬过的地方留下火痕。 }
+        - { name: 灰烬骑士, traits: [thick], desc: 甲胄里空无一人，灰烬从缝隙不断漏出。 }
+        - { name: 火山凶豚, traits: [strong], desc: 拱起的背像一块烧红的铁砧。 }
+        - { name: 焰翅蝠王, traits: [swarm], desc: 翅膜上跳动着细小的火苗。 }
     - id: frost
       name: 冰封王座
       desc: 永冻的宫殿与断裂的冰桥，呼出的白霜会立刻在睫毛上结冰。
@@ -78,15 +108,25 @@ tower:
       monster:
         base: { hp: 500, atk: 66, def: 32, spd: 18 }
         growth: { hp: 12, atk: 2.75, def: 1.25, spd: 0.5 }
-      monsters: [霜狼, 冰晶傀儡, 雪怪, 冻尸兵, 极地幽魂, 冰锥蝠, 霜花妖, 寒风元素, 白熊, 冰面猎手]
+      monsters:
+        - { name: 霜狼, traits: [swift] }
+        - { name: 冰晶傀儡, traits: [thick, slow] }
+        - { name: 雪怪, traits: [strong, tough] }
+        - { name: 冻尸兵, traits: [thick, dull] }
+        - { name: 极地幽魂, traits: [leech] }
+        - { name: 冰锥蝠, traits: [crit] }
+        - { name: 霜花妖, traits: [thorns] }
+        - { name: 寒风元素, traits: [swift, fragile] }
+        - { name: 白熊, traits: [thick] }
+        - { name: 冰面猎手, traits: [swift, crit] }
       rewards: { coins: 18, coins_per_floor: 3, exp: 300, exp_per_floor: 12 }
       shop: { heal_mult: 9 }
       elites:
-        - { name: 冰棘猛犸, desc: 象牙结满冰棱，吼一声能冻住呼吸。 }
-        - { name: 霜翼巨鹰, desc: 爪下抓着整块浮冰在空中巡弋。 }
-        - { name: 冻原食人魔, desc: 肩上扛着半截结冰的路牌。 }
-        - { name: 雪腹巨蛛, desc: 白色绒毛与雪地融为一体。 }
-        - { name: 冰镜魅影, desc: 从冰面里坐起来的另一个"你"。 }
+        - { name: 冰棘猛犸, traits: [thorns], desc: 象牙结满冰棱，吼一声能冻住呼吸。 }
+        - { name: 霜翼巨鹰, traits: [swift], desc: 爪下抓着整块浮冰在空中巡弋。 }
+        - { name: 冻原食人魔, traits: [strong], desc: 肩上扛着半截结冰的路牌。 }
+        - { name: 雪腹巨蛛, traits: [swarm], desc: 白色绒毛与雪地融为一体。 }
+        - { name: 冰镜魅影, traits: [leech], desc: 从冰面里坐起来的另一个"你"。 }
     - id: abyss
       name: 深渊之巅
       desc: 塔顶之上的倒悬深渊，星光从脚下坠落，连影子都会背叛你。
@@ -97,15 +137,25 @@ tower:
       monster:
         base: { hp: 1000, atk: 120, def: 60, spd: 24 }
         growth: { hp: 17, atk: 4.0, def: 1.75, spd: 0.6 }
-      monsters: [虚空之影, 星蚀兽, 坠落守卫, 裂隙爬虫, 回声魔偶, 深渊水母, 虚无信徒, 黑日鸦, 失重骷髅, 命运织蛛]
+      monsters:
+        - { name: 虚空之影, traits: [leech, swift] }
+        - { name: 星蚀兽, traits: [strong] }
+        - { name: 坠落守卫, traits: [tough, slow] }
+        - { name: 裂隙爬虫, traits: [swarm] }
+        - { name: 回声魔偶, traits: [thick] }
+        - { name: 深渊水母, traits: [thorns, fragile] }
+        - { name: 虚无信徒, traits: [swarm, thin] }
+        - { name: 黑日鸦, traits: [crit, swift] }
+        - { name: 失重骷髅, traits: [fragile] }
+        - { name: 命运织蛛, traits: [leech, crit] }
       rewards: { coins: 30, coins_per_floor: 4, exp: 560, exp_per_floor: 20 }
       shop: { heal_mult: 15 }
       elites:
-        - { name: 虚空之眼, desc: 悬浮的巨眼，瞳孔里倒转着星光。 }
-        - { name: 星坠猎犬, desc: 由陨屑拼成的猎犬，奔跑时拖出火尾。 }
-        - { name: 裂魂双子, desc: 共享一具身体的两个影子，各朝一方拉扯。 }
-        - { name: 深渊灯水母, desc: 伞盖下的光是诱饵，触须垂进虚无。 }
-        - { name: 影噬巨口, desc: 没有身体，只有一张缓缓张开的嘴。 }
+        - { name: 虚空之眼, traits: [crit], desc: 悬浮的巨眼，瞳孔里倒转着星光。 }
+        - { name: 星坠猎犬, traits: [swift], desc: 由陨屑拼成的猎犬，奔跑时拖出火尾。 }
+        - { name: 裂魂双子, traits: [swarm], desc: 共享一具身体的两个影子，各朝一方拉扯。 }
+        - { name: 深渊灯水母, traits: [leech], desc: 伞盖下的光是诱饵，触须垂进虚无。 }
+        - { name: 影噬巨口, traits: [thick], desc: 没有身体，只有一张缓缓张开的嘴。 }
 
 elite:
   chance: 0.3              # 候选层逐层判定的概率（区域级 seed，可复现）
@@ -114,6 +164,27 @@ elite:
   guaranteed_offset: 2     # end - offset 层必定精英（首领前一层是纯补给层，故保底在倒数第二层）
   stats_mult: 1.6          # 精英 = 当层普通公式 × 1.6（介于小怪与首领之间）
   reward_mult: { coins: 2, exp: 2 }   # 精英掉落倍率（金币/经验）
+
+# 怪物特点：数值乘区/行为参数全部外置在这里（展示用中文标签在 texts.yaml 的 rogue.traits）。
+# region.monsters[].traits 列 0-2 个特点 id；没有特点的怪不显示标注。
+#   *_mult        该属性乘区（特点在精英/首领倍率**之前**作用）
+#   strikes       每次出击命中次数（群袭）；strike_mult 每击伤害乘区
+#   crit_rate     敌方暴击概率（倍率沿用 battle.crit_mult）
+#   leech         吸血：造成损害的回复比例（封顶自身生成时生命）
+#   thorns        棘刺：我方打出的伤害按比例反弹到局内生命
+monster_traits:
+  swarm:   { strikes: 2, strike_mult: 0.6 }
+  thick:   { hp_mult: 1.35 }
+  thin:    { hp_mult: 0.7 }
+  strong:  { atk_mult: 1.3 }
+  dull:    { atk_mult: 0.75 }
+  tough:   { def_mult: 1.5 }
+  fragile: { def_mult: 0.6 }
+  swift:   { spd_mult: 1.3 }
+  slow:    { spd_mult: 0.7 }
+  crit:    { crit_rate: 0.25 }
+  leech:   { leech: 0.3 }
+  thorns:  { thorns: 0.2 }
 
 supply:
   floor_offset: 1          # end - offset 层（首领前一层）**唯一选项就是回血补给**（不再有三选一）
@@ -128,7 +199,7 @@ supply:
       - { text: 打包带走干粮和药, effect: { coins: 15, run_hp: 20 } }
 
 battle:
-  max_rounds: 50          # 超过回合上限判定战败
+  max_rounds: 500         # 超过回合上限判定战败
   variance: [0.85, 1.15]  # 伤害浮动区间
   def_factor: 0.5         # 防御减伤系数：atk - def * def_factor
   # 攻击条机制（ATB）：取 100 为个人攻击条上限，每轮按速度攒 gauge_rate_mult × spd；

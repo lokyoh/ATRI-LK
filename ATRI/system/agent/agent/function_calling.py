@@ -388,8 +388,8 @@ def register_function_calling():
 
     if llm_manager.has_type(ModelType.EMBEDDING):
 
-        class MemeryChangeFunctionCalling(FunctionCalling):
-            function_name = "memery_change"
+        class MemoryChangeFunctionCalling(FunctionCalling):
+            function_name = "memory_change"
             description = "更改你对用户的临时长期记忆，该记忆存在数量上限11"
             args: ClassVar = [
                 FunctionCallingArg(
@@ -413,7 +413,7 @@ def register_function_calling():
                 user_info = get_user_info(data.sender_id)
                 msg = []
                 if mem:
-                    user_info.memery.append(
+                    user_info.memory.append(
                         f"{now().strftime('%Y年%m月%d日%a-%H时%M分')} {mem}"
                     )
                     log.debug(
@@ -427,7 +427,7 @@ def register_function_calling():
                     for index in del_index:
                         try:
                             index: int
-                            user_info.memery.pop(index)
+                            user_info.memory.pop(index)
                             log.debug(f"用户 {data.sender_id} 删除记忆：{index}")
                             msg.append(f"删除记忆：{index}")
                         except IndexError:
@@ -436,7 +436,7 @@ def register_function_calling():
                 save_user_info(data.sender_id, user_info)
                 return msg
 
-        FunctionCallingManager.register(MemeryChangeFunctionCalling)
+        FunctionCallingManager.register(MemoryChangeFunctionCalling)
 
         class GetMemoriesFunctionCalling(FunctionCalling):
             function_name = "get_memories"

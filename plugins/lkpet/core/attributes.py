@@ -43,14 +43,13 @@ def calc_attributes_on_level_up(
     for key in ("hp", "atk", "def"):
         attributes[key] = int(attributes[key] * age_multiplier)
 
-    # 训练增益是累加在公式结果之上的固定值，否则每次升级重算都会把它抹掉。
-    trained = pet.trained_attributes or {}
-    for key, value in trained.items():
-        if key in attributes and isinstance(value, (int, float)):
-            attributes[key] += int(value)
+    # 训练指令已移除（2026-10-16）：trained_attributes 旧列保留在库里但不再读取，
+    # 与 PETDATA.LOVE 同策略——历史训练增益自本次改版起不再生效。
 
     if pet.talents:
-        talents_cfg = talent_config if talent_config is not None else _load_talent_config()
+        talents_cfg = (
+            talent_config if talent_config is not None else _load_talent_config()
+        )
         for talent_id, talent_level in pet.talents.items():
             talent = talents_cfg.get("talents", {}).get(talent_id)
             if talent is None:

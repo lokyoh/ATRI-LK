@@ -15,10 +15,8 @@ action_points:
   costs:
     feed: 1
     play: 1
-    pet: 0
     bathe: 1
-    train: 2
-    rest: 0
+    rest: 1   # 2026-10-16 起休息也要花行动点
     adventure: 3
     battle: 2
     rogue: 3        # 肉鸽入场（§12：行动点仅入场时需要）
@@ -46,9 +44,7 @@ affection_decay:
 daily_flags:
   - fed
   - played
-  - petted
   - bathed
-  - trained
   - rested
   - adventured
   - battled

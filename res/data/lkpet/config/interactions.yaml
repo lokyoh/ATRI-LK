@@ -1,20 +1,12 @@
-foods:
-  apple:
-    name: 苹果
-    effects: { hunger: 20, mood: 5, affection: 20 }
-    message: "开心地吃掉了苹果"
-  meat:
-    name: 肉
-    effects: { hunger: 40, mood: 10, affection: 30 }
-    message: "大口吃掉了肉"
-  cake:
-    name: 蛋糕
-    effects: { hunger: 15, mood: 20, affection: 50 }
-    message: "幸福地吃掉了蛋糕"
+# 互动效果。喂食自 2026-10-16 起不再区分食物：饥饿恢复取 effects.feed.hunger 固定值。
+# 喂食/玩耍/洗澡/休息 的好感收益统一为 3d10（见下方 affection_roll）。
 
 effects:
-  play: { mood: 10, fatigue: 10, affection: 30 }
-  pet: { affection: 20, mood: 3 }
+  feed: { hunger: 30, mood: 0 }
+  play: { mood: 10, fatigue: 10 }
   bathe: { cleanliness: 30, mood: -5 }
-  train: { gain: 2, fatigue: 15, exp: 30 }
   rest: { fatigue_recover: 20, mood: 5 }
+
+affection_roll:
+  count: 3
+  sides: 10

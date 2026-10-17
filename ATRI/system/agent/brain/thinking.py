@@ -10,6 +10,7 @@ from ..agent.history import History, get_history_messages
 from ..agent.model import ChatArgs
 from ..agent.role import ATRI
 from ..agent.schedule import ATRISchedule
+from ..agent.skills import skill_manager
 from ..agent.temp_his import ChatMessage
 from ..agent.user import get_user_info
 from ..agent.util import get_name, get_user_group
@@ -47,11 +48,19 @@ class ThinkingModel:
         return f"{image_history}\n\n{history_prompt}\n#历史聊天记录结束\n\n"
 
     @classmethod
-    async def get_prompt(cls, chat_id, user_id, user_info, bot, lst_history: History):
+    async def get_prompt(
+        cls, chat_id, user_id, user_info, bot, lst_history: History, sender=None
+    ):
         lst_msg = await lst_history.message.get_message(bot)
         # 角色设定
         prompt = f"#你的信息\n{ATRI.get_role_prompt()}\n\n"
-        prompt += cls.get_function_prompt()
+        prompt += cls.get_function_prompt(
+            FunctionCallingManager.get_available(sender, user_id)
+        )
+        # 内嵌技能正文
+        embedded = skill_manager.get_embedded_prompt()
+        if embedded:
+            prompt += f"#你的技能\n{embedded}\n\n"
         # 当前日程
         now_schedule = await ATRISchedule().get_schedule()
         prompt += (
@@ -85,13 +94,15 @@ class ThinkingModel:
         return prompt
 
     @staticmethod
-    def get_function_prompt():
+    def get_function_prompt(available: dict[str, type] | None = None):
+        if available is None:
+            available = FunctionCallingManager.get_available()
         return f"""你可以调用以下功能，禁止调用未列出的功能:
 {
             "\n".join(
                 f'''{f.function_name}:
     说明: {f.description}{f"\n参数:\n{'\n'.join(f'        -{arg.name} {arg.type}: {arg.description}' for arg in f.args)}" if f.args else ""}'''
-                for f in FunctionCallingManager.function_calling.values()
+                for f in available.values()
             )
         }
 
@@ -134,7 +145,7 @@ class ThinkingModel:
         user_info = get_user_info(args.user_id)
         prompt = self.get_system_prompt() + "\n\n"
         prompt += await self.get_prompt(
-            args.chat_id, args.user_id, user_info, args.bot, current_history
+            args.chat_id, args.user_id, user_info, args.bot, current_history, sender
         )
         prompt += await self.get_history_prompt(
             args.bot,
@@ -248,6 +259,13 @@ class ThinkingModel:
             if func_name not in FunctionCallingManager.function_calling:
                 log.debug(f"未知的调用功能:{func_name}，已跳过")
                 calling_back.append(f"未知的调用功能:{func_name}")
+                continue
+            # 非 stop_thinking 的不可用功能，区分"环境/配置不可用"与"模型幻觉"
+            if not FunctionCallingManager.is_available(func_name, sender, user_id):
+                check = FunctionCallingManager.get_can_enable(func_name)
+                reason = check.reason or "该功能已被关闭"
+                log.debug(f"不可用的调用功能:{func_name}（{reason}），已跳过")
+                calling_back.append(f"功能 {func_name} 当前不可用：{reason}")
                 continue
             args = func["args"]
             try:

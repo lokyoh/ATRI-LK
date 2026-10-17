@@ -3,10 +3,14 @@ from . import explanations as explanations
 from . import user as user
 from . import util as util
 from .chat_chain import ATRIAgent as ATRIAgent
+from .function_calling import EnableCheck as EnableCheck
 from .function_calling import FunctionCalling as FunctionCalling
 from .function_calling import FunctionCallingArg as FunctionCallingArg
 from .function_calling import FunctionCallingData as FunctionCallingData
 from .function_calling import FunctionCallingManager as FunctionCallingManager
+from .function_calling import (
+    FunctionCallingUnavailableError as FunctionCallingUnavailableError,
+)
 from .history import ChatHistoryManager as ChatHistoryManager
 from .memes import FaceManager as FaceManager
 from .memory.manage import MemoryManager as MemoryManager

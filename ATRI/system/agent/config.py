@@ -37,6 +37,27 @@ class AgentConfig(PluginConfig):
             "api_key": Field(str, "", "搜索 API 密钥"),
         },
     )
+    function_calling_disable = Field(
+        list,
+        [],
+        "禁用的功能调用",
+        "列表中的功能不会出现在智能体功能列表中（不在列表内即启用）",
+        item_type=str,
+    )
+    skills_disable = Field(
+        list,
+        [],
+        "禁用的技能",
+        "列表中的技能不进入提示词、也不可被 agent 查询（不在列表内即启用）",
+        item_type=str,
+    )
+    skills_embed = Field(
+        list,
+        [],
+        "内嵌提示词的技能",
+        "列表中的技能正文直接嵌入思考提示词，且不可被 agent 查询",
+        item_type=str,
+    )
 
 
 config: AgentConfig = plugin.add_plugin_config(AgentConfig)

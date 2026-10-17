@@ -20,7 +20,7 @@ from .model import (
     ModelType,
 )
 from .openai import create_openai_model
-from .provider import LLMModel, LLMProvider, ProviderManager
+from .provider import LLMModel, LLMProvider, ModelPricing, ProviderManager
 from .system_one import SystemOneModel, create_sys1_model
 from .tts import create_tts_model
 
@@ -81,6 +81,7 @@ __all__ = [
     "LLMModel",
     "LLMProvider",
     "LLMResponse",
+    "ModelPricing",
     "ModelRequestError",
     "ModelType",
     "Sys1Content",

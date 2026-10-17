@@ -13,15 +13,16 @@ from .contents import LLMContents, LLMMessages
 from .token import MTYM, TokenUsage
 
 NO_MODEL_ERR = "没有可用的模型"
-ALL_MODEL_RESP_ERR = "没有可用的模型"
+ALL_MODEL_RESP_ERR = "所有模型请求失败"
 
 
 class ModelType(Enum):
     """预定义的模型类型常量"""
 
-    CHAT = "chat"  # 聊天模型
+    CHAT = "chat"  # 聊天专用模型
     IMAGE = "image"  # 图片处理模型
-    TOOL = "tool"  # 工具模型
+    WORK = "work"  # 工作模型
+    TOOL = "tool"  # 小型工具模型
     EMBEDDING = "embedding"  # 嵌入模型
     TTS = "tts"  # 文本转语音模型
     SYSTEMONE = "sys1"  # SystemOne模型

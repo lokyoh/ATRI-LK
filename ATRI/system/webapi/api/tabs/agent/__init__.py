@@ -2,6 +2,7 @@ from pathlib import Path
 
 from fastapi import APIRouter
 from fastapi.responses import JSONResponse
+from pydantic import BaseModel
 
 from ATRI.configs import Field
 from ATRI.exceptions import str_traceback
@@ -10,18 +11,48 @@ from ATRI.system.agent.config import config
 from ATRI.system.agent.llm import (
     LLMModel,
     LLMProvider,
+    ModelPricing,
     ModelType,
     ProviderManager,
     Sys1Content,
     Sys1Question,
     provider_type,
 )
+from ATRI.system.agent.llm.provider import PRICING_UNIT_TOKENS
 from ATRI.system.agent.llm.token import MTYM, TokenUsageData
 
 from ....base_model import Result
 from ....utils import authentication
+from .function_calling import router as function_calling_router
+from .skills import router as skills_router
 
 router = APIRouter(prefix="/agent")
+router.include_router(function_calling_router)
+router.include_router(skills_router)
+
+
+class ModelPricingInfo(BaseModel):
+    """模型计费信息（前端据此换算费用）"""
+
+    pricing: ModelPricing
+    """三项单价，元/1M tokens"""
+    unit_tokens: int = PRICING_UNIT_TOKENS
+    """单价的计量基数"""
+
+
+def _get_pricing_map() -> dict[str, ModelPricingInfo]:
+    """汇总所有 provider 下模型的计费配置，以模型 name 为键。
+
+    模型 name 要求全局唯一；若配置中出现重名，按 provider 注册顺序取第一个
+    配置了计费的条目，保证结果稳定。未配置计费的模型不会出现在结果里。
+    """
+    pricing_map: dict[str, ModelPricingInfo] = {}
+    for provider in ProviderManager.providers.values():
+        for model in provider.models:
+            if not model.name or model.pricing is None:
+                continue
+            pricing_map.setdefault(model.name, ModelPricingInfo(pricing=model.pricing))
+    return pricing_map
 
 
 def _flatten_config_updates(
@@ -324,4 +355,19 @@ async def _() -> Result[dict[str, list[TokenUsageData]]]:
         return Result.ok(data=MTYM.get_all_usage(), info="拿到信息啦!")
     except Exception as e:
         log.error(f"{router.prefix}/get_token_usage 调用错误:{str_traceback(e)}")
+        return Result.fail(f"发生了一点错误捏 {type(e)}: {e}")
+
+
+@router.get(
+    "/get_model_pricing",
+    dependencies=[authentication()],
+    response_model=Result[dict[str, ModelPricingInfo]],
+    response_class=JSONResponse,
+    description="获取各模型的计费配置（元/1M tokens），未配置计费的模型不会出现在结果中",
+)
+async def _() -> Result[dict[str, ModelPricingInfo]]:
+    try:
+        return Result.ok(data=_get_pricing_map(), info="拿到信息啦!")
+    except Exception as e:
+        log.error(f"{router.prefix}/get_model_pricing 调用错误:{str_traceback(e)}")
         return Result.fail(f"发生了一点错误捏 {type(e)}: {e}")

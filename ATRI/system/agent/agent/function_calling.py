@@ -3,6 +3,7 @@ from pathlib import Path
 from typing import ClassVar
 
 import anyio
+from pydantic import BaseModel
 
 from ATRI.exceptions import str_traceback
 from ATRI.message import QQMessage, img_msg, rec_msg_from_path
@@ -46,14 +47,36 @@ class FunctionCallingData:
         self.current_history = current_history
 
 
+class EnableCheck(BaseModel):
+    """技能/功能的环境可用性判定结果"""
+
+    available: bool = True
+    reason: str = ""
+    """不可用原因，供 UI 灰显 tooltip 与排障使用"""
+
+
 class FunctionCalling:
     function_name = ""
     description = ""
     args: ClassVar[list[FunctionCallingArg]] = []
 
+    @classmethod
+    def can_enable(cls) -> EnableCheck:
+        """① 当前环境能否开启该功能（与对话人无关）。"""
+        return EnableCheck()
+
+    @classmethod
+    def is_available_for(cls, sender: ChatSender | None, user_id: str) -> bool:
+        """② 对当前对话人是否可用。sender 可能为 None（后台/测试调用），必须容忍。"""
+        return True
+
     @staticmethod
     async def call(data: FunctionCallingData):
         pass
+
+
+class FunctionCallingUnavailableError(Exception):
+    """FC 存在但当前不可用（手动关闭 / 环境不支持 / 当前对话人不可用）"""
 
 
 class FunctionCallingManager:
@@ -64,12 +87,74 @@ class FunctionCallingManager:
         cls.function_calling[func.function_name] = func
 
     @classmethod
-    async def call(cls, func_name: str, data: FunctionCallingData):
-        return await cls.function_calling[func_name].call(data)
-
-    @classmethod
     def clear_all(cls):
         cls.function_calling.clear()
+
+    # ---- 手动开关（存 AgentConfig 的禁用列表：默认启用，列表只记例外）----
+
+    @classmethod
+    def is_manually_enabled(cls, name: str) -> bool:
+        return name not in (config.get("function_calling_disable") or [])
+
+    @classmethod
+    def set_manually_enabled(cls, name: str, enabled: bool):
+        # config.get() 返回内部引用，必须构造新列表后 config.set 才会落盘
+        names = list(config.get("function_calling_disable") or [])
+        if enabled:
+            if name in names:
+                names.remove(name)
+        elif name not in names:
+            names.append(name)
+        config.set("function_calling_disable", names)
+
+    # ---- 可用性（手动开关 ∧ 环境 ∧ 对话人）----
+
+    @classmethod
+    def get_can_enable(cls, name: str) -> EnableCheck:
+        func = cls.function_calling.get(name)
+        if func is None:
+            return EnableCheck(available=False, reason="功能未注册")
+        try:
+            return func.can_enable()
+        except Exception as e:
+            log.warning(f"功能 {name} 环境可用性检查失败:{str_traceback(e)}")
+            return EnableCheck(available=False, reason="环境可用性检查失败")
+
+    @classmethod
+    def is_available(
+        cls, name: str, sender: ChatSender | None = None, user_id: str = ""
+    ) -> bool:
+        func = cls.function_calling.get(name)
+        if func is None:
+            return False
+        if not cls.is_manually_enabled(name):
+            return False
+        if not cls.get_can_enable(name).available:
+            return False
+        try:
+            return bool(func.is_available_for(sender, user_id))
+        except Exception as e:
+            log.warning(f"功能 {name} 对话人可用性检查失败:{str_traceback(e)}")
+            return False
+
+    @classmethod
+    def get_available(
+        cls, sender: ChatSender | None = None, user_id: str = ""
+    ) -> dict[str, type[FunctionCalling]]:
+        """保持注册顺序（= 提示词顺序）的可用功能子集"""
+        return {
+            name: func
+            for name, func in cls.function_calling.items()
+            if cls.is_available(name, sender, user_id)
+        }
+
+    @classmethod
+    async def call(cls, func_name: str, data: FunctionCallingData):
+        if func_name not in cls.function_calling:
+            raise KeyError(func_name)
+        if not cls.is_available(func_name, data.sender, data.sender_id):
+            raise FunctionCallingUnavailableError(f"功能 {func_name} 当前不可用")
+        return await cls.function_calling[func_name].call(data)
 
 
 # 生成表情的例子字符串
@@ -221,8 +306,13 @@ def register_function_calling():
             )
         ]
 
+        @classmethod
+        def is_available_for(cls, sender: ChatSender | None, user_id: str) -> bool:
+            return isinstance(sender, OneBotChatSender)
+
         @staticmethod
         async def call(data: FunctionCallingData):
+            # 兜底判断：防止绕过 FCM 直接调用
             if isinstance(data.sender, OneBotChatSender):
                 meme = data.data.get("meme", "")
                 try:
@@ -238,42 +328,46 @@ def register_function_calling():
 
     FunctionCallingManager.register(SendFaceFunctionCalling)
 
-    if llm_manager.has_type(ModelType.TOOL):
+    class UserProfileGetFunctionCalling(FunctionCalling):
+        function_name = "user_profile"
+        description = "获取或修改指定用户的用户画像。用户画像是用于存储用户的个性化信息和偏好设置的文本数据，它可以包含用户的兴趣、行为模式、偏好设置等信息，用于在与用户交互时提供更个性化的体验。同时也可以用于存储你对用户的看法和评价，可以多次调用"
+        args: ClassVar = [
+            FunctionCallingArg(
+                name="opt",
+                _type="str",
+                description="操作类型，'get'表示获取，'change'表示修改",
+            ),
+            FunctionCallingArg(name="user_id", _type="str", description="目标用户ID"),
+            FunctionCallingArg(
+                name="profile_change",
+                _type="str",
+                description="如何更改用户画像，除自己以外的人物全都使用用户ID，仅在change操作时需要",
+            ),
+        ]
 
-        class UserProfileGetFunctionCalling(FunctionCalling):
-            function_name = "user_profile"
-            description = "获取或修改指定用户的用户画像。用户画像是用于存储用户的个性化信息和偏好设置的文本数据，它可以包含用户的兴趣、行为模式、偏好设置等信息，用于在与用户交互时提供更个性化的体验。同时也可以用于存储你对用户的看法和评价，可以多次调用"
-            args: ClassVar = [
-                FunctionCallingArg(
-                    name="opt",
-                    _type="str",
-                    description="操作类型，'get'表示获取，'change'表示修改",
-                ),
-                FunctionCallingArg(
-                    name="user_id", _type="str", description="目标用户ID"
-                ),
-                FunctionCallingArg(
-                    name="profile_change",
-                    _type="str",
-                    description="如何更改用户画像，除自己以外的人物全都使用用户ID，仅在change操作时需要",
-                ),
-            ]
+        @classmethod
+        def can_enable(cls) -> EnableCheck:
+            if not llm_manager.has_type(ModelType.TOOL):
+                return EnableCheck(
+                    available=False, reason="未配置 TOOL 类型模型"
+                )
+            return EnableCheck()
 
-            @staticmethod
-            async def call(data: FunctionCallingData):
-                user_id = data.data.get("user_id")
-                opt = data.data.get("opt")
-                profile_change = data.data.get("profile_change")
-                if opt == "get":
-                    return UserProfile.get_profile(user_id)
-                elif opt == "change":
-                    log.info(f"用户 {user_id} 更改画像：{profile_change}")
-                    now_user_profile = await UserProfile.change_profile(
-                        user_id, profile_change
-                    )
-                    return f"用户 {user_id} 画像更改成功: {now_user_profile}"
+        @staticmethod
+        async def call(data: FunctionCallingData):
+            user_id = data.data.get("user_id")
+            opt = data.data.get("opt")
+            profile_change = data.data.get("profile_change")
+            if opt == "get":
+                return UserProfile.get_profile(user_id)
+            elif opt == "change":
+                log.info(f"用户 {user_id} 更改画像：{profile_change}")
+                now_user_profile = await UserProfile.change_profile(
+                    user_id, profile_change
+                )
+                return f"用户 {user_id} 画像更改成功: {now_user_profile}"
 
-        FunctionCallingManager.register(UserProfileGetFunctionCalling)
+    FunctionCallingManager.register(UserProfileGetFunctionCalling)
 
     class GetServiceListFunctionCalling(FunctionCalling):
         function_name = "get_service_list"
@@ -334,169 +428,195 @@ def register_function_calling():
 
     FunctionCallingManager.register(GetCommandInfoFunctionCalling)
 
-    if config.get("search.enable"):
+    class SearchFunctionCalling(FunctionCalling):
+        function_name = "search"
+        description = "搜索网络上的信息，并到一个总结性回答"
+        args: ClassVar = [
+            FunctionCallingArg(name="query", _type="str", description="搜索关键词")
+        ]
 
-        class SearchFunctionCalling(FunctionCalling):
-            function_name = "search"
-            description = "搜索网络上的信息，并到一个总结性回答"
-            args: ClassVar = [
-                FunctionCallingArg(name="query", _type="str", description="搜索关键词")
-            ]
+        @classmethod
+        def can_enable(cls) -> EnableCheck:
+            if not config.get("search.enable"):
+                return EnableCheck(available=False, reason="未启用联网搜索")
+            if not config.get("search.api_key"):
+                return EnableCheck(available=False, reason="未配置搜索 API 密钥")
+            return EnableCheck()
 
-            @staticmethod
-            async def call(data: FunctionCallingData):
-                """
-                搜索网络信息
-                支持多种搜索引擎和网站
-                """
-                query = data.data.get("query", "")
-                if not query:
-                    return None
-                try:
-                    # 构建搜索 URL
-                    url = "https://api.tavily.com/search"
-                    log.debug(f"搜索：{url}")
-                    # 发送请求
-                    response = await request.post(
-                        url,
-                        headers={
-                            "Content-Type": "application/json",
-                            "Authorization": f"Bearer {config.get('search.api_key')}",
-                        },
-                        json={
-                            "query": query,
-                            "include_answer": "advanced",
-                            "search_depth": "basic",
-                            "chunks_per_source": 1,
-                            "country": "china",
-                        },
-                    )
-                    if response.status_code == 200:
-                        resp = response.json()
-                        log.info(f"{query} 搜索结果：\n{resp['answer']}")
-                        return resp["answer"]
-                    else:
-                        error_msg = f"搜索失败，状态码：{response.status_code}"
-                        log.warning(error_msg)
-                        return error_msg
-                except Exception as e:
-                    error_msg = f"搜索出错：{e}"
-                    log.error(error_msg)
+        @staticmethod
+        async def call(data: FunctionCallingData):
+            """
+            搜索网络信息
+            支持多种搜索引擎和网站
+            """
+            query = data.data.get("query", "")
+            if not query:
+                return None
+            try:
+                # 构建搜索 URL
+                url = "https://api.tavily.com/search"
+                log.debug(f"搜索：{url}")
+                # 发送请求
+                response = await request.post(
+                    url,
+                    headers={
+                        "Content-Type": "application/json",
+                        "Authorization": f"Bearer {config.get('search.api_key')}",
+                    },
+                    json={
+                        "query": query,
+                        "include_answer": "advanced",
+                        "search_depth": "basic",
+                        "chunks_per_source": 1,
+                        "country": "china",
+                    },
+                )
+                if response.status_code == 200:
+                    resp = response.json()
+                    log.info(f"{query} 搜索结果：\n{resp['answer']}")
+                    return resp["answer"]
+                else:
+                    error_msg = f"搜索失败，状态码：{response.status_code}"
+                    log.warning(error_msg)
                     return error_msg
+            except Exception as e:
+                error_msg = f"搜索出错：{e}"
+                log.error(error_msg)
+                return error_msg
 
-        FunctionCallingManager.register(SearchFunctionCalling)
+    FunctionCallingManager.register(SearchFunctionCalling)
 
-    if llm_manager.has_type(ModelType.EMBEDDING):
+    class MemoryChangeFunctionCalling(FunctionCalling):
+        function_name = "memory_change"
+        description = "更改你对用户的临时长期记忆，该记忆存在数量上限11"
+        args: ClassVar = [
+            FunctionCallingArg(
+                name="mem",
+                _type="str",
+                description="新增记忆临时长期记忆,超出上限则先入先出,不要添加时间戳,直接输出记忆内容,可选",
+            ),
+            FunctionCallingArg(
+                name="del",
+                _type="list[int]",
+                description="需要删除的记忆列表索引,请积极删除无用与过期的记忆,可选",
+            ),
+        ]
 
-        class MemoryChangeFunctionCalling(FunctionCalling):
-            function_name = "memory_change"
-            description = "更改你对用户的临时长期记忆，该记忆存在数量上限11"
-            args: ClassVar = [
-                FunctionCallingArg(
-                    name="mem",
-                    _type="str",
-                    description="新增记忆临时长期记忆,超出上限则先入先出,不要添加时间戳,直接输出记忆内容,可选",
-                ),
-                FunctionCallingArg(
-                    name="del",
-                    _type="list[int]",
-                    description="需要删除的记忆列表索引,请积极删除无用与过期的记忆,可选",
-                ),
-            ]
-
-            @staticmethod
-            async def call(data: FunctionCallingData):
-                # 处理记忆变更
-                mem = data.data.get("mem")
-                del_index = data.data.get("del")
-                # 新增记忆
-                user_info = get_user_info(data.sender_id)
-                msg = []
-                if mem:
-                    user_info.memory.append(
-                        f"{now().strftime('%Y年%m月%d日%a-%H时%M分')} {mem}"
-                    )
-                    log.debug(
-                        f"用户 {data.sender_id} 新增记忆：{now().strftime('%Y年%m月%d日%a-%H时%M分')} {mem}"
-                    )
-                    msg.append("新增记忆成功")
-                if del_index:
-                    if type(del_index) is int:
-                        del_index = [del_index]
-                    del_index.sort(reverse=True)
-                    for index in del_index:
-                        try:
-                            index: int
-                            user_info.memory.pop(index)
-                            log.debug(f"用户 {data.sender_id} 删除记忆：{index}")
-                            msg.append(f"删除记忆：{index}")
-                        except IndexError:
-                            log.warning(f"用户 {data.sender_id} 删除记忆失败：{index}")
-                            msg.append(f"删除记忆失败：{index}")
-                save_user_info(data.sender_id, user_info)
-                return msg
-
-        FunctionCallingManager.register(MemoryChangeFunctionCalling)
-
-        class GetMemoriesFunctionCalling(FunctionCalling):
-            function_name = "get_memories"
-            description = "根据语义检索长期记忆。仅在需要回忆相关历史事实时使用，由你自行决定查询数量和最低相似度。"
-            args: ClassVar = [
-                FunctionCallingArg(
-                    name="query", _type="str", description="要回忆的主题或事实"
-                ),
-                FunctionCallingArg(
-                    name="top_k",
-                    _type="int",
-                    description="返回记忆数量，建议 1 到 5，由你根据需要决定",
-                ),
-                FunctionCallingArg(
-                    name="min_similarity",
-                    _type="float",
-                    description="最低相似度，范围 0 到 1，由你根据需要决定",
-                ),
-            ]
-
-            @staticmethod
-            async def call(data: FunctionCallingData):
-                query = data.data.get("query", "")
-                top_k = data.data.get("top_k", 5)
-                min_similarity = data.data.get("min_similarity")
-                if not query:
-                    return []
-                return await memory_manager.get_memories(
-                    query, int(top_k), min_similarity
+        @classmethod
+        def can_enable(cls) -> EnableCheck:
+            if not llm_manager.has_type(ModelType.EMBEDDING):
+                return EnableCheck(
+                    available=False, reason="未配置 EMBEDDING 类型模型"
                 )
+            return EnableCheck()
 
-        FunctionCallingManager.register(GetMemoriesFunctionCalling)
-
-        class AccessMemoryFunctionCalling(FunctionCalling):
-            function_name = "access_memory"
-            description = "采用并强化一条已经检索到的长期记忆。只能采用检索结果中的记忆，并自行决定强化值。"
-            args: ClassVar = [
-                FunctionCallingArg(
-                    name="memory_id", _type="int", description="检索结果中的记忆 ID"
-                ),
-                FunctionCallingArg(
-                    name="reinforce",
-                    _type="float",
-                    description="重要度强化值，建议 0 到 0.2，由你根据本次使用价值决定",
-                ),
-            ]
-
-            @staticmethod
-            async def call(data: FunctionCallingData):
-                from .memory.manage import memory_manager
-
-                memory_id = data.data.get("memory_id")
-                reinforce = data.data.get("reinforce", 0.1)
-                if memory_id is None:
-                    return None
-                return await memory_manager.access_memory(
-                    {"id": int(memory_id)}, float(reinforce)
+        @staticmethod
+        async def call(data: FunctionCallingData):
+            # 处理记忆变更
+            mem = data.data.get("mem")
+            del_index = data.data.get("del")
+            # 新增记忆
+            user_info = get_user_info(data.sender_id)
+            msg = []
+            if mem:
+                user_info.memory.append(
+                    f"{now().strftime('%Y年%m月%d日%a-%H时%M分')} {mem}"
                 )
+                log.debug(
+                    f"用户 {data.sender_id} 新增记忆：{now().strftime('%Y年%m月%d日%a-%H时%M分')} {mem}"
+                )
+                msg.append("新增记忆成功")
+            if del_index:
+                if type(del_index) is int:
+                    del_index = [del_index]
+                del_index.sort(reverse=True)
+                for index in del_index:
+                    try:
+                        index: int
+                        user_info.memory.pop(index)
+                        log.debug(f"用户 {data.sender_id} 删除记忆：{index}")
+                        msg.append(f"删除记忆：{index}")
+                    except IndexError:
+                        log.warning(f"用户 {data.sender_id} 删除记忆失败：{index}")
+                        msg.append(f"删除记忆失败：{index}")
+            save_user_info(data.sender_id, user_info)
+            return msg
 
-        FunctionCallingManager.register(AccessMemoryFunctionCalling)
+    FunctionCallingManager.register(MemoryChangeFunctionCalling)
+
+    class GetMemoriesFunctionCalling(FunctionCalling):
+        function_name = "get_memories"
+        description = "根据语义检索长期记忆。仅在需要回忆相关历史事实时使用，由你自行决定查询数量和最低相似度。"
+        args: ClassVar = [
+            FunctionCallingArg(
+                name="query", _type="str", description="要回忆的主题或事实"
+            ),
+            FunctionCallingArg(
+                name="top_k",
+                _type="int",
+                description="返回记忆数量，建议 1 到 5，由你根据需要决定",
+            ),
+            FunctionCallingArg(
+                name="min_similarity",
+                _type="float",
+                description="最低相似度，范围 0 到 1，由你根据需要决定",
+            ),
+        ]
+
+        @classmethod
+        def can_enable(cls) -> EnableCheck:
+            if not llm_manager.has_type(ModelType.EMBEDDING):
+                return EnableCheck(
+                    available=False, reason="未配置 EMBEDDING 类型模型"
+                )
+            return EnableCheck()
+
+        @staticmethod
+        async def call(data: FunctionCallingData):
+            query = data.data.get("query", "")
+            top_k = data.data.get("top_k", 5)
+            min_similarity = data.data.get("min_similarity")
+            if not query:
+                return []
+            return await memory_manager.get_memories(query, int(top_k), min_similarity)
+
+    FunctionCallingManager.register(GetMemoriesFunctionCalling)
+
+    class AccessMemoryFunctionCalling(FunctionCalling):
+        function_name = "access_memory"
+        description = "采用并强化一条已经检索到的长期记忆。只能采用检索结果中的记忆，并自行决定强化值。"
+        args: ClassVar = [
+            FunctionCallingArg(
+                name="memory_id", _type="int", description="检索结果中的记忆 ID"
+            ),
+            FunctionCallingArg(
+                name="reinforce",
+                _type="float",
+                description="重要度强化值，建议 0 到 0.2，由你根据本次使用价值决定",
+            ),
+        ]
+
+        @classmethod
+        def can_enable(cls) -> EnableCheck:
+            if not llm_manager.has_type(ModelType.EMBEDDING):
+                return EnableCheck(
+                    available=False, reason="未配置 EMBEDDING 类型模型"
+                )
+            return EnableCheck()
+
+        @staticmethod
+        async def call(data: FunctionCallingData):
+            from .memory.manage import memory_manager
+
+            memory_id = data.data.get("memory_id")
+            reinforce = data.data.get("reinforce", 0.1)
+            if memory_id is None:
+                return None
+            return await memory_manager.access_memory(
+                {"id": int(memory_id)}, float(reinforce)
+            )
+
+    FunctionCallingManager.register(AccessMemoryFunctionCalling)
 
     class GetDirTreeFunctionCalling(FunctionCalling):
         function_name = "get_dir_tree"
@@ -555,5 +675,51 @@ def register_function_calling():
             return read_file(path, start, end)
 
     FunctionCallingManager.register(ReadFileFunctionCalling)
+
+    class ListSkillsFunctionCalling(FunctionCalling):
+        function_name = "list_skills"
+        description = "列出你当前可查阅的技能清单。技能是详细的玩法与操作说明文档，当用户询问某个功能怎么用、某个玩法有哪些指令时，先调用本功能查看有哪些技能，再调用 get_skill_content 获取正文。"
+        args: ClassVar[list[FunctionCallingArg]] = []
+
+        @staticmethod
+        async def call(data: FunctionCallingData):
+            from .skills import skill_manager
+
+            skills = skill_manager.list_queryable()
+            if not skills:
+                return "当前没有可查询的技能"
+            return "\n".join(
+                f"{s.name}: [{s.source_label}] {s.description or '无说明'}"
+                for s in skills
+            )
+
+    FunctionCallingManager.register(ListSkillsFunctionCalling)
+
+    class GetSkillContentFunctionCalling(FunctionCalling):
+        function_name = "get_skill_content"
+        description = "获取指定技能的完整正文（Markdown）。技能名必须来自 list_skills 的结果。"
+        args: ClassVar[list[FunctionCallingArg]] = [
+            FunctionCallingArg(
+                name="name", _type="str", description="技能名，来自 list_skills 的结果"
+            )
+        ]
+
+        @staticmethod
+        async def call(data: FunctionCallingData):
+            from .skills import skill_manager
+
+            name = str(data.data.get("name", "")).strip()
+            if not name:
+                return "请提供技能名"
+            skill = skill_manager.get(name)
+            if skill is None:
+                return f"技能 {name} 不存在，请调用 list_skills 查看可用技能"
+            if not skill.enabled:
+                return f"技能 {name} 已被停用，无法查看"
+            if skill.embedded:
+                return f"技能 {name} 已直接写入你的提示词，无需查询"
+            return f"# {skill.name}\n{skill.description}\n\n{skill.content}"
+
+    FunctionCallingManager.register(GetSkillContentFunctionCalling)
 
     AgentEventBus.publish_sync(event_type="register_FC", source="agent")

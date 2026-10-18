@@ -31,9 +31,16 @@ class ModelType(Enum):
 
 
 class LLMResponse:
-    def __init__(self, content: Any, usage: dict[str, Any] | None = None):
+    def __init__(
+        self,
+        content: Any,
+        usage: dict[str, Any] | None = None,
+        model: str | None = None,
+    ):
         self.content = content
         self.usage = usage
+        #: 实际应答的模型名（由 LLMManager 回填，供调用方换算计费）
+        self.model = model
 
 
 class ModelRequestError(Exception):
@@ -251,6 +258,8 @@ class LLMManager:
             usage = resp.usage
             if isinstance(usage, TokenUsage):
                 MTYM.add_usage(m_name, event, usage)
+            if isinstance(resp, LLMResponse) and not resp.model:
+                resp.model = m_name
             return resp
         except ModelRequestError as e:
             log.warning(

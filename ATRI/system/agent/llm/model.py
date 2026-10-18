@@ -1,5 +1,6 @@
 import json
 import random
+import time
 from collections.abc import Awaitable, Callable
 from enum import Enum
 from typing import Any
@@ -10,6 +11,7 @@ from ATRI.exceptions import str_traceback
 
 from ..utils import log, request
 from .contents import LLMContents, LLMMessages
+from .log import log_llm_call
 from .token import MTYM, TokenUsage
 
 NO_MODEL_ERR = "没有可用的模型"
@@ -87,18 +89,15 @@ class LLMModel:
         if self.call_func:
             return await self.call_func(self, content)
         if isinstance(content, LLMContents):
-            log_content = content.get_shorten_content()
             messages = [
                 {"role": "user", "content": content.get_contents()},
             ]
         elif isinstance(content, LLMMessages):
-            log_content = content.get_shorten_content()
             messages = [
                 {"role": msg.role, "content": msg.content.get_contents()}
                 for msg in content.messages
             ]
         else:
-            log_content = content
             messages = [
                 {"role": "user", "content": content},
             ]
@@ -113,7 +112,6 @@ class LLMModel:
                 "temperature": self.temperature,
                 **self.data,
             }
-            log.debug(f"模型输入: {log_content}")
             resp = await request.post(
                 url=self.endpoint + "/chat/completions", json=data, headers=headers
             )
@@ -133,7 +131,6 @@ class LLMModel:
                 output_tokens=usage_dict.get("completion_tokens", 0),
                 cache_hit_tokens=usage_dict.get("prompt_cache_hit_tokens", 0),
             )
-            log.debug(f"模型输出: {resp_content}\nTokens: {usage}")
             return LLMResponse(content=resp_content, usage=usage)
         except Exception:
             try:
@@ -150,10 +147,8 @@ class LLMModel:
                     output_tokens=usage_dict.get("completion_tokens", 0),
                     cache_hit_tokens=usage_dict.get("prompt_cache_hit_tokens", 0),
                 )
-                log.debug(f"模型输出: {resp_content}\nTokens: {usage}")
                 return LLMResponse(content=resp_content, usage=usage)
             except Exception as e:
-                log.debug(f"模型输出: {resp.text}")
                 raise ModelRequestError(
                     f"请求失败了: {resp.text}", status_code=resp.status_code
                 ) from e
@@ -219,9 +214,40 @@ class LLMManager:
                 raise ValueError(f"模型 '{m_name}' 未注册")
         else:
             m_name = model.name
+        model_type = self.get_model_type(m_name)
         try:
-            log.debug(f"调用模型 {m_name} (类型: {self.get_model_type(m_name)})")
-            resp: LLMResponse = await model.call(content)
+            started = time.perf_counter()
+            try:
+                resp: LLMResponse = await model.call(content)
+            except BaseException as exc:
+                duration = time.perf_counter() - started
+                log_llm_call(
+                    model=model,
+                    model_type=model_type,
+                    content=content,
+                    event=event,
+                    duration=duration,
+                    error=exc,
+                )
+                log.debug(
+                    f"模型调用 {m_name} (类型: {model_type}) | 事件={event} | "
+                    f"耗时={duration:.3f}s | 失败: {type(exc).__name__}"
+                )
+                raise
+            duration = time.perf_counter() - started
+            log_llm_call(
+                model=model,
+                model_type=model_type,
+                content=content,
+                event=event,
+                duration=duration,
+                response=resp.content,
+                usage=resp.usage,
+            )
+            log.debug(
+                f"模型调用 {m_name} (类型: {model_type}) | 事件={event} | "
+                f"耗时={duration:.3f}s | Tokens: {resp.usage} | 成功"
+            )
             usage = resp.usage
             if isinstance(usage, TokenUsage):
                 MTYM.add_usage(m_name, event, usage)

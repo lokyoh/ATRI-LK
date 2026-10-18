@@ -1,7 +1,6 @@
-from ..utils import log, request
+from ..utils import request
 from .contents import Sys1Content
 from .model import LLMModel, LLMResponse, ModelRequestError
-from .token import TokenUsage
 
 
 class SystemOneModel(LLMModel):
@@ -26,33 +25,19 @@ class SystemOneModel(LLMModel):
         headers = {
             "Authorization": f"Bearer {self.api_key}",
         }
-        log.debug(f"模型输入: {content.get_shorten_content()}")
         resp = await request.post(url=self.endpoint, json=data, headers=headers)
         try:
             resp_json: dict = resp.json()
             usage: dict = resp_json.get("usage", {})
-            usage_obj = TokenUsage(
-                prompt_tokens=usage.get("input_tokens", 0),
-                output_tokens=usage.get("output_tokens", 0),
-                cache_hit_tokens=0,
-            )
             answers = resp_json["answers"]
-            log.debug(f"模型输出: {answers}\nTokens: {usage_obj}")
             return LLMResponse(content=answers, usage=usage)
         except Exception:
             try:
                 resp_json: dict = resp.json()
                 usage: dict = resp_json.get("usage", {})
-                usage_obj = TokenUsage(
-                    prompt_tokens=usage.get("input_tokens", 0),
-                    output_tokens=usage.get("output_tokens", 0),
-                    cache_hit_tokens=0,
-                )
                 answers = resp_json["answers"]
-                log.debug(f"模型输出: {answers}\nTokens: {usage_obj!s}")
                 return LLMResponse(content=answers, usage=usage)
             except Exception as e:
-                log.debug(f"模型输出: {resp.text}")
                 raise ModelRequestError(
                     f"请求失败了: {resp.text}", status_code=resp.status_code
                 ) from e

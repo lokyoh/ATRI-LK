@@ -37,6 +37,7 @@ ATRI/system/agent/
 │   ├── system_one.py    # SystemOne 接口
 │   ├── embedding.py     # Embedding 模型
 │   ├── tts.py           # TTS 模型
+│   ├── log.py           # 模型输入输出独立日志
 │   └── ...
 ├── utils.py             # 日志与通用请求封装
 └── README.md            # 文档入口
@@ -85,6 +86,18 @@ ATRI/system/agent/
 - `ProviderManager`：统一管理 provider 和 model 注册
 
 在启动或 reload 时，会从系统配置目录读取 `provider.yml`（由 `PROVIDER_CONFIG_FILE` 指定），并通过 `load_provider_from_config()` 注册所有模型。
+
+### 3.5 模型调用日志
+
+模型输入输出使用独立日志系统，写入 `data/logs/llm`：
+
+- 每次启动创建一轮运行目录，滚动保留最近 3 轮；
+- 单个日志文件最大 10MB，溢出后自动轮转；
+- 每次调用按文本块记录模型、事件、耗时、Token 用量、完整输入输出与异常；
+- 图片/音频只记录类型与长度，不写入 base64；
+- 主日志仅保留一行调用摘要，不再输出完整输入输出。
+
+日志由 `LLMManager.call_model()` 统一写入。
 
 ## 4. 配置项
 

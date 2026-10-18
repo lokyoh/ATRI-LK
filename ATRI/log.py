@@ -1,6 +1,6 @@
 import sys
-from pathlib import Path
 from datetime import datetime
+from pathlib import Path
 
 from nonebot.log import logger as log
 
@@ -8,6 +8,9 @@ from ATRI import conf
 
 LOGGER_DIR = Path(".") / "data" / "logs"
 LOGGER_DIR.mkdir(exist_ok=True, parents=True)
+
+LLM_LOG_EXTRA = "llm_io"
+"""LLM 独立日志的标记，主日志会忽略带有该标记的记录"""
 
 _NOW_TIME = datetime.now().strftime("%Y%m%d-%H")
 
@@ -22,6 +25,9 @@ _LOG_FORMAT = (
 
 class LoguruNameDealer:
     def __call__(self, record):
+        if record["extra"].get(LLM_LOG_EXTRA):
+            # LLM 输入输出使用 data/logs/llm 下的独立日志，不进入主日志
+            return False
         log_handle = record["name"]
         if "nonebot.plugin.manager" in log_handle:
             plugin_name = log_handle.split(".")[-1]

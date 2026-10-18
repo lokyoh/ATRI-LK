@@ -5,7 +5,7 @@ plugin = (
     Service(
         "agent",
         "为ATRI-LK项目专门设计的智能体。",
-        "0.3.0",
+        "0.3.1",
         Service.ServiceType.SYSTEM,
     )
     .allow_switch(False)
@@ -39,7 +39,9 @@ def init():
     from .agent.daily_task import init
     from .agent.function_calling import register_function_calling
     from .llm import load_models_from_config
+    from .llm.log import init_llm_log
 
+    init_llm_log()
     load_models_from_config()
     register_function_calling()
     init()

@@ -8,18 +8,14 @@ async def call_func(
     model: LLMModel, content: str | LLMContents | LLMMessages
 ) -> LLMResponse:
     if isinstance(content, LLMContents):
-        log_content = ""
         _content = []
         for part in content.contents:
             if part.type == "text":
                 _content.append({"text": part.content})
-                log_content += part.content
         contents = [{"parts": _content}]
     elif isinstance(content, str):
-        log_content = content
         contents = [{"parts": [{"text": content}]}]
     elif isinstance(content, LLMMessages):
-        log_content = content.get_shorten_content()
         contents = []
         for msg in content.messages:
             _parts = []
@@ -29,7 +25,6 @@ async def call_func(
             contents.append({"role": msg.role, "parts": _parts})
     else:
         raise TypeError
-    log.debug(f"模型输入: {log_content}")
     g_c: dict = {
         "responseMimeType": "text/plain",
     }

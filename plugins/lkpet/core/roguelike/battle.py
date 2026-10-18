@@ -4,7 +4,11 @@ import random
 from dataclasses import dataclass
 from typing import Any
 
-from ..skills import get_skill_power, increase_proficiency
+from ..skills import (
+    equipped_specs,
+    get_skill_power,
+    increase_proficiency,
+)
 from ._common import (
     BASE_SKILL_POWER,
     _load_skills_config,
@@ -60,7 +64,10 @@ class BattleSession:
         log: list[tuple[int, str]] | None = None,
     ):
         self.pet = pet
-        self.run = run
+        # 局内 run 状态 dict。注意不能叫 ``self.run``：那会遮蔽 ``run()``
+        # 方法（自动战斗入口），导致 `_auto_battle` 调用时报
+        # "TypeError: 'dict' object is not callable"。
+        self.state = run
         self.monster = monster
         self.cfg = cfg
         self.rng = rng
@@ -113,10 +120,10 @@ class BattleSession:
 
         passives = passive_effects(self.pet, self.skills_cfg)
         attrs = self.pet.attributes
-        buffs = self.run.get("buffs", {})
-        relic_stats = relic_stat_bonuses(self.run.get("relics") or [])
+        buffs = self.state.get("buffs", {})
+        relic_stats = relic_stat_bonuses(self.state.get("relics") or [])
 
-        self.pet_hp = self.run["hp"]
+        self.pet_hp = self.state["hp"]
         self.pet_mp = (
             int(int(attrs.get("mp", 20)) * self.mults.get("mp_mult", 1.0))
             + int(passives["mp"])
@@ -147,20 +154,18 @@ class BattleSession:
             + int(passives["spd"])
             + int(relic_stats["spd"])
         )
-        self.hp_max = int(self.run.get("hp_max", self.pet_hp))
+        self.hp_max = int(self.state.get("hp_max", self.pet_hp))
         self.crit_rate = float(passives["crit_rate"]) + float(relic_stats["crit_rate"])
+        # 被动 dmg_mult 是平值相加的乘区（0.12 = +12%）；与遗物的 vs_boss_mult 相乘。
+        self.dmg_mult = 1.0 + float(passives.get("dmg_mult", 0.0))
         self.out_mult = (
             self.mults.get("vs_boss_mult", 1.0)
             if (self.monster.get("boss") or self.monster.get("elite"))
             else 1.0
         )
 
-        # 技能列表
-        self.active_pairs = [
-            (skill_id, self.skills_cfg["skills"][skill_id])
-            for skill_id in self.pet.skills.get("active", [])
-            if skill_id in self.skills_cfg.get("skills", {})
-        ]
+        # 技能列表：只结算**装备中**的主动技能（收集池里没装备的不参与战斗）。
+        self.active_pairs = equipped_specs(self.pet, "active", self.skills_cfg)
         self.cooldowns: dict[str, int] = {
             skill_id: 0 for skill_id, _ in self.active_pairs
         }
@@ -210,8 +215,8 @@ class BattleSession:
         return max(1, round(self.pet_spd * self.pet_mods["spd_mult"]))
 
     def _pet_damage(self, defence: int, bossy: bool) -> tuple[int, bool]:
-        """我方输出（遗物 vs_boss_mult 乘区 + 被动 crit_rate 暴击）。"""
-        mult = self.out_mult if bossy else 1.0
+        """我方输出（遗物 vs_boss_mult × 被动 dmg_mult × 被动 crit_rate 暴击）。"""
+        mult = (self.out_mult if bossy else 1.0) * self.dmg_mult
         dmg = max(
             1,
             round(
@@ -301,21 +306,53 @@ class BattleSession:
                     get_skill_power(self.pet, skill_id, self.skills_cfg)
                     / BASE_SKILL_POWER
                 )
-                dmg, is_crit = self._pet_damage(
-                    int(target["unit"]["def"]), bool(target["primary"])
-                )
-                dealt = max(1, round(dmg * factor))
-                target["unit"]["hp"] -= dealt
-                self._blog(
-                    "log_skill",
-                    "R{round} {actor} 使用【{skill}】，造成 {dmg} 伤害。",
-                    actor=self.pet.name,
-                    skill=str(skill.get("name") or skill_id),
-                    dmg=dealt,
-                )
-                self._blog_crit(is_crit)
-                self._charge_taken(target, dealt)
-                self._strike_back(target["unit"], dealt)
+                strikes = max(1, int(skill.get("strikes", 1) or 1))
+                dealt_total = 0
+                crit_any = False
+                for _ in range(strikes):
+                    if target["unit"]["hp"] <= 0:
+                        break
+                    dmg, is_crit = self._pet_damage(
+                        int(target["unit"]["def"]), bool(target["primary"])
+                    )
+                    dealt = max(1, round(dmg * factor))
+                    target["unit"]["hp"] -= dealt
+                    dealt_total += dealt
+                    crit_any = crit_any or is_crit
+                if strikes > 1:
+                    self._blog(
+                        "log_skill_multi",
+                        "R{round} {actor} 使用【{skill}】，{strikes} 连击共 {dmg} 伤害。",
+                        actor=self.pet.name,
+                        skill=str(skill.get("name") or skill_id),
+                        strikes=strikes,
+                        dmg=dealt_total,
+                    )
+                else:
+                    self._blog(
+                        "log_skill",
+                        "R{round} {actor} 使用【{skill}】，造成 {dmg} 伤害。",
+                        actor=self.pet.name,
+                        skill=str(skill.get("name") or skill_id),
+                        dmg=dealt_total,
+                    )
+                self._blog_crit(crit_any)
+                self._charge_taken(target, dealt_total)
+                self._strike_back(target["unit"], dealt_total)
+                # 吸血：按实际伤害比例回复局内生命（不超上限）。
+                leech = float(skill.get("leech", 0.0) or 0.0)
+                if leech > 0 and dealt_total > 0:
+                    healed = min(
+                        round(dealt_total * leech), max(0, self.hp_max - self.pet_hp)
+                    )
+                    if healed > 0:
+                        self.pet_hp += healed
+                        self._blog(
+                            "log_skill_leech",
+                            "R{round} {actor} 吸取 {heal} 点生命。",
+                            actor=self.pet.name,
+                            heal=healed,
+                        )
                 # 回蓝效果
                 for effect in skill.get("effects", []) or []:
                     if effect.get("type") == "mp":
@@ -944,10 +981,20 @@ def _auto_battle(
     return session.run()
 
 
-async def _do_battle(pet, rogue, cfg: dict[str, Any]) -> str:
-    """战斗入口：生成怪物、跑自动战斗、渲染战报、处理掉落与推进。"""
+async def _do_battle(
+    pet,
+    rogue,
+    cfg: dict[str, Any],
+    *,
+    enemy_index: int | None = None,
+    elite: bool | None = None,
+) -> str:
+    """战斗入口：生成怪物、跑自动战斗、渲染战报、处理掉落与推进。
+
+    ``enemy_index`` 是普通层选项里预抽好的敌人池下标（见 ``FloorChoiceState``）；
+    ``elite`` 缺省时沿用 pending 里的层内精英标记。
+    """
     from ._common import _persist, _text, floor_rng
-    from .floor import _advance
     from .relics import (
         _grant_relic,
         _run_relics,
@@ -967,14 +1014,16 @@ async def _do_battle(pet, rogue, cfg: dict[str, Any]) -> str:
     region = region_of(floor, cfg)
     rng = floor_rng(run["seed"], floor, "battle")
     pending = run.get("pending") or {}
-    is_elite = bool(pending.get("elite"))
+    is_elite = bool(pending.get("elite")) if elite is None else elite
+    boss_index = pending.get("boss_index")
     monster = _gen_monster(
         floor,
         region,
         cfg,
         rng,
-        boss_index=pending.get("boss_index"),
+        boss_index=boss_index,
         elite=is_elite,
+        pool_index=None if is_elite else enemy_index,
     )
 
     mults = relic_multipliers(rogue)
@@ -1082,6 +1131,28 @@ async def _do_battle(pet, rogue, cfg: dict[str, Any]) -> str:
         )
     )
 
+    # 首通记录：精英 / 首领都按「区域」记一次（键见 roguelike.yaml 的
+    # stage_skill_rewards）。只在尚未解锁时记入 run，避免每次战斗都刷提示。
+    stage_rewards = (cfg.get("stage_skill_rewards") or {}).get(region.get("id", ""))
+    stage_rewards = stage_rewards if isinstance(stage_rewards, dict) else {}
+    unlock_key = ""
+    if monster.get("boss") and stage_rewards.get("boss"):
+        unlock_key = f"boss:{region.get('id', '')}"
+    elif is_elite and stage_rewards.get("elite"):
+        unlock_key = f"elite:{region.get('id', '')}"
+    # 同一次 run 里可能打赢多只精英，而 rogue.unlocked 要到结算才写回；
+    # 这里必须连 run 自己的待结算列表一起判，避免重复提示与重复记账。
+    run_unlocks = run.setdefault("unlocks", [])
+    if unlock_key and unlock_key not in rogue.unlocked and unlock_key not in run_unlocks:
+        run_unlocks.append(unlock_key)
+        lines.append(
+            _text(
+                "stage_unlock_hint",
+                "🔓 首次击败本区域{kind}，阶段奖励技能将于结算时发放。",
+                kind="首领" if monster.get("boss") else "精英",
+            )
+        )
+
     if monster.get("boss"):
         heal = int(relic_flat(rogue, "boss_heal"))
         if heal:
@@ -1099,7 +1170,7 @@ async def _do_battle(pet, rogue, cfg: dict[str, Any]) -> str:
     if floor in boss_floor_set(cfg):
         run["boss_wins"] += 1
         unlock = (cfg.get("boss_unlocks") or {}).get(str(floor))
-        if unlock is not None:
+        if unlock is not None and str(floor) not in rogue.unlocked:
             run.setdefault("unlocks", []).append(str(floor))
             lines.append(
                 _text("boss_unlock_hint", "🔓 首通奖励将于结算时发放。", floor=floor)
@@ -1126,5 +1197,7 @@ async def _do_battle(pet, rogue, cfg: dict[str, Any]) -> str:
             lines.append(await settle_run(pet, rogue, reason="clear"))
             return "\n".join(lines)
 
-    advance = await _advance(pet, rogue)
-    return "\n".join(lines) + "\n" + advance
+    from .run_state import advance as advance_floor
+
+    step_text = await advance_floor(pet, rogue)
+    return "\n".join(lines) + "\n" + step_text

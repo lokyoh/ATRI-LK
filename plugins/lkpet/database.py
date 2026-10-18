@@ -45,6 +45,28 @@ class Pet(BaseModel):
     skills: dict[str, list[str]] = Field(
         default_factory=lambda: {"active": [], "passive": []}
     )
+    """已掌握的技能库（收集池）：``{"active": [...], "passive": [...]}``。
+
+    无数量上限，只增不减（轮回时按来源裁剪，见 ``core.skills``）。
+    """
+    skill_equipped: dict[str, list[str]] = Field(
+        default_factory=lambda: {"active": [], "passive": []}
+    )
+    """当前装备的技能：主动 / 被动各至多 ``limits.*_slots`` 个（默认 4 + 4）。
+
+    战斗与被动加成只结算这里；未装备的留在 :attr:`skills` 里随时可换。
+    """
+    skill_sources: dict[str, str] = Field(default_factory=dict)
+    """技能 id → 来源（starter/regular/reincarnation/rogue/legacy）。
+
+    决定「轮回时保留什么」：只保留 reincarnation 与 rogue。
+    """
+    skill_grants: dict[str, int] = Field(default_factory=dict)
+    """等级里程碑的已发放计数 ``{"active": n, "passive": m}``。
+
+    每达到 ``grants.active_every`` / ``passive_every`` 的倍数就发一个，用计数保证
+    幂等（重复读档不会重复发放，轮回后归零重新累计）。
+    """
     skill_proficiency: dict[str, float] = Field(default_factory=dict)
     talent_points: int = 0
     talents: dict[str, int] = Field(default_factory=dict)
@@ -108,7 +130,13 @@ class Rogue(BaseModel):
     updated_at: datetime = Field(default_factory=datetime.now)
 
 
-PETDATA_VERSION = 1
+PETDATA_VERSION = 2
+"""PETDATA 表结构版本。
+
+1 = 旧聊天插件的三列表重建为完整养成表；
+2 = 技能系统重构：新增 SKILL_EQUIPPED / SKILL_SOURCES / SKILL_GRANTS
+    （收集池 + 装备槽 + 来源 + 里程碑计数），并把旧的「已学即装备」拆开。
+"""
 # 注：LOVE 是旧聊天插件的 0-100 好感列，属于历史遗留。它保留在表里以避免动既有数据，
 # 但**已无代码读取**，也不参与任何迁移（新养成的亲密度是 AFFECTION，旧宠物从 0 开始）。
 PETDATA_COLUMNS = """
@@ -144,6 +172,9 @@ DAILY_FLAGS         TEXT NOT NULL DEFAULT '{}',
 WEEKLY_FLAGS        TEXT NOT NULL DEFAULT '{}',
 MONTHLY_FLAGS       TEXT NOT NULL DEFAULT '{}',
 SKILLS              TEXT NOT NULL DEFAULT '{"active": [], "passive": []}',
+SKILL_EQUIPPED      TEXT NOT NULL DEFAULT '{"active": [], "passive": []}',
+SKILL_SOURCES       TEXT NOT NULL DEFAULT '{}',
+SKILL_GRANTS        TEXT NOT NULL DEFAULT '{}',
 SKILL_PROFICIENCY   TEXT NOT NULL DEFAULT '{}',
 TALENT_POINTS       INTEGER NOT NULL DEFAULT 0,
 TALENTS             TEXT NOT NULL DEFAULT '{}',
@@ -186,6 +217,9 @@ PETDATA_MIGRATION_COLUMNS = {
     "WEEKLY_FLAGS": "TEXT NOT NULL DEFAULT '{}'",
     "MONTHLY_FLAGS": "TEXT NOT NULL DEFAULT '{}'",
     "SKILLS": 'TEXT NOT NULL DEFAULT \'{"active": [], "passive": []}\'',
+    "SKILL_EQUIPPED": 'TEXT NOT NULL DEFAULT \'{"active": [], "passive": []}\'',
+    "SKILL_SOURCES": "TEXT NOT NULL DEFAULT '{}'",
+    "SKILL_GRANTS": "TEXT NOT NULL DEFAULT '{}'",
     "SKILL_PROFICIENCY": "TEXT NOT NULL DEFAULT '{}'",
     "TALENT_POINTS": "INTEGER NOT NULL DEFAULT 0",
     "TALENTS": "TEXT NOT NULL DEFAULT '{}'",
@@ -200,6 +234,15 @@ PETDATA_MIGRATION_COLUMNS = {
 
 
 def update_pet_db(connection, version: int) -> None:
+    """幂等的迁移：先按 PRAGMA 补齐缺失列，再按版本做数据搬运。
+
+    v1 → v2（技能系统重构）：旧模型里 ``SKILLS`` 既是「已学」也是「已装备」。
+    新模型把两者拆开——``SKILLS`` 变成收集池、``SKILL_EQUIPPED`` 是装备槽、
+    ``SKILL_SOURCES`` 记录来源、``SKILL_GRANTS`` 记录里程碑计数。
+    这里把旧列原样复制进收集池，装备槽取各类型前 ``active_slots`` /
+    ``passive_slots`` 个（多出来的留在收集池里可以再装），来源统一标成 legacy
+    （轮回时被清空，与旧技能「靠等级临时获得」的定位一致）。
+    """
     cursor = connection.cursor()
     try:
         if version < 1:
@@ -215,17 +258,19 @@ def update_pet_db(connection, version: int) -> None:
             )
             cursor.execute("DROP TABLE `PETDATA`")
             cursor.execute("ALTER TABLE `PETDATA_TEMP` RENAME TO `PETDATA`")
-            columns = {row[1] for row in cursor.execute("PRAGMA table_info(PETDATA)")}
-            # 用插件统一的时区（ATRI.utils.datetime）而不是 SQLite 的 CURRENT_TIMESTAMP ——
-            # 后者是 UTC，会让旧宠物的 CYCLE_STARTED_AT 比本地时间早 8 小时，
-            # 在本地 00:00~08:00 之间迁移时 .date() 会差一天，导致多结算一天。
-            stamp = atri_now().strftime("%Y-%m-%d %H:%M:%S")
-            with connection:
-                for column, definition in PETDATA_MIGRATION_COLUMNS.items():
-                    if column not in columns:
-                        cursor.execute(
-                            f"ALTER TABLE PETDATA ADD COLUMN {column} {definition}"
-                        )
+
+        columns = {row[1] for row in cursor.execute("PRAGMA table_info(PETDATA)")}
+        # 用插件统一的时区（ATRI.utils.datetime）而不是 SQLite 的 CURRENT_TIMESTAMP ——
+        # 后者是 UTC，会让旧宠物的 CYCLE_STARTED_AT 比本地时间早 8 小时，
+        # 在本地 00:00~08:00 之间迁移时 .date() 会差一天，导致多结算一天。
+        stamp = atri_now().strftime("%Y-%m-%d %H:%M:%S")
+        with connection:
+            for column, definition in PETDATA_MIGRATION_COLUMNS.items():
+                if column not in columns:
+                    cursor.execute(
+                        f"ALTER TABLE PETDATA ADD COLUMN {column} {definition}"
+                    )
+            if version < 1:
                 cursor.execute(
                     "UPDATE PETDATA SET ADOPTED_AT = ? "
                     "WHERE ADOPTED_AT IS NULL OR ADOPTED_AT = ''",
@@ -239,8 +284,50 @@ def update_pet_db(connection, version: int) -> None:
                     "UPDATE PETDATA SET LAST_SETTLEMENT_AT = ADOPTED_AT "
                     "WHERE LAST_SETTLEMENT_AT IS NULL OR LAST_SETTLEMENT_AT = ''"
                 )
+        if version < 2:
+            _migrate_pet_skills_v2(connection, cursor)
     finally:
         cursor.close()
+
+
+def _migrate_pet_skills_v2(connection, cursor) -> None:
+    """把旧「已学 = 已装备」的技能列拆成收集池 + 装备槽 + 来源 + 里程碑计数。"""
+    from .core.skills import SLOT_TYPES, equipped_limit, infer_source
+
+    limits = {slot: equipped_limit(slot) for slot in SLOT_TYPES}
+    rows = list(cursor.execute("SELECT ID, SKILLS FROM PETDATA"))
+    with connection:
+        for player_id, raw in rows:
+            try:
+                learned = json.loads(raw or "{}")
+            except (TypeError, ValueError):
+                learned = {}
+            if not isinstance(learned, dict):
+                learned = {}
+
+            collection = {
+                slot: [str(sid) for sid in learned.get(slot, []) or []]
+                for slot in SLOT_TYPES
+            }
+            all_ids = [sid for slot in SLOT_TYPES for sid in collection[slot]]
+            sources = {sid: infer_source(sid) for sid in all_ids}
+            equipped = {
+                slot: collection[slot][: limits[slot]] for slot in SLOT_TYPES
+            }
+            # 旧技能全部来自等级解锁，视为本世临时技能。里程碑计数按 0 起算，
+            # 于是旧存档首次读档时会按当前等级补发常规池技能（见
+            # ``pet_core.ensure_initialized``），与旧版「到等级就学」的体验对齐。
+            cursor.execute(
+                "UPDATE PETDATA SET SKILLS = ?, SKILL_EQUIPPED = ?, "
+                "SKILL_SOURCES = ?, SKILL_GRANTS = ? WHERE ID = ?",
+                (
+                    json.dumps(collection, ensure_ascii=False),
+                    json.dumps(equipped, ensure_ascii=False),
+                    json.dumps(sources, ensure_ascii=False),
+                    json.dumps({"active": 0, "passive": 0}, ensure_ascii=False),
+                    player_id,
+                ),
+            )
 
 
 REINCARNATION_COLUMNS = """

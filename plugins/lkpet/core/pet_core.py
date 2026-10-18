@@ -43,11 +43,16 @@ def ensure_initialized(pet, pet_config: dict[str, Any] | None = None) -> bool:
     at their ``'{}'`` column default, so they would show HP 0 and never gain
     anything on level-up until something recomputes them.
 
-    Level-appropriate skills are unlocked here too: ``core.leveling`` only calls
-    ``check_skill_unlock`` on a level-up, so a pet that never levels up would sit
-    at level 1 without its ``unlock_condition: {level: 1}`` starting skill.
+    Skill storage is normalised here too (collection pool / equip slots / sources)
+    and the level-milestone grants are topped up, so a pet that already sits at
+    level 40 receives every grant it should have had even though nothing levelled
+    up on this read.
     """
-    from .skills import check_skill_unlock
+    from .skills import (
+        ensure_skill_storage,
+        grant_level_skills,
+        grant_start_skills,
+    )
 
     changed = False
     if not pet.qualification:
@@ -57,7 +62,12 @@ def ensure_initialized(pet, pet_config: dict[str, Any] | None = None) -> bool:
         cfg = pet_config if pet_config is not None else _load_pet_config()
         pet.attributes = calc_attributes_on_level_up(pet, cfg)
         changed = True
-    if check_skill_unlock(pet):
+    if ensure_skill_storage(pet):
+        changed = True
+    # 开局技能：每世开局（创建 / 轮回后）都补一次，已掌握的会跳过。
+    if grant_start_skills(pet):
+        changed = True
+    if grant_level_skills(pet):
         changed = True
     return changed
 

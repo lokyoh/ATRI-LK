@@ -54,11 +54,16 @@ def check_level_up(
     pet,
     *,
     max_level: int = 100,
-    skill_unlocker=None,
+    skill_granter=None,
     pet_config: dict | None = None,
     permanent_bonus: dict[str, int | float] | None = None,
     talent_config: dict | None = None,
 ) -> dict:
+    """结算升级；达到等级里程碑时补发常规池技能（见 ``core.skills``）。
+
+    ``skill_granter`` 是可选注入点：默认调 ``skills.grant_level_skills``，
+    测试可传入确定性实现。
+    """
     result = {
         "level_up": False,
         "old_level": pet.level,
@@ -70,10 +75,10 @@ def check_level_up(
         return result
 
     config = pet_config if pet_config is not None else _load_pet_config()
-    if skill_unlocker is None:
-        from .skills import check_skill_unlock
+    if skill_granter is None:
+        from .skills import grant_level_skills
 
-        skill_unlocker = check_skill_unlock
+        skill_granter = grant_level_skills
 
     while pet.exp >= pet.exp_next and pet.level < max_level:
         pet.exp -= pet.exp_next
@@ -83,9 +88,11 @@ def check_level_up(
         result["level_up"] = True
         result["levels_gained"] += 1
         result["new_level"] = pet.level
-        result["learned_skills"].extend(skill_unlocker(pet))
 
     if result["level_up"]:
+        # 里程碑按 pet.level 计算，跨多级时一次补齐（不需要在循环里逐级发）。
+        for granted in skill_granter(pet):
+            result["learned_skills"].append(granted)
         pet.attributes = calc_attributes_on_level_up(
             pet,
             config,

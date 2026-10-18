@@ -35,6 +35,7 @@ from ..core import (
     pet_core,
     reincarnation,
     roguelike,
+    skills,
     talents,
     tutorial,
 )
@@ -299,11 +300,44 @@ async def handle_rest(bot: Bot, event: Event):
 
 
 @pet_skill_matcher.handle()
-async def handle_skill(bot: Bot, event: Event):
+async def handle_skill(bot: Bot, event: Event, args: Message = CommandArg()):
+    """``/宠物.技能`` 列表；``装备|卸下 <技能名或ID>`` 调整装备槽。"""
     await _guard(pet_skill_matcher)
     player_id = int(event.get_user_id())
     pet = await _load_pet(pet_skill_matcher, player_id)
-    await pet_skill_matcher.finish(format_skill_list(pet))
+
+    raw = lk_util.get_trans_text(args).strip()
+    if not raw:
+        await pet_skill_matcher.finish(format_skill_list(pet))
+
+    action, _, rest = raw.partition(" ")
+    rest = rest.strip()
+    if action not in ("装备", "卸下") or not rest:
+        await pet_skill_matcher.finish(
+            text(
+                "skill.usage",
+                "用法：/宠物.技能 装备 <技能名>｜/宠物.技能 卸下 <技能名>",
+            )
+        )
+
+    try:
+        skill_id = skills.resolve_skill(rest)
+        if action == "装备":
+            skills.equip_skill(pet, skill_id)
+        else:
+            skills.unequip_skill(pet, skill_id)
+    except ValueError as exc:
+        await pet_skill_matcher.finish(text("skill.unknown", "❌ {msg}", msg=str(exc)))
+
+    await pet_core.save_pet(pet)
+    key = "skill.equipped_ok" if action == "装备" else "skill.unequipped_ok"
+    default = "✅ 已装备「{name}」" if action == "装备" else "✅ 已卸下「{name}」（仍保留在技能库中）"
+    await pet_skill_matcher.finish(
+        _compose(
+            text(key, default, name=skills.skill_name(skill_id)),
+            format_skill_list(pet),
+        )
+    )
 
 
 @pet_talent_matcher.handle()

@@ -307,6 +307,7 @@ async def train(
         "old_level": level_result.get("old_level", pet.level),
         "new_level": level_result.get("new_level", pet.level),
         "best_floor": best_floor,
+        "learned_skills": level_result.get("learned_skills", []),
         "message": _train_message(pet, level_result),
     }
 
@@ -315,12 +316,39 @@ def _train_message(pet, level_result: dict) -> str:
     from ..utils.texts import text
 
     if level_result.get("level_up"):
-        return text(
-            "messages.train.level_up",
-            f"{pet.name}升级了！Lv.{level_result['old_level']} → Lv.{level_result['new_level']}",
-            name=pet.name,
-            old_level=level_result["old_level"],
-            new_level=level_result["new_level"],
+        lines = [
+            text(
+                "messages.train.level_up",
+                f"{pet.name}升级了！Lv.{level_result['old_level']} → Lv.{level_result['new_level']}",
+                name=pet.name,
+                old_level=level_result["old_level"],
+                new_level=level_result["new_level"],
+            )
+        ]
+    else:
+        lines = [
+            text("messages.train.normal", f"{pet.name}完成了训练", name=pet.name)
+        ]
+
+    # 升级里程碑发的技能是静默入池/自动装备的，这里必须告诉玩家。
+    learned = level_result.get("learned_skills") or []
+    if learned:
+        names = "、".join(
+            str(item.get("name") or item.get("id", "")) for item in learned
         )
-    return text("messages.train.normal", f"{pet.name}完成了训练", name=pet.name)
+        lines.append(text("skill.granted", "📖 学会新技能：{names}", names=names))
+        benched = [
+            str(item.get("name") or item.get("id", ""))
+            for item in learned
+            if not item.get("equipped")
+        ]
+        if benched:
+            lines.append(
+                text(
+                    "skill.granted_full",
+                    "📖 新技能 {name} 已进入技能库（装备槽已满，可在 /宠物.技能 中调整）",
+                    name="、".join(benched),
+                )
+            )
+    return "\n".join(lines)
 

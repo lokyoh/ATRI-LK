@@ -1,15 +1,21 @@
 # 互动效果。喂食自 2026-10-16 起不再区分食物：饥饿恢复取 effects.feed.hunger 固定值。
 # 喂食/玩耍/洗澡/休息 的好感收益统一为 3d10（见下方 affection_roll）。
+#
+# 2026-10-18 平衡：训练原先「2 行动点 + 饥饿 -15 / 疲劳 +15 / 心情 -10」，
+# 一次训练连同补状态的实际开销约 4.25 行动点，10 点/天只够练 2.35 次。
+# 本次**不动行动点消耗**，只下调训练消耗、上调四项状态回复：
+#   常规照护下约 2.35 → 3.03 次/天（+29%），经验约 +49%。
+# 训练消耗按 2/3 缩放（-15→-10、+15→+12、-10→-7），四项回复各上调约 1/4。
 
 effects:
-  feed: { hunger: 30, mood: 0 }
-  play: { mood: 10, fatigue: 10 }
-  bathe: { cleanliness: 30, mood: -5 }
-  rest: { fatigue_recover: 20, mood: 5 }
+  feed: { hunger: 38, mood: 0 }
+  play: { mood: 13, fatigue: 8 }
+  bathe: { cleanliness: 38, mood: -4 }
+  rest: { fatigue_recover: 25, mood: 7 }
   train:
-    hunger: -15      # 训练消耗饥饿
-    fatigue: 15      # 训练增加疲劳
-    mood: -10        # 训练降低心情
+    hunger: -10      # 训练消耗饥饿（原 -15）
+    fatigue: 12      # 训练增加疲劳（原 +15）
+    mood: -7         # 训练降低心情（原 -10）
     exp_base: 500    # 基础经验值
     exp_tiers:       # 根据肉鸽最高层数动态调整经验
       - { floor: 0, exp: 500 }

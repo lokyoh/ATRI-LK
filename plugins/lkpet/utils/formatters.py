@@ -125,41 +125,135 @@ def format_daily_report(settle: dict[str, Any]) -> str:
     return "\n".join(line for line in lines if line)
 
 
+PASSIVE_EFFECT_LABELS = {
+    "atk": "攻",
+    "def": "防",
+    "spd": "速",
+    "mp": "魔",
+    "max_hp": "生命上限",
+    "crit_rate": "暴击率",
+    "dmg_mult": "输出",
+}
+
+
+def _passive_effect_note(effect: dict[str, Any]) -> str:
+    """被动技能的效果短描述，如「攻+6」「暴击率+15%」。"""
+    parts = []
+    for key, value in effect.items():
+        if not isinstance(value, (int, float)):
+            continue
+        label = PASSIVE_EFFECT_LABELS.get(key, key)
+        if key in ("crit_rate", "dmg_mult"):
+            parts.append(f"{label}+{round(value * 100)}%")
+        else:
+            parts.append(f"{label}+{int(value)}")
+    return "，".join(parts)
+
+
 def format_skill_list(pet, skills_config: dict[str, Any] | None = None) -> str:
-    """List the pet's learned skills and their proficiency."""
+    """Render the skill card: equipped slots first, then the collection pool.
+
+    装备中的技能带威力 / 熟练度；未装备的只列名字，并提示如何装备。
+    """
+    from ..core.skills import (
+        SOURCE_LABELS,
+        equipped_limit,
+        equipped_skills,
+        known_skills,
+        skill_name,
+        skill_specs,
+        source_of,
+    )
+
     cfg = skills_config if skills_config is not None else _load_config("skills")
-    limits = cfg.get("limits", {})
-    skills = cfg.get("skills", {})
-    known = pet.skills or {}
+    specs = skill_specs(cfg)
+    equipped = equipped_skills(pet)
+    collection = known_skills(pet)
 
     lines = [
         text(
             "skill.title",
             "📚 {name} 的技能",
             name=pet.name,
-            active_used=len(known.get("active", [])),
-            active_max=limits.get("active_slots", 0),
-            passive_used=len(known.get("passive", [])),
-            passive_max=limits.get("passive_slots", 0),
+            active_used=len(equipped["active"]),
+            active_max=equipped_limit("active", cfg),
+            passive_used=len(equipped["passive"]),
+            passive_max=equipped_limit("passive", cfg),
+            known=len(collection["active"]) + len(collection["passive"]),
         )
     ]
-    entries = []
+
     for slot in ("active", "passive"):
-        for skill_id in known.get(slot, []):
-            skill = skills.get(skill_id)
-            if skill is None:
-                continue
-            entries.append(
-                text(
-                    "skill.line",
-                    "",
-                    name=skill.get("name", skill_id),
-                    type=slot,
-                    power=skill.get("power", 0),
-                    proficiency=round(pet.skill_proficiency.get(skill_id, 0.0), 2),
-                )
+        label = "主动" if slot == "active" else "被动"
+        lines.append(
+            text(
+                f"skill.section.{slot}",
+                "【{label}】装备 {used}/{max}",
+                label=label,
+                used=len(equipped[slot]),
+                max=equipped_limit(slot, cfg),
             )
-    lines.extend(entries or [text("skill.empty", "还没有学会任何技能")])
+        )
+        if not equipped[slot]:
+            lines.append(text("skill.equip_empty", "· （空槽）"))
+            continue
+        for skill_id in equipped[slot]:
+            spec = specs.get(skill_id) or {}
+            if slot == "active":
+                lines.append(
+                    text(
+                        "skill.equipped_line",
+                        "· {name}｜威力 {power}｜熟练度 {proficiency}",
+                        name=skill_name(skill_id, cfg),
+                        power=spec.get("power", 0),
+                        proficiency=round(
+                            (getattr(pet, "skill_proficiency", None) or {}).get(
+                                skill_id, 0.0
+                            ),
+                            2,
+                        ),
+                        effect="",
+                    )
+                )
+            else:
+                lines.append(
+                    text(
+                        "skill.equipped_passive_line",
+                        "· {name}（{effect}）",
+                        name=skill_name(skill_id, cfg),
+                        effect=_passive_effect_note(spec.get("effect") or {})
+                        or "无加成",
+                        power=0,
+                        proficiency=0.0,
+                    )
+                )
+
+    unused = [
+        skill_id
+        for slot in ("active", "passive")
+        for skill_id in collection[slot]
+        if skill_id not in equipped[slot]
+    ]
+    if unused:
+        lines.append(
+            text(
+                "skill.bench",
+                "🎒 技能库（未装备 {count} 个）：{names}",
+                count=len(unused),
+                names="、".join(
+                    f"{skill_name(skill_id, cfg)}[{SOURCE_LABELS.get(source_of(pet, skill_id, cfg), '常规')}]"
+                    for skill_id in unused
+                ),
+            )
+        )
+    if not any(collection[slot] for slot in ("active", "passive")):
+        lines.append(text("skill.empty", "还没有学会任何技能"))
+    lines.append(
+        text(
+            "skill.usage",
+            "用法：/宠物.技能 装备 <技能名>｜/宠物.技能 卸下 <技能名>",
+        )
+    )
     return "\n".join(line for line in lines if line)
 
 
@@ -264,8 +358,81 @@ def format_reincarnation_check(
 
 
 def format_reincarnation_result(result: dict[str, Any]) -> str:
-    """Render the outcome of a confirmed reincarnation."""
-    return text("reincarnation.done", "", **result)
+    """Render the outcome of a confirmed reincarnation.
+
+    ``result`` 里的 ``drawn_skills`` / ``kept_skills`` 由
+    ``core.reincarnation.perform_reincarnation`` 给出：满级轮回抽到的轮回技能
+    （数量由 ``grants.reincarnation_draw`` 决定），以及跨世保留下来的技能
+    （轮回技能 + 肉鸽奖励技能）。``drawn_skill`` 是旧版单抽字段，仍兼容。
+    """
+    from ..core.skills import skill_name
+
+    lines = [
+        text(
+            "reincarnation.done",
+            "",
+            **{
+                key: value
+                for key, value in result.items()
+                if key
+                not in (
+                    "drawn_skill",
+                    "drawn_skills",
+                    "kept_skills",
+                    "max_level_cycle",
+                )
+            },
+        )
+    ]
+
+    drawn = [item for item in (result.get("drawn_skills") or []) if item]
+    if not drawn and result.get("drawn_skill"):
+        drawn = [result["drawn_skill"]]
+    if result.get("max_level_cycle"):
+        if not drawn:
+            lines.append(text("reincarnation.drawn_skill_none", ""))
+        else:
+            names = "、".join(
+                str(item.get("name") or item.get("id", "")) for item in drawn
+            )
+            if len(drawn) == 1:
+                line = text(
+                    "reincarnation.drawn_skill",
+                    "🌟 满级轮回，从轮回技能池抽得：{name}",
+                    name=names,
+                )
+            else:
+                line = text(
+                    "reincarnation.drawn_skills",
+                    "🌟 满级轮回，从轮回技能池抽得：{names}",
+                    names=names,
+                )
+            if any(not item.get("equipped") for item in drawn):
+                line += text(
+                    "reincarnation.skill_bench",
+                    "（技能槽已满，请在「/宠物.技能」中装备）",
+                )
+            lines.append(line)
+
+    drawn_ids = {str(item.get("id", "")) for item in drawn}
+    kept = result.get("kept_skills") or {}
+    names = [
+        skill_name(skill_id)
+        for slot in ("active", "passive")
+        for skill_id in kept.get(slot, [])
+        if str(skill_id) not in drawn_ids
+    ]
+    if names:
+        lines.append(
+            text(
+                "reincarnation.kept_skills",
+                "🎒 保留技能（轮回技能 / 奖励技能）：{names}",
+                names="、".join(names),
+            )
+        )
+    elif not drawn:
+        lines.append(text("reincarnation.no_kept_skills", ""))
+    return "\n".join(line for line in lines if line)
 
 
 def format_perk_list(

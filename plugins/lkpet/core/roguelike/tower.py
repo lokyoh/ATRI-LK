@@ -75,6 +75,36 @@ def _region_events(region: dict[str, Any]) -> list[dict[str, Any]]:
     return (_load_events_config().get("events") or {}).get(region["id"], [])
 
 
+def enemy_pool(region: dict[str, Any], *, elite: bool = False) -> list[Any]:
+    """该层可填进战斗选项的敌人池：精英层用 ``elites``，普通层用 ``monsters``。"""
+    if elite:
+        elites = region.get("elites") or []
+        if elites:
+            return list(elites)
+    return list(region.get("monsters") or [{"name": "敌人"}])
+
+
+def _pick_enemy_indices(
+    region: dict[str, Any],
+    seed: int,
+    floor: int,
+    count: int,
+    *,
+    elite: bool = False,
+) -> list[int]:
+    """为同层的 ``count`` 个战斗选项抽**互不相同**的敌人池下标。
+
+    池子比选项少时按洗好的顺序循环补齐（配置异常兜底；正常区域 10 小怪 / 5 精英
+    远多于三选一的战斗位数）。
+    """
+    pool = enemy_pool(region, elite=elite)
+    if count <= 0 or not pool:
+        return []
+    indices = list(range(len(pool)))
+    floor_rng(seed, floor, "elite_enemies" if elite else "enemies").shuffle(indices)
+    return [indices[index % len(indices)] for index in range(count)]
+
+
 # ---------------------------------------------------------------------------
 # 怪物生成与特点
 # ---------------------------------------------------------------------------
@@ -218,14 +248,23 @@ def _gen_monster(
     rng,
     boss_index: int | None = None,
     elite: bool = False,
+    pool_index: int | None = None,
+    elite_index: int | None = None,
 ) -> dict[str, Any]:
-    """按区域公式生成敌人；``elite`` 生成精英，``boss_index`` 生成候选首领。"""
+    """按区域公式生成敌人；``elite`` 生成精英，``boss_index`` 生成候选首领。
+
+    ``pool_index`` / ``elite_index`` 指定敌人在 ``monsters`` / ``elites`` 池里的下标
+    （普通层三选一按选项预先抽好、互不相同）；省略时仍按 rng 随机抽取。
+    """
     scale = floor - int(region["start"])
     base = region["monster"]["base"]
     growth = region["monster"]["growth"]
     rewards = region.get("rewards", {})
     pool = region.get("monsters") or [{"name": "敌人"}]
-    picked = pool[rng.randrange(len(pool))]
+    if pool_index is None:
+        picked = pool[rng.randrange(len(pool))]
+    else:
+        picked = pool[pool_index % len(pool)]
     if isinstance(picked, str):
         picked = {"name": picked}
     name = picked.get("name", "敌人")
@@ -236,8 +275,13 @@ def _gen_monster(
     elite_phases: list[str] = []
     if is_elite:
         epool = region.get("elites") or []
-        chosen = epool[rng.randrange(len(epool))] if epool else None
+        if elite_index is None:
+            chosen = epool[rng.randrange(len(epool))] if epool else None
+        else:
+            chosen = epool[elite_index % len(epool)] if epool else None
         if chosen is not None:
+            if isinstance(chosen, str):
+                chosen = {"name": chosen}
             name = chosen.get("name", name)
             desc = chosen.get("desc", "")
             traits = list(chosen.get("traits") or [])

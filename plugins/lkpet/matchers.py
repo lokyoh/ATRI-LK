@@ -23,7 +23,9 @@ pet_feed_matcher = plugin.cmd_as_group("喂食", "喂食宠物（消耗行动点
 pet_play_matcher = plugin.cmd_as_group("玩耍", "陪宠物玩耍（消耗行动点）")
 pet_bathe_matcher = plugin.cmd_as_group("洗澡", "给宠物洗澡（消耗行动点）")
 pet_rest_matcher = plugin.cmd_as_group("休息", "让宠物休息，恢复疲劳")
-pet_skill_matcher = plugin.cmd_as_group("技能", "查看宠物已学会的技能")
+pet_skill_matcher = plugin.cmd_as_group(
+    "技能", "查看技能（装备 4+4）；装备 / 卸下 <技能名>"
+)
 pet_talent_matcher = plugin.cmd_as_group("天赋", "查看或分配天赋点")
 pet_bio_matcher = plugin.cmd_as_group("传记", "查看宠物的传记")
 pet_log_matcher = plugin.cmd_as_group("日志", "查看最近的每日日志")

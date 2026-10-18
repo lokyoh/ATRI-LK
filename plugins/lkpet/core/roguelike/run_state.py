@@ -160,14 +160,21 @@ class NeedAPState(FloorState):
 
 
 class BattleState(FloorState):
-    """战斗状态（首领层 / 普通战斗确认）。"""
+    """战斗状态（首领层 / 普通层选中的战斗选项）。"""
 
     type_name = "battle"
 
-    def __init__(self, boss: bool = False, boss_index: int = 0, elite: bool = False):
+    def __init__(
+        self,
+        boss: bool = False,
+        boss_index: int = 0,
+        elite: bool = False,
+        enemy_index: int | None = None,
+    ):
         self.boss = boss
         self.boss_index = boss_index
         self.elite = elite
+        self.enemy_index = enemy_index
 
     def to_pending(self) -> dict[str, Any]:
         d: dict[str, Any] = {
@@ -177,14 +184,18 @@ class BattleState(FloorState):
         }
         if self.elite:
             d["elite"] = True
+        if self.enemy_index is not None:
+            d["enemy_index"] = int(self.enemy_index)
         return d
 
     @classmethod
     def from_pending(cls, pending: dict[str, Any]) -> BattleState:
+        enemy_index = pending.get("enemy_index")
         return cls(
             boss=pending.get("boss", False),
             boss_index=pending.get("boss_index", 0),
             elite=pending.get("elite", False),
+            enemy_index=None if enemy_index is None else int(enemy_index),
         )
 
     def render(self, run: RogueRun, cfg: dict[str, Any], chosen: set[str]) -> str:
@@ -200,6 +211,8 @@ class BattleState(FloorState):
             floor_rng(run.seed, floor, "battle"),
             boss_index=self.boss_index if self.boss else None,
             elite=self.elite,
+            pool_index=None if self.elite else self.enemy_index,
+            elite_index=self.enemy_index if self.elite else None,
         )
         if self.boss:
             return _text(
@@ -225,7 +238,12 @@ class BattleState(FloorState):
 
 
 class FloorChoiceState(FloorState):
-    """普通层三选一（战斗/事件/商店）。"""
+    """普通层三选一（若干战斗位 + 至多一个事件 + 可能的商店）。
+
+    ``options`` 按**展示顺序**排列（商店优先占位，其余顺延）；``enemies`` 与之等长，
+    战斗位存预抽好的敌人池下标，非战斗位为 ``None``。精英层的战斗位沿用原有的
+    rng 生成方式，因此恒为 ``None``。
+    """
 
     type_name = "floor"
 
@@ -235,11 +253,13 @@ class FloorChoiceState(FloorState):
         elite: bool = False,
         event_id: str = "",
         stock: list[str] | None = None,
+        enemies: list[int | None] | None = None,
     ):
         self.options = options or []
         self.elite = elite
         self.event_id = event_id
         self.stock = stock or []
+        self.enemies = list(enemies or [])
 
     def to_pending(self) -> dict[str, Any]:
         d: dict[str, Any] = {"type": "floor", "options": list(self.options)}
@@ -249,6 +269,10 @@ class FloorChoiceState(FloorState):
             d["event_id"] = self.event_id
         if self.stock:
             d["stock"] = list(self.stock)
+        if any(index is not None for index in self.enemies):
+            d["enemies"] = [
+                None if index is None else int(index) for index in self.enemies
+            ]
         return d
 
     @classmethod
@@ -258,38 +282,55 @@ class FloorChoiceState(FloorState):
             elite=pending.get("elite", False),
             event_id=pending.get("event_id", ""),
             stock=pending.get("stock", []),
+            enemies=pending.get("enemies") or [],
         )
 
-    def render(self, run: RogueRun, cfg: dict[str, Any], chosen: set[str]) -> str:
-        from ._common import _text
-        from .tower import _gen_monster, _monster_label, region_of
+    def enemy_at(self, number: int) -> int | None:
+        """第 ``number``（从 1 起）个选项预定的敌人池下标；非战斗位/旧存档为 None。"""
+        index = number - 1
+        if 0 <= index < len(self.enemies):
+            return self.enemies[index]
+        return None
+
+    def _option_monster(
+        self, cfg: dict[str, Any], run: RogueRun, enemy_index: int | None
+    ) -> dict[str, Any]:
+        """该战斗位展示的对手：新存档按预抽下标，旧存档/精英沿用原 rng 生成。"""
+        from .tower import _gen_monster, region_of
 
         floor = run.floor
         region = region_of(floor, cfg)
-        labels = {
-            "battle": _text("opt_battle", "① 战斗"),
-            "event": _text("opt_event", "② 事件"),
-            "shop": _text("opt_shop", "③ 商店"),
-        }
-        monster = _gen_monster(
+        return _gen_monster(
             floor,
             region,
             cfg,
             floor_rng(run.seed, floor, "battle"),
             elite=self.elite,
+            pool_index=None if self.elite else enemy_index,
         )
+
+    def render(self, run: RogueRun, cfg: dict[str, Any], chosen: set[str]) -> str:
+        from ._common import _text
+        from .tower import _monster_label, region_of
+
+        labels = {
+            "battle": _text("opt_battle", "战斗"),
+            "event": _text("opt_event", "事件"),
+            "shop": _text("opt_shop", "商店"),
+        }
         stock_text = _stock_preview_text(self.stock, cfg)
         lines = [
             _text(
                 "floor_header",
                 "—— 第 {floor} 层 · {region} ——",
-                floor=floor,
-                region=region.get("name", ""),
+                floor=run.floor,
+                region=region_of(run.floor, cfg).get("name", ""),
             )
         ]
         for idx, opt in enumerate(self.options, start=1):
             line = f"{idx}. {labels.get(opt, opt)}"
             if opt == "battle":
+                monster = self._option_monster(cfg, run, self.enemy_at(idx))
                 if self.elite:
                     line += _text(
                         "elite_hint",
@@ -299,11 +340,11 @@ class FloorChoiceState(FloorState):
                 else:
                     line += _text(
                         "battle_hint",
-                        f"（强敌：{monster['name']}）",
+                        "（强敌：{monster}）",
                         monster=_monster_label(monster),
                     )
             elif opt == "shop":
-                line += _text("shop_hint", f"（{stock_text}）", stock=stock_text)
+                line += _text("shop_hint", "（{stock}）", stock=stock_text)
             else:
                 line += _text("event_hint", "（未知遭遇）")
             lines.append(line)
@@ -540,7 +581,11 @@ def _chosen_set(rogue) -> set[str]:
 
 
 async def start(pet, rogue) -> str:
-    """入场：扣入场行动点，开新 run 并展示第 1 层。"""
+    """入场：**有肉鸽入场券则优先用券且不扣行动点**，无券时按原规则扣入场行动点。
+
+    入场券是 LK 背包物品（签到发放，见 ``items.py``）；用券成功时当次入场
+    完全不消耗行动点。没有任何券、行动点也不够时给出明确回执。
+    """
     from ..interaction import check_action_point, consume_action_point
     from ._common import (
         ENTRY_COST_KEY,
@@ -553,32 +598,87 @@ async def start(pet, rogue) -> str:
     if _has_run(rogue):
         return await resume(pet, rogue)
     cfg = _load_rogue_config()
-    try:
-        check_action_point(pet, ENTRY_COST_KEY)
-    except ValueError as exc:
-        return _text(
-            "entry_no_ap",
-            "入场行动点不足（需要 {cost} 点）：{msg}",
-            cost=_entry_cost(),
-            msg=str(exc),
-        )
-    consume_action_point(pet, ENTRY_COST_KEY)
 
-    run = RogueRun.create(pet, cfg, rogue)
-    _present_floor(run, cfg, rogue)
-    rogue.run_state = run.to_dict()
-    await _persist(rogue)
-    return (
-        _text(
-            "started",
-            "🗼 入场成功！",
-            floor=run.floor,
-            action_points=pet.action_points,
-            coins=run.coins,
-        )
-        + "\n"
-        + _render_pending(run, cfg, _chosen_set(rogue))
+    ticket_used, ticket_note = _use_entry_ticket(pet)
+    if not ticket_used:
+        try:
+            check_action_point(pet, ENTRY_COST_KEY)
+        except ValueError as exc:
+            return _text(
+                "entry_no_ap",
+                "今天没有入场券，行动点也不够（需要 {cost} 点）：{msg}",
+                cost=_entry_cost(),
+                msg=str(exc),
+            )
+        consume_action_point(pet, ENTRY_COST_KEY)
+
+    try:
+        run = RogueRun.create(pet, cfg, rogue)
+        _present_floor(run, cfg, rogue)
+        rogue.run_state = run.to_dict()
+        await _persist(rogue)
+    except Exception:
+        # 建局/落库失败时把刚扣掉的券补回去，避免「券没了、局没开」。
+        if ticket_used:
+            _refund_entry_ticket(pet)
+        raise
+    header = _text(
+        "started",
+        "🗼 入场成功！",
+        floor=run.floor,
+        action_points=pet.action_points,
+        coins=run.coins,
     )
+    return (header + ("\n" + ticket_note if ticket_note else "")) + (
+        "\n" + _render_pending(run, cfg, _chosen_set(rogue))
+    )
+
+
+def _change_entry_ticket(pet, delta: int) -> bool:
+    """增减 LK 背包里的入场券；成功返回 ``True``。
+
+    券是 LK 背包物品，读写都走 LK 账户。``get_user_data`` 返回的是**未加锁的副本**，
+    必须放进 ``with`` 块，退出时才会由 ``__exit__`` 落库——所以变动一定要在 with 内完成，
+    否则券只是少在内存里，数据库仍保留。
+    """
+    from ...items import rogue_ticket_name
+
+    name = rogue_ticket_name()
+    player_id = str(getattr(pet, "player_id", "") or "")
+    if not player_id:
+        return False
+    try:
+        from ATRI.system.lkapi.entity.user import user_manager
+
+        with user_manager.get_user_data(player_id) as user_data:
+            if delta < 0 and not user_data.backpack.bp_has_item(name):
+                return False
+            return bool(user_data.item_num_change(name, delta))
+    except Exception:  # noqa: BLE001 - LK 账户不可用时按「没有券」处理
+        return False
+
+
+def _use_entry_ticket(pet) -> tuple[bool, str]:
+    """尝试消耗 1 张肉鸽入场券；成功返回 ``(True, 回执文案)``。
+
+    LK 侧异常（未登录/物品未注册/背包不可用）一律视为没有券，回落到行动点入场。
+    """
+    from ...items import rogue_ticket_name
+    from ._common import _text
+
+    if not _change_entry_ticket(pet, -1):
+        return False, ""
+    name = rogue_ticket_name()
+    return True, _text(
+        "entry_ticket_used",
+        "🎫 消耗 1 张{name}入场（本局不消耗行动点）",
+        name=name,
+    )
+
+
+def _refund_entry_ticket(pet) -> None:
+    """把入场券退回 LK 背包（建局失败时使用）。"""
+    _change_entry_ticket(pet, 1)
 
 
 async def resume(pet, rogue) -> str:
@@ -710,7 +810,6 @@ def _present_floor(run: RogueRun, cfg: dict[str, Any], rogue=None) -> None:
     from .relics import relic_offer
     from .tower import (
         _is_elite_floor,
-        _region_events,
         boss_floor_set,
         region_of,
     )
@@ -741,32 +840,79 @@ def _present_floor(run: RogueRun, cfg: dict[str, Any], rogue=None) -> None:
         run.pending = state.to_pending()
         return
 
-    rng = floor_rng(run.seed, floor, "floor")
-    options = ["battle", "event", "shop"]
-    rng.shuffle(options)
-    is_elite = _is_elite_floor(run.to_dict(), region, cfg)
-    event_id = ""
-    stock: list[str] = []
-
-    if "shop" in options:
-        gap = int(cfg.get("shop", {}).get("no_before_gap", 5))
-        if floor < int(region["start"]) + gap:
-            options.remove("shop")
-    if "event" in options:
-        events = _region_events(region)
-        seen = set(run.seen_events)
-        pool = [event for event in events if event.get("id") not in seen] or events
-        if pool:
-            picked = pool[floor_rng(run.seed, floor, "event").randrange(len(pool))]
-            event_id = picked["id"]
-            run.seen_events.append(picked["id"])
-    if "shop" in options:
-        stock = _shop_stock(run, cfg, floor_rng(run.seed, floor, "shop"))
-
+    options, event_id, stock, enemies = _normal_floor_options(
+        run, region, cfg, floor, rogue
+    )
     state = FloorChoiceState(
-        options=options, elite=is_elite, event_id=event_id, stock=stock
+        options=options,
+        elite=_is_elite_floor(run.to_dict(), region, cfg),
+        event_id=event_id,
+        stock=stock,
+        enemies=enemies,
     )
     run.pending = state.to_pending()
+
+
+def _normal_floor_options(
+    run: RogueRun, region: dict[str, Any], cfg: dict[str, Any], floor: int, rogue
+) -> tuple[list[str], str, list[str], list[int | None]]:
+    """普通层的三选一内容：商店规则优先，其余选项依次判事件，战斗位填不同敌人。
+
+    规则（``roguelike.yaml`` 的 ``floor_choice`` 块）：
+
+    1. **商店规则优先**：允许出现的层（``shop.no_before_gap`` 之后）必定占第 1 个名额，
+       先于事件判定定下来，不参与概率抽取；
+    2. **事件判定**：剩下的名额按顺序用 ``event_chance``（0.1 / 0.2 / 0.3）逐个判定，
+       **顺序判定、只会出现一个事件**——一旦命中就停止，后面的选项直接成为战斗。
+       因此第 1 位命中即 10%，第 2 位 90%×20%，第 3 位 90%×80%×30%；
+    3. **战斗位**：普通层从该区域敌人池（``region.monsters``）抽**互不相同**的敌人，
+       保证同一层的几条战斗路线不是同一只怪；精英层沿用原有精英生成（概率/保底/
+       抽取方式都不改），不预抽下标；
+    4. **排列**：生成顺序即展示顺序，不再打乱（商店在第 1 位，其余顺延）。
+
+    返回 ``(options, event_id, stock, enemies)``，``enemies`` 与 ``options`` 等长。
+    """
+    from .tower import _is_elite_floor, _pick_enemy_indices, _region_events
+
+    choice_cfg = cfg.get("floor_choice", {}) or {}
+    slot_count = max(1, int(choice_cfg.get("option_count", 3)))
+    chances = [float(x) for x in (choice_cfg.get("event_chance") or [0.1, 0.2, 0.3])]
+    is_elite = _is_elite_floor(run.to_dict(), region, cfg)
+
+    options: list[str] = []
+    stock: list[str] = []
+    gap = int((cfg.get("shop") or {}).get("no_before_gap", 5))
+    if floor >= int(region["start"]) + gap:
+        options.append("shop")
+        stock = _shop_stock(run, cfg, floor_rng(run.seed, floor, "shop"))
+
+    event_id = ""
+    remaining = slot_count - len(options)
+    event_rng = floor_rng(run.seed, floor, "event")
+    events = _region_events(region)
+    seen = set(run.seen_events)
+    pool = [event for event in events if event.get("id") not in seen] or events
+    for position in range(remaining):
+        chance = chances[position] if position < len(chances) else 0.0
+        if not event_id and pool and event_rng.random() < chance:
+            picked = pool[event_rng.randrange(len(pool))]
+            event_id = picked["id"]
+            run.seen_events.append(picked["id"])
+            options.append("event")
+        else:
+            options.append("battle")
+
+    battle_slots = options.count("battle")
+    # 精英层沿用原有的 rng 生成（不预抽下标），普通层才填不同敌人。
+    enemies: list[int | None] = [None] * len(options)
+    if battle_slots and not is_elite:
+        indices = _pick_enemy_indices(region, run.seed, floor, battle_slots)
+        cursor = 0
+        for index, opt in enumerate(options):
+            if opt == "battle" and cursor < len(indices):
+                enemies[index] = indices[cursor]
+                cursor += 1
+    return options, event_id, stock, enemies
 
 
 def _shop_stock(run: RogueRun, cfg: dict[str, Any], rng: random.Random) -> list[str]:

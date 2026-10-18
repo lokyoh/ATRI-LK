@@ -351,6 +351,20 @@ shop:
   stock_tiers: [normal, rare, shop]
   tier_price: { normal: 25, rare: 60, shop: 50 }
 
+# 普通层三选一的生成规则（首领层 / 补给层 / 遗物层不适用，它们各自只有唯一内容）：
+#   1. 商店规则优先：允许出现的层（shop.no_before_gap 之后）必定占**第 1 个名额**，
+#      先于事件判定定下来，不参与概率抽取；
+#   2. 事件判定：剩下的名额按顺序用 event_chance 逐个判定（0.1 / 0.2 / 0.3），
+#      **顺序判定、只会出现一个事件**——一旦命中就停止，后面的选项直接成为战斗。
+#      因此第 1 位命中即 10%，第 2 位 90%×20% = 18%，第 3 位 90%×80%×30% = 21.6%；
+#      无商店的层总事件率 ≈ 1 - 0.9×0.8×0.7 = 49.6%，有商店的层 ≈ 1 - 0.9×0.8 = 28%；
+#   3. 战斗位：普通层从该区域敌人池（region.monsters）抽**互不相同**的敌人填满；
+#      精英层沿用原有精英生成（概率/保底/抽取方式都不改），不预抽下标；
+#   4. 排列：生成顺序即展示顺序（商店第 1 位、其余顺延），不再打乱。
+floor_choice:
+  option_count: 3                  # 普通层选项数
+  event_chance: [0.1, 0.2, 0.3]    # 除商店外的选项依次判定事件的概率（只出一个事件）
+
 rewards:                  # 成就点（§12.2：按到达层数结算，写入 PETREINCARNATION）
   per_floor: 2            # 到达每层
   boss_bonus: 10          # 每通关一个区域首领（不限首通）
@@ -358,22 +372,37 @@ rewards:                  # 成就点（§12.2：按到达层数结算，写入 
   battle_exp: true        # 战斗经验随结算写回宠物 exp
 
 # 区域首领首通解锁的专属奖励（首通记录存 PETROGUE，已解锁的不重复发放）。
-# key = 首领层号（20/40/60/80/100）；skill 必须在 skills.yaml 中且 level: 999（绝不自动解锁）。
+# key = 首领层号（20/40/60/80/100）；type = equipment / title。
+# **技能奖励不走这里**：每阶段的精英首通 / 首领首通技能见下方 stage_skill_rewards。
 boss_unlocks:
   "20":
     type: equipment
     slot: ring
     item: { name: 守塔者之戒, bonus: { atk: 5 } }
-  "40":
-    type: skill
-    id: rogue_slash
   "60":
     type: equipment
     slot: armor
     item: { name: 霜纹胸甲, bonus: { def: 8 } }
-  "80":
-    type: skill
-    id: fireball
   "100":
     type: title
     title: 五域统御
+
+# 每阶段（= 塔的每个区域）2 个技能奖励：首次击败该区域**精英**、首次击败该区域
+# **首领**各 1 个。id 必须存在于 skills.yaml（来源标记为 rogue，跨轮回保留）。
+# 首通记录沿用 PETROGUE.UNLOCKED，键为 "elite:<区域id>" / "boss:<区域id>"，幂等不重复发放。
+stage_skill_rewards:
+  plains:
+    elite: rogue_slash
+    boss: boss_plains_guard
+  forest:
+    elite: elite_forest_venom
+    boss: boss_forest_whisper
+  lava:
+    elite: elite_lava_magma
+    boss: boss_lava_core
+  frost:
+    elite: elite_frost_lance
+    boss: boss_frost_throne
+  abyss:
+    elite: elite_abyss_rend
+    boss: boss_abyss_crown

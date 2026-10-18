@@ -14,7 +14,16 @@ BASE_SKILL_POWER = 30.0
 威力 30 → 1.0×（等于普攻但白赚熟练度），火球术 40 → 1.33×，肉鸽斩击 55 → 1.83×。
 """
 
-PASSIVE_STAT_KEYS = ("atk", "def", "spd", "mp", "max_hp", "crit_rate")
+PASSIVE_STAT_KEYS = (
+    "atk",
+    "def",
+    "spd",
+    "mp",
+    "max_hp",
+    "crit_rate",
+    "dmg_mult",
+)
+"""被动技能可用的加成键（见 skills.yaml 的被动说明）。"""
 
 
 def _load_rogue_config() -> dict[str, Any]:
@@ -59,21 +68,16 @@ def floor_rng(seed: int, floor: int, purpose: str) -> random.Random:
 
 
 def passive_effects(pet, skills_cfg: dict[str, Any] | None = None) -> dict[str, float]:
-    """汇总已学被动技能（type: passive）的 effect，返回战斗/局内加成。
+    """汇总**装备中**被动技能（type: passive）的 effect，返回战斗/局内加成。
 
+    只有 ``pet.skill_equipped`` 里的被动生效——未装备的留在技能库里不提供加成。
     键见 skills.yaml 的被动注释：atk/def/spd/mp 加在入场战斗属性上、
-    max_hp 加在局内生命上限（new_run）上、crit_rate 为我方输出暴击率。
+    max_hp 加在局内生命上限（new_run）上、crit_rate 为我方输出暴击率、
+    dmg_mult 为我方输出乘区。
     """
-    cfg = skills_cfg if skills_cfg is not None else _load_skills_config()
-    total: dict[str, float] = dict.fromkeys(PASSIVE_STAT_KEYS, 0)
-    for skill_id in pet.skills.get("passive", []):
-        spec = cfg.get("skills", {}).get(skill_id)
-        if not spec or spec.get("type") != "passive":
-            continue
-        for key, value in (spec.get("effect") or {}).items():
-            if key in total:
-                total[key] += float(value)
-    return total
+    from ..skills import passive_bonuses
+
+    return passive_bonuses(pet, skills_cfg)
 
 
 async def get_or_create_rogue(player_id: str | int):

@@ -26,3 +26,9 @@ class LKPetConfig(PluginConfig):
 
     # 是否启用按天推进的新手引导（Step 14）
     tutorial_enabled = Field(bool, True, "启用新手引导")
+
+    # 肉鸽入场券：LK 背包物品名（签到发放、入场时自动消耗）
+    rogue_ticket_item = Field(str, "肉鸽入场券", "肉鸽入场券物品名")
+
+    # 每次签到发放的入场券张数；0 = 关闭签到发券（仍可扣行动点入场）
+    rogue_ticket_per_sign = Field(int, 1, "签到发放入场券", min=0, max=99)

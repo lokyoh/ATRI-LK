@@ -61,57 +61,35 @@ async def settle_run(
                     talent_points=pet.talent_points,
                 )
             )
-
-    # 2) 首通解锁写回（幂等）。
-    skills_cfg = _load_skills_config()
-    for floor_key in dict.fromkeys(run.get("unlocks", [])):
-        spec = (cfg.get("boss_unlocks") or {}).get(str(floor_key))
-        if spec is None or floor_key in rogue.unlocked:
-            continue
-        rogue.unlocked.append(floor_key)
-        kind = spec.get("type")
-        if kind == "equipment":
-            slot = spec.get("slot", "misc")
-            pet.equipment[slot] = spec.get("item", {})
-            lines.append(
-                _text(
-                    "unlock_equipment",
-                    "🔓 首通解锁装备：{name}",
-                    name=spec.get("item", {}).get("name", slot),
-                )
-            )
-        elif kind == "skill":
-            from ..skills import add_skill
-
-            skill_id = spec.get("id", "")
-            skill_name = (
-                skills_cfg.get("skills", {}).get(skill_id, {}).get("name", skill_id)
-            )
-            if add_skill(pet, skill_id, skills_cfg):
-                lines.append(
-                    _text("unlock_skill", "🔓 首通解锁技能：{name}", name=skill_name)
-                )
-            else:
+            learned = level_result.get("learned_skills") or []
+            if learned:
                 lines.append(
                     _text(
-                        "unlock_skill_full",
-                        "🔓 已记录首通技能 {name}（技能槽已满，暂时无法学会）",
-                        name=skill_name,
+                        "settle_grant_skill",
+                        "📖 升级奖励技能：{names}",
+                        names="、".join(
+                            str(item.get("name") or item.get("id", ""))
+                            for item in learned
+                        ),
                     )
                 )
-        elif kind == "title":
-            pet.title = spec.get("title", pet.title)
-            lines.append(
-                _text(
-                    "unlock_title",
-                    "🔓 首通解锁称号：{title}",
-                    title=spec.get("title", ""),
-                )
-            )
-            if title_hook is not None:
-                from ...utils.callbacks import run_callback
 
-                await run_callback(title_hook, pet, spec.get("title", ""))
+    # 2) 首通解锁写回（幂等）。键有三种：
+    #    "20"/"40"…            首领层首通（boss_unlocks：装备 / 称号）
+    #    "elite:<区域id>"      该区域首次击败精英（stage_skill_rewards.<stage>.elite）
+    #    "boss:<区域id>"       该区域首次击败首领（stage_skill_rewards.<stage>.boss）
+    skills_cfg = _load_skills_config()
+    for raw_key in dict.fromkeys(run.get("unlocks", [])):
+        floor_key = str(raw_key)
+        if floor_key in rogue.unlocked:
+            continue
+        spec = _unlock_spec(cfg, floor_key)
+        if spec is None:
+            continue
+        rogue.unlocked.append(floor_key)
+        lines.extend(
+            await _grant_unlock(pet, spec, skills_cfg, floor_key, title_hook)
+        )
 
     # 3) 成就点写回轮回数据。
     if points > 0:
@@ -144,3 +122,81 @@ async def settle_run(
     if reason == "retreat" and not cleared:
         lines.insert(0, _text("retired", "🏳️ 已撤退。"))
     return "\n".join(line for line in lines if line)
+
+
+def _unlock_spec(
+    cfg: dict[str, Any], unlock_key: str
+) -> dict[str, Any] | None:
+    """把首通记录的键翻译成奖励描述。
+
+    ``elite:<区域>`` / ``boss:<区域>`` → ``stage_skill_rewards`` 里的技能；
+    纯数字键 → ``boss_unlocks`` 里的装备 / 称号。
+    """
+    if ":" in unlock_key:
+        kind, _, stage_id = unlock_key.partition(":")
+        if kind not in ("elite", "boss"):
+            return None
+        stage = (cfg.get("stage_skill_rewards") or {}).get(stage_id)
+        if not isinstance(stage, dict):
+            return None
+        skill_id = stage.get(kind)
+        if not skill_id:
+            return None
+        return {"type": "skill", "id": str(skill_id), "stage": stage_id, "kind": kind}
+    spec = (cfg.get("boss_unlocks") or {}).get(unlock_key)
+    return spec if isinstance(spec, dict) else None
+
+
+async def _grant_unlock(
+    pet,
+    spec: dict[str, Any],
+    skills_cfg: dict[str, Any],
+    unlock_key: str,
+    title_hook=None,
+) -> list[str]:
+    """发放一条首通奖励，返回要拼进结算消息的行。"""
+    from ..skills import grant_skill
+
+    kind = spec.get("type")
+    if kind == "equipment":
+        slot = spec.get("slot", "misc")
+        pet.equipment[slot] = spec.get("item", {})
+        return [
+            _text(
+                "unlock_equipment",
+                "🔓 首通解锁装备：{name}",
+                name=spec.get("item", {}).get("name", slot),
+            )
+        ]
+    if kind == "title":
+        pet.title = spec.get("title", pet.title)
+        if title_hook is not None:
+            from ...utils.callbacks import run_callback
+
+            await run_callback(title_hook, pet, spec.get("title", ""))
+        return [
+            _text("unlock_title", "🔓 首通解锁称号：{title}", title=spec.get("title", ""))
+        ]
+    if kind == "skill":
+        granted = grant_skill(
+            pet, spec.get("id", ""), skills_cfg, source="rogue"
+        )
+        if not granted["added"]:
+            return [
+                _text(
+                    "unlock_skill_known",
+                    "🔓 首通技能「{name}」已在技能库中。",
+                    name=granted["name"],
+                )
+            ]
+        key = "unlock_boss_skill" if unlock_key.startswith("boss:") else "unlock_elite_skill"
+        default = (
+            "🔓 首次击败首领解锁技能：{name}（已进入技能库）"
+            if unlock_key.startswith("boss:")
+            else "🔓 首次击败精英解锁技能：{name}（已进入技能库）"
+        )
+        line = _text(key, default, name=granted["name"])
+        if not granted["equipped"]:
+            line += _text("unlock_skill_bench", "（技能槽已满，请在「/宠物.技能」中装备）")
+        return [line]
+    return []

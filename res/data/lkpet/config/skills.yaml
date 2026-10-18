@@ -1,45 +1,136 @@
-limits:
-    active_slots: 6        # 主动技能槽（4 → 6：为新增主动技能留位）
-    passive_slots: 3        # 被动技能槽（被动在战斗中由 passive_effects 消费）
-    proficiency_gain: 0.01
-    proficiency_max: 1.0
-    proficiency_power_bonus: 0.3
-
-# cooldown 单位 = 计时条周期数：战斗计时条每轮 +10、每满 100 触发一次
-# 「计时条满」事件，届时所有技能的剩余冷却 -1（见 core/roguelike.py 的战斗循环）。
+# 技能系统（主动 / 被动 + 收集池 + 装备槽）
 #
-# 主动技能（type: active）：power 参与伤害系数（/30 基准），mp_cost 消耗局内 MP，
-# effects 支持 { type: heal, amount } 回血与 { type: mp, amount } 回蓝。
+# 结构总览
+#   · ``skills``  技能定义表（**列表**，每条带稳定的 ``id``）
+#   · ``pools``   发放池：开局 / 常规 / 轮回。肉鸽阶段奖励池在 roguelike.yaml 的
+#                 ``stage_skill_rewards``（id 引用本表）
+#   · ``grants``  等级里程碑与轮回抽取规则
+#   · ``limits``  装备槽、熟练度参数
+#
+# 收集池 vs 装备槽
+#   ``pet.skills``          已掌握的技能库（收集池，无上限，只增不减）
+#   ``pet.skill_equipped``  当前装备的技能（主动 / 被动各至多 limits.*_slots 个）
+#   战斗与被动加成**只结算装备中的技能**；未装备的留在技能库里，随时可换。
+#
+# 技能来源（决定「轮回时保留什么」）
+#   starter        开局技能（每世开局都发，见 pools.starter）
+#   regular        常规技能（每 5 级 1 个主动 / 每 10 级 1 个被动，轮回时清空）
+#   reincarnation  轮回技能（满级轮回额外抽取，**跨世保留**）
+#   rogue          肉鸽阶段奖励（首次击败精英 / 首领，**跨世保留**）
+#   来源由池子归属推导，不在技能条目里重复声明。
+#
+# === id 约定（重要）===
+#   每条技能的 ``id`` 是**稳定引用**：旧存档的收集池、肉鸽奖励、配置里的池子列表
+#   都靠它引用。要重做某个技能的内容（改名、改数值、甚至改主动/被动类型）时，
+#   **保留同一个 id** 即可，玩家已掌握的那个技能会就地变成新内容，不会凭空消失。
+#   新增技能才需要新 id。id 里刻意用到的历史命名（如 rogue_slash）同样不能再改。
+#
+# === 主动技能字段 ===
+#   power      伤害系数基准，实际伤害 = 普攻伤害 × power / 30（30 = 一次普通攻击）
+#   strikes    出击次数（每次独立结算，默认 1）
+#   leech      吸血比例：造成伤害按此比例回复局内生命
+#   mp_cost    消耗局内 MP
+#   cooldown   冷却，单位 = 计时条周期（计时条每轮 +10，满 100 全体冷却 -1）
+#   target     single / self（self 目前仅用于治疗类）
+#   effects    [{ type: heal, amount }] 回血（要求 power: 0）｜[{ type: mp, amount }] 回蓝
+#
+# === 被动技能字段 ===
+#   effect     战斗加成，可用键：atk / def / spd / mp / max_hp / crit_rate / dmg_mult
+#              atk/def/spd/mp 加在入场战斗属性上，max_hp 加在局内生命上限上，
+#              crit_rate 为我方暴击率（倍率见 roguelike.yaml battle.crit_mult），
+#              dmg_mult 为我方输出乘区（0.1 = +10%）。
+#              多个被动叠加为平值相加。
+
+limits:
+  active_slots: 4          # 主动装备槽
+  passive_slots: 4         # 被动装备槽
+  proficiency_gain: 0.01   # 每施放一次涨的熟练度
+  proficiency_max: 1.0
+  proficiency_power_bonus: 0.3   # 熟练度满时的威力加成上限（+30%）
+
+grants:
+  active_every: 5          # 每 5 级从 pools.regular.active 抽 1 个主动
+  passive_every: 10        # 每 10 级从 pools.regular.passive 抽 1 个额外被动
+  reincarnation_draw: 1    # 满级轮回时从 pools.reincarnation 额外抽取 1 个技能
+  # 满级判定沿用 reincarnation.yaml 的 max_level，不在这里重复配置。
+
+pools:
+  # 开局技能：每世（创建 / 轮回后）开局必得，与旧版行为一致。
+  starter: [tackle]
+
+  # 常规池：等级里程碑的发放来源。池内技能强度刻意拉平（威力 30-60），
+  # 差异体现在耗魔、冷却与功能（多段 / 吸血 / 回血 / 回蓝），抽到哪个都不亏。
+  regular:
+    active:
+      - tackle
+      - fireball
+      - break_strike
+      - heal
+      - heavy_slash
+      - mana_bolt
+      - pierce
+      - twin_fangs
+      - whirl
+      - flame_wave
+      - ice_shard
+      - thunder_clap
+      - stone_fist
+      - wind_blade
+      - shadow_cut
+      - venom_spit
+      - drain_bite
+      - mend_light
+      - mana_flow
+      - last_stand
+    passive:
+      - iron_will
+      - iron_wall
+      - wind_blood
+      - mana_spring
+      - giant_heart
+      - battle_instinct
+      - tough_skin
+      - sharp_claw
+      - swift_step
+      - deep_breath
+
+  # 轮回池：满级轮回时额外抽取，且**跨世保留**。强度明显高于常规池。
+  reincarnation:
+    active:
+      - sam_soul_cleave
+      - sam_void_pierce
+      - sam_starfall
+      - sam_blood_ritual
+      - sam_phoenix
+      - sam_tempest
+      - sam_eternal_blade
+      - sam_aether_bolt
+      - sam_life_drain
+      - sam_judgment
+    passive:
+      - sam_might
+      - sam_bulwark
+      - sam_wind
+      - sam_spring
+      - sam_heart
+      - sam_eye
+      - sam_bond
+      - sam_memory
+      - sam_unyielding
+      - sam_swift
+
+# ---------------------------------------------------------------------------
+# 技能定义表（列表：id 为稳定引用键，顺序仅影响 /宠物.技能 的展示顺序）
+# ---------------------------------------------------------------------------
+
 skills:
-  tackle:
-    name: 撞击
-    type: active
-    element: normal
-    power: 30
-    mp_cost: 0
-    cooldown: 0
-    target: single
-    unlock_condition: { level: 1 }
-  fireball:
-    name: 火球术
-    type: active
-    element: fire
-    power: 40
-    mp_cost: 10
-    cooldown: 1
-    target: single
-    unlock_condition: { level: 5 }
-    effects: [{ type: burn, chance: 0.3, duration: 3 }]
-  break_strike:
-    name: 破甲击
-    type: active
-    element: normal
-    power: 38
-    mp_cost: 12
-    cooldown: 1
-    target: single
-    unlock_condition: { level: 8 }
-  heal:
+  # === 开局 ===
+  - { id: tackle, name: 撞击, type: active, element: normal, power: 30, mp_cost: 0, cooldown: 0, target: single }
+
+  # === 常规：主动（20，含开局技能「撞击」） ===
+  - { id: fireball, name: 火球术, type: active, element: fire, power: 40, mp_cost: 10, cooldown: 1, target: single }
+  - { id: break_strike, name: 破甲击, type: active, element: normal, power: 38, mp_cost: 12, cooldown: 1, target: single }
+  - id: heal
     name: 治愈术
     type: active
     element: light
@@ -47,18 +138,9 @@ skills:
     mp_cost: 15
     cooldown: 1
     target: self
-    unlock_condition: { level: 10 }
     effects: [{ type: heal, amount: 50 }]
-  heavy_slash:
-    name: 重斩
-    type: active
-    element: normal
-    power: 60
-    mp_cost: 22
-    cooldown: 2
-    target: single
-    unlock_condition: { level: 16 }
-  mana_bolt:
+  - { id: heavy_slash, name: 重斩, type: active, element: normal, power: 60, mp_cost: 22, cooldown: 2, target: single }
+  - id: mana_bolt
     name: 聚魔弹
     type: active
     element: light
@@ -66,51 +148,151 @@ skills:
     mp_cost: 18
     cooldown: 1
     target: single
-    unlock_condition: { level: 32 }
-    effects: [{ type: mp, amount: 30 }]   # 施放后回复局内 MP（回蓝上限 = 入场 MP）
-  # 肉鸽专属（§12.2 boss_unlocks "40" 首通解锁）。
-  # level: 999 保证 check_skill_unlock 永远不会自动解锁它，只能由结算写回。
-  rogue_slash:
-    name: 肉鸽斩击
+    effects: [{ type: mp, amount: 30 }]
+  - { id: pierce, name: 贯穿刺, type: active, element: normal, power: 44, mp_cost: 10, cooldown: 1, target: single }
+  - { id: twin_fangs, name: 双牙咬, type: active, element: normal, power: 26, strikes: 2, mp_cost: 12, cooldown: 1, target: single }
+  - { id: whirl, name: 回旋斩, type: active, element: normal, power: 20, strikes: 3, mp_cost: 16, cooldown: 2, target: single }
+  - { id: flame_wave, name: 烈焰波, type: active, element: fire, power: 52, mp_cost: 18, cooldown: 2, target: single }
+  - { id: ice_shard, name: 冰棱刺, type: active, element: ice, power: 46, mp_cost: 12, cooldown: 1, target: single }
+  - { id: thunder_clap, name: 落雷, type: active, element: thunder, power: 54, mp_cost: 20, cooldown: 2, target: single }
+  - { id: stone_fist, name: 碎岩拳, type: active, element: earth, power: 48, mp_cost: 14, cooldown: 1, target: single }
+  - { id: wind_blade, name: 风刃, type: active, element: wind, power: 42, mp_cost: 8, cooldown: 0, target: single }
+  - { id: shadow_cut, name: 影袭, type: active, element: dark, power: 50, mp_cost: 16, cooldown: 2, target: single }
+  - id: venom_spit
+    name: 毒唾
     type: active
-    element: normal
-    power: 55
-    mp_cost: 12
+    element: dark
+    power: 36
+    mp_cost: 9
     cooldown: 1
     target: single
-    unlock_condition: { level: 999 }
+    leech: 0.15
+  - id: drain_bite
+    name: 汲血咬
+    type: active
+    element: dark
+    power: 40
+    mp_cost: 14
+    cooldown: 2
+    target: single
+    leech: 0.4
+  - id: mend_light
+    name: 微光治愈
+    type: active
+    element: light
+    power: 0
+    mp_cost: 10
+    cooldown: 1
+    target: self
+    effects: [{ type: heal, amount: 35 }]
+  - id: mana_flow
+    name: 灵脉
+    type: active
+    element: light
+    power: 20
+    mp_cost: 0
+    cooldown: 2
+    target: single
+    effects: [{ type: mp, amount: 25 }]
+  - { id: last_stand, name: 背水一击, type: active, element: normal, power: 58, mp_cost: 24, cooldown: 3, target: single }
 
-  # ---- 被动技能（type: passive，占用 passive_slots） ----
-  # 由 core/roguelike.py 的 passive_effects 在战斗入场时消费——effect 键只作用于
-  # **战斗/局内**：atk/def/spd/mp 直接加在入场战斗属性上；max_hp 加在局内生命上限上
-  # （new_run 计算）；crit_rate 为我方输出暴击率（倍率见 roguelike.yaml battle.crit_mult）。
-  iron_will:
-    name: 蛮力
-    type: passive
-    effect: { atk: 6 }
-    unlock_condition: { level: 15 }
-  iron_wall:
-    name: 铁壁
-    type: passive
-    effect: { def: 8 }
-    unlock_condition: { level: 18 }
-  wind_blood:
-    name: 疾风血脉
-    type: passive
-    effect: { spd: 6 }
-    unlock_condition: { level: 22 }
-  mana_spring:
-    name: 魔力源泉
-    type: passive
-    effect: { mp: 20 }
-    unlock_condition: { level: 26 }
-  giant_heart:
-    name: 巨心
-    type: passive
-    effect: { max_hp: 60 }
-    unlock_condition: { level: 30 }
-  battle_instinct:
-    name: 战斗直觉
-    type: passive
-    effect: { crit_rate: 0.15 }
-    unlock_condition: { level: 35 }
+  # === 常规：被动（10） ===
+  - { id: iron_will, name: 蛮力, type: passive, effect: { atk: 6 } }
+  - { id: iron_wall, name: 铁壁, type: passive, effect: { def: 8 } }
+  - { id: wind_blood, name: 疾风血脉, type: passive, effect: { spd: 6 } }
+  - { id: mana_spring, name: 魔力源泉, type: passive, effect: { mp: 20 } }
+  - { id: giant_heart, name: 巨心, type: passive, effect: { max_hp: 60 } }
+  - { id: battle_instinct, name: 战斗直觉, type: passive, effect: { crit_rate: 0.15 } }
+  - { id: tough_skin, name: 厚皮, type: passive, effect: { def: 5, max_hp: 25 } }
+  - { id: sharp_claw, name: 利爪, type: passive, effect: { atk: 4, crit_rate: 0.05 } }
+  - { id: swift_step, name: 迅步, type: passive, effect: { spd: 4, dmg_mult: 0.05 } }
+  - { id: deep_breath, name: 沉息, type: passive, effect: { mp: 12, max_hp: 20 } }
+
+  # === 轮回：主动（10） ===
+  - { id: sam_soul_cleave, name: 裂魂斩, type: active, element: dark, power: 78, mp_cost: 24, cooldown: 2, target: single }
+  - { id: sam_void_pierce, name: 虚空贯穿, type: active, element: dark, power: 72, mp_cost: 20, cooldown: 1, target: single }
+  - { id: sam_starfall, name: 星陨, type: active, element: light, power: 92, mp_cost: 32, cooldown: 3, target: single }
+  - id: sam_blood_ritual
+    name: 血祭
+    type: active
+    element: dark
+    power: 76
+    mp_cost: 26
+    cooldown: 2
+    target: single
+    leech: 0.45
+  - id: sam_phoenix
+    name: 涅槃之焰
+    type: active
+    element: fire
+    power: 0
+    mp_cost: 30
+    cooldown: 3
+    target: self
+    effects: [{ type: heal, amount: 150 }]
+  - id: sam_tempest
+    name: 万象风暴
+    type: active
+    element: wind
+    power: 28
+    strikes: 4
+    mp_cost: 30
+    cooldown: 3
+    target: single
+  - { id: sam_eternal_blade, name: 永劫之刃, type: active, element: normal, power: 84, mp_cost: 28, cooldown: 2, target: single }
+  - { id: sam_aether_bolt, name: 以太爆裂, type: active, element: light, power: 88, mp_cost: 30, cooldown: 3, target: single }
+  - id: sam_life_drain
+    name: 轮回汲取
+    type: active
+    element: dark
+    power: 64
+    mp_cost: 22
+    cooldown: 1
+    target: single
+    leech: 0.35
+    effects: [{ type: mp, amount: 25 }]
+  - { id: sam_judgment, name: 终焉审判, type: active, element: normal, power: 100, mp_cost: 40, cooldown: 4, target: single }
+
+  # === 轮回：被动（10） ===
+  - { id: sam_might, name: 永世之力, type: passive, effect: { atk: 14 } }
+  - { id: sam_bulwark, name: 永世壁垒, type: passive, effect: { def: 18 } }
+  - { id: sam_wind, name: 永世疾风, type: passive, effect: { spd: 12 } }
+  - { id: sam_spring, name: 永世灵泉, type: passive, effect: { mp: 40 } }
+  - { id: sam_heart, name: 永世之心, type: passive, effect: { max_hp: 140 } }
+  - { id: sam_eye, name: 永世之眼, type: passive, effect: { crit_rate: 0.22 } }
+  - { id: sam_bond, name: 灵魂共鸣, type: passive, effect: { atk: 8, max_hp: 60 } }
+  - { id: sam_memory, name: 轮回记忆, type: passive, effect: { mp: 25, crit_rate: 0.1 } }
+  - { id: sam_unyielding, name: 不屈之躯, type: passive, effect: { def: 10, max_hp: 80 } }
+  - { id: sam_swift, name: 疾魂, type: passive, effect: { spd: 8, dmg_mult: 0.12 } }
+
+  # === 肉鸽阶段奖励：精英首通（5 主动） ===
+  # 由 roguelike.yaml 的 stage_skill_rewards.<stage>.elite 引用。
+  - { id: rogue_slash, name: 肉鸽斩击, type: active, element: normal, power: 64, mp_cost: 16, cooldown: 1, target: single }
+  - id: elite_forest_venom
+    name: 蚀叶毒牙
+    type: active
+    element: dark
+    power: 66
+    mp_cost: 18
+    cooldown: 2
+    target: single
+    leech: 0.3
+  - { id: elite_lava_magma, name: 熔岩重拳, type: active, element: fire, power: 74, mp_cost: 22, cooldown: 2, target: single }
+  - { id: elite_frost_lance, name: 霜寂之枪, type: active, element: ice, power: 52, strikes: 2, mp_cost: 26, cooldown: 2, target: single }
+  - id: elite_abyss_rend
+    name: 深渊撕裂
+    type: active
+    element: dark
+    power: 86
+    mp_cost: 30
+    cooldown: 2
+    target: single
+    leech: 0.35
+
+  # === 肉鸽阶段奖励：首领首通（5 被动） ===
+  # 由 roguelike.yaml 的 stage_skill_rewards.<stage>.boss 引用。
+  - { id: boss_plains_guard, name: 原野守护, type: passive, effect: { def: 10, max_hp: 50 } }
+  - { id: boss_forest_whisper, name: 林语, type: passive, effect: { mp: 25, crit_rate: 0.1 } }
+  - { id: boss_lava_core, name: 熔核, type: passive, effect: { atk: 12, dmg_mult: 0.06 } }
+  - { id: boss_frost_throne, name: 冰封王座, type: passive, effect: { def: 12, max_hp: 90 } }
+  - { id: boss_abyss_crown, name: 深渊冠冕, type: passive, effect: { atk: 14, spd: 8, crit_rate: 0.1 } }

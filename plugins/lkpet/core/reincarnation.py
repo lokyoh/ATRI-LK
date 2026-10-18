@@ -12,6 +12,7 @@ from typing import Any
 from ..utils.callbacks import Callback, run_callback
 from .attributes import ATTRIBUTE_KEYS
 from .leveling import calc_exp_next
+from .skills import draw_reincarnation_skills, retention_skill_ids
 
 _PER_ATTR_STEP = 100
 """Attribute points per ``per_100_attr`` weight."""
@@ -58,7 +59,9 @@ def calc_reincarnation_points(
     attr_sum = sum(pet.attributes.get(key, 0) for key in ATTRIBUTE_KEYS)
     points += (attr_sum // _PER_ATTR_STEP) * weights["per_100_attr"]
 
-    skill_count = len(pet.skills["active"]) + len(pet.skills["passive"])
+    # 按「已掌握」的技能数计分（收集池越大分越高，装备与否不影响）。
+    skills = pet.skills or {}
+    skill_count = len(skills.get("active", [])) + len(skills.get("passive", []))
     points += skill_count * weights["per_skill"]
 
     points += (pet.affection // _PER_AFFECTION_STEP) * weights["per_200_affection"]
@@ -125,6 +128,11 @@ async def perform_reincarnation(
 
     points = calc_reincarnation_points(pet, cfg)
     ending = generate_ending(pet)
+    # 「满级轮回」按结束时（重置前）的等级判定，必须在本世数据被清空之前取样。
+    ended_at_max_level = pet.level >= int(cfg.get("max_level", 100))
+    final_skill_count = len((pet.skills or {}).get("active", [])) + len(
+        (pet.skills or {}).get("passive", [])
+    )
 
     await run_callback(
         biography_hook,
@@ -146,6 +154,7 @@ async def perform_reincarnation(
             "cycle": pet.cycle_count + 1,
             "ending": ending,
             "points_earned": points,
+            "skill_count": final_skill_count,
             "finalized_at": datetime.now().isoformat(),
         }
     )
@@ -158,6 +167,10 @@ async def perform_reincarnation(
         reinc.best_age_days = pet.age_days
 
     reset_pet_for_reincarnation(pet, reinc, pet_config=pet_config)
+    # 保留名单要在抽新技能之前取，否则刚抽到的轮回技能会在回执里重复出现。
+    kept = retention_skill_ids(pet)
+    # 满级轮回按配置额外抽 ``grants.reincarnation_draw`` 个轮回技能（池空则少抽）。
+    drawn_skills = draw_reincarnation_skills(pet) if ended_at_max_level else []
     pet.cycle_count = reinc.total_cycles
     reinc.updated_at = datetime.now()
     _persist(reinc)
@@ -167,6 +180,10 @@ async def perform_reincarnation(
         "total_points": reinc.achievement_points,
         "cycle": reinc.total_cycles,
         "ending": ending,
+        "max_level_cycle": ended_at_max_level,
+        "drawn_skill": drawn_skills[0] if drawn_skills else None,
+        "drawn_skills": drawn_skills,
+        "kept_skills": kept,
     }
 
 
@@ -176,8 +193,19 @@ def reset_pet_for_reincarnation(
     *,
     pet_config: dict[str, Any] | None = None,
 ) -> None:
-    """Put the pet back to the start of a new life, keeping the achievements."""
+    """Put the pet back to the start of a new life, keeping the achievements.
+
+    技能按新规则裁剪：**只保留轮回技能与肉鸽奖励技能**（见
+    ``core.skills.apply_reincarnation_retention``），随后补发开局技能并按新等级
+    补齐等级里程碑；常规池技能与旧存档技能都会清空。
+    """
     from .attributes import calc_attributes_on_level_up
+    from .skills import (
+        apply_reincarnation_retention,
+        ensure_skill_storage,
+        grant_level_skills,
+        grant_start_skills,
+    )
 
     pet.level = 1 + reinc.permanent_bonuses.get("start_level_bonus", 0)
     pet.exp = 0
@@ -194,8 +222,11 @@ def reset_pet_for_reincarnation(
     pet.affection = 0
     pet.health_state = "healthy"
     pet.emotion_state = "normal"
-    pet.skills = {"active": [], "passive": []}
-    pet.skill_proficiency = {}
+    ensure_skill_storage(pet)
+    apply_reincarnation_retention(pet)
+    grant_start_skills(pet)
+    # 起始等级可能直接跨过若干里程碑（起始等级特权），这里一次补齐。
+    grant_level_skills(pet)
     pet.talent_points = 0
     pet.talents = {}
     pet.trained_attributes = {}

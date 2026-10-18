@@ -90,7 +90,13 @@ async def handle_number(pet, rogue, number: int) -> str:
         if choice == "battle":
             from .battle import _do_battle
 
-            return await _do_battle(pet, rogue, cfg)
+            return await _do_battle(
+                pet,
+                rogue,
+                cfg,
+                enemy_index=state.enemy_at(number),
+                elite=state.elite,
+            )
         if choice == "event":
             from .run_state import EventState
 
@@ -174,7 +180,11 @@ async def _resolve_event(pet, rogue, cfg: dict[str, Any], number: int) -> str:
         )
     relic_id = effect.get("relic")
     if relic_id and relic_id not in _run_relics(rogue):
+        # 同 _buy：_grant_relic 写的是 rogue.run_state，必须先落再发，
+        # 否则下面 run.to_dict() 会把事件送的遗物覆盖掉。
+        rogue.run_state = run.to_dict()
         spec = _grant_relic(rogue, str(relic_id)) or {}
+        run = RogueRun.from_dict(rogue.run_state)
         await _persist(rogue)
         lines.append(
             _text(
@@ -220,7 +230,11 @@ async def _buy(pet, rogue, cfg: dict[str, Any], number: int) -> str:
     coins_before = int(run.coins)
     run.coins -= price
     hp_max_before = int(run.hp_max)
+    # 先落回 rogue.run_state：_grant_relic 改写的是那份 dict，若晚于它再
+    # to_dict() 覆盖，刚买的遗物（及其即时生效的上限/金币）会被丢掉。
+    rogue.run_state = run.to_dict()
     _grant_relic(rogue, spec.get("id"))
+    run = RogueRun.from_dict(rogue.run_state)
     lines = [
         _text(
             "shop_bought",

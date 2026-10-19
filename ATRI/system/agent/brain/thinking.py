@@ -1,5 +1,3 @@
-import ast
-import re
 from typing import Any
 
 from ATRI.exceptions import str_traceback
@@ -23,6 +21,7 @@ from ..llm import (
     llm_manager,
 )
 from ..utils import log
+from .action_parser import normalize_args, parse_calls, split_response
 
 
 class StopThinkingError(Exception):
@@ -121,9 +120,11 @@ class ThinkingModel:
 - 不要输出无关解释
 - 请及时结束本次任务:可以调用stop_thinking或不输出功能调用结束本次任务
 - 每行一个调用
+- 所有调用写在同一个代码块里
+- 禁止使用 XML / DSML 等其它调用格式
 - 无参数功能写()
 - 字符串用双引号
-- 字符串必须保持在同一行；内容需要换行时使用\\n表示，禁止直接在引号内换行
+- 字符串内容需要换行时优先写 \\n；直接换行也能被解析
 
 输出格式：
 我该怎么做的思考内容。
@@ -171,11 +172,16 @@ class ThinkingModel:
                 resp = await llm_manager.call_model_by_type(
                     ModelType.CHAT, self.messages, "主Agent思考"
                 )
-                _, functions_data = await self.process_resp(resp.content)
-                if not functions_data:
+                _, functions_data, issues = await self.process_resp(resp.content)
+                if not functions_data and not issues:
                     break
                 back = await self.do_action(
-                    functions_data, args.user_id, args.chat_id, sender, current_history
+                    functions_data,
+                    args.user_id,
+                    args.chat_id,
+                    sender,
+                    current_history,
+                    issues,
                 )
                 self.messages.add_message(
                     LLMMessage("assistant", LLMContents().text(resp.content))
@@ -190,60 +196,13 @@ class ThinkingModel:
 
     @staticmethod
     def parse_dsl(text: str) -> list[dict[str, Any]]:
-        calls: list[dict[str, Any]] = []
-        for line_no, raw_line in enumerate(text.splitlines(), start=1):
-            line = raw_line.strip()
-            # 跳过空行和注释
-            if not line or line.startswith("#"):
-                continue
-            # 解析成 AST
-            try:
-                tree = ast.parse(line, mode="eval")
-            except SyntaxError as e:
-                raise ValueError(f"第 {line_no} 行：语法错误：{e}") from e
-            node = tree.body
-            # 必须是函数调用
-            if not isinstance(node, ast.Call):
-                raise ValueError(f"第 {line_no} 行：不是函数调用")
-            # 功能名
-            if not isinstance(node.func, ast.Name):
-                raise ValueError(f"第 {line_no} 行：功能名必须是简单标识符")
-            func_name = node.func.id
-            # 不允许位置参数
-            if node.args:
-                raise ValueError(f"第 {line_no} 行：`{func_name}` 只允许关键字参数")
-            # 解析关键字参数
-            args: dict[str, Any] = {}
-            for kw in node.keywords:
-                if kw.arg is None:
-                    raise ValueError(f"第 {line_no} 行：不允许 **kwargs")
-                try:
-                    value = ast.literal_eval(kw.value)
-                except (ValueError, SyntaxError) as e:
-                    raise ValueError(
-                        f"第 {line_no} 行：参数 `{kw.arg}` 不是字面量：{e}"
-                    ) from e
-                args[kw.arg] = value
-            calls.append(
-                {
-                    "function": func_name,
-                    "args": args,
-                    "line": line_no,
-                }
-            )
-        return calls
+        """把 DSL 文本解析成调用列表；具体解析与容错见 action_parser。"""
+        return parse_calls(text)
 
     @classmethod
-    async def process_resp(cls, resp) -> tuple[str, list]:
-        content = resp or "没有输出结果"
-        function_pattern = r"```(?:text)?\s*\n?([\s\S]*?)\n?```"
-        matches = re.findall(function_pattern, resp)
-        if matches:
-            functions_data = matches[0]
-            content = re.sub(function_pattern, "", resp).strip()
-            return content, cls.parse_dsl(functions_data)
-        else:
-            return content, []
+    async def process_resp(cls, resp) -> tuple[str, list, list[str]]:
+        """把模型输出拆成（正文, 调用列表, 解析问题）；解析失败不再抛出。"""
+        return split_response(resp if isinstance(resp, str) else "")
 
     @staticmethod
     async def do_action(
@@ -252,13 +211,24 @@ class ThinkingModel:
         chat_id,
         sender,
         current_history: History,
+        issues: list[str] | None = None,
     ) -> list:
         calling_back = []
+        if issues:
+            # 解析层的问题先回填：模型据此重写，而不是整轮静默失败
+            detail = "；".join(issues)
+            calling_back.append(
+                f"本次输出有 {len(issues)} 处调用无法解析：{detail}。"
+                "请严格按「功能名(参数名=参数值, ...)」格式重写：字符串用双引号，"
+                "需要换行写 \\n，所有调用放在同一个代码块里"
+            )
         for func in functions_data:
             func_name = func["function"]
-            if func_name not in FunctionCallingManager.function_calling:
+            func_cls = FunctionCallingManager.function_calling.get(func_name)
+            if func_cls is None:
                 log.debug(f"未知的调用功能:{func_name}，已跳过")
-                calling_back.append(f"未知的调用功能:{func_name}")
+                known = "、".join(FunctionCallingManager.function_calling)
+                calling_back.append(f"未知的调用功能:{func_name}，可用功能:{known}")
                 continue
             # 非 stop_thinking 的不可用功能，区分"环境/配置不可用"与"模型幻觉"
             if not FunctionCallingManager.is_available(func_name, sender, user_id):
@@ -267,7 +237,17 @@ class ThinkingModel:
                 log.debug(f"不可用的调用功能:{func_name}（{reason}），已跳过")
                 calling_back.append(f"功能 {func_name} 当前不可用：{reason}")
                 continue
-            args = func["args"]
+            # 按功能声明校验参数名与类型：问题直接回填给模型，
+            # 不必等 call() 抛 TypeError 才暴露（那样模型只看到「调用失败」）
+            args, arg_issues = normalize_args(func_cls, func["args"])
+            if arg_issues:
+                log.debug(f"功能 {func_name} 参数不合规:{arg_issues}")
+                detail = "；".join(arg_issues)
+                calling_back.append(
+                    f"功能 {func_name} 的参数不合规：{detail}。"
+                    "请对照上面的参数声明重写本次调用"
+                )
+                continue
             try:
                 # 使用 FunctionCallingManager 统一处理功能调用
                 calling_data = FunctionCallingData(

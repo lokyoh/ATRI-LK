@@ -5,10 +5,6 @@ from nonebot.adapters.onebot.v11 import Message
 from ATRI.log import log
 from ATRI.utils.datetime import now
 
-from ..brain import (
-    JudgmentModel,
-    ThinkingModel,
-)
 from ..llm import ModelType, llm_manager
 from .model import ChatArgs
 from .sender import ChatSender, OneBotChatSender, QQChatSender
@@ -51,6 +47,9 @@ class ATRIAgent:
         args: ChatArgs,
         chat_message: ChatMessage,
     ):
+        # 局部导入：brain 下的模块会反向导入 agent 包，放在模块顶层会形成导入环
+        from ..brain import JudgmentModel, ThinkingModel
+
         this_msg = chat_message.message
         history_list = chat_message.history[:-1]
         if args.skip_chat:

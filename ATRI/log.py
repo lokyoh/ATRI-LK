@@ -32,9 +32,11 @@ class LoguruNameDealer:
         if "nonebot.plugin.manager" in log_handle:
             plugin_name = log_handle.split(".")[-1]
             record["name"] = f"plugin.{plugin_name}"
+        elif log_handle.startswith("plugin."):
+            # record 会被多个 sink 共享，短名已处理过则保持幂等
+            pass
         else:
             record["name"] = record["name"].split(".")[0]
-
         return record
 
 
@@ -53,6 +55,7 @@ log.add(
     enqueue=True,
     level="INFO",
     encoding="utf-8",
+    filter=LoguruNameDealer(),
     format=_LOG_FORMAT,
 )
 
@@ -62,6 +65,7 @@ log.add(
     enqueue=True,
     level="WARNING",
     encoding="utf-8",
+    filter=LoguruNameDealer(),
     format=_LOG_FORMAT,
 )
 
@@ -71,6 +75,7 @@ log.add(
     enqueue=True,
     level="ERROR",
     encoding="utf-8",
+    filter=LoguruNameDealer(),
     format=_LOG_FORMAT,
 )
 
@@ -80,5 +85,6 @@ log.add(
     enqueue=True,
     level="DEBUG",
     encoding="utf-8",
+    filter=LoguruNameDealer(),
     format=_LOG_FORMAT,
 )

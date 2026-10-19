@@ -157,7 +157,7 @@ def _render_content(content: Any) -> str:
         return _clip(
             json.dumps(content.to_dict(), ensure_ascii=False, indent=2, default=str)
         )
-    if isinstance(content, (list, tuple)):
+    if isinstance(content, list | tuple):
         return _clip(
             json.dumps(list(content), ensure_ascii=False, indent=2, default=str)
         )
@@ -173,13 +173,13 @@ def _render_response(content: Any) -> str:
         return _clip(content)
     if isinstance(content, Path):
         return str(content)
-    if isinstance(content, (list, tuple)):
-        if content and all(isinstance(item, (int, float)) for item in content):
+    if isinstance(content, list | tuple):
+        if content and all(isinstance(item, int | float) for item in content):
             return f"[embedding: {len(content)} 维]"
         if content and all(
-            isinstance(item, (list, tuple))
+            isinstance(item, list | tuple)
             and item
-            and all(isinstance(value, (int, float)) for value in item)
+            and all(isinstance(value, int | float) for value in item)
             for item in content
         ):
             return f"[embeddings: {len(content)} 条，维度 {len(content[0])}]"

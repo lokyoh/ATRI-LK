@@ -61,7 +61,6 @@ class JudgmentModel:
                 "Agent-主动回复判断",
             )
             content = response.content
-            log.info(f"回复判断结果：{content}")
             return bool(content.startswith(("回复", "需要回复")))
         except Exception as e:
             log.error(f"回复判断失败：{e}")

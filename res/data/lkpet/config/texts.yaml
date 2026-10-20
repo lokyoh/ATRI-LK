@@ -238,7 +238,7 @@ rogue:
   relic_boss_heal: "💚 遗物生效：回复 {amount} 局内生命"
   codex: "📇 遗物图鉴：{owned}/{total}"
   run_relics: "🗡 本局遗物（{count} 件，仅本局生效）：{names}"
-  relic_shop_line: "{idx}. {name}（{label}｜{stat}）— {price}金"
+  relic_shop_line: "{idx}. {name}（{label}｜{stat}）— {price}金{extra}"
   tiers:
     normal: 普通
     rare: 稀有
@@ -272,6 +272,9 @@ rogue:
   shop_bought: "已购买 {name}（-{price} 金，剩余 {coins}）"
   shop_poor: "金币不足（需要 {price}，现有 {coins}）。"
   shop_missing: "这件商品不见了。"
+  shop_discount_note: "🏷 折扣生效中：价格 ×{rate}（多件折扣叠乘）"
+  shop_discount_tag: "（原价 {base} 金）"
+  shop_owned_tag: "，已购买"
   shop_hp_max: "局内生命上限 +{delta}（{hp}/{hp_max}）"
   shop_buff: "{label} +{delta}（局内增益，仅本局有效）"
   invalid: "回复「1」迎战。"

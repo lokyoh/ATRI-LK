@@ -64,8 +64,6 @@ def relic_effect_note(effect: dict[str, Any]) -> str:
             parts.append(f"{label}{_pct(float(effect[key]) - 1.0)}")
     if "shop_discount" in effect:
         parts.append(f"商店价格{_pct(float(effect['shop_discount']) - 1.0)}")
-    if "start_coins" in effect:
-        parts.append(f"开局金币+{int(effect['start_coins'])}")
     if "boss_heal" in effect:
         parts.append(f"击杀首领回复{int(effect['boss_heal'])}生命")
     return "，".join(parts)
@@ -89,9 +87,19 @@ def _relic_display(relic_id: str) -> str:
 
 def relic_multipliers(rogue) -> dict[str, float]:
     """收集**本局**遗物的乘区效果（同键叠乘）：atk/def/spd/mp/max_hp/coins/exp/vs_boss 的 *_mult 键与 shop_discount。"""
+    return relic_multipliers_from_ids(_run_relics(rogue))
+
+
+def relic_multipliers_from_ids(relic_ids: list[str]) -> dict[str, float]:
+    """按遗物 id 列表收集乘区效果（同键**乘算**叠乘）。
+
+    与 :func:`relic_multipliers` 同口径，只是入参是 id 列表而非 rogue 行——
+    商店的**价格展示**需要按「本局已持有的遗物」算折后价，而展示位手上只有
+    ``run.relics``（不依赖数据库行）。
+    """
     specs = relic_specs()
     total: dict[str, float] = {}
-    for relic_id in _run_relics(rogue):
+    for relic_id in relic_ids:
         spec = specs.get(relic_id)
         if not spec:
             continue
@@ -121,7 +129,7 @@ def relic_stat_bonuses(relic_ids: list[str]) -> dict[str, float]:
 
 
 def relic_flat(rogue, key: str) -> float:
-    """收集**本局**遗物的固定值效果（start_coins / boss_heal 等）之和。"""
+    """收集**本局**遗物的固定值效果（boss_heal 等）之和。"""
     specs = relic_specs()
     return float(
         sum(
@@ -151,8 +159,8 @@ def relic_offer(rogue, floor: int, seed: int, count: int = 3) -> list[str]:
 def _grant_relic(rogue, relic_id: str) -> dict[str, Any] | None:
     """获得一件遗物：写入**本局** run.relics（立即生效）并登记到图鉴 RELICS。
 
-    获得时即时生效的效果在这里处理：max_hp 抬局内上限并同步回血、
-    start_coins 立即入账（其余效果由战斗/结算实时读取）。调用方负责持久化。
+    获得时即时生效的效果在这里处理：max_hp 抬局内上限并同步回血
+    （其余效果由战斗/结算实时读取）。调用方负责持久化。
     """
     spec = relic_specs().get(relic_id)
     if spec is None:
@@ -169,6 +177,4 @@ def _grant_relic(rogue, relic_id: str) -> dict[str, Any] | None:
         delta = int(effect["max_hp"])
         run["hp_max"] = int(run.get("hp_max", 0)) + delta
         run["hp"] = min(run["hp_max"], int(run.get("hp", 0)) + delta)
-    if "start_coins" in effect and run:
-        run["coins"] = int(run.get("coins", 0)) + int(effect["start_coins"])
     return spec

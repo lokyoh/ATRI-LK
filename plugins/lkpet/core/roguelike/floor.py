@@ -7,15 +7,15 @@ from .relics import (
     _grant_relic,
     _run_relics,
     relic_effect_note,
-    relic_multipliers,
     relic_specs,
 )
 from .run_state import (
     RogueRun,
     _chosen_set,
+    _final_price,
     _has_run,
-    _relic_price,
     _render_pending,
+    _run_discount,
     advance,
     state_from_pending,
 )
@@ -216,9 +216,7 @@ async def _buy(pet, rogue, cfg: dict[str, Any], number: int) -> str:
     if spec.get("id") in _run_relics(rogue):
         return _text("relic_owned", "这件遗物本局已经拥有了。")
 
-    price = _relic_price(spec, cfg)
-    discount = relic_multipliers(rogue).get("shop_discount", 1.0)
-    price = max(1, round(price * discount))
+    price = _final_price(spec, cfg, _run_discount(run))
     if run.coins < price:
         return _text(
             "shop_poor",

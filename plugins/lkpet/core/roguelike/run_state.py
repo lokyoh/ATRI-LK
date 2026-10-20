@@ -92,22 +92,20 @@ class RogueRun:
     @classmethod
     def create(cls, pet, cfg: dict[str, Any], rogue=None) -> RogueRun:
         """开一局：局内生命取养成 HP 上限（+被动 max_hp +遗物 max_hp_mult），从第 1 层开始。"""
-        from .relics import relic_flat, relic_multipliers
+        from .relics import relic_multipliers
 
         hp_max = int(pet.attributes.get("hp", 100)) + int(
             passive_effects(pet).get("max_hp", 0)
         )
-        coins = 0
         if rogue is not None:
             mults = relic_multipliers(rogue)
             hp_max = max(1, round(hp_max * mults.get("max_hp_mult", 1.0)))
-            coins = int(relic_flat(rogue, "start_coins"))
         return cls(
             seed=random.randint(1, 10**9),
             floor=1,
             hp=hp_max,
             hp_max=hp_max,
-            coins=coins,
+            coins=0,
             started_at=datetime.now().isoformat(timespec="seconds"),
         )
 
@@ -320,7 +318,7 @@ class FloorChoiceState(FloorState):
             "event": _text("opt_event", "事件"),
             "shop": _text("opt_shop", "商店"),
         }
-        stock_text = _stock_preview_text(self.stock, cfg)
+        stock_text = _stock_preview_text(self.stock, cfg, run)
         lines = [
             _text(
                 "floor_header",
@@ -520,23 +518,52 @@ def state_from_pending(pending: dict[str, Any]) -> FloorState:
 # ---------------------------------------------------------------------------
 
 
-def _stock_preview_text(stock: list[str], cfg: dict[str, Any]) -> str:
+def _stock_preview_text(
+    stock: list[str], cfg: dict[str, Any], run: RogueRun | None = None
+) -> str:
+    """楼层三选一里的商店货架摘要（折后价，与商店正文/成交价同口径）。"""
     from ._common import _text
     from .relics import relic_effect_note, relic_specs
 
+    discount = _run_discount(run)
+    owned = set(run.relics) if run is not None else set()
     names = []
     for relic_id in stock:
         spec = relic_specs().get(relic_id)
         if spec:
             note = relic_effect_note(spec.get("effect") or {})
             label = f"{spec['name']}（{note}，" if note else f"{spec['name']}（"
-            names.append(f"{label}{_relic_price(spec, cfg)}金）")
+            names.append(f"{label}{_final_price(spec, cfg, discount)}金{_tags(relic_id, owned)}）")
     return "、".join(names) or _text("shop_empty", "空空如也")
 
 
 def _relic_price(spec: dict[str, Any], cfg: dict[str, Any]) -> int:
+    """遗物**基础价**（按 rarity 落在 shop.tier_price）。"""
     tier_price = cfg.get("shop", {}).get("tier_price") or {}
     return int(tier_price.get(spec.get("rarity", "normal"), 25))
+
+
+def _run_discount(run: RogueRun | None) -> float:
+    """本局所有 shop_discount 的**乘积**（多件折扣叠乘，不是相加）。"""
+    if run is None:
+        return 1.0
+    from .relics import relic_multipliers_from_ids
+
+    return float(relic_multipliers_from_ids(list(run.relics)).get("shop_discount", 1.0))
+
+
+def _final_price(spec: dict[str, Any], cfg: dict[str, Any], discount: float) -> int:
+    """成交价 = 基础价 × 折扣乘积，最低 1 金（展示与购买共用）。"""
+    return max(1, round(_relic_price(spec, cfg) * discount))
+
+
+def _tags(relic_id: str, owned: set[str]) -> str:
+    """货架行后缀：已购买标记。"""
+    if relic_id in owned:
+        from ._common import _text
+
+        return _text("shop_owned_tag", "，已购买")
+    return ""
 
 
 def _shop_text_from_run(run: RogueRun, stock: list[str], cfg: dict[str, Any]) -> str:
@@ -544,15 +571,33 @@ def _shop_text_from_run(run: RogueRun, stock: list[str], cfg: dict[str, Any]) ->
     from ._common import _text
     from .relics import relic_effect_note, relic_specs
 
+    discount = _run_discount(run)
+    owned = set(run.relics)
     lines = [_text("shop_header", "🛒 遗物商店（金币 {coins}）", coins=run.coins)]
+    if discount < 1.0:
+        lines.append(
+            _text(
+                "shop_discount_note",
+                "🏷 折扣生效中：价格 ×{rate}（多件折扣叠乘）",
+                rate=round(discount, 4),
+            )
+        )
     for idx, relic_id in enumerate(stock, 1):
         spec = relic_specs().get(relic_id)
         if not spec:
             continue
+        base = _relic_price(spec, cfg)
+        price = _final_price(spec, cfg, discount)
+        if relic_id in owned:
+            extra = _text("shop_owned_tag", "，已购买")
+        elif price < base:
+            extra = _text("shop_discount_tag", "（原价 {base} 金）", base=base)
+        else:
+            extra = ""
         lines.append(
             _text(
                 "relic_shop_line",
-                "{idx}. {name}（{label}｜{stat}）— {price}金",
+                "{idx}. {name}（{label}｜{stat}）— {price}金{extra}",
                 idx=idx,
                 name=spec.get("name", relic_id),
                 label=text(
@@ -560,7 +605,8 @@ def _shop_text_from_run(run: RogueRun, stock: list[str], cfg: dict[str, Any]) ->
                     spec.get("rarity", "normal"),
                 ),
                 stat=relic_effect_note(spec.get("effect") or {}),
-                price=_relic_price(spec, cfg),
+                price=_final_price(spec, cfg, discount),
+                extra=extra,
             )
         )
     lines.append(_text("shop_reply", "回复编号购买，回复 0 离开。"))

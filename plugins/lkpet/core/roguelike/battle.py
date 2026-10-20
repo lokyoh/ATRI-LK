@@ -991,8 +991,8 @@ async def _do_battle(
 ) -> str:
     """战斗入口：生成怪物、跑自动战斗、渲染战报、处理掉落与推进。
 
-    ``enemy_index`` 是普通层选项里预抽好的敌人池下标（见 ``FloorChoiceState``）；
-    ``elite`` 缺省时沿用 pending 里的层内精英标记。
+    ``enemy_index`` 是普通层选项里预抽好的敌人池下标（精英层则是 ``region.elites``
+    池的下标，见 ``FloorChoiceState``）；``elite`` 缺省时沿用 pending 里的层内精英标记。
     """
     from ._common import _persist, _text, floor_rng
     from .relics import (
@@ -1024,6 +1024,7 @@ async def _do_battle(
         boss_index=boss_index,
         elite=is_elite,
         pool_index=None if is_elite else enemy_index,
+        elite_index=enemy_index if is_elite else None,
     )
 
     mults = relic_multipliers(rogue)

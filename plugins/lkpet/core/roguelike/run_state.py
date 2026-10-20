@@ -241,8 +241,9 @@ class FloorChoiceState(FloorState):
     """普通层三选一（若干战斗位 + 至多一个事件 + 可能的商店）。
 
     ``options`` 按**展示顺序**排列（商店优先占位，其余顺延）；``enemies`` 与之等长，
-    战斗位存预抽好的敌人池下标，非战斗位为 ``None``。精英层的战斗位沿用原有的
-    rng 生成方式，因此恒为 ``None``。
+    战斗位存预抽好的敌人池下标（普通层取 ``monsters``、精英层取 ``elites``，
+    层内各战斗位互不相同），非战斗位为 ``None``。旧存档的 pending 没有 ``enemies``，
+    战斗位恒为 ``None``，沿用 rng 随机生成兜底。
     """
 
     type_name = "floor"
@@ -295,7 +296,7 @@ class FloorChoiceState(FloorState):
     def _option_monster(
         self, cfg: dict[str, Any], run: RogueRun, enemy_index: int | None
     ) -> dict[str, Any]:
-        """该战斗位展示的对手：新存档按预抽下标，旧存档/精英沿用原 rng 生成。"""
+        """该战斗位展示的对手：按预抽下标生成；旧存档（无 ``enemies``）沿用 rng。"""
         from .tower import _gen_monster, region_of
 
         floor = run.floor
@@ -307,6 +308,7 @@ class FloorChoiceState(FloorState):
             floor_rng(run.seed, floor, "battle"),
             elite=self.elite,
             pool_index=None if self.elite else enemy_index,
+            elite_index=enemy_index if self.elite else None,
         )
 
     def render(self, run: RogueRun, cfg: dict[str, Any], chosen: set[str]) -> str:
@@ -860,14 +862,16 @@ def _normal_floor_options(
 
     规则（``roguelike.yaml`` 的 ``floor_choice`` 块）：
 
-    1. **商店规则优先**：允许出现的层（``shop.no_before_gap`` 之后）必定占第 1 个名额，
+    1. **商店规则优先**：允许出现的层（``shop.no_before_gap`` 之后）按 ``shop.chance``
+       逐层判定（区域级 seed，可复现），不再每层必出；一旦刷出，商店占第 1 个名额，
        先于事件判定定下来，不参与概率抽取；
     2. **事件判定**：剩下的名额按顺序用 ``event_chance``（0.1 / 0.2 / 0.3）逐个判定，
        **顺序判定、只会出现一个事件**——一旦命中就停止，后面的选项直接成为战斗。
        因此第 1 位命中即 10%，第 2 位 90%×20%，第 3 位 90%×80%×30%；
-    3. **战斗位**：普通层从该区域敌人池（``region.monsters``）抽**互不相同**的敌人，
-       保证同一层的几条战斗路线不是同一只怪；精英层沿用原有精英生成（概率/保底/
-       抽取方式都不改），不预抽下标；
+    3. **战斗位**：一律从对应敌人池抽**互不相同**的敌人填满——普通层用该区域
+       ``region.monsters``、精英层用 ``region.elites``，保证同一层的几条战斗路线
+       不是同一只怪（精英遭遇的概率/保底规则不变，只改层内各战斗位的抽取方式；
+       旧存档没有预抽下标，沿用 rng 随机生成兜底）；
     4. **排列**：生成顺序即展示顺序，不再打乱（商店在第 1 位，其余顺延）。
 
     返回 ``(options, event_id, stock, enemies)``，``enemies`` 与 ``options`` 等长。
@@ -881,10 +885,14 @@ def _normal_floor_options(
 
     options: list[str] = []
     stock: list[str] = []
-    gap = int((cfg.get("shop") or {}).get("no_before_gap", 5))
-    if floor >= int(region["start"]) + gap:
+    shop_cfg = cfg.get("shop") or {}
+    gap = int(shop_cfg.get("no_before_gap", 5))
+    shop_rng = floor_rng(run.seed, floor, "shop")
+    if floor >= int(region["start"]) + gap and shop_rng.random() < float(
+        shop_cfg.get("chance", 0) or 0
+    ):
         options.append("shop")
-        stock = _shop_stock(run, cfg, floor_rng(run.seed, floor, "shop"))
+        stock = _shop_stock(run, cfg, shop_rng)
 
     event_id = ""
     remaining = slot_count - len(options)
@@ -903,10 +911,14 @@ def _normal_floor_options(
             options.append("battle")
 
     battle_slots = options.count("battle")
-    # 精英层沿用原有的 rng 生成（不预抽下标），普通层才填不同敌人。
+    # 战斗位一律预抽互不相同的敌人下标：普通层取 monsters、精英层取 elites
+    # （精英遭遇的概率/保底规则不变，只改层内各战斗位的抽取方式；旧存档
+    # pending 没有 enemies，回落到 rng 随机生成）。
     enemies: list[int | None] = [None] * len(options)
-    if battle_slots and not is_elite:
-        indices = _pick_enemy_indices(region, run.seed, floor, battle_slots)
+    if battle_slots:
+        indices = _pick_enemy_indices(
+            region, run.seed, floor, battle_slots, elite=is_elite
+        )
         cursor = 0
         for index, opt in enumerate(options):
             if opt == "battle" and cursor < len(indices):

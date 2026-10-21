@@ -11,11 +11,11 @@ PLUGIN_DIRS = [
 def clear_pycache() -> int:
     """Remove every __pycache__ directory under the plugin directory."""
     removed = 0
-    for PLUGIN_DIR in PLUGIN_DIRS:
-        if not PLUGIN_DIR.is_dir():
-            print(f"Plugin directory not found: {PLUGIN_DIR}")
+    for plugin_dir in PLUGIN_DIRS:
+        if not plugin_dir.is_dir():
+            print(f"Plugin directory not found: {plugin_dir}")
             continue
-        for pycache_dir in PLUGIN_DIR.rglob("__pycache__"):
+        for pycache_dir in plugin_dir.rglob("__pycache__"):
             if pycache_dir.is_dir():
                 shutil.rmtree(pycache_dir)
                 removed += 1

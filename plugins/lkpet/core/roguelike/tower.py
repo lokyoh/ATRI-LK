@@ -139,12 +139,21 @@ def monster_trait_text(traits: list[str], cfg: dict[str, Any] | None = None) -> 
 
 
 def _monster_label(monster: dict[str, Any]) -> str:
-    """展示名：只有**名字**，不带特点标注。
+    """展示名：``名称（特点）``；没有特点的怪只显示名字。
 
-    「名称（特点）」的写法在战斗标题/胜利行里会和玩家自己的技能括号混在一起
-    显得嘈杂（用户反馈：去掉战报里的（吸血）这类特点标注），因此这里只留名字；
-    特点另行以 ``特点：吸血`` 的独立一行展示（见 :func:`_monster_trait_line`）。
+    **用于楼层三选一的路线预告**（``FloorChoiceState.render`` /
+    ``BattleState.render``）：选项行必须让人一眼看出「这条路线打的是什么、
+    有什么特点」，所以特点内嵌在括号里。
+
+    战斗详情**不要**用它——战报里的标题/胜利行/失败行用 :func:`_monster_name`，
+    特点另起一行（:func:`_monster_trait_line`），否则会与玩家技能括号混在一起。
     """
+    note = monster_trait_text(monster.get("traits") or [])
+    return f"{monster['name']}（{note}）" if note else str(monster["name"])
+
+
+def _monster_name(monster: dict[str, Any]) -> str:
+    """纯名字（不带特点标注），供战斗详情的标题/胜负行使用。"""
     return str(monster["name"])
 
 

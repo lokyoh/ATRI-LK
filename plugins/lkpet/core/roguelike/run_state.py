@@ -350,13 +350,13 @@ class FloorChoiceState(FloorState):
                 if self.elite:
                     line += _text(
                         "elite_hint",
-                        "（⚠️ 精英出没：{monster}）",
+                        "：⚠️ {monster}",
                         monster=_monster_label(monster),
                     )
                 else:
                     line += _text(
                         "battle_hint",
-                        "（强敌：{monster}）",
+                        "：{monster}",
                         monster=_monster_label(monster),
                     )
             elif opt == "shop":

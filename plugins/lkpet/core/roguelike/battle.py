@@ -21,7 +21,7 @@ from .relics import relic_stat_bonuses
 from .tower import (
     _enemy_skill_lines,
     _monster_desc,
-    _monster_label,
+    _monster_name,
     _monster_trait_line,
 )
 
@@ -1211,7 +1211,7 @@ async def _do_battle(
             floor=floor,
             region=region.get("name", ""),
             name=pet.name,
-            monster=_monster_label(monster),
+            monster=_monster_name(monster),
         )
     ]
     # 战斗详情：怪物描述（小怪/精英/首领都按 desc 渲染），特点单独一行。
@@ -1253,7 +1253,7 @@ async def _do_battle(
                 _text(
                     "battle_loss",
                     "💀 被 {monster} 击败……（{rounds} 回合）我方生命归零，敌方剩余 {monster_hp}/{monster_hp_full}，本局结束，按到达层数结算。",
-                    monster=_monster_label(monster),
+                    monster=_monster_name(monster),
                     rounds=result.rounds,
                     monster_hp=max(0, int(monster["hp"])),
                     monster_hp_full=monster_hp_full,
@@ -1264,7 +1264,7 @@ async def _do_battle(
                 _text(
                     "battle_draw",
                     "⏱ 与 {monster} 鏖战 {rounds} 回合未分胜负……我方剩余 {hp}/{hp_max}，敌方剩余 {monster_hp}/{monster_hp_full}，本局结束，按到达层数结算。",
-                    monster=_monster_label(monster),
+                    monster=_monster_name(monster),
                     rounds=result.rounds,
                     hp=run["hp"],
                     hp_max=run["hp_max"],
@@ -1284,7 +1284,7 @@ async def _do_battle(
         _text(
             "battle_win",
             "✅ 战胜 {monster}！（{rounds} 回合）生命 {hp}/{hp_max}，局内金币 +{coins}（现有 {total}），本局经验 +{exp}",
-            monster=_monster_label(monster),
+            monster=_monster_name(monster),
             rounds=result.rounds,
             hp=run["hp"],
             hp_max=run["hp_max"],

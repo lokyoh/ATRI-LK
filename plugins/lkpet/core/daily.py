@@ -65,7 +65,7 @@ async def settle_days(
         changes["age_days"] = 1
         changes["action_points"] = pet.action_points
 
-        pet.daily_flags = {key: False for key in cfg["daily_flags"]}
+        pet.daily_flags = dict.fromkeys(cfg["daily_flags"], False)
         update_health_state(pet)
         update_emotion_state(pet)
         log_text = _daily_log(pet, day, changes)
@@ -104,7 +104,7 @@ async def settle_one_day(
     pet.ap_reset_day = day
     changes["age_days"] = 1
     changes["action_points"] = pet.action_points
-    pet.daily_flags = {key: False for key in cfg["daily_flags"]}
+    pet.daily_flags = dict.fromkeys(cfg["daily_flags"], False)
     update_health_state(pet)
     update_emotion_state(pet)
     return {"day": day, "changes": changes, "log": _daily_log(pet, day, changes)}

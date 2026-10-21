@@ -55,7 +55,7 @@ def calc_attributes_on_level_up(
             if talent is None:
                 continue
             for key, value in talent.get("effect_per_level", {}).items():
-                if key in attributes and isinstance(value, (int, float)):
+                if key in attributes and isinstance(value, int | float):
                     attributes[key] += int(value * talent_level)
 
     return attributes
@@ -77,7 +77,7 @@ def apply_equipment_bonus(
         if not isinstance(bonuses, dict):
             continue
         for key, value in bonuses.items():
-            if isinstance(value, (int, float)):
+            if isinstance(value, int | float):
                 final[key] = final.get(key, 0) + value
     return final
 
@@ -94,7 +94,7 @@ def apply_title_bonus(
     if not isinstance(bonuses, dict):
         return final
     for key, value in bonuses.items():
-        if isinstance(value, (int, float)):
+        if isinstance(value, int | float):
             final[key] = final.get(key, 0) + value
     return final
 

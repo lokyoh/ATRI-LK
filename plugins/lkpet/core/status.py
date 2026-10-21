@@ -64,7 +64,9 @@ def affection_decay_amount(pet, daily_config: dict[str, Any] | None = None) -> i
     return round(affection_cfg["base"] * multipliers[index])
 
 
-def apply_daily_decay(pet, daily_config: dict[str, Any] | None = None) -> dict[str, int]:
+def apply_daily_decay(
+    pet, daily_config: dict[str, Any] | None = None
+) -> dict[str, int]:
     """Decay every status by one day and return the *actual* per-field change.
 
     The returned mapping holds the real deltas after clamping, not the nominal

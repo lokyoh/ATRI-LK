@@ -8,8 +8,7 @@ def describe_talents(talent_config: dict | None = None) -> list[str]:
     """Selectable talents as Chinese names, for usage messages."""
     config = talent_config if talent_config is not None else _load_talent_config()
     return [
-        str(item.get("name") or key)
-        for key, item in config.get("talents", {}).items()
+        str(item.get("name") or key) for key, item in config.get("talents", {}).items()
     ]
 
 
@@ -50,7 +49,7 @@ def allocate_talent(pet, talent_id: str, talent_config: dict | None = None) -> d
 
     effect = talent.get("effect_per_level", {})
     if not effect or any(
-        key not in pet.attributes or not isinstance(value, (int, float))
+        key not in pet.attributes or not isinstance(value, int | float)
         for key, value in effect.items()
     ):
         raise ValueError("天赋效果配置无效")
@@ -86,9 +85,11 @@ def reset_talents(pet, talent_config: dict | None = None) -> dict:
         if talent is None:
             raise ValueError(f"天赋配置不存在，无法重置：{talent_id}")
         for key, value in talent.get("effect_per_level", {}).items():
-            if key not in pet.attributes or not isinstance(value, (int, float)):
+            if key not in pet.attributes or not isinstance(value, int | float):
                 raise ValueError(f"天赋效果配置无效：{talent_id}")
-            removed_bonuses[key] = removed_bonuses.get(key, 0) + int(value * talent_level)
+            removed_bonuses[key] = removed_bonuses.get(key, 0) + int(
+                value * talent_level
+            )
 
     for key, value in removed_bonuses.items():
         pet.attributes[key] -= value

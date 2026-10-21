@@ -140,7 +140,7 @@ def _passive_effect_note(effect: dict[str, Any]) -> str:
     """被动技能的效果短描述，如「攻+6」「暴击率+15%」。"""
     parts = []
     for key, value in effect.items():
-        if not isinstance(value, (int, float)):
+        if not isinstance(value, int | float):
             continue
         label = PASSIVE_EFFECT_LABELS.get(key, key)
         if key in ("crit_rate", "dmg_mult"):
@@ -295,9 +295,7 @@ def format_biography(bio, name: str = "宠物", limit: int = 10) -> str:
         text("bio.title", "📖 {name} 的传记", name=name, count=len(bio.entries or []))
     ]
     if bio.titles_unlocked:
-        lines.append(
-            text("bio.titles", "", titles="、".join(bio.titles_unlocked))
-        )
+        lines.append(text("bio.titles", "", titles="、".join(bio.titles_unlocked)))
     if not entries:
         lines.append(text("bio.empty", "传记还是空的"))
     for entry in entries:

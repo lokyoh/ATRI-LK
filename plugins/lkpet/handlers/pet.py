@@ -48,7 +48,6 @@ from ..matchers import (
     pet_bio_matcher,
     pet_chat_matcher,
     pet_create_matcher,
-    pet_daily_matcher,
     pet_feed_matcher,
     pet_group_list_matcher,
     pet_instruction_matcher,
@@ -131,6 +130,20 @@ async def _settle(matcher, pet, player_id: int) -> dict:
     if result.get("need_settle"):
         await pet_core.save_pet(pet)
     return result
+
+
+async def _settle_before_action(matcher, pet, player_id: int) -> None:
+    """行动类指令的统一前置：**先结算过期天数**，再判断行动点。
+
+    没有这一步时，跨天后的第一个行动指令读到的仍是昨天的 ``action_points``
+    （技能/背包都还是旧的）——玩家会看到「行动点不足」或莫名多扣一天的量。
+    结算明细不在这里播报：行动回执里已经带有当前行动点，
+    完整的日结算卡片由「/宠物.状态」与定时推送负责（没有手动结算指令）。
+    """
+    try:
+        await _settle(matcher, pet, player_id)
+    except Exception as exc:  # 结算失败不该让玩家连喂食都做不了
+        log.warning(f"lkpet 日结算失败（{matcher}）：{exc!r}")
 
 
 async def _tutorial_prompt(pet, event: str) -> str | None:
@@ -217,26 +230,12 @@ async def handle_status(bot: Bot, event: Event):
     await pet_status_matcher.finish(_compose(report, format_pet_status(pet), hint))
 
 
-@pet_daily_matcher.handle()
-async def handle_daily(bot: Bot, event: Event):
-    await _guard(pet_daily_matcher)
-    player_id = int(event.get_user_id())
-    pet = await _load_pet(pet_daily_matcher, player_id)
-
-    settle = await _settle(pet_daily_matcher, pet, player_id)
-    if not settle.get("need_settle"):
-        await pet_daily_matcher.finish(text("daily.no_settle", "今天已经结算过了"))
-
-    hint = await _tutorial_prompt(pet, "day1_summary")
-    await pet_core.save_pet(pet)
-    await pet_daily_matcher.finish(_compose(format_daily_report(settle), hint))
-
-
 @pet_feed_matcher.handle()
 async def handle_feed(bot: Bot, event: Event):
     await _guard(pet_feed_matcher)
     player_id = int(event.get_user_id())
     pet = await _load_pet(pet_feed_matcher, player_id)
+    await _settle_before_action(pet_feed_matcher, pet, player_id)
 
     try:
         # 喂食不再区分食物：饥饿恢复固定值（interactions.yaml effects.feed）。
@@ -256,6 +255,7 @@ async def handle_play(bot: Bot, event: Event):
     await _guard(pet_play_matcher)
     player_id = int(event.get_user_id())
     pet = await _load_pet(pet_play_matcher, player_id)
+    await _settle_before_action(pet_play_matcher, pet, player_id)
 
     try:
         result = await interaction.play(pet)
@@ -274,6 +274,7 @@ async def handle_bathe(bot: Bot, event: Event):
     await _guard(pet_bathe_matcher)
     player_id = int(event.get_user_id())
     pet = await _load_pet(pet_bathe_matcher, player_id)
+    await _settle_before_action(pet_bathe_matcher, pet, player_id)
 
     try:
         result = await interaction.bathe(pet)
@@ -289,6 +290,7 @@ async def handle_rest(bot: Bot, event: Event):
     await _guard(pet_rest_matcher)
     player_id = int(event.get_user_id())
     pet = await _load_pet(pet_rest_matcher, player_id)
+    await _settle_before_action(pet_rest_matcher, pet, player_id)
 
     try:
         result = await interaction.rest(pet)
@@ -331,7 +333,11 @@ async def handle_skill(bot: Bot, event: Event, args: Message = CommandArg()):
 
     await pet_core.save_pet(pet)
     key = "skill.equipped_ok" if action == "装备" else "skill.unequipped_ok"
-    default = "✅ 已装备「{name}」" if action == "装备" else "✅ 已卸下「{name}」（仍保留在技能库中）"
+    default = (
+        "✅ 已装备「{name}」"
+        if action == "装备"
+        else "✅ 已卸下「{name}」（仍保留在技能库中）"
+    )
     await pet_skill_matcher.finish(
         _compose(
             text(key, default, name=skills.skill_name(skill_id)),

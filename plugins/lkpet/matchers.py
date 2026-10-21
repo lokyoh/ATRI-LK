@@ -18,7 +18,6 @@ from . import plugin
 
 pet_create_matcher = plugin.cmd_as_group("创建", "创建你的专属宠物（每人仅一只）")
 pet_status_matcher = plugin.cmd_as_group("状态", "查看宠物的状态与属性")
-pet_daily_matcher = plugin.cmd_as_group("结算", "手动触发日结算")
 pet_feed_matcher = plugin.cmd_as_group("喂食", "喂食宠物（消耗行动点）")
 pet_play_matcher = plugin.cmd_as_group("玩耍", "陪宠物玩耍（消耗行动点）")
 pet_bathe_matcher = plugin.cmd_as_group("洗澡", "给宠物洗澡（消耗行动点）")
@@ -47,6 +46,4 @@ pet_chat_matcher = plugin.cmd_as_group("聊天", "与宠物聊天")
 pet_rogue_matcher = plugin.cmd_as_group(
     "肉鸽", "肉鸽爬塔：开始/继续/进度/撤退，局内用编号应答"
 )
-pet_train_matcher = plugin.cmd_as_group(
-    "训练", "训练宠物获取经验（消耗行动点和状态）"
-)
+pet_train_matcher = plugin.cmd_as_group("训练", "训练宠物获取经验（消耗行动点和状态）")

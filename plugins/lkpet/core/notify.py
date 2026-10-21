@@ -19,7 +19,7 @@ from nonebot.adapters.onebot.v11.bot import Bot
 from ATRI.log import log
 
 from .. import config as lkpet_config
-from ..database import load_all_pets, save_model, pet_table, PET_KEY_COLUMN
+from ..database import PET_KEY_COLUMN, load_all_pets, pet_table, save_model
 from ..utils.texts import text
 from . import biography, daily, reincarnation
 

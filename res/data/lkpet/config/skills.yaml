@@ -1,4 +1,4 @@
-# 技能系统（主动 / 被动 + 收集池 + 装备槽）
+﻿# 技能系统（主动 / 被动 + 收集池 + 装备槽）
 #
 # 结构总览
 #   · ``skills``  技能定义表（**列表**，每条带稳定的 ``id``）
@@ -145,10 +145,10 @@ skills:
     type: active
     element: light
     power: 45
-    mp_cost: 18
+    mp_cost: 30
     cooldown: 1
     target: single
-    effects: [{ type: mp, amount: 30 }]
+    effects: [{ type: mp, amount: 28 }]
   - { id: pierce, name: 贯穿刺, type: active, element: normal, power: 44, mp_cost: 10, cooldown: 1, target: single }
   - { id: twin_fangs, name: 双牙咬, type: active, element: normal, power: 26, strikes: 2, mp_cost: 12, cooldown: 1, target: single }
   - { id: whirl, name: 回旋斩, type: active, element: normal, power: 20, strikes: 3, mp_cost: 16, cooldown: 2, target: single }
@@ -190,10 +190,10 @@ skills:
     type: active
     element: light
     power: 20
-    mp_cost: 0
-    cooldown: 2
+    mp_cost: 8
+    cooldown: 3
     target: single
-    effects: [{ type: mp, amount: 25 }]
+    effects: [{ type: mp, amount: 20 }]
   - { id: last_stand, name: 背水一击, type: active, element: normal, power: 58, mp_cost: 24, cooldown: 3, target: single }
 
   # === 常规：被动（10） ===
@@ -211,7 +211,7 @@ skills:
   # === 轮回：主动（10） ===
   - { id: sam_soul_cleave, name: 裂魂斩, type: active, element: dark, power: 78, mp_cost: 24, cooldown: 2, target: single }
   - { id: sam_void_pierce, name: 虚空贯穿, type: active, element: dark, power: 72, mp_cost: 20, cooldown: 1, target: single }
-  - { id: sam_starfall, name: 星陨, type: active, element: light, power: 92, mp_cost: 32, cooldown: 3, target: single }
+  - { id: sam_starfall, name: 星陨, type: active, element: light, power: 92, mp_cost: 44, cooldown: 3, target: single }
   - id: sam_blood_ritual
     name: 血祭
     type: active
@@ -236,22 +236,22 @@ skills:
     element: wind
     power: 28
     strikes: 4
-    mp_cost: 30
+    mp_cost: 42
     cooldown: 3
     target: single
-  - { id: sam_eternal_blade, name: 永劫之刃, type: active, element: normal, power: 84, mp_cost: 28, cooldown: 2, target: single }
-  - { id: sam_aether_bolt, name: 以太爆裂, type: active, element: light, power: 88, mp_cost: 30, cooldown: 3, target: single }
+  - { id: sam_eternal_blade, name: 永劫之刃, type: active, element: normal, power: 84, mp_cost: 34, cooldown: 2, target: single }
+  - { id: sam_aether_bolt, name: 以太爆裂, type: active, element: light, power: 88, mp_cost: 40, cooldown: 3, target: single }
   - id: sam_life_drain
     name: 轮回汲取
     type: active
     element: dark
     power: 64
-    mp_cost: 22
+    mp_cost: 24
     cooldown: 1
     target: single
     leech: 0.35
-    effects: [{ type: mp, amount: 25 }]
-  - { id: sam_judgment, name: 终焉审判, type: active, element: normal, power: 100, mp_cost: 40, cooldown: 4, target: single }
+    effects: [{ type: mp, amount: 16 }]
+  - { id: sam_judgment, name: 终焉审判, type: active, element: normal, power: 100, mp_cost: 52, cooldown: 4, target: single }
 
   # === 轮回：被动（10） ===
   - { id: sam_might, name: 永世之力, type: passive, effect: { atk: 14 } }

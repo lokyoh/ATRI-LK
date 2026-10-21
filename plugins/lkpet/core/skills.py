@@ -79,7 +79,9 @@ def skill_specs(skills_config: dict[str, Any] | None = None) -> dict[str, dict]:
     raw = cfg.get("skills") or []
     items: list[dict] = []
     if isinstance(raw, dict):  # 兼容旧的「映射」写法
-        items = [dict(spec, id=sid) for sid, spec in raw.items() if isinstance(spec, dict)]
+        items = [
+            dict(spec, id=sid) for sid, spec in raw.items() if isinstance(spec, dict)
+        ]
     else:
         items = [spec for spec in raw if isinstance(spec, dict)]
     specs: dict[str, dict] = {}
@@ -91,7 +93,9 @@ def skill_specs(skills_config: dict[str, Any] | None = None) -> dict[str, dict]:
     return specs
 
 
-def skill_spec(skill_id: str, skills_config: dict[str, Any] | None = None) -> dict | None:
+def skill_spec(
+    skill_id: str, skills_config: dict[str, Any] | None = None
+) -> dict | None:
     """单个技能定义；不存在返回 ``None``。"""
     return skill_specs(skills_config).get(str(skill_id))
 
@@ -102,7 +106,9 @@ def skill_name(skill_id: str, skills_config: dict[str, Any] | None = None) -> st
     return str(spec.get("name") or skill_id)
 
 
-def skill_type(skill_id: str, skills_config: dict[str, Any] | None = None) -> str | None:
+def skill_type(
+    skill_id: str, skills_config: dict[str, Any] | None = None
+) -> str | None:
     """技能类型（``active`` / ``passive``）；未知技能返回 ``None``。"""
     spec = skill_spec(skill_id, skills_config) or {}
     slot = spec.get("type")
@@ -193,9 +199,7 @@ def infer_source(skill_id: str, skills_config: dict[str, Any] | None = None) -> 
     return "legacy"
 
 
-def source_of(
-    pet, skill_id: str, skills_config: dict[str, Any] | None = None
-) -> str:
+def source_of(pet, skill_id: str, skills_config: dict[str, Any] | None = None) -> str:
     """宠物身上某个技能的来源：优先用落库记录，缺失时再推导。"""
     stored = getattr(pet, "skill_sources", None) or {}
     recorded = stored.get(str(skill_id))
@@ -209,9 +213,7 @@ def source_of(
 # ---------------------------------------------------------------------------
 
 
-def ensure_skill_storage(
-    pet, skills_config: dict[str, Any] | None = None
-) -> bool:
+def ensure_skill_storage(pet, skills_config: dict[str, Any] | None = None) -> bool:
     """规整四个技能字段并修复历史数据，返回是否发生改动。
 
     修复内容：
@@ -260,11 +262,15 @@ def ensure_skill_storage(
         pet.skill_equipped = fixed_equipped
         changed = True
 
-    new_sources = {
-        str(key): str(value)
-        for key, value in (sources or {}).items()
-        if isinstance(key, str) and isinstance(value, str)
-    } if isinstance(sources, dict) else {}
+    new_sources = (
+        {
+            str(key): str(value)
+            for key, value in (sources or {}).items()
+            if isinstance(key, str) and isinstance(value, str)
+        }
+        if isinstance(sources, dict)
+        else {}
+    )
     all_known = [sid for slot in SLOT_TYPES for sid in collection[slot]]
     for skill_id in all_known:
         new_sources.setdefault(skill_id, infer_source(skill_id, cfg))
@@ -328,9 +334,7 @@ def _equip_raw(pet, slot: str, skill_id: str, skills_config: dict) -> bool:
     return True
 
 
-def equip_skill(
-    pet, skill_id: str, skills_config: dict[str, Any] | None = None
-) -> str:
+def equip_skill(pet, skill_id: str, skills_config: dict[str, Any] | None = None) -> str:
     """装备一个已掌握的技能；返回技能 id。失败抛 ``ValueError``。"""
     cfg = skills_config if skills_config is not None else _load_skills_config()
     ensure_skill_storage(pet, cfg)
@@ -649,7 +653,7 @@ def apply_reincarnation_retention(
         for skill_id, value in (getattr(pet, "skill_proficiency", None) or {}).items()
         if skill_id in all_kept
     }
-    pet.skill_grants = {slot: 0 for slot in SLOT_TYPES}
+    pet.skill_grants = dict.fromkeys(SLOT_TYPES, 0)
 
     for slot in SLOT_TYPES:
         for skill_id in previous[slot]:
@@ -665,9 +669,7 @@ def apply_reincarnation_retention(
 # ---------------------------------------------------------------------------
 
 
-def resolve_skill(
-    value: str, skills_config: dict[str, Any] | None = None
-) -> str:
+def resolve_skill(value: str, skills_config: dict[str, Any] | None = None) -> str:
     """把玩家输入的「技能名 / id」解析成技能 id。
 
     与性格、天赋同惯例：展示用中文名，落库用 id，输入两者都认（忽略大小写）。
@@ -721,7 +723,11 @@ def get_skill_power(
     maximum = float(limits.get("proficiency_max", 1.0))
     bonus = float(limits.get("proficiency_power_bonus", 0.3))
     proficiency = min(
-        maximum, max(0.0, float((getattr(pet, "skill_proficiency", None) or {}).get(skill_id, 0.0)))
+        maximum,
+        max(
+            0.0,
+            float((getattr(pet, "skill_proficiency", None) or {}).get(skill_id, 0.0)),
+        ),
     )
     return float(spec.get("power", 0)) * (1.0 + proficiency * bonus)
 
@@ -755,6 +761,6 @@ def passive_bonuses(
     total: dict[str, float] = dict.fromkeys(PASSIVE_STAT_KEYS, 0.0)
     for _, spec in equipped_specs(pet, "passive", cfg):
         for key, value in (spec.get("effect") or {}).items():
-            if key in total and isinstance(value, (int, float)):
+            if key in total and isinstance(value, int | float):
                 total[key] += float(value)
     return total

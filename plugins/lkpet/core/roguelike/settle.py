@@ -87,9 +87,7 @@ async def settle_run(
         if spec is None:
             continue
         rogue.unlocked.append(floor_key)
-        lines.extend(
-            await _grant_unlock(pet, spec, skills_cfg, floor_key, title_hook)
-        )
+        lines.extend(await _grant_unlock(pet, spec, skills_cfg, floor_key, title_hook))
 
     # 3) 成就点写回轮回数据。
     if points > 0:
@@ -124,9 +122,7 @@ async def settle_run(
     return "\n".join(line for line in lines if line)
 
 
-def _unlock_spec(
-    cfg: dict[str, Any], unlock_key: str
-) -> dict[str, Any] | None:
+def _unlock_spec(cfg: dict[str, Any], unlock_key: str) -> dict[str, Any] | None:
     """把首通记录的键翻译成奖励描述。
 
     ``elite:<区域>`` / ``boss:<区域>`` → ``stage_skill_rewards`` 里的技能；
@@ -175,12 +171,12 @@ async def _grant_unlock(
 
             await run_callback(title_hook, pet, spec.get("title", ""))
         return [
-            _text("unlock_title", "🔓 首通解锁称号：{title}", title=spec.get("title", ""))
+            _text(
+                "unlock_title", "🔓 首通解锁称号：{title}", title=spec.get("title", "")
+            )
         ]
     if kind == "skill":
-        granted = grant_skill(
-            pet, spec.get("id", ""), skills_cfg, source="rogue"
-        )
+        granted = grant_skill(pet, spec.get("id", ""), skills_cfg, source="rogue")
         if not granted["added"]:
             return [
                 _text(
@@ -189,7 +185,11 @@ async def _grant_unlock(
                     name=granted["name"],
                 )
             ]
-        key = "unlock_boss_skill" if unlock_key.startswith("boss:") else "unlock_elite_skill"
+        key = (
+            "unlock_boss_skill"
+            if unlock_key.startswith("boss:")
+            else "unlock_elite_skill"
+        )
         default = (
             "🔓 首次击败首领解锁技能：{name}（已进入技能库）"
             if unlock_key.startswith("boss:")
@@ -197,6 +197,8 @@ async def _grant_unlock(
         )
         line = _text(key, default, name=granted["name"])
         if not granted["equipped"]:
-            line += _text("unlock_skill_bench", "（技能槽已满，请在「/宠物.技能」中装备）")
+            line += _text(
+                "unlock_skill_bench", "（技能槽已满，请在「/宠物.技能」中装备）"
+            )
         return [line]
     return []

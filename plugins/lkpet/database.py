@@ -311,9 +311,7 @@ def _migrate_pet_skills_v2(connection, cursor) -> None:
             }
             all_ids = [sid for slot in SLOT_TYPES for sid in collection[slot]]
             sources = {sid: infer_source(sid) for sid in all_ids}
-            equipped = {
-                slot: collection[slot][: limits[slot]] for slot in SLOT_TYPES
-            }
+            equipped = {slot: collection[slot][: limits[slot]] for slot in SLOT_TYPES}
             # 旧技能全部来自等级解锁，视为本世临时技能。里程碑计数按 0 起算，
             # 于是旧存档首次读档时会按当前等级补发常规池技能（见
             # ``pet_core.ensure_initialized``），与旧版「到等级就学」的体验对齐。
@@ -436,7 +434,7 @@ def _encode_value(value: Any) -> Any:
     """Convert a model value into something SQLite can hold."""
     if isinstance(value, datetime):
         return value.isoformat()
-    if isinstance(value, (dict, list)):
+    if isinstance(value, dict | list):
         return json.dumps(value, ensure_ascii=False)
     return value
 
@@ -495,7 +493,7 @@ def load_model(
 
     data = {
         field: _decode_value(raw, model_cls.model_fields[field].annotation)
-        for (_, field), raw in zip(pairs, rows[0])
+        for (_, field), raw in zip(pairs, rows[0], strict=False)
     }
     _normalize_string_keys(model_cls, data)
     return model_cls.model_validate(data)
@@ -557,7 +555,7 @@ def load_all_pets() -> list[Pet]:
     for row in pet_table.select_all(columns):
         data = {
             field: _decode_value(raw, Pet.model_fields[field].annotation)
-            for (_, field), raw in zip(pairs, row)
+            for (_, field), raw in zip(pairs, row, strict=False)
         }
         _normalize_string_keys(Pet, data)
         try:

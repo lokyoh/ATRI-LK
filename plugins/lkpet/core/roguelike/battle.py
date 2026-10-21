@@ -13,9 +13,17 @@ from ._common import (
     BASE_SKILL_POWER,
     _load_skills_config,
     _text,
+    mp_regen_pct,
+    rogue_mp_max,
+    unactionable_cfg,
 )
 from .relics import relic_stat_bonuses
-from .tower import _enemy_skill_lines, _monster_label
+from .tower import (
+    _enemy_skill_lines,
+    _monster_desc,
+    _monster_label,
+    _monster_trait_line,
+)
 
 
 @dataclass
@@ -29,6 +37,8 @@ class BattleResult:
     pet_acts: int
     monster_acts: int
     crits: int
+    mp_cap: int = 0
+    """局内魔力上限（供 ``_do_battle`` 写回 run，展示「MP x/y」）。"""
 
 
 def _damage(
@@ -83,9 +93,14 @@ class BattleSession:
         self.timer_gain = float(battle_cfg.get("timer_gain", 10))
         self.crit_mult = float(battle_cfg.get("crit_mult", 1.8))
         self.max_units = max(1, int(battle_cfg.get("max_units", 4)))
+        # 「不可行动」（眩晕）参数：数值与上限全部外置，便于按首领特点配平。
+        self.unactionable = unactionable_cfg(cfg)
+        # 局内魔力：每层 / 每个战斗回合（= 我方每次行动）的回复比例。
+        self.mp_floor_pct = mp_regen_pct(cfg, "per_floor_pct")
+        self.mp_turn_pct = mp_regen_pct(cfg, "per_turn_pct")
 
         # 技能配置
-        if not isinstance(monster.get("skills"), (list, tuple)):
+        if not isinstance(monster.get("skills"), list | tuple):
             monster["skills"] = []
         self.skills_cfg = _load_skills_config()
 
@@ -115,7 +130,11 @@ class BattleSession:
         self.crits = 0
 
     def _compute_pet_stats(self) -> None:
-        """计算宠物入场属性。"""
+        """计算宠物入场属性。
+
+        魔力（MP）是**局内跨层资源**：上限由 :func:`rogue_mp_max` 统一算出，
+        当前值从 ``run["mp"]`` 取（入场满蓝、每层回复 ``battle.mp.per_floor_pct``）。
+        """
         from ._common import passive_effects
 
         passives = passive_effects(self.pet, self.skills_cfg)
@@ -124,12 +143,20 @@ class BattleSession:
         relic_stats = relic_stat_bonuses(self.state.get("relics") or [])
 
         self.pet_hp = self.state["hp"]
-        self.pet_mp = (
-            int(int(attrs.get("mp", 20)) * self.mults.get("mp_mult", 1.0))
-            + int(passives["mp"])
-            + int(relic_stats["mp"])
+        self.mp_cap = rogue_mp_max(
+            self.pet,
+            self.state.get("relics") or [],
+            self.cfg,
+            self.skills_cfg,
         )
-        self.mp_cap = self.pet_mp
+        # 旧存档没有 run.mp：按「刚入场/刚回满」处理，并立即写回，避免每场重置。
+        stored_mp = self.state.get("mp")
+        if stored_mp is None:
+            self.pet_mp = self.mp_cap
+            self.state["mp"] = self.mp_cap
+        else:
+            self.pet_mp = max(0, min(self.mp_cap, int(stored_mp)))
+        self.state["mp_max"] = self.mp_cap
         self.pet_atk = (
             int(
                 (int(attrs.get("atk", 10)) + int(buffs.get("atk", 0)))
@@ -251,12 +278,37 @@ class BattleSession:
         if thorns > 0 and self.pet_hp > 0:
             rebound = max(0, round(dealt * thorns))
             self.pet_hp = max(1, self.pet_hp - rebound)
-            self._blog("log_thorns", "R{round} 棘刺反弹 {dmg} 点伤害。", dmg=rebound)
+            self._blog("log_thorns", "回合{round} 棘刺反弹 {dmg} 点伤害。", dmg=rebound)
+
+    def _regen_turn_mp(self) -> None:
+        """回合回蓝：每个战斗回合（我方每次行动）回复上限的 ``per_turn_pct``。
+
+        与「轮」（内部帧）无关——轮只用于冷却/持续伤害等内部结算，
+        玩家看到的计时单位是「回合」。
+        """
+        if self.mp_turn_pct <= 0 or self.mp_cap <= 0:
+            return
+        if self.pet_mp >= self.mp_cap:
+            return
+        gain = max(1, round(self.mp_cap * self.mp_turn_pct))
+        before = self.pet_mp
+        self.pet_mp = min(self.mp_cap, self.pet_mp + gain)
+        gained = self.pet_mp - before
+        if gained > 0:
+            self._blog(
+                "log_mp_turn",
+                "回合{round} 魔力回复 {gain} 点（{mp}/{mp_max}）。",
+                gain=gained,
+                mp=self.pet_mp,
+                mp_max=self.mp_cap,
+            )
 
     def _pet_action(self) -> None:
-        """宠物行动。"""
+        """宠物行动（= 一个「回合」）。"""
         self.gauge_pet -= 100.0
         self.pet_acts += 1
+        # 回合回蓝：我方每个回合（每次行动）开始前回复上限的 per_turn_pct。
+        self._regen_turn_mp()
         target = self._pick_target()
         if target is None:
             return
@@ -264,7 +316,7 @@ class BattleSession:
         if self.current_target is not None and target is not self.current_target:
             self._blog(
                 "log_target",
-                "R{round} 你的攻击转向 {name}。",
+                "回合{round} 你的攻击转向 {name}。",
                 name=str(target["unit"]["name"]),
             )
         self.current_target = target
@@ -322,7 +374,7 @@ class BattleSession:
                 if strikes > 1:
                     self._blog(
                         "log_skill_multi",
-                        "R{round} {actor} 使用【{skill}】，{strikes} 连击共 {dmg} 伤害。",
+                        "回合{round} {actor} 使用【{skill}】，{strikes} 连击共 {dmg} 伤害。",
                         actor=self.pet.name,
                         skill=str(skill.get("name") or skill_id),
                         strikes=strikes,
@@ -331,7 +383,7 @@ class BattleSession:
                 else:
                     self._blog(
                         "log_skill",
-                        "R{round} {actor} 使用【{skill}】，造成 {dmg} 伤害。",
+                        "回合{round} {actor} 使用【{skill}】，造成 {dmg} 伤害。",
                         actor=self.pet.name,
                         skill=str(skill.get("name") or skill_id),
                         dmg=dealt_total,
@@ -349,7 +401,7 @@ class BattleSession:
                         self.pet_hp += healed
                         self._blog(
                             "log_skill_leech",
-                            "R{round} {actor} 吸取 {heal} 点生命。",
+                            "回合{round} {actor} 吸取 {heal} 点生命。",
                             actor=self.pet.name,
                             heal=healed,
                         )
@@ -372,7 +424,7 @@ class BattleSession:
             target["unit"]["hp"] -= dmg
             self._blog(
                 "log_attack",
-                "R{round} {actor} 普攻，造成 {dmg} 伤害。",
+                "回合{round} {actor} 普攻，造成 {dmg} 伤害。",
                 actor=self.pet.name,
                 dmg=dmg,
             )
@@ -413,6 +465,12 @@ class BattleSession:
             "mp_cap": pool,
             "gauge": 0.0,
             "charge": None,
+            # 「不可行动」值（速度点）：每轮先用速度抵扣，剩余速度才攒行动条。
+            "stun": 0.0,
+            "stun_total": 0.0,
+            # ↑ 本场战斗**累计**吃到的控制回合数（只增不减）。用作
+            #   battle.unactionable.stack_limit_rounds 的预算：一场里同一单位最多
+            #   被控制这么多回合。挣脱后不清零——否则反复打断首领就能无限续控。
             "phases": [
                 str(pid)
                 for pid in (unit.get("phases") or [])
@@ -452,7 +510,7 @@ class BattleSession:
                 record["charge"] = None
                 self._blog(
                     "log_slain",
-                    "R{round} {name} 被击倒。",
+                    "回合{round} {name} 被击倒。",
                     name=str(record["unit"]["name"]),
                 )
 
@@ -473,7 +531,7 @@ class BattleSession:
         return heal
 
     def _charge_taken(self, rec: dict[str, Any], dealt: int) -> None:
-        """打断判定。"""
+        """打断判定：累积伤害达到阈值即打断，并施加「不可行动」。"""
         charge = rec["charge"]
         if charge is None or dealt <= 0:
             return
@@ -486,9 +544,64 @@ class BattleSession:
         rec["cd"][skill_id] = int(skill.get("cooldown", 0))
         self._blog(
             "log_interrupt",
-            "R{round} {actor} 的【{skill}】被打断了！",
+            "回合{round} {actor} 的【{skill}】被打断了！",
             actor=rec["unit"]["name"],
             skill=self._skill_label(skill, skill_id),
+        )
+        self._apply_unactionable(rec, skill, charge)
+
+    def _apply_unactionable(
+        self,
+        rec: dict[str, Any],
+        skill: dict[str, Any],
+        charge: dict[str, Any] | None = None,
+    ) -> None:
+        """蓄力被打断 → 施加「不可行动」值（单位：速度点）。
+
+        取值：技能自身 ``unactionable``（回合数）→ ``battle.unactionable`` 默认值；
+        蓄力越久惩罚越重（``charge_bonus``）；再按 ``max_rounds`` 与
+        ``stack_limit_rounds`` 双重封顶、按 ``boss_resist`` 打折。
+
+        速度点 = 目标当前速度 × 回合数，因此高速首领被扣得更多，节奏按比例回到
+        与低速单位一致——不会出现「速度越高越容易被永久锁住」。
+        """
+        cfg = self.unactionable
+        if not cfg.get("enabled", True):
+            return
+        base = float(
+            skill.get("unactionable", cfg.get("default_rounds", 1.0))
+            or cfg.get("default_rounds", 1.0)
+        )
+        if base <= 0:
+            return
+        # 蓄力越久，被打断的代价越高（charge 2 → +0.5 回合）。
+        charge_rounds = int(skill.get("charge", 0) or 0)
+        bonus = max(0, charge_rounds - 1) * float(cfg.get("charge_bonus", 0.0) or 0.0)
+        rounds = base + bonus
+        rounds = min(rounds, float(cfg.get("max_rounds", 2.5) or rounds))
+        if rec["unit"].get("boss"):
+            rounds *= float(cfg.get("boss_resist", 1.0) or 1.0)
+        # 连控上限：同一单位在「不可行动」期间的再次打断不无限叠加。
+        spent = float(rec.get("stun_total", 0.0))
+        cap = float(cfg.get("stack_limit_rounds", 4.0) or 0.0)
+        if cap > 0:
+            rounds = min(rounds, max(0.0, cap - spent))
+        if rounds <= 0:
+            return
+        gain = max(1.0, float(rec["unit"]["spd"]) * rounds)
+        rec["stun"] = float(rec.get("stun", 0.0)) + gain
+        rec["stun_total"] = spent + rounds
+        # 打断同时清空已攒的行动条，并取消它**本轮**尚未执行的那次行动：
+        # 只清行动条不够——它本轮的行动早在轮初就排进行动队列了，
+        # 不拦下来的话「打断」当轮照常挨打，控制等于没生效。
+        if cfg.get("reset_gauge", True):
+            rec["gauge"] = 0.0
+            rec["skip_round"] = True
+        self._blog(
+            "log_unactionable",
+            "回合{round} {actor} 陷入「不可行动」（{value} 点，需以速度抵扣）。",
+            actor=rec["unit"]["name"],
+            value=round(gain),
         )
 
     def _unit_phases(self, rec: dict[str, Any]) -> None:
@@ -522,7 +635,7 @@ class BattleSession:
             if healed > 0:
                 self._blog(
                     "log_phase_heal",
-                    "R{round} {actor} 进入形态【{phase}】，回复 {heal} 点生命！",
+                    "回合{round} {actor} 进入形态【{phase}】，回复 {heal} 点生命！",
                     actor=unit["name"],
                     phase=label,
                     heal=healed,
@@ -530,7 +643,7 @@ class BattleSession:
             else:
                 self._blog(
                     "log_phase",
-                    "R{round} {actor} 进入形态【{phase}】！",
+                    "回合{round} {actor} 进入形态【{phase}】！",
                     actor=unit["name"],
                     phase=label,
                 )
@@ -567,7 +680,7 @@ class BattleSession:
         if room <= 0:
             self._blog(
                 "log_summon_full",
-                "R{round} {actor} 想召唤 {name}，但场上已满。",
+                "回合{round} {actor} 想召唤 {name}，但场上已满。",
                 actor=unit["name"],
                 name=name,
             )
@@ -598,7 +711,7 @@ class BattleSession:
             self.units.append(self._spawn_unit(minion, primary=False, minion=True))
         self._blog(
             "log_summon",
-            "R{round} {actor} 召唤了 {count} 只 {name}。",
+            "回合{round} {actor} 召唤了 {count} 只 {name}。",
             actor=unit["name"],
             count=count,
             name=name,
@@ -645,7 +758,7 @@ class BattleSession:
             if charged:
                 self._blog(
                     "log_charge_hit",
-                    "R{round} {actor} 释放【{skill}】，造成 {dmg} 伤害！",
+                    "回合{round} {actor} 释放【{skill}】，造成 {dmg} 伤害！",
                     actor=unit["name"],
                     skill=label,
                     dmg=dealt,
@@ -653,7 +766,7 @@ class BattleSession:
             elif strikes > 1:
                 self._blog(
                     "log_skill_hit",
-                    "R{round} {actor} 使用【{skill}】，{strikes} 连击共 {dmg} 伤害。",
+                    "回合{round} {actor} 使用【{skill}】，{strikes} 连击共 {dmg} 伤害。",
                     actor=unit["name"],
                     skill=label,
                     strikes=strikes,
@@ -662,7 +775,7 @@ class BattleSession:
             else:
                 self._blog(
                     "log_skill",
-                    "R{round} {actor} 使用【{skill}】，造成 {dmg} 伤害。",
+                    "回合{round} {actor} 使用【{skill}】，造成 {dmg} 伤害。",
                     actor=unit["name"],
                     skill=label,
                     dmg=dealt,
@@ -672,7 +785,7 @@ class BattleSession:
         if leeched > 0:
             self._blog(
                 "log_leech",
-                "R{round} {actor} 吸血回复 {heal} 点。",
+                "回合{round} {actor} 吸血回复 {heal} 点。",
                 actor=unit["name"],
                 heal=leeched,
             )
@@ -687,7 +800,7 @@ class BattleSession:
                 unit["hp"] += healed
                 self._blog(
                     "log_skill_heal",
-                    "R{round} {actor} 使用【{skill}】，回复 {heal} 点生命。",
+                    "回合{round} {actor} 使用【{skill}】，回复 {heal} 点生命。",
                     actor=unit["name"],
                     skill=label,
                     heal=healed,
@@ -701,7 +814,7 @@ class BattleSession:
                     unit[stat] = max(1, round(int(unit[stat]) * mult))
             self._blog(
                 "log_skill_buff",
-                "R{round} {actor} 使用【{skill}】，自身强化。",
+                "回合{round} {actor} 使用【{skill}】，自身强化。",
                 actor=unit["name"],
                 skill=label,
             )
@@ -719,7 +832,7 @@ class BattleSession:
             self._refresh_pet_mods()
             self._blog(
                 "log_skill_debuff",
-                "R{round} {actor} 使用【{skill}】，你的状态被削弱。",
+                "回合{round} {actor} 使用【{skill}】，你的状态被削弱。",
                 actor=unit["name"],
                 skill=label,
             )
@@ -735,7 +848,7 @@ class BattleSession:
             )
             self._blog(
                 "log_skill_dot",
-                "R{round} {actor} 使用【{skill}】，你陷入持续伤害。",
+                "回合{round} {actor} 使用【{skill}】，你陷入持续伤害。",
                 actor=unit["name"],
                 skill=label,
             )
@@ -769,7 +882,7 @@ class BattleSession:
         self._unit_leech(rec, dealt)
         self._blog(
             "log_attack",
-            "R{round} {actor} 普攻，造成 {dmg} 伤害。",
+            "回合{round} {actor} 普攻，造成 {dmg} 伤害。",
             actor=unit["name"],
             dmg=dealt,
         )
@@ -786,7 +899,7 @@ class BattleSession:
             rec["charge"] = None
             self._blog(
                 "log_charge_ready",
-                "R{round} {actor} 蓄力完成【{skill}】，即将释放！",
+                "回合{round} {actor} 蓄力完成【{skill}】，即将释放！",
                 actor=rec["unit"]["name"],
                 skill=self._skill_label(skill, skill_id),
             )
@@ -812,7 +925,7 @@ class BattleSession:
             }
             self._blog(
                 "log_charge_start",
-                "R{round} {actor} 开始蓄力【{skill}】——打断它！",
+                "回合{round} {actor} 开始蓄力【{skill}】——打断它！",
                 actor=rec["unit"]["name"],
                 skill=self._skill_label(skill, skill_id),
             )
@@ -855,7 +968,7 @@ class BattleSession:
         ):
             self._blog(
                 "log_over",
-                "R{round} 战斗在第 {max} 回合上限处中止。",
+                "回合{round} 战斗在第 {max} 回合上限处中止。",
                 round=self.rounds,
                 max=self.max_rounds,
             )
@@ -868,6 +981,7 @@ class BattleSession:
             pet_acts=self.pet_acts,
             monster_acts=self.monster_acts,
             crits=self.crits,
+            mp_cap=self.mp_cap,
         )
 
     def _run_round(self) -> None:
@@ -877,9 +991,8 @@ class BattleSession:
             100.0, self.gauge_pet + self._pet_spd_eff() * self.gauge_rate_mult
         )
         for rec in self._live_units():
-            rec["gauge"] = min(
-                100.0, rec["gauge"] + int(rec["unit"]["spd"]) * self.gauge_rate_mult
-            )
+            speed = self._spend_stun(rec)
+            rec["gauge"] = min(100.0, rec["gauge"] + speed * self.gauge_rate_mult)
 
         # 决定行动顺序
         actors: list[tuple[str, int, dict[str, Any] | None]] = []
@@ -902,12 +1015,50 @@ class BattleSession:
                     break
             else:
                 assert rec is not None
+                # 本轮被「不可行动」打断并取消行动的，直接跳过（见 _apply_unactionable）。
+                if rec.pop("skip_round", False):
+                    self._blog(
+                        "log_unactionable_skip",
+                        "回合{round} {actor} 因「不可行动」未能出手。",
+                        actor=rec["unit"]["name"],
+                    )
+                    continue
                 rec["gauge"] -= 100.0
                 self.monster_acts += 1
                 self._enemy_action(rec)
 
         # 轮末处理
         self._end_of_round()
+
+    def _spend_stun(self, rec: dict[str, Any]) -> float:
+        """用速度抵扣「不可行动」值，返回本轮可用于攒条的速度。
+
+        抵扣顺序：先扣眩晕值，剩下的速度才进行动条——所以眩晕期间不仅不攒条，
+        连当轮本会攒到的那份也一并被吃掉。抵扣完当轮立即解除。
+        """
+        speed = float(int(rec["unit"]["spd"]))
+        remaining = float(rec.get("stun", 0.0))
+        if remaining <= 0:
+            return speed
+        if speed <= 0:
+            return 0.0
+        used = min(speed, remaining)
+        left = remaining - used
+        rec["stun"] = left
+        self._blog(
+            "log_unactionable_tick",
+            "回合{round} {actor} 处于「不可行动」，速度被抵消 {used} 点（剩余 {left}）。",
+            actor=rec["unit"]["name"],
+            used=round(used),
+            left=round(left),
+        )
+        if left <= 0:
+            self._blog(
+                "log_unactionable_end",
+                "回合{round} {actor} 挣脱了「不可行动」。",
+                actor=rec["unit"]["name"],
+            )
+        return max(0.0, speed - used)
 
     def _end_of_round(self) -> None:
         """轮末处理：计时条、冷却、持续伤害。"""
@@ -935,7 +1086,7 @@ class BattleSession:
                 self._refresh_pet_mods()
                 self._blog(
                     "log_debuff_end",
-                    "R{round} 你身上的削弱效果消退。",
+                    "回合{round} 你身上的削弱效果消退。",
                     round=self.rounds,
                 )
             # 持续伤害
@@ -945,7 +1096,7 @@ class BattleSession:
                 if tick > 0:
                     self._blog(
                         "log_dot_tick",
-                        "R{round} 持续伤害造成 {dmg} 点（你剩余 {hp}）。",
+                        "回合{round} 持续伤害造成 {dmg} 点（你剩余 {hp}）。",
                         round=self.rounds,
                         dmg=tick,
                         hp=self.pet_hp,
@@ -954,10 +1105,12 @@ class BattleSession:
                 if entry["rounds"] <= 0:
                     self.dots.remove(entry)
                     self._blog(
-                        "log_dot_end", "R{round} 持续伤害结束。", round=self.rounds
+                        "log_dot_end", "回合{round} 持续伤害结束。", round=self.rounds
                     )
             self._blog(
-                "log_timer", "R{round} ⏱ 计时条满：双方技能冷却 -1。", round=self.rounds
+                "log_timer",
+                "回合{round} ⏱ 计时条满：双方技能冷却 -1。",
+                round=self.rounds,
             )
         # 形态判定
         for rec in self._live_units():
@@ -1033,6 +1186,9 @@ async def _do_battle(
     battle_log: list[tuple[int, str]] | None = [] if log_limit > 0 else None
     result = _auto_battle(pet, run, monster, cfg, rng, mults, battle_log)
     run["hp"] = max(0, result.pet_hp)
+    # 魔力是局内跨层资源：战斗结束把当前值写回 run，下一层接着用。
+    run["mp"] = max(0, int(result.pet_mp))
+    run["mp_max"] = int(result.mp_cap)
     if monster.get("boss"):
         header_key, header_default = (
             "battle_header",
@@ -1058,8 +1214,14 @@ async def _do_battle(
             monster=_monster_label(monster),
         )
     ]
+    # 战斗详情：怪物描述（小怪/精英/首领都按 desc 渲染），特点单独一行。
+    desc_line = _monster_desc(monster)
+    if desc_line:
+        lines.append(desc_line)
+    trait_line = _monster_trait_line(monster)
+    if trait_line:
+        lines.append(trait_line)
     if monster.get("boss") or is_elite:
-        lines.append(_text("boss_desc", "—— {desc}", desc=monster.get("desc", "")))
         lines.extend(_enemy_skill_lines(monster, cfg, hint=True))
     lines.append(
         _text(
@@ -1144,7 +1306,11 @@ async def _do_battle(
     # 同一次 run 里可能打赢多只精英，而 rogue.unlocked 要到结算才写回；
     # 这里必须连 run 自己的待结算列表一起判，避免重复提示与重复记账。
     run_unlocks = run.setdefault("unlocks", [])
-    if unlock_key and unlock_key not in rogue.unlocked and unlock_key not in run_unlocks:
+    if (
+        unlock_key
+        and unlock_key not in rogue.unlocked
+        and unlock_key not in run_unlocks
+    ):
         run_unlocks.append(unlock_key)
         lines.append(
             _text(

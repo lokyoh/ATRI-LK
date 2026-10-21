@@ -139,38 +139,81 @@ def monster_trait_text(traits: list[str], cfg: dict[str, Any] | None = None) -> 
 
 
 def _monster_label(monster: dict[str, Any]) -> str:
-    """展示名：``名称（特点）``；没有特点的怪不标注（用户规则）。"""
+    """展示名：只有**名字**，不带特点标注。
+
+    「名称（特点）」的写法在战斗标题/胜利行里会和玩家自己的技能括号混在一起
+    显得嘈杂（用户反馈：去掉战报里的（吸血）这类特点标注），因此这里只留名字；
+    特点另行以 ``特点：吸血`` 的独立一行展示（见 :func:`_monster_trait_line`）。
+    """
+    return str(monster["name"])
+
+
+def _monster_trait_line(monster: dict[str, Any]) -> str:
+    """单独一行的特点说明；没有特点时返回空串。"""
     note = monster_trait_text(monster.get("traits") or [])
-    return f"{monster['name']}（{note}）" if note else monster["name"]
+    if not note:
+        return ""
+    from ...utils.texts import text
+
+    return text("rogue.monster_trait_line", "🔹 特点：{traits}", traits=note)
+
+
+def _monster_desc(monster: dict[str, Any]) -> str:
+    """怪物的描述行（战斗详情用）；没有描述时返回空串。
+
+    小怪过去只写 ``name + traits``、没有 ``desc``，于是战斗详情里只有精英/首领
+    才有「—— 描述」那一行。现在 ``monsters[]`` 也补了描述，这里统一按 desc
+    字段渲染，有就显示、没有就跳过。
+    """
+    desc = str(monster.get("desc") or "").strip()
+    if not desc:
+        return ""
+    from ...utils.texts import text
+
+    return text("rogue.monster_desc", "—— {desc}", desc=desc)
 
 
 def _enemy_skill_note(skill: dict[str, Any]) -> str:
-    """技能的机制标签（蓄力/召唤/回复/强化/削弱/持续伤害/吸血），无机制返回空串。"""
+    """技能的机制标签（蓄力/召唤/回复/强化/削弱/持续伤害/吸血），无机制返回空串。
+
+    多个机制会一起列出（用「，」连接），避免像以前那样只显示第一个而让
+    「蓄力 + 削弱」这类技能漏掉信息。没有任何机制时返回空串——调用方负责
+    不要把空 note 渲染成「技能名（）」。
+    """
     from ...utils.texts import text
 
+    parts: list[str] = []
     if int(skill.get("charge", 0)) > 0:
-        return text(
-            "rogue.skill_note_charge",
-            "蓄力 {rounds} 回合，累积伤害可打断",
-            rounds=int(skill["charge"]),
+        parts.append(
+            text(
+                "rogue.skill_note_charge",
+                "蓄力 {rounds} 回合，累积伤害可打断",
+                rounds=int(skill["charge"]),
+            )
         )
     if skill.get("summon"):
-        return text(
-            "rogue.skill_note_summon",
-            "召唤 {count} 只",
-            count=int((skill["summon"] or {}).get("count", 1)),
+        parts.append(
+            text(
+                "rogue.skill_note_summon",
+                "召唤 {count} 只",
+                count=int((skill["summon"] or {}).get("count", 1)),
+            )
         )
     if skill.get("heal"):
-        return text("rogue.skill_note_heal", "自我回复")
+        parts.append(text("rogue.skill_note_heal", "自我回复"))
     if skill.get("self_buff"):
-        return text("rogue.skill_note_buff", "自我强化")
+        parts.append(text("rogue.skill_note_buff", "自我强化"))
     if skill.get("debuff"):
-        return text("rogue.skill_note_debuff", "削弱我方")
+        parts.append(text("rogue.skill_note_debuff", "削弱我方"))
     if skill.get("dot"):
-        return text("rogue.skill_note_dot", "持续伤害")
+        parts.append(text("rogue.skill_note_dot", "持续伤害"))
     if skill.get("leech"):
-        return text("rogue.skill_note_leech", "吸血")
-    return ""
+        parts.append(text("rogue.skill_note_leech", "吸血"))
+    if int(skill.get("mp_cost", 0)) > 0:
+        parts.append(
+            text("rogue.skill_note_mp", "耗蓝 {cost}", cost=int(skill["mp_cost"]))
+        )
+    return "，".join(parts)
 
 
 def _enemy_skill_lines(
@@ -201,13 +244,13 @@ def _enemy_skill_lines(
         items = []
         for skill_id in skill_ids:
             skill = skill_cfg[skill_id] or {}
+            name = skill.get("name") or skill_id
+            note = _enemy_skill_note(skill)
+            # 没有机制标签时不能渲染成「技能名（）」，直接用纯名字。
             items.append(
-                text(
-                    "rogue.skill_item",
-                    "{name}（{note}）",
-                    name=skill.get("name") or skill_id,
-                    note=_enemy_skill_note(skill),
-                )
+                text("rogue.skill_item", "{name}（{note}）", name=name, note=note)
+                if note
+                else str(name)
             )
         lines.append(
             text(

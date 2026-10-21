@@ -80,6 +80,85 @@ def passive_effects(pet, skills_cfg: dict[str, Any] | None = None) -> dict[str, 
     return passive_bonuses(pet, skills_cfg)
 
 
+# ---------------------------------------------------------------------------
+# 局内魔力（MP）
+# ---------------------------------------------------------------------------
+
+
+def rogue_mp_max(
+    pet,
+    relic_ids: list[str] | None = None,
+    cfg: dict[str, Any] | None = None,
+    skills_cfg: dict[str, Any] | None = None,
+) -> int:
+    """局内魔力上限：养成 ``mp``（×遗物乘区） + 被动 mp + 遗物平值 mp。
+
+    战斗入场与局内推进共用这一个口径，避免「战斗里 60 蓝、进度里 50 蓝」
+    两处算不一样。``mp`` 在肉鸽里是**跨层保留**的资源（见 roguelike.yaml
+    的 ``battle.mp``），不是每场战斗重置。
+    """
+    from .relics import relic_multipliers_from_ids, relic_stat_bonuses
+
+    passives = passive_effects(pet, skills_cfg)
+    relics = relic_stat_bonuses(list(relic_ids or []))
+    mult = float(
+        (relic_multipliers_from_ids(list(relic_ids or [])) or {}).get("mp_mult", 1.0)
+    )
+    base = int(int((getattr(pet, "attributes", {}) or {}).get("mp", 20)) * mult)
+    return max(1, base + int(passives["mp"]) + int(relics["mp"]))
+
+
+def battle_mp_cfg(cfg: dict[str, Any] | None = None) -> dict[str, Any]:
+    """``battle.mp`` 块：每层 / 每回合的魔力回复比例。"""
+    return ((cfg or {}).get("battle") or {}).get("mp") or {}
+
+
+def mp_regen_pct(
+    cfg: dict[str, Any] | None = None, key: str = "per_floor_pct"
+) -> float:
+    """读取 ``battle.mp`` 里的某个回复比例。
+
+    * ``per_floor_pct``：每前进一层回复上限的百分比（默认 20%）
+    * ``per_turn_pct``：**每个战斗回合**（= 我方每次行动）回复上限的百分比（默认 5%）
+    * ``rest_floor_pct``：休息层（区域倒数第二层）额外回复（默认 40%）
+    """
+    defaults = {"per_floor_pct": 0.2, "per_turn_pct": 0.05, "rest_floor_pct": 0.4}
+    try:
+        return float(battle_mp_cfg(cfg).get(key, defaults.get(key, 0.0)) or 0.0)
+    except (TypeError, ValueError):
+        return defaults.get(key, 0.0)
+
+
+# ---------------------------------------------------------------------------
+# 不可行动（打断蓄力后的硬控）
+#
+# 注意：本插件只有一种硬控状态，统一叫「不可行动」。旧版临时命名「眩晕」
+# 已废弃——不要再用眩晕命名任何字段、配置键或文案。
+# ---------------------------------------------------------------------------
+
+
+def unactionable_cfg(cfg: dict[str, Any] | None = None) -> dict[str, Any]:
+    """``battle.unactionable`` 块：被打断蓄力后施加的「不可行动」参数。
+
+    数值单位是**速度点**（= 目标速度 × 回合数），因此对高速度的首领同样有效：
+    高速度的怪每轮攒条更快，被扣除的速度点也更多，二者按比例抵消。
+    """
+    defaults = {
+        "enabled": True,
+        "default_rounds": 1.0,
+        "max_rounds": 2.5,
+        "stack_limit_rounds": 4.0,
+        "boss_resist": 0.8,
+        "charge_bonus": 0.5,
+        "reset_gauge": True,
+    }
+    node = ((cfg or {}).get("battle") or {}).get("unactionable")
+    merged = dict(defaults)
+    if isinstance(node, dict):
+        merged.update(node)
+    return merged
+
+
 async def get_or_create_rogue(player_id: str | int):
     """取回肉鸽进度行；不存在时按默认值建行。"""
     from ...database import Rogue, load_rogue, save_rogue

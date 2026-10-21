@@ -326,9 +326,7 @@ def _train_message(pet, level_result: dict) -> str:
             )
         ]
     else:
-        lines = [
-            text("messages.train.normal", f"{pet.name}完成了训练", name=pet.name)
-        ]
+        lines = [text("messages.train.normal", f"{pet.name}完成了训练", name=pet.name)]
 
     # 升级里程碑发的技能是静默入池/自动装备的，这里必须告诉玩家。
     learned = level_result.get("learned_skills") or []
@@ -351,4 +349,3 @@ def _train_message(pet, level_result: dict) -> str:
                 )
             )
     return "\n".join(lines)
-

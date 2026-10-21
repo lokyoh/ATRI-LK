@@ -28,6 +28,12 @@ def _choice_effect_note(effect: dict[str, Any]) -> str:
     hp = int(effect.get("run_hp", 0))
     if hp:
         parts.append(f"HP{hp:+d}")
+    mp = int(effect.get("run_mp", 0))
+    if mp:
+        parts.append(f"MP{mp:+d}")
+    mp_pct = float(effect.get("run_mp_pct", 0) or 0)
+    if mp_pct:
+        parts.append(f"MP{round(mp_pct * 100):+d}%")
     coins = int(effect.get("coins", 0))
     if coins:
         parts.append(f"金币{coins:+d}")
@@ -174,10 +180,30 @@ async def _resolve_event(pet, rogue, cfg: dict[str, Any], number: int) -> str:
     if exp:
         run.exp = max(0, run.exp + exp)
         lines.append(
-            _text(
-                "ev_exp", "本局经验 {delta:+d}（累计 {exp}）", delta=exp, exp=run.exp
-            )
+            _text("ev_exp", "本局经验 {delta:+d}（累计 {exp}）", delta=exp, exp=run.exp)
         )
+
+    # 事件回蓝：run_mp 固定值 + run_mp_pct 百分比（上限向下取整，可同时使用）。
+    mp_fixed = int(effect.get("run_mp", 0))
+    mp_pct = float(effect.get("run_mp_pct", 0) or 0)
+    if mp_fixed or mp_pct:
+        if run.mp_max <= 0:
+            run.mp_max = max(1, run.mp)
+        delta = mp_fixed + (round(run.mp_max * mp_pct) if mp_pct else 0)
+        if delta:
+            before_mp = max(0, min(run.mp_max, run.mp))
+            run.mp = max(0, min(run.mp_max, before_mp + delta))
+            gained = run.mp - before_mp
+            if gained:
+                lines.append(
+                    _text(
+                        "mp_event",
+                        "🔵 魔力 {delta:+d}（现有 {mp}/{mp_max}）",
+                        delta=gained,
+                        mp=run.mp,
+                        mp_max=run.mp_max,
+                    )
+                )
     relic_id = effect.get("relic")
     if relic_id and relic_id not in _run_relics(rogue):
         # 同 _buy：_grant_relic 写的是 rogue.run_state，必须先落再发，

@@ -31,6 +31,10 @@ class RogueRun:
     floor: int = 1
     hp: int = 0
     hp_max: int = 0
+    mp: int = 0
+    """局内魔力当前值。跨层保留：入场满蓝，每前进一层回复 ``battle.mp.per_floor_pct``。"""
+    mp_max: int = 0
+    """局内魔力上限（由 :func:`rogue_mp_max` 按养成属性/被动/遗物算出）。"""
     coins: int = 0
     exp: int = 0
     buffs: dict[str, int] = field(
@@ -53,6 +57,8 @@ class RogueRun:
             "floor": self.floor,
             "hp": self.hp,
             "hp_max": self.hp_max,
+            "mp": self.mp,
+            "mp_max": self.mp_max,
             "coins": self.coins,
             "exp": self.exp,
             "buffs": dict(self.buffs),
@@ -75,6 +81,8 @@ class RogueRun:
             floor=data.get("floor", 1),
             hp=data.get("hp", 0),
             hp_max=data.get("hp_max", 0),
+            mp=int(data.get("mp", 0) or 0),
+            mp_max=int(data.get("mp_max", 0) or 0),
             coins=data.get("coins", 0),
             exp=data.get("exp", 0),
             buffs=data.get("buffs", {"atk": 0, "def": 0, "spd": 0}),
@@ -91,20 +99,28 @@ class RogueRun:
 
     @classmethod
     def create(cls, pet, cfg: dict[str, Any], rogue=None) -> RogueRun:
-        """开一局：局内生命取养成 HP 上限（+被动 max_hp +遗物 max_hp_mult），从第 1 层开始。"""
+        """开一局：局内生命取养成 HP 上限（+被动 max_hp +遗物 max_hp_mult），
+        局内魔力取 :func:`rogue_mp_max` 并**满蓝入场**，从第 1 层开始。"""
+        from ._common import rogue_mp_max
         from .relics import relic_multipliers
 
         hp_max = int(pet.attributes.get("hp", 100)) + int(
             passive_effects(pet).get("max_hp", 0)
         )
+        # 新开一局还没有本局遗物，因此魔力上限只算养成属性 + 被动；
+        # 之后每获得一件带 mp 效果的遗物，会在战斗入场时按 run.relics 重算。
+        mults: dict[str, float] = {}
         if rogue is not None:
             mults = relic_multipliers(rogue)
             hp_max = max(1, round(hp_max * mults.get("max_hp_mult", 1.0)))
+        mp_max = rogue_mp_max(pet, [], cfg)
         return cls(
             seed=random.randint(1, 10**9),
             floor=1,
             hp=hp_max,
             hp_max=hp_max,
+            mp=mp_max,
+            mp_max=mp_max,
             coins=0,
             started_at=datetime.now().isoformat(timespec="seconds"),
         )
@@ -372,6 +388,13 @@ class EventState(FloorState):
         self.event_id = event_id
         self.supply = supply
 
+    def _sync_mp(self, run: RogueRun) -> None:
+        """旧存档 / 遗物变动后同步魔力上限，并把当前值钳进新范围。"""
+        if run.mp_max > 0:
+            run.mp = max(0, min(run.mp_max, run.mp))
+        else:
+            run.mp_max = max(0, run.mp)
+
     def to_pending(self) -> dict[str, Any]:
         d: dict[str, Any] = {"type": "event", "event_id": self.event_id}
         if self.supply:
@@ -390,6 +413,7 @@ class EventState(FloorState):
         from .floor import _choice_effect_note
         from .tower import region_of
 
+        self._sync_mp(run)
         floor = run.floor
         region = region_of(floor, cfg)
         event = _find_event(self.event_id, region, cfg)
@@ -533,7 +557,9 @@ def _stock_preview_text(
         if spec:
             note = relic_effect_note(spec.get("effect") or {})
             label = f"{spec['name']}（{note}，" if note else f"{spec['name']}（"
-            names.append(f"{label}{_final_price(spec, cfg, discount)}金{_tags(relic_id, owned)}）")
+            names.append(
+                f"{label}{_final_price(spec, cfg, discount)}金{_tags(relic_id, owned)}）"
+            )
     return "、".join(names) or _text("shop_empty", "空空如也")
 
 
@@ -702,7 +728,7 @@ def _change_entry_ticket(pet, delta: int) -> bool:
             if delta < 0 and not user_data.backpack.bp_has_item(name):
                 return False
             return bool(user_data.item_num_change(name, delta))
-    except Exception:  # noqa: BLE001 - LK 账户不可用时按「没有券」处理
+    except Exception:
         return False
 
 
@@ -832,19 +858,83 @@ async def advance(pet, rogue, *, first: bool = False) -> str:
     old_region = region_of(run.floor, cfg)
     run.floor += 1
     new_region = region_of(run.floor, cfg)
+    mp_note = _regen_floor_mp(run, pet, cfg, rogue)
     _present_floor(run, cfg, rogue)
     rogue.run_state = run.to_dict()
     await _persist(rogue)
     rendered = _render_pending(run, cfg, _chosen_set(rogue))
+    lines: list[str] = []
     if new_region["id"] != old_region["id"]:
-        entered = _text(
-            "region_enter",
-            "🗺 抵达新区域【{name}】{desc}",
-            name=new_region.get("name", ""),
-            desc=new_region.get("desc", ""),
+        lines.append(
+            _text(
+                "region_enter",
+                "🗺 抵达新区域【{name}】{desc}",
+                name=new_region.get("name", ""),
+                desc=new_region.get("desc", ""),
+            )
         )
-        return entered + "\n" + rendered
-    return rendered
+    if mp_note:
+        lines.append(mp_note)
+    lines.append(rendered)
+    return "\n".join(lines)
+
+
+def _regen_floor_mp(run: RogueRun, pet, cfg: dict[str, Any], rogue) -> str:
+    """前进一层时恢复局内魔力，返回回执文案（无恢复则不提示）。
+
+    规则（``roguelike.yaml`` 的 ``battle.mp``）：
+    * 常规层：回复上限的 ``per_floor_pct``（默认 20%）；
+    * **休息层**（区域倒数第二层，即补给层）：额外叠加
+      ``rest_floor_pct``（默认 40%），因为这一层没有战斗。
+    """
+    from ._common import (
+        _text,
+        mp_regen_pct,
+        rogue_mp_max,
+    )
+    from .tower import boss_floor_set
+
+    # 遗物可能改过上上限（本局中途获得），每次前进都按当前遗物重算。
+    new_cap = rogue_mp_max(pet, list(run.relics), cfg)
+    before_cap = int(run.mp_max or 0)
+    run.mp_max = new_cap
+    if before_cap and new_cap > before_cap:
+        run.mp = min(new_cap, int(run.mp) + (new_cap - before_cap))
+    run.mp = max(0, min(new_cap, int(run.mp)))
+
+    pct = mp_regen_pct(cfg, "per_floor_pct")
+    if _is_rest_floor(run.floor, cfg, boss_floor_set(cfg)):
+        pct += mp_regen_pct(cfg, "rest_floor_pct")
+    if pct <= 0 or run.mp >= run.mp_max:
+        return ""
+    gain = max(1, round(run.mp_max * pct))
+    before = run.mp
+    run.mp = min(run.mp_max, run.mp + gain)
+    gained = run.mp - before
+    if gained <= 0:
+        return ""
+    rest = _is_rest_floor(run.floor, cfg, boss_floor_set(cfg))
+    key = "mp_floor_rest" if rest else "mp_floor"
+    default = (
+        "🔵 休息层整备：魔力 +{gain}（{mp}/{mp_max}）"
+        if rest
+        else "🔵 前进恢复：魔力 +{gain}（{mp}/{mp_max}）"
+    )
+    return _text(key, default, gain=gained, mp=run.mp, mp_max=run.mp_max)
+
+
+def _is_rest_floor(
+    floor: int, cfg: dict[str, Any], boss_floors: set[int] | None = None
+) -> bool:
+    """是否本局的「休息层」：区域首领前一层（``supply.floor_offset``）。"""
+    from .tower import region_of
+
+    supply_cfg = cfg.get("supply") or {}
+    offset = int(supply_cfg.get("floor_offset", 1) or 0)
+    if not offset:
+        return False
+    region = region_of(floor, cfg)
+    return floor == int(region["end"]) - offset
 
 
 # ---------------------------------------------------------------------------

@@ -52,10 +52,22 @@ def _damage(
 class BattleSession:
     """ATB 自动战斗引擎。
 
-    攻击条机制：个人攻击条上限 100，每轮按速度攒 ``gauge_rate_mult × spd``，
-    **先满者出击**（-100），同轮都满时速度快者先动——速度值决定出击频率。
-    战斗计时条每轮结束固定 ``+timer_gain``，满 100 触发一次「计时条满」：
+    攻击条机制：个人攻击条上限 100，每**帧**按速度攒 ``gauge_rate_mult × spd``，
+    **先满者出击**（-100），同帧都满时速度快者先动——速度值决定出击频率。
+    战斗计时条每帧结束固定 ``+timer_gain``，满 100 触发一次「计时条满」：
     所有技能剩余冷却 -1、计时 Buff 剩余时长 -1（预留），随后计时条清零。
+
+    **帧（frame）与回合（turn）是两个单位，别混用**：
+
+    * **帧**是内部时钟：攻击条积攒、冷却、DoT、削弱消退都按帧结算，
+      循环上限也是帧（``max_frames = max_rounds × frames_per_turn``）。
+    * **回合**是对外计时单位：战斗计时条走满一次算一回合，默认
+      ``frames_per_turn = 100 / timer_gain = 10`` 帧。战报行首、胜/负/平局行的
+      「N 回合」、``battle_pace`` 的「共 N 回合」全部用 :attr:`turn`。
+
+    早期版本把帧号直接当回合显示，而 ATB 入场前几帧常无人攒满攻击条
+    （例如速度 17 × 5 = 85 < 100，要两帧才出手），于是战报从「回合2」开始。
+    现在展示一律走 :attr:`turn`（帧数 ÷ 10 向上取整），第 1 回合覆盖前 10 帧。
 
     敌方只有精英/首领（及其召唤物）会用专属技能（roguelike.yaml 的
     enemy_skills / enemy_phases）：蓄力终极技可被累积伤害打断、生命跌破阈值
@@ -91,6 +103,14 @@ class BattleSession:
         self.max_rounds = int(battle_cfg.get("max_rounds", 500))
         self.gauge_rate_mult = float(battle_cfg.get("gauge_rate_mult", 5))
         self.timer_gain = float(battle_cfg.get("timer_gain", 10))
+        # 一个「回合」= 战斗计时条走满一次 = 内部跑多少帧。
+        # 计时条每帧 +timer_gain、满 100 清零，所以默认 10 帧 = 1 回合。
+        # 对外展示一律用回合（帧数 ÷ 本值，向上取整），内部循环与冷却仍按帧。
+        self.frames_per_turn = (
+            max(1, round(100.0 / self.timer_gain)) if self.timer_gain > 0 else 1
+        )
+        # 内部循环上限（帧）。max_rounds 以**回合**为单位，换算成帧给 while 用。
+        self.max_frames = max(1, self.max_rounds * self.frames_per_turn)
         self.crit_mult = float(battle_cfg.get("crit_mult", 1.8))
         self.max_units = max(1, int(battle_cfg.get("max_units", 4)))
         # 「不可行动」（眩晕）参数：数值与上限全部外置，便于按首领特点配平。
@@ -126,8 +146,22 @@ class BattleSession:
         self.battle_timer = 0.0
         self.pet_acts = 0
         self.monster_acts = 0
-        self.rounds = 0
+        self.frames = 0
+        """已经跑过的**内部帧**数（攻击条 / 冷却 / DoT 的结算单位）。
+
+        注意：这不是「回合」。对外展示用 :attr:`turn`（帧数 ÷ frames_per_turn），
+        否则 ATB 入场前几帧无人攒满、日志里就会从「回合2」甚至更晚开始。
+        """
         self.crits = 0
+
+    @property
+    def turn(self) -> int:
+        """当前**回合**（从 1 起）：内部帧数换算，计时条走满一次算一回合。
+
+        第 1 回合覆盖第 1..frames_per_turn 帧，因此有行动的帧一定落在 ≥1 的回合里，
+        不会出现「战报从回合2开始」这种观感。
+        """
+        return max(1, -(-self.frames // self.frames_per_turn))
 
     def _compute_pet_stats(self) -> None:
         """计算宠物入场属性。
@@ -216,11 +250,15 @@ class BattleSession:
     # -------------------------------------------------------------------------
 
     def _blog(self, key: str, default: str, **fields: Any) -> None:
-        """记录战报。"""
+        """记录战报。
+
+        日志里的 ``{round}`` 是**对外回合**（:attr:`turn`），不是内部帧号——
+        ATB 前几帧可能无人行动，用帧号会从「回合2」开始。
+        """
         if self.log is None:
             return
-        fields.setdefault("round", self.rounds)
-        self.log.append((self.rounds, _text(key, default, **fields)))
+        fields.setdefault("round", self.turn)
+        self.log.append((self.turn, _text(key, default, **fields)))
 
     def _blog_crit(self, is_crit: bool) -> None:
         """暴击后缀。"""
@@ -950,13 +988,17 @@ class BattleSession:
     # -------------------------------------------------------------------------
 
     def run(self) -> BattleResult:
-        """运行战斗直到结束。"""
+        """运行战斗直到结束。
+
+        循环与 ``max_rounds`` 上限按**内部帧**计（`battle.max_frames`），
+        ``BattleResult.rounds`` 回报的是**对外回合**。
+        """
         while (
-            self.rounds < self.max_rounds
+            self.frames < self.max_frames
             and self.pet_hp > 0
             and self._pick_target() is not None
         ):
-            self.rounds += 1
+            self.frames += 1
             self._run_round()
 
         victory = self._pick_target() is None and self.pet_hp > 0
@@ -964,12 +1006,11 @@ class BattleSession:
             not victory
             and self.pet_hp > 0
             and self._pick_target() is not None
-            and self.rounds >= self.max_rounds
+            and self.frames >= self.max_frames
         ):
             self._blog(
                 "log_over",
                 "回合{round} 战斗在第 {max} 回合上限处中止。",
-                round=self.rounds,
                 max=self.max_rounds,
             )
 
@@ -977,7 +1018,7 @@ class BattleSession:
             pet_hp=self.pet_hp,
             pet_mp=self.pet_mp,
             victory=victory,
-            rounds=self.rounds,
+            rounds=self.turn,
             pet_acts=self.pet_acts,
             monster_acts=self.monster_acts,
             crits=self.crits,
@@ -1087,7 +1128,6 @@ class BattleSession:
                 self._blog(
                     "log_debuff_end",
                     "回合{round} 你身上的削弱效果消退。",
-                    round=self.rounds,
                 )
             # 持续伤害
             for entry in list(self.dots):
@@ -1097,20 +1137,16 @@ class BattleSession:
                     self._blog(
                         "log_dot_tick",
                         "回合{round} 持续伤害造成 {dmg} 点（你剩余 {hp}）。",
-                        round=self.rounds,
                         dmg=tick,
                         hp=self.pet_hp,
                     )
                 entry["rounds"] -= 1
                 if entry["rounds"] <= 0:
                     self.dots.remove(entry)
-                    self._blog(
-                        "log_dot_end", "回合{round} 持续伤害结束。", round=self.rounds
-                    )
+                    self._blog("log_dot_end", "回合{round} 持续伤害结束。")
             self._blog(
                 "log_timer",
                 "回合{round} ⏱ 计时条满：双方技能冷却 -1。",
-                round=self.rounds,
             )
         # 形态判定
         for rec in self._live_units():

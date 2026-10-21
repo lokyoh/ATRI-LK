@@ -119,7 +119,9 @@ def mp_regen_pct(
     """读取 ``battle.mp`` 里的某个回复比例。
 
     * ``per_floor_pct``：每前进一层回复上限的百分比（默认 20%）
-    * ``per_turn_pct``：**每个战斗回合**（= 我方每次行动）回复上限的百分比（默认 5%）
+    * ``per_turn_pct``：**每个战斗回合结束时**回复上限的百分比（默认 5%）。
+      回合 = 计时条走满一次 = ``frames_per_turn`` 帧，**不是**每次行动；
+      一回合内双方可以各行动 8~10 次，挂在行动上会变成每出手都回蓝。
     * ``rest_floor_pct``：休息层（区域倒数第二层）额外回复（默认 40%）
     """
     defaults = {"per_floor_pct": 0.2, "per_turn_pct": 0.05, "rest_floor_pct": 0.4}

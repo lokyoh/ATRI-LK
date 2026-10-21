@@ -319,10 +319,14 @@ class BattleSession:
             self._blog("log_thorns", "回合{round} 棘刺反弹 {dmg} 点伤害。", dmg=rebound)
 
     def _regen_turn_mp(self) -> None:
-        """回合回蓝：每个战斗回合（我方每次行动）回复上限的 ``per_turn_pct``。
+        """回合回蓝：**战斗计时条走满一次**（= 一个回合结束）回复上限的 ``per_turn_pct``。
 
-        与「轮」（内部帧）无关——轮只用于冷却/持续伤害等内部结算，
-        玩家看到的计时单位是「回合」。
+        触发点是「回合结束」而不是「我方行动」——一回合内双方可能各行动
+        8~10 次（速度 20 × gauge_rate_mult 5 = 每帧满条），挂在行动上会变成
+        「每次出手都回蓝」，战报里一回合出现好几条「魔力回复」。
+
+        开局那一回合（计时条尚未走满）**不回复**：入场时魔力量就是上一层的
+        结余，第一个回合只消耗不回补，回补发生在第 1 回合结束之后。
         """
         if self.mp_turn_pct <= 0 or self.mp_cap <= 0:
             return
@@ -342,11 +346,9 @@ class BattleSession:
             )
 
     def _pet_action(self) -> None:
-        """宠物行动（= 一个「回合」）。"""
+        """宠物行动（一次出手，**不等于**一个回合）。"""
         self.gauge_pet -= 100.0
         self.pet_acts += 1
-        # 回合回蓝：我方每个回合（每次行动）开始前回复上限的 per_turn_pct。
-        self._regen_turn_mp()
         target = self._pick_target()
         if target is None:
             return
@@ -1102,10 +1104,16 @@ class BattleSession:
         return max(0.0, speed - used)
 
     def _end_of_round(self) -> None:
-        """轮末处理：计时条、冷却、持续伤害。"""
+        """帧末处理：计时条、冷却、持续伤害。
+
+        计时条每帧 +timer_gain，走满 100 即「一个回合结束」——回合回蓝、
+        冷却 -1、削弱/DoT 结算都挂在这里，而不是挂在某次行动上。
+        """
         self.battle_timer += self.timer_gain
         if self.battle_timer >= 100.0:
             self.battle_timer -= 100.0
+            # 回合结束：我方回蓝（每回合一次，开局那回合不计）。
+            self._regen_turn_mp()
             # 冷却 -1
             for skill_id in self.cooldowns:
                 if self.cooldowns[skill_id] > 0:

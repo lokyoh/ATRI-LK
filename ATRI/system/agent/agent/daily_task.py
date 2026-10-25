@@ -18,6 +18,10 @@ async def agent_cleanup_task():
     log.info("执行 Agent 清理任务")
     from datetime import date, timedelta
 
+    from .telemetry import prune_old_files
+
+    prune_old_files()
+
     from ATRI.utils.datetime import now, now_timestamp, today
     from ATRI.utils.sqlite import DataBase
 

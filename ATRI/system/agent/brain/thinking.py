@@ -1,16 +1,21 @@
+import time
 from typing import Any
 
 from ATRI.exceptions import str_traceback
+from ATRI.utils.datetime import now
 
 from ..agent.explanations import get_top_explanations
 from ..agent.function_calling import FunctionCallingData, FunctionCallingManager
 from ..agent.history import History, get_history_messages
+from ..agent.memory.persona import render_memories, render_self_memories
 from ..agent.model import ChatArgs
 from ..agent.role import ATRI
 from ..agent.schedule import ATRISchedule
 from ..agent.skills import skill_manager
+from ..agent.state import fatigue_for_hour, get_state, set_fatigue, state_store
+from ..agent.telemetry import telemetry
 from ..agent.temp_his import ChatMessage
-from ..agent.user import get_user_info
+from ..agent.user import get_self_memories, get_user_info
 from ..agent.util import get_name, get_user_group
 from ..config import config
 from ..llm import (
@@ -22,6 +27,42 @@ from ..llm import (
 )
 from ..utils import log
 from .action_parser import normalize_args, parse_calls, split_response
+
+
+def _sync_attention(current_activity: str) -> None:
+    """把日程里的「当前活动」写进内心状态。
+
+    只在变化时落库；日程的 Null / 睡眠占位不算「正忙」，跳过。
+    """
+    try:
+        text = str(current_activity or "").strip()
+        if not text or text in {"Null", "睡眠中。", "睡眠中"}:
+            return
+        state = get_state()
+        if state.attention != text:
+            state.attention = text
+            state_store.save(state)
+    except Exception:
+        pass
+
+
+def get_state_prompt() -> str:
+    """把内心状态渲染成提示词片段。
+
+    疲劳每轮按当前时段**自动重算**：它由作息决定，不是模型能自由决定的，
+    也不该只在模型主动调 ``feel`` 时才更新。
+    """
+    try:
+        hour = now().hour
+        current = get_state()
+        if abs(current.fatigue - fatigue_for_hour(hour)) > 0.05:
+            current = set_fatigue(fatigue_for_hour(hour))
+        text = current.describe()
+    except Exception:
+        return ""
+    if not text:
+        return ""
+    return f"#你此刻的状态\n{text}\n"
 
 
 class StopThinkingError(Exception):
@@ -66,6 +107,9 @@ class ThinkingModel:
             f"#你的日程\n"
             f"今日穿搭:{now_schedule.outfit}\n目前日程:{now_schedule.now_schedule}\n\n"
         )
+        # 日程里「正在做什么」同步进内心状态，让状态里的 attention 不是空的。
+        # 这样她说「等一下我在忙」时有真实来源，而不是临时编的。
+        _sync_attention(now_schedule.now_schedule)
         # 对话人信息
         user_name = await get_name(bot, lst_history.sender, chat_id)
         prompt += f"{user_name}信息:\n"
@@ -74,12 +118,27 @@ class ThinkingModel:
             f"你对{user_name}的好感度:{user_info.love}。正积极,负消极,最大1000,最小-1000,难增加,易减少,可以根据好感动来调整对待{user_name}的态度\n"
         )
         if user_info.memory:
-            prompt += f"你与{user_name}的记忆:\n{user_info.memory}\n"
+            # 渲染成回忆的口吻，而不是把 Python 列表原样拼进提示词。
+            memory_text = render_memories(user_name, user_info.memory)
+            if memory_text:
+                prompt += f"#你记得的事\n{memory_text}\n"
+        # 她自己的经历：这是「独立个体」在提示词里的落点。
+        # 与「关于用户的事」分开渲染——前者可以自然流露，后者要看场合。
+        self_memories = get_self_memories()
+        if self_memories:
+            self_text = render_self_memories(self_memories)
+            if self_text:
+                prompt += f"\n{self_text}\n"
         prompt += (
             f"{user_name}用户画像：" + user_info.profile
             if user_info.profile
             else "暂时没有用户画像。\n"
         )
+        # 她此刻的状态：让决策层「带着情绪」思考，
+        # 而不是靠系统提示词里被禁掉的情绪描写（那条约束不动）。
+        state_text = get_state_prompt()
+        if state_text:
+            prompt += state_text
         # 对话中词语解释
         exp = get_top_explanations(lst_msg)
         if exp:
@@ -158,9 +217,12 @@ class ThinkingModel:
         )
         message = LLMMessage(role="user", content=LLMContents().text(prompt))
         self.messages.add_message(message)
+        started = time.perf_counter()
+        thinking_times = 0
+        limit = config.get("max_thinking_times")
+        failed = False
         try:
-            thinking_times = 0
-            while thinking_times <= config.get("max_thinking_times"):
+            while thinking_times <= limit:
                 processing_messages_prompt = (
                     await chat_message.get_processing_messages_prompt(args.bot)
                 )
@@ -190,11 +252,22 @@ class ThinkingModel:
                 )
                 thinking_times += 1
                 msg = "\n".join(back)
-                if thinking_times == config.get("max_thinking_times"):
+                if thinking_times == limit:
                     msg += "\n调用次数达到上限,本次调用结束后直接结束本次任务"
                 self.messages.add_message(LLMMessage("user", LLMContents().text(msg)))
         except StopThinkingError:
             pass
+        except Exception:
+            failed = True
+            raise
+        finally:
+            telemetry.turn(
+                chat_id=str(args.chat_id),
+                rounds=thinking_times,
+                duration=time.perf_counter() - started,
+                hit_limit=thinking_times >= limit,
+                failed=failed,
+            )
 
     @staticmethod
     def parse_dsl(text: str) -> list[dict[str, Any]]:
@@ -258,6 +331,7 @@ class ThinkingModel:
                     "请对照上面的参数声明重写本次调用"
                 )
                 continue
+            tool_started = time.perf_counter()
             try:
                 # 使用 FunctionCallingManager 统一处理功能调用
                 calling_data = FunctionCallingData(
@@ -266,11 +340,27 @@ class ThinkingModel:
                 log.debug(f"调用功能 {func_name}")
                 result = await FunctionCallingManager.call(func_name, calling_data)
                 calling_back.append(f"调用{func_name}成功,返回:{result}")
+                telemetry.tool(
+                    name=func_name,
+                    ok=True,
+                    duration=time.perf_counter() - tool_started,
+                )
             except StopThinkingError:
+                telemetry.tool(
+                    name=func_name,
+                    ok=True,
+                    duration=time.perf_counter() - tool_started,
+                )
                 raise
             except Exception as e:
                 log.warning(
                     f"用户 {user_id} 功能调用失败 {func_name}:\n{str_traceback(e)}"
                 )
                 calling_back.append(f"调用{func_name}失败,请勿再次调用")
+                telemetry.tool(
+                    name=func_name,
+                    ok=False,
+                    duration=time.perf_counter() - tool_started,
+                    error=str(e),
+                )
         return calling_back

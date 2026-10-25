@@ -144,8 +144,12 @@ async def on_birthday(event: PreChatEvent):
 
 
 def get_atri_memory(mem, mtype: int = 0):
+    from ATRI.system.agent.agent.memory.persona import strip_timestamp
+
     md_text = "# 亚托莉对你的记忆\n\n"
-    md_text += "\n".join(f"- {i}:{item}" for i, item in enumerate(mem, 1))
+    md_text += "\n".join(
+        f"- {i}:{strip_timestamp(item)}" for i, item in enumerate(mem, 1)
+    )
     if mtype == 1:
         md_text += f"\n\n> 输入`{QQMessage.cmd(f'{cmd}聊天.删除记忆', f'{cmd}聊天.删除记忆 [标号]')}`来删除指定记忆,[标号]为数字,例如:`{cmd}聊天.删除记忆 1`"
     else:
@@ -171,10 +175,6 @@ def match_atri_img(text):
     return None
 
 
-def has_key_word(text):
-    return any(key_word in text for key_word in config.get("key_word", []))
-
-
 async def call_agent(event: GroupMessageEvent, matcher: Matcher, bot: Bot):
     group_id = str(event.group_id)
     sender_id = event.get_user_id()
@@ -184,7 +184,7 @@ async def call_agent(event: GroupMessageEvent, matcher: Matcher, bot: Bot):
     )
     skip_chat = not p_c
     skip_judgment = not p_c
-    if event.to_me or has_key_word(message.extract_plain_text()):
+    if event.to_me:
         skip_chat = False
         skip_judgment = True
     try:

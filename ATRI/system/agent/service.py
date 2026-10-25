@@ -38,12 +38,14 @@ async def _():
 def init():
     from .agent.daily_task import init
     from .agent.function_calling import register_function_calling
+    from .config import apply_runtime_config
     from .llm import load_models_from_config
     from .llm.log import init_llm_log
 
     init_llm_log()
     load_models_from_config()
     register_function_calling()
+    apply_runtime_config()
     init()
 
 

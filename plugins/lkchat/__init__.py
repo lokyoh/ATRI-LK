@@ -124,10 +124,12 @@ async def _(event: MessageEvent | QQMessageEvent):
         user_id = event.get_user_id()
         user_info = get_user_info(user_id)
         num = int(k[1])
-        user_info.memory.pop(num - 1)
+        if not 1 <= num <= len(user_info.memory):
+            await del_mem.finish(f"标号超出范围，当前共 {len(user_info.memory)} 条记忆")
+        removed = user_info.memory.pop(num - 1)
         save_user_info(user_id, user_info)
-        msg = MessageBuilder().text("删除成功")
-        if num - 1 > 0 and isinstance(event, MessageEvent):
+        msg = MessageBuilder().text(f"已删除第 {num} 条记忆：{removed}")
+        if user_info.memory and isinstance(event, MessageEvent):
             msg.image(await md_to_pic(get_atri_memory(user_info.memory)))
     except Exception:
         await del_mem.finish("输入错误")

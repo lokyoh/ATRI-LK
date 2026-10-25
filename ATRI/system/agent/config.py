@@ -65,13 +65,70 @@ class AgentConfig(PluginConfig):
         "列表中的技能正文直接嵌入思考提示词，且不可被 agent 查询",
         item_type=str,
     )
+    proactive_max_per_hour = Field(
+        int,
+        3,
+        "主动发言上限",
+        "每个群每小时最多主动发言几次。仅约束她主动插话，被@或叫到不受限。"
+        "设太大会刷屏，建议 2-5",
+        min=1,
+    )
+    proactive_cooldown = Field(
+        int,
+        300,
+        "主动发言冷却",
+        "两次主动发言之间至少间隔多少秒，防止连续插话",
+        min=0,
+    )
+    telemetry_enabled = Field(
+        bool,
+        True,
+        "行为数据收集",
+        "记录思考轮数/工具耗时/主动发言判断等指标到插件数据目录下的 telemetry/，"
+        "用于评估改进效果。默认不记录消息正文",
+    )
+    telemetry_include_content = Field(
+        bool,
+        False,
+        "数据收集包含正文",
+        "开启后会在数据文件里记录消息正文片段（截断 120 字）。"
+        "涉及聊天隐私，非排查问题不建议开启",
+    )
 
 
 config: AgentConfig = plugin.add_plugin_config(AgentConfig)
 
 
+def apply_runtime_config() -> None:
+    """把配置同步给运行时组件。
+
+    配置改了不生效是最难排查的一类问题（用户以为改好了，行为却没变），
+    所以凡是「配置 → 单例参数」的连线都集中在这里，启动和重载各调一次。
+    """
+    try:
+        from .agent.initiative import configure
+
+        configure(
+            int(config.get("proactive_max_per_hour")),
+            float(config.get("proactive_cooldown")),
+        )
+    except Exception as e:
+        log.warning(f"应用主动发言配置失败，沿用默认值：{e}")
+
+    try:
+        from .agent.telemetry import telemetry
+
+        telemetry.configure(
+            enabled=bool(config.get("telemetry_enabled")),
+            include_content=bool(config.get("telemetry_include_content")),
+        )
+    except Exception as e:
+        log.warning(f"应用数据收集配置失败，沿用默认值：{e}")
+
+
 def reload_config():
     config.load()
+    apply_runtime_config()
 
 
 def load_provider_from_config():

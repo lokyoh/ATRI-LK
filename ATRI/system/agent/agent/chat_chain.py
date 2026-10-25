@@ -6,9 +6,23 @@ from ATRI.log import log
 from ATRI.utils.datetime import now
 
 from ..llm import ModelType, llm_manager
+from .initiative import initiative_limiter
 from .model import ChatArgs
 from .sender import ChatSender, OneBotChatSender, QQChatSender
+from .telemetry import telemetry
 from .temp_his import ChatMessage, TempHisManager
+
+
+def _check_initiative(chat_id: str) -> tuple[bool, str]:
+    """主动发言限流检查。状态读失败时**放行**——不能让状态模块的小故障
+    变成「她永远不说话」。"""
+    try:
+        from .state import get_state
+
+        irritation = get_state().irritation
+    except Exception:
+        irritation = 0.0
+    return initiative_limiter.allow(chat_id, irritation=irritation)
 
 
 class ATRIAgent:
@@ -65,6 +79,15 @@ class ATRIAgent:
         if not args.skip_judgment and (plain_text == "" or 2 <= now_time.hour < 6):
             log.info("跳过主动聊天")
             return
+        proactive = not args.skip_judgment
+        if proactive:
+            allowed, reason = _check_initiative(args.chat_id)
+            telemetry.initiative(
+                chat_id=str(args.chat_id), allowed=allowed, reason=reason
+            )
+            if not allowed:
+                log.debug(f"不主动发言：{reason}")
+                return
         if not args.skip_judgment and not await JudgmentModel.analyze(
             args.bot, this_msg, history_list, chat_message
         ):
@@ -78,5 +101,7 @@ class ATRIAgent:
             chat_message,
             chat_sender,
         )
-        if isinstance(chat_sender, (QQChatSender, OneBotChatSender)):
+        if proactive and getattr(chat_sender, "sent_count", 0) > 0:
+            initiative_limiter.record(args.chat_id)
+        if isinstance(chat_sender, QQChatSender | OneBotChatSender):
             await chat_sender.finish()

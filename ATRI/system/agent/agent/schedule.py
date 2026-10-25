@@ -9,6 +9,9 @@ from ATRI.utils.datetime import now, now_time, today
 from ..llm import ModelType, llm_manager
 from .role import ATRI
 
+#: 「昨日记忆」注入日程生成的字数预算。日程只需要气质与近况，不需要全部记忆。
+SCHEDULE_MEMORY_BUDGET = 600
+
 
 def extract_json_from_markdown(text):
     """
@@ -124,7 +127,23 @@ class ATRISchedule:
             datetime.date.fromisoformat(date) - datetime.timedelta(days=1)
         ).isoformat()
         memory = await memory_manager.get_memories_by_date(memory_date)
-        memory = "\n".join(m["content"] for m in memory) if memory else None
+        if memory:
+            ranked = sorted(
+                memory, key=lambda m: m.get("importance", 0.0), reverse=True
+            )
+            lines: list[str] = []
+            used = 0
+            for item in ranked:
+                text = str(item.get("content", "")).strip()
+                if not text:
+                    continue
+                if used + len(text) > SCHEDULE_MEMORY_BUDGET:
+                    break
+                lines.append(text)
+                used += len(text)
+            memory = "\n".join(lines) if lines else None
+        else:
+            memory = None
         prompt = (
             self.before_prompt
             + f"\n\n### 人物简介\n{ATRI.get_role_prompt()}\n\n"

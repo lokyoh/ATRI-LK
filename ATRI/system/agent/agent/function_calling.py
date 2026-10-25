@@ -17,8 +17,17 @@ from .history import History
 from .memes import FaceManager
 from .memory.manage import memory_manager
 from .sender import ChatSender, OneBotChatSender, QQChatSender
-from .user import get_user_info, save_user_info
+from .state import feel
+from .telemetry import telemetry
+from .user import add_self_memory, get_user_info, save_user_info
 from .user_profile import UserProfile
+
+#: 单个对话人「临时长期记忆」的条数上限（`memory_change` 写入时强制，先进先出）。
+#: 这份列表每轮整段进提示词，所以上限是成本约束，不只是整洁问题。
+USER_MEMORY_LIMIT = 11
+
+#: 亚托莉自我记忆的条数上限。
+SELF_MEMORY_LIMIT = 8
 
 
 class FunctionCallingArg:
@@ -422,7 +431,10 @@ def register_function_calling():
 
     class LoveChangeFunctionCalling(FunctionCalling):
         function_name = "love_change"
-        description = "更改你对用户的好感度"
+        description = (
+            "更改你对用户的好感度（长期关系评价）。"
+            "注意：好感度**不会**改变你当下的心情——心情用 feel 记录。"
+        )
         args: ClassVar = [
             FunctionCallingArg(
                 name="num", _type="int", description="与对话人好感度增减数值"
@@ -442,6 +454,49 @@ def register_function_calling():
                 )
 
     FunctionCallingManager.register(LoveChangeFunctionCalling)
+
+    class FeelFunctionCalling(FunctionCalling):
+        function_name = "feel"
+        description = (
+            "表达你此刻的情绪，会持续影响接下来一段时间的语气。"
+            "与 love_change 不同：这个只关当下感受，不改关系评价。"
+            "如被冒犯、被感动、被逗笑、觉得无聊。"
+        )
+        args: ClassVar = [
+            FunctionCallingArg(
+                name="mood",
+                _type="float",
+                description="心情变化，-1.0 到 1.0，负数变差、正数变好；不需要就省略",
+            ),
+            FunctionCallingArg(
+                name="irritation",
+                _type="float",
+                description="烦躁增加量，0.0 到 1.0；被冒犯/被反复打扰时用，不需要就省略",
+            ),
+        ]
+
+        @staticmethod
+        async def call(data: FunctionCallingData):
+            mood = data.data.get("mood")
+            irritation = data.data.get("irritation")
+            if mood is None and irritation is None:
+                return "没有变化"
+            try:
+                state = feel(
+                    mood=float(mood or 0.0),
+                    irritation=float(irritation or 0.0),
+                )
+            except (TypeError, ValueError):
+                return "情绪参数无效"
+            log.debug(
+                f"情绪变化 mood={state.mood:.2f} irritation={state.irritation:.2f}"
+            )
+            telemetry.feel(
+                mood=state.mood, irritation=state.irritation, source="feel_tool"
+            )
+            return f"你现在的感受：{state.describe() or '很平静'}"
+
+    FunctionCallingManager.register(FeelFunctionCalling)
 
     class SendFaceFunctionCalling(FunctionCalling):
         function_name = "send_face"
@@ -632,7 +687,9 @@ def register_function_calling():
 
     class MemoryChangeFunctionCalling(FunctionCalling):
         function_name = "memory_change"
-        description = "更改你对用户的临时长期记忆，该记忆存在数量上限11"
+        description = (
+            f"更改你对用户的临时长期记忆，该记忆存在数量上限{USER_MEMORY_LIMIT}"
+        )
         args: ClassVar = [
             FunctionCallingArg(
                 name="mem",
@@ -664,10 +721,15 @@ def register_function_calling():
                 user_info.memory.append(
                     f"{now().strftime('%Y年%m月%d日%a-%H时%M分')} {mem}"
                 )
+                overflow = len(user_info.memory) - USER_MEMORY_LIMIT
+                if overflow > 0:
+                    del user_info.memory[:overflow]
+                    msg.append(f"新增记忆成功（超出上限，已遗忘最早 {overflow} 条）")
+                else:
+                    msg.append("新增记忆成功")
                 log.debug(
                     f"用户 {data.sender_id} 新增记忆：{now().strftime('%Y年%m月%d日%a-%H时%M分')} {mem}"
                 )
-                msg.append("新增记忆成功")
             if del_index:
                 if type(del_index) is int:
                     del_index = [del_index]
@@ -685,6 +747,38 @@ def register_function_calling():
             return msg
 
     FunctionCallingManager.register(MemoryChangeFunctionCalling)
+
+    class SelfMemoryFunctionCalling(FunctionCalling):
+        function_name = "self_memory"
+        description = (
+            "记下你自己（亚托莉）的经历与感受，不是关于用户的资料。"
+            f"上限 {SELF_MEMORY_LIMIT} 条，超出先入先出。"
+            "用于保持你作为独立个体的连续性：今天发生了什么、你对谁有什么感觉、"
+            "你答应了什么。只在确有值得留下的经历时调用，日常寒暄不要记。"
+        )
+        args: ClassVar = [
+            FunctionCallingArg(
+                name="mem",
+                _type="str",
+                description=(
+                    "你自己的经历或感受，用第一人称简短短语，"
+                    "如「今天被说成机器人，有点不服气」。不要写时间戳"
+                ),
+            ),
+        ]
+
+        @staticmethod
+        async def call(data: FunctionCallingData):
+            mem = data.data.get("mem")
+            if not mem:
+                return "没有内容，未记录"
+            ok = add_self_memory(str(mem))
+            if not ok:
+                return "记录失败"
+            log.debug(f"亚托莉自我记忆：{mem}")
+            return f"已记下（共上限 {SELF_MEMORY_LIMIT} 条）"
+
+    FunctionCallingManager.register(SelfMemoryFunctionCalling)
 
     class GetMemoriesFunctionCalling(FunctionCalling):
         function_name = "get_memories"
@@ -718,7 +812,13 @@ def register_function_calling():
             min_similarity = data.data.get("min_similarity")
             if not query:
                 return []
-            return await memory_manager.get_memories(query, int(top_k), min_similarity)
+            return await memory_manager.get_memories(
+                query,
+                int(top_k),
+                min_similarity,
+                chat_id=data.chat_id,
+                subject=data.sender_id,
+            )
 
     FunctionCallingManager.register(GetMemoriesFunctionCalling)
 

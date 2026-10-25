@@ -238,7 +238,7 @@ async def handle_feed(bot: Bot, event: Event):
     await _settle_before_action(pet_feed_matcher, pet, player_id)
 
     try:
-        # 喂食不再区分食物：饥饿恢复固定值（interactions.yaml effects.feed）。
+        # 喂食不再区分食物：饱食恢复固定值（interactions.yaml effects.feed）。
         result = await interaction.feed(pet)
     except ValueError as exc:
         await pet_feed_matcher.finish(f"❌ {exc}")

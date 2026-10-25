@@ -53,7 +53,7 @@ status:
     等级：{level}    经验：{exp}/{exp_next}
     年龄：{age}    寿命：{lifespan}
     健康：{health}    情绪：{emotion}
-    饥饿：{hunger}    心情：{mood}
+    饱食：{hunger}    心情：{mood}
     疲劳：{fatigue}    清洁：{cleanliness}
     亲密：{affection}（{affection_level}）
     行动点：{action_points}
@@ -76,7 +76,7 @@ create:
   need_name: "还要给宠物起个名字哦，例如：/宠物.创建 勇敢 小豆"
 
 feed:
-  ok: "{message}\n饥饿：{hunger} | 心情：{mood} | 亲密：{affection}（+{affection_gain}）\n行动点：{action_points}"
+  ok: "{message}\n饱食：{hunger} | 心情：{mood} | 亲密：{affection}（+{affection_gain}）\n行动点：{action_points}"
 
 play:
   ok: "{message}\n心情：{mood} | 疲劳：{fatigue} | 亲密：{affection}（+{affection_gain}）\n行动点：{action_points}"
@@ -88,7 +88,7 @@ rest:
   ok: "{message}\n疲劳：{fatigue} | 亲密：{affection}（+{affection_gain}）\n行动点：{action_points}"
 
 train:
-  ok: "{message}\n经验 +{exp}（等级 {level}）\n饥饿：{hunger} | 疲劳：{fatigue} | 心情：{mood}\n行动点：{action_points}"
+  ok: "{message}\n经验 +{exp}（等级 {level}）\n饱食：{hunger} | 疲劳：{fatigue} | 心情：{mood}\n行动点：{action_points}"
 
 skill:
   title: "📚 {name} 的技能｜主动 {active_used}/{active_max}　被动 {passive_used}/{passive_max}（技能库 {known} 个）"

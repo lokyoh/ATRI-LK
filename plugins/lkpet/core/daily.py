@@ -23,7 +23,7 @@ def _load_daily_config() -> dict[str, Any]:
 def _daily_log(pet: Any, day: int, changes: dict[str, int]) -> str:
     parts = [f"第 {day} 天"]
     for key, label in (
-        ("hunger", "饥饿"),
+        ("hunger", "饱食"),
         ("mood", "心情"),
         ("cleanliness", "清洁"),
         ("fatigue", "疲劳"),

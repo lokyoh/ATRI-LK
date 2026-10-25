@@ -20,6 +20,20 @@ from .status import clamp_status, update_emotion_state, update_health_state
 _STATUS_FLOOR = 0
 """Interaction effects clamp statuses into ``[0, 100]``."""
 
+_TRAIN_STATUS_FIELDS = ("hunger", "mood", "fatigue")
+"""训练前置校验要预演的三项状态（饱食 / 心情 / 疲劳）。"""
+
+_DEFAULT_TRAIN_REQUIREMENTS: dict[str, int] = {
+    "hunger_min": 30,
+    "mood_min": 30,
+    "fatigue_max": 80,
+}
+"""训练资源门槛的**最后兜底**，与 ``daily.yaml`` 的照护阈值同口径。
+
+默认值本身来自 ``daily.yaml`` 的 ``affection_decay.thresholds``（单一事实来源），
+这里只在两份配置都读不到时生效。
+"""
+
 
 def _load_daily_config() -> dict[str, Any]:
     from ..config_loader import load_config
@@ -69,6 +83,111 @@ def consume_action_point(
     """Deduct the action-point cost of ``action``, never going below zero."""
     cost = _action_costs(daily_config).get(action, 0)
     pet.action_points = max(0, pet.action_points - cost)
+
+
+_TRAIN_LABELS = {
+    "hunger": "饱食",
+    "mood": "心情",
+    "fatigue": "疲劳",
+}
+"""训练门槛提示用的中文名，与 ``texts.yaml`` 的状态文案保持一致。"""
+
+
+def _care_thresholds() -> dict[str, int]:
+    """``daily.yaml`` 的照护阈值（与好感衰减判定同一份数值）。"""
+    try:
+        return dict(_load_daily_config()["affection_decay"]["thresholds"])
+    except (FileNotFoundError, TypeError, KeyError):
+        return {}
+
+
+def train_requirements(
+    interactions_config: dict[str, Any] | None = None,
+    *,
+    daily_config: dict[str, Any] | None = None,
+) -> dict[str, int]:
+    """训练的资源门槛：训练**结束后**必须仍然满足的状态区间。
+
+    优先级：``interactions.yaml`` 的 ``effects.train.requirements`` →
+    ``daily.yaml`` 的 ``affection_decay.thresholds`` → :data:`_DEFAULT_TRAIN_REQUIREMENTS`。
+    默认与好感衰减同口径，所以「练完刚好掉出照护线」也会被拒绝——玩家不会一觉醒来
+    平白掉好感；想放宽/收紧只改 ``interactions.yaml`` 那三项即可。
+    """
+    cfg = (
+        interactions_config
+        if interactions_config is not None
+        else _load_interactions_config()
+    )
+    effects = cfg.get("effects", {}).get("train", {})
+    configured = effects.get("requirements") or {}
+
+    daily_cfg = None
+    if daily_config is not None:
+        daily_cfg = daily_config.get("affection_decay", {}).get("thresholds", {})
+    else:
+        daily_cfg = _care_thresholds()
+
+    source = {
+        "hunger_min": daily_cfg.get("hunger"),
+        "mood_min": daily_cfg.get("mood"),
+        "fatigue_max": daily_cfg.get("fatigue"),
+    }
+    # 用 `is None` 判断而不是 `or`：阈值配成 0（照护线关掉）也是合法值。
+    return {
+        key: int(
+            configured.get(key, source[key] if source[key] is not None else default)
+        )
+        for key, default in _DEFAULT_TRAIN_REQUIREMENTS.items()
+    }
+
+
+def _train_status_after(pet, effects: dict[str, Any]) -> dict[str, int]:
+    """预演训练后的三项状态（与 :func:`train` 的扣减完全同一套 clamp）。"""
+    return {
+        field: clamp_status(
+            getattr(pet, field) + int(effects.get(field, 0)), _STATUS_FLOOR
+        )
+        for field in _TRAIN_STATUS_FIELDS
+    }
+
+
+def check_train_resources(
+    pet,
+    effects: dict[str, Any],
+    requirements: dict[str, int],
+) -> None:
+    """Raise ``ValueError`` when the pet lacks the resources a training needs.
+
+    训练不是「有行动点就能点」的动作：它要吃掉饱食、压心情、抬疲劳。
+    这里按**训练之后**的值判定，任何一项会越界就整体拒绝，并把缺什么、
+    该先做什么写进提示，而不是先扣完行动点再说「状态太差」。
+    """
+    after = _train_status_after(pet, effects)
+    problems: list[str] = []
+
+    if after["hunger"] < requirements["hunger_min"]:
+        need = requirements["hunger_min"] - after["hunger"]
+        problems.append(
+            f"{_TRAIN_LABELS['hunger']}不足（训练后 {after['hunger']}，"
+            f"至少要 {requirements['hunger_min']}），先 /宠物.喂食 +{need} 起步"
+        )
+    if after["mood"] < requirements["mood_min"]:
+        need = requirements["mood_min"] - after["mood"]
+        problems.append(
+            f"{_TRAIN_LABELS['mood']}不足（训练后 {after['mood']}，"
+            f"至少要 {requirements['mood_min']}），先 /宠物.玩耍 +{need} 起步"
+        )
+    if after["fatigue"] > requirements["fatigue_max"]:
+        need = after["fatigue"] - requirements["fatigue_max"]
+        problems.append(
+            f"{_TRAIN_LABELS['fatigue']}过高（训练后 {after['fatigue']}，"
+            f"至多 {requirements['fatigue_max']}），先 /宠物.休息 -{need} 起步"
+        )
+    if problems:
+        # 提示里带指令，必须走统一的前缀替换（command_start 可能是 ！ 等）。
+        from ..utils.texts import apply_command_start
+
+        raise ValueError(apply_command_start("训练会把它累垮：" + "；".join(problems)))
 
 
 def _affection_roll(interactions_config: dict[str, Any] | None = None) -> int:
@@ -254,7 +373,12 @@ async def train(
     interactions_config: dict[str, Any] | None = None,
     daily_config: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
-    """训练宠物获取经验；消耗行动点和状态，经验根据肉鸽历史最高层数动态调整。"""
+    """训练宠物获取经验；消耗行动点和状态，经验根据肉鸽历史最高层数动态调整。
+
+    训练前有两道门：行动点够（``check_action_point``），以及**资源够**
+    （``check_train_resources``——练完之后饱食 / 心情 / 疲劳仍须留在照护区间内）。
+    两道门都在扣状态与扣点之前判定，拒绝时宠物不会被改动。
+    """
     from ..database import load_rogue
     from .leveling import calc_exp_gain, check_level_up
 
@@ -265,6 +389,9 @@ async def train(
     )
     effects = cfg["effects"]["train"]
     check_action_point(pet, "train", daily_config=daily_config)
+    # 资源门槛：训练要吃掉饱食 / 压心情 / 抬疲劳，练完还得站得住才允许开始。
+    # 放在扣行动点之前判定，失败时宠物状态与行动点都不会被动过。
+    check_train_resources(pet, effects, train_requirements(cfg))
 
     # 读取肉鸽历史最高层数
     rogue = load_rogue(player_id)
@@ -278,10 +405,11 @@ async def train(
             base_exp = tier.get("exp", base_exp)
             break
 
-    # 消耗状态
-    pet.hunger = clamp_status(pet.hunger + effects.get("hunger", 0), _STATUS_FLOOR)
-    pet.fatigue = clamp_status(pet.fatigue + effects.get("fatigue", 0), _STATUS_FLOOR)
-    pet.mood = clamp_status(pet.mood + effects.get("mood", 0), _STATUS_FLOOR)
+    # 消耗状态：复用 check_train_resources 的同一个预演函数，判定与实际扣减不会漂移。
+    after = _train_status_after(pet, effects)
+    pet.hunger = after["hunger"]
+    pet.fatigue = after["fatigue"]
+    pet.mood = after["mood"]
 
     # 计算经验（带状态修正）
     exp_gain = calc_exp_gain(base_exp, pet)

@@ -13,11 +13,15 @@ class SkillSource(StrEnum):
     MODIFIED = "modified"
     """内置（已修改）：内置文件 + 同名用户文件，以用户文件为准"""
 
+    VIRTUAL = "virtual"
+    """插件提供：正文由功能插件在注册时注入内存，**不落盘**"""
+
 
 SKILL_SOURCE_LABEL: dict[SkillSource, str] = {
     SkillSource.BUILTIN: "内置",
     SkillSource.USER: "用户",
     SkillSource.MODIFIED: "内置（已修改）",
+    SkillSource.VIRTUAL: "插件提供",
 }
 
 MAX_SKILL_NAME_LENGTH = 64
@@ -45,8 +49,20 @@ class Skill(BaseModel):
 
     @property
     def deletable(self) -> bool:
-        """仅内置技能不可删除（编辑内置会创建同名用户配置，此后可删）。"""
+        """仅内置技能不可删除（编辑内置会创建同名用户配置，此后可删）。
+
+        `virtual` 技能不由技能页管理，其生命周期跟随所属功能插件。
+        """
         return self.source is not SkillSource.BUILTIN
+
+
+def _first_line(content: str) -> str:
+    """从正文首个非标题行截取描述（description 缺失时的兜底）。"""
+    for line in (content or "").splitlines():
+        text = line.strip().lstrip("#").strip()
+        if text:
+            return text[:MAX_SKILL_DESCRIPTION_LENGTH]
+    return ""
 
 
 def validate_skill_name(name: str) -> str | None:

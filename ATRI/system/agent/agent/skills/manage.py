@@ -5,7 +5,7 @@ from ATRI.log import log
 from ...config import config
 from ...service import plugin
 from .loader import USER_SKILLS_SUBDIR, scan_merged
-from .model import Skill, SkillSource, validate_skill_name
+from .model import Skill, SkillSource, _first_line, validate_skill_name
 
 
 class SkillManager:
@@ -14,11 +14,14 @@ class SkillManager:
     - 内容：内置目录只读，用户目录可写；同名用户文件覆盖内置。
     - 开关：`AgentConfig.skills_disable`（禁用列表）/ `skills_embed`（内嵌列表），
       两者都是"记录例外"，按技能名记录，与正文来源目录无关。
+    - 内存技能：功能插件自带的正文**不落盘**，由 `put_virtual()` 注入内存，
+      与磁盘扫描结果合并后对外表现一致（卸载时 `drop_virtual()` 摘除）。
     """
 
     def __init__(self, user_dir=None):
         self._user_dir = user_dir
         self._cache: dict[str, Skill] | None = None
+        self._virtual: dict[str, Skill] = {}
 
     # ---- 目录 ----
 
@@ -27,6 +30,37 @@ class SkillManager:
         if self._user_dir is None:
             self._user_dir = plugin.get_path() / USER_SKILLS_SUBDIR
         return self._user_dir
+
+    def put_virtual(self, name: str, description: str, content: str) -> Skill:
+        """注入一个只存在于内存的技能；同名磁盘技能会被它覆盖。"""
+        error = validate_skill_name(name)
+        if error:
+            raise ValueError(error)
+        skill = Skill(
+            name=name,
+            description=description or _first_line(content),
+            content=content,
+            source=SkillSource.VIRTUAL,
+        )
+        self._virtual[name] = skill
+        self._cache = None
+        return self._decorate(skill.model_copy(deep=True))
+
+    def drop_virtual(self, name: str) -> bool:
+        """摘除内存技能；同时清掉它的开关记录，避免残留"幽灵开关"。"""
+        removed = self._virtual.pop(name, None) is not None
+        if removed:
+            self._cache = None
+            self._drop_from_toggles(name)
+        return removed
+
+    def clear_virtual(self):
+        """清空全部内存技能（连同开关记录）。"""
+        for name in list(self._virtual):
+            self.drop_virtual(name)
+
+    def is_virtual(self, name: str) -> bool:
+        return name in self._virtual
 
     # ---- 开关（AgentConfig 两个列表）----
 
@@ -56,25 +90,52 @@ class SkillManager:
 
     # ---- 数据 ----
 
-    def refresh(self):
+    def invalidate(self):
+        """丢弃磁盘扫描缓存；不动功能插件注入的内存技能。
+
+        写文件（save_user / delete_user）后、以及外部改动技能目录后调用它即可。
+        插件内存技能的生命周期由插件自己负责（注册注入、卸载摘除），此处不介入。
+        """
         self._cache = None
 
     def _all(self) -> dict[str, Skill]:
         if self._cache is None:
-            self._cache = scan_merged(self.user_dir)
+            merged = scan_merged(self.user_dir)
+            merged.update(self._virtual)
+            self._cache = merged
         return self._cache
 
     def _decorate(self, skill: Skill) -> Skill:
         name = skill.name
-        skill.enabled = name not in self._read_list("skills_disable")
-        skill.embedded = name in self._read_list("skills_embed")
+        plugin_enabled = self._plugin_enabled(name)
+        skill.enabled = plugin_enabled and name not in self._read_list("skills_disable")
+        skill.embedded = plugin_enabled and name in self._read_list("skills_embed")
         return skill
+
+    @staticmethod
+    def _plugin_enabled(skill_name: str) -> bool:
+        """技能所属功能插件的整体开关；不属于任何插件时恒为 True。"""
+        from ..function_plugin.manage import function_plugin_manager
+
+        return function_plugin_manager.is_enabled(
+            function_plugin_manager.owner_of_skill(skill_name)
+        )
 
     # ---- 对外 API ----
 
     def list_all(self) -> list[Skill]:
         """合并视图全量（UI 用，含未启用）"""
         return [self._decorate(s.model_copy(deep=True)) for s in self._all().values()]
+
+    def list_standalone(self) -> list[Skill]:
+        """不属于任何功能插件的技能（技能页只展示这些）。"""
+        from ..function_plugin.manage import function_plugin_manager
+
+        return [
+            s
+            for s in self.list_all()
+            if function_plugin_manager.owner_of_skill(s.name) is None
+        ]
 
     def list_queryable(self) -> list[Skill]:
         """enabled ∧ not embedded（list_skills FC 用）"""
@@ -114,7 +175,7 @@ class SkillManager:
         else:
             document = f"{text}\n"
         path.write_text(document, encoding="utf-8")
-        self.refresh()
+        self.invalidate()
         return self.get(name) or Skill(name=name, source=SkillSource.USER)
 
     def delete_user(self, name: str) -> bool:
@@ -128,11 +189,13 @@ class SkillManager:
             raise ValueError(error)
         path = self.user_dir / f"{name}.md"
         skill = self._all().get(name)
+        if skill is not None and skill.source is SkillSource.VIRTUAL:
+            raise ValueError("该技能由功能插件提供，不能在此删除")
         if not path.is_file() or skill is None or skill.source is SkillSource.BUILTIN:
             raise ValueError("该技能不是用户技能，无法删除")
         was_overriding_builtin = skill.source is SkillSource.MODIFIED
         path.unlink()
-        self.refresh()
+        self.invalidate()
         if not was_overriding_builtin:
             self._drop_from_toggles(name)
         return True

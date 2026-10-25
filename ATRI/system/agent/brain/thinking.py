@@ -96,6 +96,8 @@ class ThinkingModel:
     def get_function_prompt(available: dict[str, type] | None = None):
         if available is None:
             available = FunctionCallingManager.get_available()
+        call_fc = available.get("call")
+        rare_hint = call_fc.describe_rare() if call_fc is not None else ""
         return f"""你可以调用以下功能，禁止调用未列出的功能:
 {
             "\n".join(
@@ -103,7 +105,7 @@ class ThinkingModel:
     说明: {f.description}{f"\n参数:\n{'\n'.join(f'        -{arg.name} {arg.type}: {arg.description}' for arg in f.args)}" if f.args else ""}'''
                 for f in available.values()
             )
-        }
+        }{rare_hint}
 
 功能调用格式：
 ``` text
@@ -236,6 +238,14 @@ class ThinkingModel:
                 reason = check.reason or "该功能已被关闭"
                 log.debug(f"不可用的调用功能:{func_name}（{reason}），已跳过")
                 calling_back.append(f"功能 {func_name} 当前不可用：{reason}")
+                continue
+            # 不常用功能只能由 call 调用：直接写名字给了更明确的重写提示
+            if FunctionCallingManager.is_rare(func_name):
+                log.debug(f"不常用功能被直接调用:{func_name}，已引导改用 call")
+                calling_back.append(
+                    f"功能 {func_name} 是不常用功能，不能直接调用。"
+                    f'请改用 call(function="{func_name}", args={{...}})'
+                )
                 continue
             # 按功能声明校验参数名与类型：问题直接回填给模型，
             # 不必等 call() 抛 TypeError 才暴露（那样模型只看到「调用失败」）

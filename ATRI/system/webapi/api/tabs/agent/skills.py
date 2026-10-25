@@ -4,6 +4,7 @@ from pydantic import BaseModel
 
 from ATRI.exceptions import str_traceback
 from ATRI.log import log
+from ATRI.system.agent.agent.function_plugin.manage import function_plugin_manager
 from ATRI.system.agent.agent.skills import skill_manager
 
 from ....base_model import Result
@@ -82,7 +83,9 @@ def _to_info(skill) -> SkillInfo:
 )
 async def _() -> Result[list[SkillInfo]]:
     try:
-        return Result.ok([_to_info(s) for s in skill_manager.list_all()], "拿到信息啦!")
+        return Result.ok(
+            [_to_info(s) for s in skill_manager.list_standalone()], "拿到信息啦!"
+        )
     except Exception as e:
         log.error(f"{router.prefix}/get_skills 调用错误:{str_traceback(e)}")
         return Result.fail(f"发生了一点错误捏 {type(e)}: {e}")
@@ -115,6 +118,11 @@ async def _(name: str) -> Result[SkillDetail]:
 )
 async def _(payload: SaveSkillModel) -> Result[SkillInfo]:
     try:
+        owner = function_plugin_manager.owner_of_skill(payload.name)
+        if owner:
+            return Result.fail(
+                f"技能 {payload.name} 属于功能插件 {owner}，插件内技能不可编辑", 400
+            )
         skill = skill_manager.save_user(
             payload.name, payload.description, payload.content
         )
@@ -135,6 +143,11 @@ async def _(payload: SaveSkillModel) -> Result[SkillInfo]:
 )
 async def _(name: str) -> Result:
     try:
+        owner = function_plugin_manager.owner_of_skill(name)
+        if owner:
+            return Result.fail(
+                f"技能 {name} 属于功能插件 {owner}，插件内技能不可删除", 400
+            )
         target = skill_manager.get(name)
         if target is None:
             return Result.fail(f"技能 {name} 不存在", 404)
@@ -160,6 +173,11 @@ async def _(payload: SetSkillStateModel) -> Result[SkillInfo]:
     try:
         if payload.enabled is None and payload.embedded is None:
             return Result.fail("未提供任何开关状态", 400)
+        owner = function_plugin_manager.owner_of_skill(payload.name)
+        if owner and payload.embedded is not None:
+            return Result.fail(
+                f"技能 {payload.name} 属于功能插件 {owner}，插件内技能不能设置内嵌", 400
+            )
         if payload.enabled is not None:
             skill_manager.set_enabled(payload.name, payload.enabled)
         if payload.embedded is not None:

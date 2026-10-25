@@ -1,5 +1,4 @@
 import time
-from pathlib import Path
 from typing import ClassVar
 
 import anyio
@@ -14,8 +13,6 @@ from ..config import config
 from ..event import AgentEventBus
 from ..llm import ModelType, llm_manager
 from ..utils import log, request
-from .file.reader import read_file
-from .file.tree_string import default_ignore_dirs, get_tree_string
 from .history import History
 from .memes import FaceManager
 from .memory.manage import memory_manager
@@ -59,6 +56,8 @@ class FunctionCalling:
     function_name = ""
     description = ""
     args: ClassVar[list[FunctionCallingArg]] = []
+    essential: ClassVar[bool] = False
+    """核心功能：始终启用，不受手动开关影响（见 FunctionCallingManager）"""
 
     @classmethod
     def can_enable(cls) -> EnableCheck:
@@ -79,12 +78,34 @@ class FunctionCallingUnavailableError(Exception):
     """FC 存在但当前不可用（手动关闭 / 环境不支持 / 当前对话人不可用）"""
 
 
+class FunctionCallingEssentialError(Exception):
+    """核心功能不可关闭（stop_thinking / send_message 等）"""
+
+
+def _plugin_enabled(function_name: str) -> bool:
+    """功能所属插件的整体开关；不属于任何插件时恒为 True。"""
+    from .function_plugin.manage import function_plugin_manager
+
+    return function_plugin_manager.is_enabled(
+        function_plugin_manager.owner_of_function(function_name)
+    )
+
+
+def _plugin_rare(function_name: str) -> bool:
+    """该功能是否被功能插件声明为不常用（只能经 call 调用）。"""
+    from .function_plugin.manage import function_plugin_manager
+
+    return function_plugin_manager.is_rare_function(function_name)
+
+
 class FunctionCallingManager:
     function_calling: ClassVar[dict[str, type[FunctionCalling]]] = {}
 
     @classmethod
     def register(cls, func: type[FunctionCalling]):
         cls.function_calling[func.function_name] = func
+        if getattr(func, "essential", False):
+            cls.purge_essential_disables()
 
     @classmethod
     def clear_all(cls):
@@ -93,11 +114,26 @@ class FunctionCallingManager:
     # ---- 手动开关（存 AgentConfig 的禁用列表：默认启用，列表只记例外）----
 
     @classmethod
+    def is_essential(cls, name: str) -> bool:
+        """核心功能：维持对话闭环所必需，永远启用，不能被手动关闭。"""
+        func = cls.function_calling.get(name)
+        return bool(getattr(func, "essential", False))
+
+    @classmethod
+    def is_rare(cls, name: str) -> bool:
+        """不常用功能：不进入常规功能提示词，只能由 call 调用。"""
+        return _plugin_rare(name)
+
+    @classmethod
     def is_manually_enabled(cls, name: str) -> bool:
+        if cls.is_essential(name):
+            return True
         return name not in (config.get("function_calling_disable") or [])
 
     @classmethod
     def set_manually_enabled(cls, name: str, enabled: bool):
+        if not enabled and cls.is_essential(name):
+            raise FunctionCallingEssentialError(f"功能 {name} 是核心功能，不能关闭")
         # config.get() 返回内部引用，必须构造新列表后 config.set 才会落盘
         names = list(config.get("function_calling_disable") or [])
         if enabled:
@@ -106,6 +142,18 @@ class FunctionCallingManager:
         elif name not in names:
             names.append(name)
         config.set("function_calling_disable", names)
+
+    @classmethod
+    def purge_essential_disables(cls) -> list[str]:
+        """把核心功能名从禁用列表中剔除（手动改配置 / 旧版本残留都会在这里被纠正）。
+
+        返回被修复后的列表；没有变化时不写盘。
+        """
+        names = list(config.get("function_calling_disable") or [])
+        kept = [name for name in names if not cls.is_essential(name)]
+        if kept != names:
+            config.set("function_calling_disable", kept)
+        return kept
 
     # ---- 可用性（手动开关 ∧ 环境 ∧ 对话人）----
 
@@ -129,6 +177,8 @@ class FunctionCallingManager:
             return False
         if not cls.is_manually_enabled(name):
             return False
+        if not _plugin_enabled(name):
+            return False
         if not cls.get_can_enable(name).available:
             return False
         try:
@@ -145,7 +195,20 @@ class FunctionCallingManager:
         return {
             name: func
             for name, func in cls.function_calling.items()
-            if cls.is_available(name, sender, user_id)
+            if not _plugin_rare(name) and cls.is_available(name, sender, user_id)
+        }
+
+    @classmethod
+    def get_rare_available(
+        cls, sender: ChatSender | None = None, user_id: str = ""
+    ) -> dict[str, type[FunctionCalling]]:
+        """可由 call 调用的不常用功能子集（不进常规提示词）。"""
+        return {
+            name: func
+            for name, func in cls.function_calling.items()
+            if name != "call"
+            and _plugin_rare(name)
+            and cls.is_available(name, sender, user_id)
         }
 
     @classmethod
@@ -174,6 +237,7 @@ def register_function_calling():
     class StopThinkingFunctionCalling(FunctionCalling):
         function_name = "stop_thinking"
         description = "在不需要接收调用反馈时调用,调用后结束本次思考"
+        essential = True
         args: ClassVar[list[FunctionCallingArg]] = []
 
         @staticmethod
@@ -187,6 +251,7 @@ def register_function_calling():
     class SendMessageFunctionCalling(FunctionCalling):
         function_name = "send_message"
         description = "发送消息,消息符合及时聊天软件的简短聊天风格"
+        essential = True
         args: ClassVar = [
             FunctionCallingArg(name="msg", _type="str", description="要发送的消息内容")
         ]
@@ -212,6 +277,87 @@ def register_function_calling():
             return "发送成功"
 
     FunctionCallingManager.register(SendMessageFunctionCalling)
+
+    class CallFunctionCalling(FunctionCalling):
+        function_name = "call"
+        description = (
+            "调用不常用功能。不常用功能不会出现在上面的功能列表里，"
+            "它们的具体用法通常写在技能正文中，请按技能给出的功能名与参数调用"
+        )
+        args: ClassVar[list[FunctionCallingArg]] = [
+            FunctionCallingArg(
+                name="function", _type="str", description="要调用的功能名"
+            ),
+            FunctionCallingArg(
+                name="args",
+                _type="dict",
+                description='目标功能的参数，写成 {"参数名": 值} 的字典，无参数时省略',
+            ),
+        ]
+
+        @classmethod
+        def can_enable(cls) -> EnableCheck:
+            if not FunctionCallingManager.get_rare_available():
+                return EnableCheck(available=False, reason="没有可用的不常用功能")
+            return EnableCheck()
+
+        @classmethod
+        def describe_rare(cls) -> str:
+            """当前会话可调用的不常用功能清单，附在 call 的说明后面。"""
+            rare = FunctionCallingManager.get_rare_available()
+            if not rare:
+                return ""
+            from .function_plugin.manage import function_plugin_manager
+
+            lines: list[str] = []
+            for name, func in rare.items():
+                owner = function_plugin_manager.owner_of_function(name)
+                label = f"（属于功能插件 {owner}）" if owner else ""
+                lines.append(f"- {name}{label}: {func.description}")
+            return "\n可调用的不常用功能:\n" + "\n".join(lines)
+
+        @staticmethod
+        async def call(data: FunctionCallingData):
+            from ..brain.action_parser import normalize_args
+
+            func_name = str(data.data.get("function") or "").strip()
+            if not func_name:
+                return "请提供要调用的功能名"
+            if func_name == "call":
+                return "call 不能调用自己"
+            required = data.data.get("args")
+            if required is None:
+                required = {}
+            if not isinstance(required, dict):
+                return 'args 必须是 {"参数名": 值} 形式的字典'
+            func_cls = FunctionCallingManager.function_calling.get(func_name)
+            if func_cls is None:
+                known = "、".join(FunctionCallingManager.get_rare_available()) or "无"
+                return f"未知的功能:{func_name}，当前可调用的不常用功能:{known}"
+            if not FunctionCallingManager.is_rare(func_name):
+                return f"功能 {func_name} 不是不常用功能，请直接调用它"
+            if not FunctionCallingManager.is_available(
+                func_name, data.sender, data.sender_id
+            ):
+                check = FunctionCallingManager.get_can_enable(func_name)
+                return (
+                    f"功能 {func_name} 当前不可用：{check.reason or '该功能已被关闭'}"
+                )
+            args, issues = normalize_args(func_cls, required)
+            if issues:
+                return f"功能 {func_name} 的参数不合规：{'；'.join(issues)}"
+            return await FunctionCallingManager.call(
+                func_name,
+                FunctionCallingData(
+                    data.sender_id,
+                    data.chat_id,
+                    data.sender,
+                    args,
+                    data.current_history,
+                ),
+            )
+
+    FunctionCallingManager.register(CallFunctionCalling)
 
     class SendMdMessageFunctionCalling(FunctionCalling):
         function_name = "send_md_message"
@@ -348,9 +494,7 @@ def register_function_calling():
         @classmethod
         def can_enable(cls) -> EnableCheck:
             if not llm_manager.has_type(ModelType.TOOL):
-                return EnableCheck(
-                    available=False, reason="未配置 TOOL 类型模型"
-                )
+                return EnableCheck(available=False, reason="未配置 TOOL 类型模型")
             return EnableCheck()
 
         @staticmethod
@@ -505,9 +649,7 @@ def register_function_calling():
         @classmethod
         def can_enable(cls) -> EnableCheck:
             if not llm_manager.has_type(ModelType.EMBEDDING):
-                return EnableCheck(
-                    available=False, reason="未配置 EMBEDDING 类型模型"
-                )
+                return EnableCheck(available=False, reason="未配置 EMBEDDING 类型模型")
             return EnableCheck()
 
         @staticmethod
@@ -566,9 +708,7 @@ def register_function_calling():
         @classmethod
         def can_enable(cls) -> EnableCheck:
             if not llm_manager.has_type(ModelType.EMBEDDING):
-                return EnableCheck(
-                    available=False, reason="未配置 EMBEDDING 类型模型"
-                )
+                return EnableCheck(available=False, reason="未配置 EMBEDDING 类型模型")
             return EnableCheck()
 
         @staticmethod
@@ -599,9 +739,7 @@ def register_function_calling():
         @classmethod
         def can_enable(cls) -> EnableCheck:
             if not llm_manager.has_type(ModelType.EMBEDDING):
-                return EnableCheck(
-                    available=False, reason="未配置 EMBEDDING 类型模型"
-                )
+                return EnableCheck(available=False, reason="未配置 EMBEDDING 类型模型")
             return EnableCheck()
 
         @staticmethod
@@ -617,64 +755,6 @@ def register_function_calling():
             )
 
     FunctionCallingManager.register(AccessMemoryFunctionCalling)
-
-    class GetDirTreeFunctionCalling(FunctionCalling):
-        function_name = "get_dir_tree"
-        description = "查询文件目录:root:不包含后续目录根目录;ATRI:系统代码目录;system_plugins:系统插件目录;plugins:插件目录;config:配置目录;errors:最近7天的错误报告目录"
-        args: ClassVar = [
-            FunctionCallingArg(name="dir", _type="str", description="目录名")
-        ]
-
-        @staticmethod
-        async def call(data: FunctionCallingData):
-            dir_name = data.data.get("dir", "")
-            if dir_name == "root":
-                path = Path(".")
-                return f"{path.resolve()}/\n" + get_tree_string(
-                    path, ignore_dirs={"ATRI", "data", "plugins"} | default_ignore_dirs
-                )
-            if dir_name == "ATRI":
-                path = Path(".") / "ATRI"
-                return f"{path.resolve()}/\n" + get_tree_string(
-                    path, ignore_dirs={"system"} | default_ignore_dirs
-                )
-            if dir_name == "system_plugins":
-                path = Path(".") / "ATRI" / "system"
-                return f"{path.resolve()}/\n" + get_tree_string(path)
-            if dir_name == "plugins":
-                path = Path(".") / "plugins"
-                return f"{path.resolve()}/\n" + get_tree_string(path)
-            if dir_name == "config":
-                path = Path(".") / "data" / "config"
-                return f"{path.resolve()}/\n" + get_tree_string(path)
-            if dir_name == "errors":
-                path = Path(".") / "data" / "errors"
-                return f"{path.resolve()}/\n" + get_tree_string(path, recent_days=7)
-            return "请提供正确的目录名。"
-
-    FunctionCallingManager.register(GetDirTreeFunctionCalling)
-
-    class ReadFileFunctionCalling(FunctionCalling):
-        function_name = "read_file"
-        description = "读取指定文件"
-        args: ClassVar = [
-            FunctionCallingArg(name="path", _type="str", description="文件路径"),
-            FunctionCallingArg(
-                name="start", _type="int", description="可选,起始行数,默认1"
-            ),
-            FunctionCallingArg(
-                name="end", _type="int", description="可选,结束行数,默认0"
-            ),
-        ]
-
-        @staticmethod
-        async def call(data: FunctionCallingData):
-            path = data.data.get("path", "")
-            start = data.data.get("start", 1)
-            end = data.data.get("end", 0)
-            return read_file(path, start, end)
-
-    FunctionCallingManager.register(ReadFileFunctionCalling)
 
     class ListSkillsFunctionCalling(FunctionCalling):
         function_name = "list_skills"
@@ -697,7 +777,9 @@ def register_function_calling():
 
     class GetSkillContentFunctionCalling(FunctionCalling):
         function_name = "get_skill_content"
-        description = "获取指定技能的完整正文（Markdown）。技能名必须来自 list_skills 的结果。"
+        description = (
+            "获取指定技能的完整正文（Markdown）。技能名必须来自 list_skills 的结果。"
+        )
         args: ClassVar[list[FunctionCallingArg]] = [
             FunctionCallingArg(
                 name="name", _type="str", description="技能名，来自 list_skills 的结果"
@@ -722,4 +804,23 @@ def register_function_calling():
 
     FunctionCallingManager.register(GetSkillContentFunctionCalling)
 
+    from .function_plugin.builtin import register_builtin_function_plugins
+
+    register_builtin_function_plugins()
+    _log_function_plugin_problems()
+
     AgentEventBus.publish_sync(event_type="register_FC", source="agent")
+
+
+def _log_function_plugin_problems():
+    """校验功能插件声明的成员是否真的存在（只记日志，不阻断加载）。"""
+    from .function_plugin.manage import function_plugin_manager
+    from .skills import skill_manager
+
+    try:
+        function_plugin_manager.log_member_problems(
+            set(FunctionCallingManager.function_calling),
+            {skill.name for skill in skill_manager.list_all()},
+        )
+    except Exception as e:
+        log.warning(f"功能插件成员校验失败:{str_traceback(e)}")

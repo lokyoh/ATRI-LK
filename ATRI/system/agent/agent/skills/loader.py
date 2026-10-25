@@ -12,6 +12,8 @@ from .model import (
 BUILTIN_SKILLS_DIR = RES_DATA_DIR / "agent" / "skills"
 """内置技能目录：随仓库分发，只读，程序永不写入"""
 
+FUNCTION_PLUGIN_SKILLS_DIR = RES_DATA_DIR / "agent" / "function_plugins"
+
 USER_SKILLS_SUBDIR = "skills"
 """用户技能目录相对插件数据目录的子路径"""
 

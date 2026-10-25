@@ -7,6 +7,7 @@ from pydantic import BaseModel
 from ATRI.configs import Field
 from ATRI.exceptions import str_traceback
 from ATRI.log import log
+from ATRI.system.agent.agent.function_calling import FunctionCallingManager
 from ATRI.system.agent.config import config
 from ATRI.system.agent.llm import (
     LLMModel,
@@ -24,9 +25,11 @@ from ATRI.system.agent.llm.token import MTYM, TokenUsageData
 from ....base_model import Result
 from ....utils import authentication
 from .function_calling import router as function_calling_router
+from .function_plugin import router as function_plugin_router
 from .skills import router as skills_router
 
 router = APIRouter(prefix="/agent")
+router.include_router(function_plugin_router)
 router.include_router(function_calling_router)
 router.include_router(skills_router)
 
@@ -85,7 +88,7 @@ def _flatten_config_updates(
         elif expected_type is int:
             valid_type = isinstance(value, int) and not isinstance(value, bool)
         elif expected_type is float:
-            valid_type = isinstance(value, (int, float)) and not isinstance(value, bool)
+            valid_type = isinstance(value, int | float) and not isinstance(value, bool)
         else:
             valid_type = isinstance(value, expected_type)
         if not valid_type:
@@ -143,6 +146,15 @@ async def _(settings: dict[str, object]) -> Result:
             type(config)._fields,
         )
         config.update(updates)
+        if "function_calling_disable" in updates:
+            kept = FunctionCallingManager.purge_essential_disables()
+            dropped = [
+                name
+                for name in (updates["function_calling_disable"] or [])
+                if name not in kept
+            ]
+            if dropped:
+                return Result.warning_(f"{'、'.join(dropped)} 是核心功能，已自动忽略")
         return Result.ok(info="设置成功!")
     except ValueError as e:
         return Result.fail(str(e))

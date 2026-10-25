@@ -165,12 +165,24 @@ class PluginConfig:
             if self.path.exists():
                 with contextlib.suppress(OSError):
                     os.chmod(tmp_path, os.stat(self.path).st_mode)
-            os.replace(tmp_path, self.path)
+            self._replace_with_retry(tmp_path)
         except Exception:
             with contextlib.suppress(OSError):
                 os.unlink(tmp_path)
             raise
         return self
+
+    def _replace_with_retry(self, tmp_path, attempts: int = 5):
+        import time
+
+        for attempt in range(attempts):
+            try:
+                os.replace(tmp_path, self.path)
+                return
+            except PermissionError:
+                if attempt == attempts - 1:
+                    raise
+                time.sleep(0.02 * (attempt + 1))
 
     def _merge(self, base: dict, incoming: dict):
         for k, v in incoming.items():

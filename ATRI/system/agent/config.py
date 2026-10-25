@@ -44,6 +44,13 @@ class AgentConfig(PluginConfig):
         "列表中的功能不会出现在智能体功能列表中（不在列表内即启用）",
         item_type=str,
     )
+    function_plugin_disable = Field(
+        list,
+        [],
+        "禁用的功能插件",
+        "列表中的功能插件整体关闭，其技能与功能调用同时失效（不在列表内即启用）",
+        item_type=str,
+    )
     skills_disable = Field(
         list,
         [],

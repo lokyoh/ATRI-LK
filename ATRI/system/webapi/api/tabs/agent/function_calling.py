@@ -5,6 +5,7 @@ from pydantic import BaseModel
 from ATRI.exceptions import str_traceback
 from ATRI.log import log
 from ATRI.system.agent.agent.function_calling import FunctionCallingManager
+from ATRI.system.agent.agent.function_plugin.manage import function_plugin_manager
 
 from ....base_model import Result
 from ....utils import authentication
@@ -32,10 +33,14 @@ class FunctionCallingInfo(BaseModel):
     """参数列表"""
     manually_enabled: bool
     """手动开关状态"""
+    always_enabled: bool
+    """核心功能（stop_thinking / send_message 等）：开关恒为开，不可关闭"""
     can_enable: bool
     """当前环境是否支持该功能"""
     can_enable_reason: str
     """环境不可用原因（available 为真时为空串）"""
+    plugin: str | None = None
+    """所属功能插件名；非空时该功能在功能插件页管理，不在本页展示"""
 
 
 class FunctionCallingState(BaseModel):
@@ -60,8 +65,10 @@ def _describe(name: str, func: type) -> FunctionCallingInfo:
             for arg in func.args
         ],
         manually_enabled=FunctionCallingManager.is_manually_enabled(name),
+        always_enabled=FunctionCallingManager.is_essential(name),
         can_enable=check.available,
         can_enable_reason=check.reason,
+        plugin=function_plugin_manager.owner_of_function(name),
     )
 
 
@@ -98,6 +105,14 @@ async def _(payload: SetFunctionCallingModel) -> Result[FunctionCallingState]:
     try:
         if payload.name not in FunctionCallingManager.function_calling:
             return Result.fail(f"功能 {payload.name} 不存在", 404)
+        if not payload.enabled and FunctionCallingManager.is_essential(payload.name):
+            return Result.fail(f"功能 {payload.name} 是核心功能，不能关闭", 400)
+        owner = function_plugin_manager.owner_of_function(payload.name)
+        if owner:
+            return Result.fail(
+                f"功能 {payload.name} 属于功能插件 {owner}，请到「功能插件」页开关",
+                400,
+            )
         FunctionCallingManager.set_manually_enabled(payload.name, payload.enabled)
         return Result.ok(
             FunctionCallingState(

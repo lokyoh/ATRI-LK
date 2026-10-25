@@ -4,6 +4,7 @@ import random
 from dataclasses import dataclass
 from typing import Any
 
+from ..affection import apply_affection_bonus
 from ..skills import (
     equipped_specs,
     get_skill_power,
@@ -280,9 +281,14 @@ class BattleSession:
         return max(1, round(self.pet_spd * self.pet_mods["spd_mult"]))
 
     def _pet_damage(self, defence: int, bossy: bool) -> tuple[int, bool]:
-        """我方输出（遗物 vs_boss_mult × 被动 dmg_mult × 被动 crit_rate 暴击）。"""
+        """我方输出（遗物 vs_boss_mult × 被动 dmg_mult × 好感加成 × 暴击）。
+
+        好感乘区最多 +10%。基础伤害**先按原口径 round**，好感加成叠在这个整数
+        之上再 floor（``apply_affection_bonus``）——这样好感为 0 时伤害与改动前
+        逐点相同，加成只对「已经确定的伤害」生效，不会顺带把基线压下去。
+        """
         mult = (self.out_mult if bossy else 1.0) * self.dmg_mult
-        dmg = max(
+        base = max(
             1,
             round(
                 _damage(
@@ -295,6 +301,7 @@ class BattleSession:
                 * mult
             ),
         )
+        dmg = max(1, apply_affection_bonus(base, int(self.pet.affection)))
         is_crit = self.crit_rate > 0 and self.rng.random() < self.crit_rate
         if is_crit:
             dmg = max(1, round(dmg * self.crit_mult))

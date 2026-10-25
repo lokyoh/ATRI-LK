@@ -190,6 +190,7 @@ chat:
 
 love:
   line: "{name} 的好感度为 {affection}（{level}）"
+  bonus: "💗 好感加成：经验 / 输出各 +{bonus_pct}%（上限 10%）"
 
 rename:
   usage: "用法：/宠物.改名 <新名字>"

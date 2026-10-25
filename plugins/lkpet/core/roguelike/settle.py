@@ -3,6 +3,7 @@
 from datetime import datetime
 from typing import Any
 
+from ..affection import apply_affection_bonus
 from ._common import (
     _load_rogue_config,
     _load_skills_config,
@@ -45,7 +46,11 @@ async def settle_run(
     ]
 
     # 1) 经验写回并允许升级。
-    exp_gain = int(run.get("exp", 0))
+    # 局内累积的 exp 是「原始经验」，写回前统一叠一次好感加成（最多 +10%，按总值
+    # floor）——与训练走同一个 apply_affection_bonus，玩家看到的「经验 +N」就是
+    # 真正入账的那个数，不会出现回执与实得两套口径。
+    raw_exp = int(run.get("exp", 0))
+    exp_gain = apply_affection_bonus(raw_exp, int(pet.affection)) if raw_exp > 0 else 0
     if exp_gain > 0:
         from ..leveling import check_level_up
 

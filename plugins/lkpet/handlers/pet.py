@@ -39,7 +39,7 @@ from ..core import (
     talents,
     tutorial,
 )
-from ..core.affection import get_affection_level
+from ..core.affection import affection_bonus_ratio, get_affection_level
 from ..core.chat import chat_manager
 from ..database import load_pet_names
 from ..matchers import (
@@ -506,13 +506,19 @@ async def handle_love(event: Event):
     player_id = int(event.get_user_id())
     pet = await _load_pet(pet_love_matcher, player_id)
 
+    # 好感同时加成经验与战斗输出（最多 +10%），这里把当前档位一并说明，
+    # 免得玩家只看到数字却不知道它有什么用。
+    bonus_pct = round(affection_bonus_ratio(pet.affection) * 100, 1)
     await pet_love_matcher.finish(
-        text(
-            "love.line",
-            "",
-            name=pet.name,
-            affection=pet.affection,
-            level=get_affection_level(pet.affection),
+        _compose(
+            text(
+                "love.line",
+                "",
+                name=pet.name,
+                affection=pet.affection,
+                level=get_affection_level(pet.affection),
+            ),
+            text("love.bonus", "", bonus_pct=f"{bonus_pct:g}"),
         )
     )
 

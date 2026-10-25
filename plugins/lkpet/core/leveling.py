@@ -1,4 +1,4 @@
-from .affection import AFFECTION_MAX
+from .affection import AFFECTION_MAX, apply_affection_bonus
 from .attributes import calc_attributes_on_level_up
 
 
@@ -16,6 +16,12 @@ def calc_exp_gain(
     pet_config: dict | None = None,
     permanent_bonus: dict[str, int | float] | None = None,
 ) -> int:
+    """经验收益：状态 / 性格 / 年龄 / 轮回特权各是乘区，**好感最后叠、最多 +10%**。
+
+    好感的加成不写进下面这串乘区，而是最后一步用
+    :func:`core.affection.apply_affection_bonus` 加上去——那里按
+    「加成后的总值」向下取整，与战斗输出共用同一套口径。
+    """
     config = pet_config if pet_config is not None else _load_pet_config()
     mood = min(100, max(0, pet.mood))
     hunger = min(100, max(0, pet.hunger))
@@ -25,7 +31,6 @@ def calc_exp_gain(
     mood_mod = 0.5 + mood / 200
     hunger_mod = 0.5 + hunger / 200
     fatigue_mod = 1.0 - fatigue / 200
-    affection_mod = 1.0 + (affection / AFFECTION_MAX) * 0.3
     personality_mod = get_personality_exp_mod(pet.personality, config)
     age_mod = max(0.5, 1.0 - max(0, pet.age_days) / 500)
     reincarnation_mod = 1.0 + (permanent_bonus or {}).get("exp_bonus", 0.0)
@@ -35,13 +40,12 @@ def calc_exp_gain(
         * mood_mod
         * hunger_mod
         * fatigue_mod
-        * affection_mod
         * personality_mod
         * age_mod
         * reincarnation_mod
         * multiplier
     )
-    return max(1, int(total))
+    return max(1, apply_affection_bonus(total, affection))
 
 
 def get_personality_exp_mod(personality: str, pet_config: dict | None = None) -> float:

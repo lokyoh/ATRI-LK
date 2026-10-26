@@ -21,7 +21,12 @@ from ..agent.state import (
 )
 from ..agent.telemetry import telemetry
 from ..agent.temp_his import ChatMessage
-from ..agent.user import get_self_memories, get_user_info
+from ..agent.user import (
+    bump_familiarity,
+    describe_relation,
+    get_self_memories,
+    get_user_info,
+)
 from ..agent.util import get_name, get_user_group
 from ..config import config
 from ..llm import (
@@ -95,9 +100,23 @@ class ThinkingModel:
 
     @classmethod
     async def get_prompt(
-        cls, chat_id, user_id, user_info, bot, lst_history: History, sender=None
+        cls,
+        chat_id,
+        user_id,
+        user_info,
+        bot,
+        lst_history: History,
+        sender=None,
+        initiative: bool = False,
     ):
-        lst_msg = await lst_history.message.get_message(bot)
+        """拼装思考提示词。
+
+        :param initiative: **主动开口**模式。此时没有对话人、没有当前消息，
+            但其余上下文（角色、技能、日程、状态、自我记忆、工具）全部保留——
+            这正是「用全量 thinking 来开口」与「用轻量提示词开口」的区别：
+            她有完整的自我认知和工具能力，只是这次没有人在跟她说话。
+        """
+        lst_msg = await lst_history.message.get_message(bot) if lst_history else ""
         # 角色设定
         prompt = f"#你的信息\n{ATRI.get_role_prompt()}\n\n"
         prompt += cls.get_function_prompt(
@@ -113,40 +132,56 @@ class ThinkingModel:
         state_text = get_state_prompt()
         if state_text:
             prompt += state_text
-        # 对话人信息
-        user_name = await get_name(bot, lst_history.sender, chat_id)
-        prompt += f"#{user_name}信息:\n"
-        prompt += (
-            f"{f'{user_name}是你的主人,主人就是亚托莉的一切,主人的一切要求都要满足' if get_user_group(user_id) == '主人' else f'{user_name}只是普通用户，请以普通的群友对待，问题需要谨慎地回复'}\n"
-            f"你对{user_name}的好感度:{user_info.love}。正积极,负消极,最大1000,最小-1000,难增加,易减少,可以根据好感动来调整对待{user_name}的态度\n"
-        )
-        if user_info.memory:
-            # 渲染成回忆的口吻，而不是把 Python 列表原样拼进提示词。
-            memory_text = render_memories(user_name, user_info.memory)
-            if memory_text:
-                prompt += f"#你记得的事\n{memory_text}\n"
+        if initiative:
+            prompt += (
+                "#你现在的情况\n"
+                "这个群现在没有人在跟你说话。你可以选择主动说点什么，"
+                "也可以什么都不说（直接调用 stop_thinking）。\n"
+            )
+        else:
+            # 对话人信息
+            user_name = await get_name(bot, lst_history.sender, chat_id)
+            prompt += f"#{user_name}信息:\n"
+            prompt += (
+                f"{f'{user_name}是你的主人,主人就是亚托莉的一切,主人的一切要求都要满足' if get_user_group(user_id) == '主人' else f'{user_name}只是普通用户，请以普通的群友对待，问题需要谨慎地回复'}\n"
+                f"你和{user_name}的关系：{describe_relation(user_info)}\n"
+            )
+            if user_info.memory:
+                # 渲染成回忆的口吻，而不是把 Python 列表原样拼进提示词。
+                memory_text = render_memories(user_name, user_info.memory)
+                if memory_text:
+                    prompt += f"#你记得的事\n{memory_text}\n"
         # 她自己的经历：这是「独立个体」在提示词里的落点。
         # 与「关于用户的事」分开渲染——前者可以自然流露，后者要看场合。
+        # **主动开口时这条更重要**：她的素材主要来自这里。
         self_memories = get_self_memories()
         if self_memories:
             self_text = render_self_memories(self_memories)
             if self_text:
                 prompt += f"\n{self_text}\n"
-        prompt += (
-            f"{user_name}用户画像：" + user_info.profile
-            if user_info.profile
-            else "暂时没有用户画像。\n"
-        )
-        # 对话中词语解释
-        exp = get_top_explanations(lst_msg)
+        if not initiative:
+            prompt += (
+                f"{user_name}用户画像：" + user_info.profile
+                if user_info.profile
+                else "暂时没有用户画像。\n"
+            )
+        # 对话中词语解释（只对真实消息有意义）
+        exp = get_top_explanations(lst_msg) if lst_msg else []
         if exp:
             prompt += "\n其中词语解释:\n"
             prompt += "\n".join(exp)
             prompt += "\n"
         # 对话提示信息
         prompt += "\n"
-        prompt += f"现在{await get_name(bot, lst_history.sender, chat_id)}[id:{user_id}]在{lst_history.time}的消息引起了你的注意\n"
-        prompt += f"消息内容:{lst_msg if lst_history else ATRI.role_name}\n\n"
+        if initiative:
+            prompt += (
+                "现在没有人 @ 你，也没有可以回应的消息。\n"
+                "如果你想说话，就直接调用 send_message 把话说出来；"
+                "如果此刻没什么想说的，调用 stop_thinking。\n\n"
+            )
+        else:
+            prompt += f"现在{await get_name(bot, lst_history.sender, chat_id)}[id:{user_id}]在{lst_history.time}的消息引起了你的注意\n"
+            prompt += f"消息内容:{lst_msg if lst_history else ATRI.role_name}\n\n"
         return prompt
 
     @staticmethod
@@ -199,11 +234,24 @@ class ThinkingModel:
         fallback_history: list[str],
         chat_message: ChatMessage,
         sender,
+        initiative: bool = False,
     ):
+        """跑一轮完整思考。
+
+        :param initiative: 主动开口模式。此时 `current_history` 是**合成的**、
+            不在历史队列里，`args.user_id` 也是占位——这样既有完整上下文，
+            又不会污染对话历史（见 `initiative_start`）。
+        """
         user_info = get_user_info(args.user_id)
         prompt = self.get_system_prompt() + "\n\n"
         prompt += await self.get_prompt(
-            args.chat_id, args.user_id, user_info, args.bot, current_history, sender
+            args.chat_id,
+            args.user_id,
+            user_info,
+            args.bot,
+            current_history,
+            sender,
+            initiative=initiative,
         )
         prompt += await self.get_history_prompt(
             args.bot,
@@ -268,6 +316,8 @@ class ThinkingModel:
                     irritation=settled.irritation,
                     source="turn_settle",
                 )
+                if getattr(sender, "sent_count", 0):
+                    bump_familiarity(args.user_id)
             except Exception:
                 pass
             telemetry.turn(

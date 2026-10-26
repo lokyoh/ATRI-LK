@@ -162,11 +162,14 @@ class MemoryDB:
         # Linear scan for conflicts
         candidate = None
         incoming_subject = str(metadata.get("subject") or "")
+        incoming_chat = str(metadata.get("chat_id") or "")
         with _lock:
             rows = self._table.select_all()
             for row in rows:
                 row_meta = json.loads(row[5]) if row[5] else {}
                 if str(row_meta.get("subject") or "") != incoming_subject:
+                    continue
+                if str(row_meta.get("chat_id") or "") != incoming_chat:
                     continue
                 existing_emb = json.loads(row[2])
                 sim = _cosine_similarity(embedding, existing_emb)

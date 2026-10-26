@@ -456,6 +456,39 @@ def register_function_calling():
 
     FunctionCallingManager.register(LoveChangeFunctionCalling)
 
+    class RelationSetFunctionCalling(FunctionCalling):
+        function_name = "relation_set"
+        description = (
+            "设置你对某个人的**关系态度**（不是心情，也不是好感度）。"
+            "用于记录「刚吵完架」「在闹别扭」「最近很黏人」这类针对某个人的状态。"
+            "与 feel 的区别：feel 是你此刻的情绪（会自然消退、对所有人一样），"
+            "这个只对当前对话人生效，且**不会自动消退**——和好需要你主动清空。"
+        )
+        args: ClassVar = [
+            FunctionCallingArg(
+                name="tag",
+                _type="str",
+                description=(
+                    "态度标签，简短短语，如「在闹别扭」「刚吵完架」「最近很黏人」。"
+                    "传空字符串表示清除当前态度（和好、恢复正常）"
+                ),
+            ),
+        ]
+
+        @staticmethod
+        async def call(data: FunctionCallingData):
+            tag = str(data.data.get("tag") or "").strip()
+            if len(tag) > 20:
+                return "标签太长（最多 20 字），请用简短短语"
+            user_info = get_user_info(data.sender_id)
+            user_info.mood_tag = tag
+            save_user_info(data.sender_id, user_info)
+            if tag:
+                return f"已记下你对这个人的态度：{tag}"
+            return "已清除对这个人的态度，恢复正常"
+
+    FunctionCallingManager.register(RelationSetFunctionCalling)
+
     class FeelFunctionCalling(FunctionCalling):
         function_name = "feel"
         description = (

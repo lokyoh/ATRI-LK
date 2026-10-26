@@ -75,8 +75,16 @@ class Telemetry:
                 target = self._current_file(root)
                 with open(target, "a", encoding="utf-8") as f:
                     f.write(line + "\n")
+            self._fail_streak = 0
         except Exception as exc:
-            log.debug(f"埋点写入失败（忽略）：{exc}")
+            self._fail_streak = getattr(self, "_fail_streak", 0) + 1
+            if self._fail_streak == 1:
+                log.warning(
+                    f"埋点写入失败，行为数据将不会被记录：{exc}"
+                    "（后续同类错误只记 debug）"
+                )
+            else:
+                log.debug(f"埋点写入失败（第 {self._fail_streak} 次，忽略）：{exc}")
 
     def preview(self, text: Any) -> str | None:
         """按配置返回正文预览；未开启时返回 None。"""

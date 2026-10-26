@@ -15,6 +15,14 @@ SELF_MEMORY_ID = "__atri_self__"
 
 class User(BaseModel):
     love: int = 50
+    """长期关系评价（-1000~1000）。"""
+
+    familiarity: float = 0.0
+    """熟络度 0.0~1.0：聊得越多越熟。"""
+
+    mood_tag: str = ""
+    """当下对这个人的态度标签，空串表示没有特别态度。"""
+
     memory: list = Field(default_factory=list)
     """关于**这个对话人**的记忆（他/她告诉过我什么）。"""
     profile: str = ""
@@ -43,6 +51,53 @@ def get_user_info(user_id: str) -> User:
 def save_user_info(user_id: str, user_info: User):
     user_id = user_manager.resolve_user_id(user_id)
     user_table.update((("DATA",), (user_info.model_dump_json(),)), f"ID='{user_id}'")
+
+
+def bump_familiarity(user_id: str, delta: float = 0.02) -> None:
+    """聊一轮涨一点熟络度，上限 1.0。"""
+    try:
+        info = get_user_info(user_id)
+        new_value = min(1.0, max(0.0, float(info.familiarity) + float(delta)))
+        if abs(new_value - float(info.familiarity)) < 1e-9:
+            return
+        info.familiarity = new_value
+        save_user_info(user_id, info)
+    except Exception:
+        pass
+
+
+_FAMILIARITY_BANDS = (
+    (0.7, "很熟，说话不用客气"),
+    (0.4, "比较熟，可以聊得随意些"),
+    (0.15, "有点熟了，但还是客气的"),
+    (0.0, "还不太熟"),
+)
+
+
+def describe_relation(info: User) -> str:
+    """把好感度 + 熟络度 + 态度标签渲染成一段关系描述。"""
+    band = "还不太熟"
+    for lower, text in _FAMILIARITY_BANDS:
+        if float(info.familiarity or 0.0) >= lower:
+            band = text
+            break
+
+    parts = [band]
+    love = int(info.love or 0)
+    if love >= 500:
+        parts.append("你很喜欢这个人")
+    elif love >= 150:
+        parts.append("你对这个人有好感")
+    elif love <= -500:
+        parts.append("你很反感这个人")
+    elif love <= -150:
+        parts.append("你对这个人有些不满")
+
+    tag = (info.mood_tag or "").strip()
+    if tag:
+        parts.append(f"当前态度：{tag}")
+
+    return "；".join(parts)
 
 
 #: 自我记忆的条数上限。和 USER_MEMORY_LIMIT 同量级：

@@ -551,6 +551,31 @@ def _group_id(chat_id: str):
     return int(text) if text.isdigit() else text
 
 
+def _record_to_history(chat_id: str, text: str) -> None:
+    """把主动说出的话写进对话历史。
+
+    为什么必须做：不记录的话，她下一轮对话时**不知道自己刚说过什么**，
+    会重复提同一件事、或与刚才的话自相矛盾。人不会这样。
+
+    实现要点：
+
+    - 用 `add_agent_message`，它同时写盘（`user_id=None` = 机器人）和进内存队列，
+      与正常回复走同一条路径；
+    - **不设 `reply_to_mid`**：主动开口不是在回复某条消息，设了会让历史里
+      出现「你在回复 mid:x」这种不存在的关联。
+
+    失败不影响已发出的消息——记录是旁路，不能因为写盘失败就报发送失败。
+    """
+    try:
+        from .history import ChatHistoryManager, History, LLMMessage, MessageSegment
+
+        reply = History(None, chat_id)
+        reply.message = LLMMessage(chat_id, [MessageSegment(text)])
+        ChatHistoryManager.get_history(chat_id).add_agent_message(reply, text)
+    except Exception as exc:
+        log.warning(f"主动发言写入历史失败（消息已发出，忽略）：{exc}")
+
+
 async def try_speak(chat_id: str, bot) -> str | None:
     """某个群尝试主动开口一次。返回实际说出的话（没说则 None）。
 
@@ -576,6 +601,10 @@ async def try_speak(chat_id: str, bot) -> str | None:
             return None
 
         await bot.send_group_msg(group_id=_group_id(chat_id), message=text)
+        # **必须进历史**。否则下一轮对话时她不记得自己说过——
+        # 会重复提同一件事，或者与刚说过的话自相矛盾。
+        # 走 add_agent_message（写盘 + 进内存队列），user_id=None 表示机器人。
+        _record_to_history(chat_id, text)
         mark_spoken(chat_id, opening)
         telemetry.record(
             "initiative_start",

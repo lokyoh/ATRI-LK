@@ -8,7 +8,7 @@ from ATRI.configs import Field
 from ATRI.exceptions import str_traceback
 from ATRI.log import log
 from ATRI.system.agent.agent.function_calling import FunctionCallingManager
-from ATRI.system.agent.config import config
+from ATRI.system.agent.config import apply_runtime_config, config
 from ATRI.system.agent.llm import (
     LLMModel,
     LLMProvider,
@@ -146,6 +146,7 @@ async def _(settings: dict[str, object]) -> Result:
             type(config)._fields,
         )
         config.update(updates)
+        apply_runtime_config()
         if "function_calling_disable" in updates:
             kept = FunctionCallingManager.purge_essential_disables()
             dropped = [

@@ -31,6 +31,7 @@ class Field:
         item_type: type | Field | None = None,
         item_field=None,
         key_field: Field | None = None,
+        options_provider=None,
     ):
         self.type_ = type_
         self.default = default
@@ -38,6 +39,8 @@ class Field:
         self.description = description
         self.ui_type = ui_type
         self.options = options
+        #: 动态选项回调：``() -> list[dict]``，每次导出 schema 时调用。
+        self.options_provider = options_provider
         self.min = min
         self.max = max
         self.editable = editable
@@ -246,6 +249,16 @@ class PluginConfig:
             }
             if field.options:
                 node["options"] = field.options
+            elif field.options_provider is not None:
+                try:
+                    dynamic = field.options_provider()
+                except Exception as exc:
+                    from ATRI.log import log
+
+                    log.warning(f"字段 {name} 的动态选项获取失败：{exc}")
+                    dynamic = None
+                if dynamic:
+                    node["options"] = dynamic
             if field.min is not None:
                 node["min"] = field.min
             if field.max is not None:

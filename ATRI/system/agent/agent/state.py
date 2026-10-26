@@ -236,3 +236,42 @@ def fatigue_for_hour(hour: int) -> float:
     if hour < 23:
         return 0.5
     return 0.75  # 23:00–02:00 深夜
+
+
+SETTLE_BLEND = 0.25
+
+
+def settle_from_turn(
+    *,
+    replied: bool,
+    rounds: int,
+    user_was_master: bool = False,
+    now_ts: float | None = None,
+) -> InnerState:
+    """每轮对话结束后**被动结算**情绪——不依赖模型主动调 ``feel``。
+
+    为什么需要这个：``thinking.py`` 的系统提示词要求「不写情绪描写」，
+    而 ``feel`` 是模型表达情绪的唯一入口。两者叠加成一个死循环——
+    模型被要求克制 → 很少调 feel → 状态长期停在基线 → 状态注入形同虚设，
+    ``telemetry.feel`` 也因此几乎没有采样，「情绪是否长期极端」根本测不出来。
+
+    这里改用「由已发生的交互事实推导情绪」：
+    她说了话、说了几轮、对谁说的——这些本来就有，不需要模型额外表态。
+
+    刻意保守：每次只把情绪往目标值拉 ``SETTLE_BLEND``，且幅度都很小。
+    情绪应该是被**慢慢带动**的，不该因为一轮对话就翻脸或狂喜。
+    """
+    now_ts = _now() if now_ts is None else now_ts
+    state = state_store.load()
+    state.settle(now_ts)
+
+    target_mood = 0.0
+    if replied:
+        target_mood += 0.08 * min(3, max(0, rounds))
+    if user_was_master and replied:
+        target_mood += 0.05
+
+    state.mood += (target_mood - state.mood) * SETTLE_BLEND
+    state.mood = max(-MAX_MAGNITUDE, min(MAX_MAGNITUDE, state.mood))
+    state_store.save(state)
+    return state

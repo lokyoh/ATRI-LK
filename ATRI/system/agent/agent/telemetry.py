@@ -128,6 +128,7 @@ class Telemetry:
         replied: bool,
         duration: float,
         reason: str | None = None,
+        tag: str | None = None,
         text: Any = None,
     ) -> None:
         self.record(
@@ -136,6 +137,7 @@ class Telemetry:
             replied=replied,
             duration=round(duration, 3),
             reason=reason,
+            tag=tag,
             content_preview=self.preview(text),
         )
 
@@ -151,6 +153,15 @@ class Telemetry:
             irritation=round(float(irritation), 3),
             source=source,
         )
+
+    def decay(self, *, count: int, span_days: float) -> None:
+        """一次遗忘结算。
+
+        ``span_days`` 是本次结算覆盖的最长跨度：正常每天跑一次约等于 1.0，
+        停机数日后恢复会明显偏大——这时才知道「补算了多少」，
+        否则停机对遗忘的影响完全不可观测。
+        """
+        self.record("decay", count=count, span_days=span_days)
 
     def memory(
         self,

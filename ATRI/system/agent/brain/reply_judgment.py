@@ -1,3 +1,4 @@
+import re
 import time
 
 from ATRI.log import log
@@ -7,6 +8,38 @@ from ..agent.role import ATRI
 from ..agent.state import get_state
 from ..agent.telemetry import telemetry
 from ..llm import ModelType, llm_manager
+
+#: 标签白名单。只接受这里面列出的词——模型偶尔会自创标签。
+ALLOWED_TAGS = (
+    "求助",
+    "延续",
+    "相关",
+    "想说话",
+    "相关事件",
+    "不宜打扰",
+    "不想说话",
+)
+
+#: 匹配 `标签:xxx`（中英文冒号都接受，前后允许空白）
+_TAG_RE = re.compile(r"标签\s*[:：]\s*([^\s，,。；;]+)")
+
+
+def _parse_tag(content: str) -> str | None:
+    """从判断输出里抽出分类标签；不在白名单内返回 None。
+
+    None 与「抽到了但不在名单」都记成空，避免污染 groupby——
+    宁可少一个样本，也不要一个错样本。
+    """
+    m = _TAG_RE.search(content or "")
+    if not m:
+        return None
+    raw = m.group(1).strip()
+    if raw in ALLOWED_TAGS:
+        return raw
+    for tag in ALLOWED_TAGS:
+        if raw.startswith(tag):
+            return tag
+    return None
 
 
 class JudgmentModel:
@@ -46,13 +79,27 @@ class JudgmentModel:
 4. 这只是别人之间的寒暄，她插进去会很突兀
 
 # 输出格式
-请按以下格式输出分析结果
-是否需要回复
-原因:当前判断的原因。
+请严格按以下两行输出，不要多写。
+
+第一行只写「回复」或「不回复」。
+第二行写原因，并在末尾附上**一个分类标签**。
+
+分类标签只能取以下七个之一：
+- 求助：有人明确提出需要帮助
+- 延续：与她的既有对话在继续
+- 相关：话题涉及她记得的人或事
+- 想说话：她此刻状态上想开口
+- 相关事件：刚发生了与她直接相关的事
+- 不宜打扰：别人在聊私事/寒暄，她插进去突兀
+- 不想说话：她烦躁或很累
 
 例:
 不回复
-原因:当前用户正与另一个用户商量私事且不宜打搅。
+原因:当前用户正与另一个用户商量私事且不宜打搅。 标签:不宜打扰
+
+例:
+回复
+原因:这正好是昨天她答应帮忙的那件事。 标签:延续
 
 # 历史消息
 {history_content}
@@ -96,6 +143,7 @@ class JudgmentModel:
                 if "原因" in line:
                     reason = line.strip()[:120]
                     break
+            tag = _parse_tag(content)
             return replied
         except Exception as e:
             log.error(f"回复判断失败：{e}")
@@ -106,5 +154,6 @@ class JudgmentModel:
                 replied=replied,
                 duration=time.perf_counter() - started,
                 reason=reason,
+                tag=tag,
                 text=chat_content,
             )

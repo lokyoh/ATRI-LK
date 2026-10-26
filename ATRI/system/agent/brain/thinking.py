@@ -12,7 +12,13 @@ from ..agent.model import ChatArgs
 from ..agent.role import ATRI
 from ..agent.schedule import ATRISchedule
 from ..agent.skills import skill_manager
-from ..agent.state import fatigue_for_hour, get_state, set_fatigue, state_store
+from ..agent.state import (
+    fatigue_for_hour,
+    get_state,
+    set_fatigue,
+    settle_from_turn,
+    state_store,
+)
 from ..agent.telemetry import telemetry
 from ..agent.temp_his import ChatMessage
 from ..agent.user import get_self_memories, get_user_info
@@ -101,18 +107,15 @@ class ThinkingModel:
         embedded = skill_manager.get_embedded_prompt()
         if embedded:
             prompt += f"#你的技能\n{embedded}\n\n"
-        # 当前日程
         now_schedule = await ATRISchedule().get_schedule()
-        prompt += (
-            f"#你的日程\n"
-            f"今日穿搭:{now_schedule.outfit}\n目前日程:{now_schedule.now_schedule}\n\n"
-        )
-        # 日程里「正在做什么」同步进内心状态，让状态里的 attention 不是空的。
-        # 这样她说「等一下我在忙」时有真实来源，而不是临时编的。
+        prompt += f"#今日穿搭\n{now_schedule.outfit}\n"
         _sync_attention(now_schedule.now_schedule)
+        state_text = get_state_prompt()
+        if state_text:
+            prompt += state_text
         # 对话人信息
         user_name = await get_name(bot, lst_history.sender, chat_id)
-        prompt += f"{user_name}信息:\n"
+        prompt += f"#{user_name}信息:\n"
         prompt += (
             f"{f'{user_name}是你的主人,主人就是亚托莉的一切,主人的一切要求都要满足' if get_user_group(user_id) == '主人' else f'{user_name}只是普通用户，请以普通的群友对待，问题需要谨慎地回复'}\n"
             f"你对{user_name}的好感度:{user_info.love}。正积极,负消极,最大1000,最小-1000,难增加,易减少,可以根据好感动来调整对待{user_name}的态度\n"
@@ -134,11 +137,6 @@ class ThinkingModel:
             if user_info.profile
             else "暂时没有用户画像。\n"
         )
-        # 她此刻的状态：让决策层「带着情绪」思考，
-        # 而不是靠系统提示词里被禁掉的情绪描写（那条约束不动）。
-        state_text = get_state_prompt()
-        if state_text:
-            prompt += state_text
         # 对话中词语解释
         exp = get_top_explanations(lst_msg)
         if exp:
@@ -155,16 +153,14 @@ class ThinkingModel:
     def get_function_prompt(available: dict[str, type] | None = None):
         if available is None:
             available = FunctionCallingManager.get_available()
-        call_fc = available.get("call")
-        rare_hint = call_fc.describe_rare() if call_fc is not None else ""
         return f"""你可以调用以下功能，禁止调用未列出的功能:
 {
             "\n".join(
                 f'''{f.function_name}:
-    说明: {f.description}{f"\n参数:\n{'\n'.join(f'        -{arg.name} {arg.type}: {arg.description}' for arg in f.args)}" if f.args else ""}'''
+    说明: {f.description}{f"\n    参数:\n{'\n'.join(f'        -{arg.name} {arg.type}: {arg.description}' for arg in f.args)}" if f.args else ""}'''
                 for f in available.values()
             )
-        }{rare_hint}
+        }
 
 功能调用格式：
 ``` text
@@ -261,6 +257,19 @@ class ThinkingModel:
             failed = True
             raise
         finally:
+            try:
+                settled = settle_from_turn(
+                    replied=bool(getattr(sender, "sent_count", 0)),
+                    rounds=thinking_times,
+                    user_was_master=(get_user_group(args.user_id) == "主人"),
+                )
+                telemetry.feel(
+                    mood=settled.mood,
+                    irritation=settled.irritation,
+                    source="turn_settle",
+                )
+            except Exception:
+                pass
             telemetry.turn(
                 chat_id=str(args.chat_id),
                 rounds=thinking_times,

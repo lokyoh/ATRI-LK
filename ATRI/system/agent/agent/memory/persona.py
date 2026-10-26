@@ -10,6 +10,9 @@ _TS_PREFIX = re.compile(
     r"^\d{4}年\d{1,2}月\d{1,2}日\s*\w{0,3}\s*-?\s*\d{1,2}时\d{1,2}分\s*"
 )
 
+#: 情绪标记：写在 `USERDATA` 纯文本记忆的**末尾**，形如 `\u200b[emo:0.8]`。
+_EMO_TAG = re.compile(r"\u200b\[emo:(-?\d+(?:\.\d+)?)\]$")
+
 #: 时间质感的分档：(秒, 措辞)。刻意模糊——人不会记得精确时间戳。
 _AGE_BUCKETS = (
     (60 * 60 * 6, "刚刚"),
@@ -23,14 +26,46 @@ _AGE_BUCKETS = (
 )
 
 
-def strip_timestamp(text: str) -> str:
-    """去掉记忆自带的日期前缀。
+def tag_emotion(text: str, emotion: float) -> str:
+    """给纯文本记忆追加情绪标记（幂等：先剥掉旧标记）。
+
+    ``text`` 可以带日期前缀，前缀会被保留——这个函数只负责尾巴上的标记。
+    """
+    raw = str(text or "").strip()
+    if not raw:
+        return ""
+    body = _EMO_TAG.sub("", raw).strip()
+    if not body:
+        return ""
+    value = max(-1.0, min(1.0, float(emotion or 0.0)))
+    if abs(value) < 1e-6:
+        return body
+    return f"{body}\u200b[emo:{value:g}]"
+
+
+def read_emotion(text: str) -> float:
+    """读出纯文本记忆里的情绪标记；没有则 0。"""
+    m = _EMO_TAG.search(str(text or ""))
+    if not m:
+        return 0.0
+    try:
+        return max(-1.0, min(1.0, float(m.group(1))))
+    except ValueError:
+        return 0.0
+
+
+def strip_timestamp(text: str, keep_emotion: bool = False) -> str:
+    """去掉记忆自带的日期前缀（以及末尾的情绪标记）。
 
     前缀是写入时为了排序加的，对读者是噪声；时间感由 `time_text` 用
-    相对措辞重建，比绝对时间戳更像回忆。
+    相对措辞重建，比绝对时间戳更像回忆。情绪标记同理——它是给
+    `pick_weighted` 用的元数据，不该显示给用户或模型看。
     """
     body = str(text or "").strip()
-    return _TS_PREFIX.sub("", body, count=1).strip() or body
+    body = _TS_PREFIX.sub("", body, count=1).strip() or body
+    if not keep_emotion:
+        body = _EMO_TAG.sub("", body).strip() or body
+    return body
 
 
 def time_text(created_at: float | None, now: float | None = None) -> str:
@@ -53,13 +88,17 @@ def _as_items(memories: Any) -> list[str]:
 def _as_entries(memories: Any) -> list[tuple[str, float]]:
     """取出 (文本, 情绪强度) 对。
 
-    情绪值在 dict 里可能位于 ``emotion`` 字段，也可能在 ``metadata.emotion``
-    （数据库行是后者）。两种都接受，缺失按 0 处理。
+    情绪有三个来源，按优先级：
+    1. dict 的 ``metadata.emotion``（数据库行）
+    2. dict 的 ``emotion`` 字段
+    3. 纯文本末尾的 ``\\u200b[emo:x]`` 标记（``USERDATA`` 里的记忆）
+
+    都没有就按 0 处理——老数据不该因为缺字段而被丢掉。
     """
     if not memories:
         return []
     if isinstance(memories, str):
-        return [(memories, 0.0)] if memories.strip() else []
+        return [(strip_timestamp(memories), abs(read_emotion(memories)))]
     entries: list[tuple[str, float]] = []
     for item in memories:
         emotion = 0.0
@@ -72,8 +111,11 @@ def _as_entries(memories: Any) -> list[tuple[str, float]]:
                 emotion = abs(float(raw or 0.0))
             except (TypeError, ValueError):
                 emotion = 0.0
+            text = strip_timestamp(text)
         else:
-            text = str(item or "").strip()
+            text = str(item or "")
+            emotion = abs(read_emotion(text))
+            text = strip_timestamp(text)
         if text:
             entries.append((text, min(1.0, emotion)))
     return entries
@@ -169,8 +211,9 @@ def render_self_memories(memories: Any, *, limit: int = 6, budget: int = 300) ->
     与用户记忆分开渲染：自己的经历可以跨群复用，不涉及他人隐私，
     但在群里全部倒出来会显得自恋，所以默认条数更少。
 
-    自我记忆目前是纯文本列表（没有情绪字段），所以这里不做加权抽样，
-    保持「最近的优先」——她自己刚经历的事最该延续。
+    自我记忆目前不做加权抽样，保持「最近的优先」——她自己刚经历的事最该延续。
+    条目末尾的 ``\\u200b[emo:x]`` 情绪标记由 ``strip_timestamp`` 剥掉，
+    只作为元数据存在，不会显示给模型或用户。
     """
     items = _as_items(memories)
     if not items:

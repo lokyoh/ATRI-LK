@@ -71,14 +71,23 @@ def get_self_memories() -> list:
         return []
 
 
-def add_self_memory(text: str, limit: int = SELF_MEMORY_LIMIT) -> bool:
-    """记一条「我自己的经历」，先进先出。"""
+def add_self_memory(
+    text: str, limit: int = SELF_MEMORY_LIMIT, emotion: float = 0.0
+) -> bool:
+    """记一条「我自己的经历」，先进先出。
+
+    ``emotion`` 交给 ``persona.tag_emotion`` 编码进字符串末尾——
+    ``User.memory`` 是 ``list[str]``，没有 metadata 可放数值。
+    「今天被说成机器人」这种事本身就是高情绪的，不该按 0 存。
+    """
     body = (text or "").strip()
     if not body:
         return False
     try:
+        from .memory.persona import tag_emotion
+
         row = _read_self_row()
-        row.memory.append(body)
+        row.memory.append(tag_emotion(body, emotion))
         overflow = len(row.memory) - limit
         if overflow > 0:
             del row.memory[:overflow]

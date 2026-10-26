@@ -20,6 +20,9 @@ MIN_IMPORTANCE = 1e-3
 #: 存 metadata.subject；用户相关的记忆存解析后的主账号 ID。
 SELF_SUBJECT = "self"
 
+#: 换模型后旧向量与新向量不在同一语义空间，余弦值不可比——检索时据此排除。
+EMBEDDING_MODEL_KEY = "embedding_model"
+
 #: 记忆的情绪强度（-1.0 ~ 1.0）在 metadata 里的键名。
 #: 与 importance 是两件事：importance 决定「值不值得记」，
 #: emotion 决定「记得多牢、会不会被突然想起」。
@@ -273,6 +276,7 @@ class MemoryDB:
         chat_id: str | None = None,
         subject: str | None = None,
         include_self: bool = True,
+        embedding_model: str | None = None,
     ) -> list[dict[str, Any]]:
         """按向量检索。
 
@@ -282,12 +286,18 @@ class MemoryDB:
         :param subject: 「关于谁」。给定后只返回该主体的记忆。
         :param include_self: 是否把 ``subject == SELF_SUBJECT``（亚托莉自己的
             经历）也算进来。自己的记忆不涉及他人隐私，默认放开。
+        :param embedding_model: 当前 embedding 模型的真实 id。给定后，
+            **由别的模型生成的向量不参与打分**——不同语义空间的余弦值
+            看着合理、实际无意义，混算等于随机召回。
+            标识为空（老数据 / 换模型前的记录）同样排除：无法证明可比，
+            就当作不可比。
         """
         top_k = max(1, min(int(top_k), 20))
         if min_similarity is not None:
             min_similarity = min(1.0, max(0.0, float(min_similarity)))
         scope = str(chat_id) if chat_id is not None else None
         who = str(subject) if subject is not None else None
+        model_id = str(embedding_model) if embedding_model else None
         now = _now()
         with _lock:
             rows = self._table.select_all()
@@ -307,6 +317,10 @@ class MemoryDB:
                     and row_subject != who
                     and not (include_self and row_subject == SELF_SUBJECT)
                 ):
+                    continue
+            if model_id is not None:
+                row_model = str(meta.get(EMBEDDING_MODEL_KEY) or "")
+                if row_model != model_id:
                     continue
             sim = _cosine_similarity(query_embedding, mem["embedding"])
             if min_similarity is not None and sim < min_similarity:
@@ -366,6 +380,8 @@ class MemoryDB:
         平淡的事实快速淡出——这是「像人」和「像档案」的分界。
         """
         now = _now()
+        span_days = 0.0
+        changed = 0
         with _lock:
             rows = self._table.select_all(
                 "id, importance, decay_rate, last_accessed, metadata"
@@ -381,6 +397,7 @@ class MemoryDB:
                     1.0 - EMOTION_DECAY_RESISTANCE * min(1.0, emotion)
                 )
                 elapsed = max(0.0, now - last_accessed)
+                span_days = max(span_days, elapsed / 86400.0)
                 new_importance = max(
                     MIN_IMPORTANCE, importance * math.exp(-effective_rate * elapsed)
                 )
@@ -388,6 +405,14 @@ class MemoryDB:
                     {"importance": new_importance, "last_accessed": now},
                     {"id": mid},
                 )
+                changed += 1
+        if changed:
+            try:
+                from ..telemetry import telemetry
+
+                telemetry.decay(count=changed, span_days=round(span_days, 2))
+            except Exception:
+                pass
 
     def all_memories(self) -> list[dict[str, Any]]:
         rows = self._table.select_all()

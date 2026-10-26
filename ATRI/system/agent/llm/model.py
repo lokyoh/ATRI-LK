@@ -161,6 +161,9 @@ class LLMModel:
                 ) from e
 
 
+DETERMINISTIC_TYPES: frozenset[str] = frozenset({ModelType.EMBEDDING.value})
+
+
 class LLMManager:
     """
     模型管理器，负责注册和调用模型
@@ -169,6 +172,36 @@ class LLMManager:
     def __init__(self):
         self._models: dict[str, LLMModel] = {}
         self._typed_models: dict[str, list[str]] = {}
+        self._preferred: dict[str, str] = {}
+
+    def set_preferred(self, model_type: str, model_name: str) -> bool:
+        """指定某类型优先使用的模型。空串 = 清除指定、回到默认分配。
+
+        :return: 指定的模型是否存在且确实注册了该类型。
+
+        失败时**保留原值**，不改动。两种失败处理都是刻意的：
+
+        - 从「指定 A」改成「写错的 B」：继续用 A，而不是退回随机。
+          用户的意图明显是「换一个模型」，手误不该让行为退化成随机；
+        - 从「未指定」改成「写错的 B」：仍然未指定，与原来一致。
+
+        调用方（``config._apply_model_preferences``）必须把 False 变成一条
+        告警——用户需要知道自己的配置没生效，否则会以为已经切换了。
+        """
+        type_key = str(model_type)
+        name = (model_name or "").strip()
+        if not name:
+            self._preferred.pop(type_key, None)
+            return True
+        if name not in self._models:
+            return False
+        if name not in (self._typed_models.get(type_key) or []):
+            return False
+        self._preferred[type_key] = name
+        return True
+
+    def get_preferred(self, model_type: str) -> str:
+        return self._preferred.get(str(model_type), "")
 
     def register_model(self, model: LLMModel, model_type: str) -> None:
         """
@@ -189,12 +222,21 @@ class LLMManager:
         return self._models.get(name)
 
     def get_models(self, model_type: str) -> list[LLMModel]:
+        """根据类型获取所有已注册的模型列表。
+
+        未注册任何该类型的模型时返回**空列表**，而不是抛 ``KeyError``。
+
+        这一点很重要：原先用 ``self._typed_models[model_type]`` 直接下标，
+        类型没注册就抛 ``KeyError``；而 ``call_model_by_type`` 里那句
+        ``if not models: raise ModelRequestError(NO_MODEL_ERR)`` 因此**永远走不到**。
+        结果是「没配模型」抛的是一个未预期的 KeyError，所有
+        ``except ModelRequestError`` 的降级分支全部失效——本该优雅跳过的功能
+        变成直接冒泡。
         """
-        根据类型获取所有已注册的模型列表
-        :param model_type: 模型类型，如 ModelType.CHAT
-        :return: 该类型的所有模型实例列表
-        """
-        return [self._models[m] for m in self._typed_models[model_type]]
+        names = self._typed_models.get(model_type)
+        if not names:
+            return []
+        return [self._models[m] for m in names if m in self._models]
 
     def get_model_type(self, model: str) -> str:
         for m_type, models in self._typed_models.items():
@@ -291,18 +333,34 @@ class LLMManager:
         content: str | LLMContents | list | Any,
         event: str = "未知调度",
     ) -> LLMResponse:
+        """调用指定类型的模型。选择顺序：
+
+        1. **配置指定**（``set_preferred``）：固定用它，失败后按序转移；
+        2. **确定性类型**（``DETERMINISTIC_TYPES``，embedding）：按注册顺序取第一个。
+           这是「没配就等于固定」的兜底——向量必须始终落在同一语义空间；
+        3. 其余类型：随机打散做负载均衡（这些调用彼此独立，无状态可比性要求）。
+
+        :return: 模型的响应；``resp.model`` 回填的是**注册名**，
+            需要真实模型 id 时用 ``llm_manager.get_model(resp.model).model``。
         """
-        调用指定类型的模型，返回每个模型的响应列表
-        :param model_type: 模型类型
-        :param content: 传递给每个模型的调用内容
-        :return: 所有模型响应的列表（顺序与 get_models 返回的顺序一致）
-        """
-        model_type: str = model_type.value
-        models = self.get_models(model_type)
+        type_key: str = model_type.value
+        models = self.get_models(type_key)
         if not models:
-            log.warning(f"没有找到类型为 '{model_type}' 的模型")
+            log.warning(f"没有找到类型为 '{type_key}' 的模型")
             raise ModelRequestError(NO_MODEL_ERR)
-        for model in random.sample(models, len(models)):
+
+        preferred = self._preferred.get(type_key)
+        head = [m for m in models if m.name == preferred] if preferred else []
+        rest = [m for m in models if m.name != preferred] if preferred else list(models)
+
+        if head:
+            candidates = head + rest
+        elif type_key in DETERMINISTIC_TYPES:
+            candidates = rest
+        else:
+            candidates = random.sample(rest, len(rest))
+
+        for model in candidates:
             times = 0
             while True:
                 try:
@@ -314,9 +372,33 @@ class LLMManager:
                     break
         raise ModelRequestError(ALL_MODEL_RESP_ERR)
 
+    def embedding_identity(self) -> tuple[str, str]:
+        """当前 embedding 的 (注册名, 真实模型 id)；没有配置时返回空串对。
+
+        记忆写入时要把这个标识存进 metadata：换模型后据此判断历史向量
+        能不能拿来比（不同空间的余弦值不可比）。
+
+        **解析顺序必须与 ``call_model_by_type`` 一致**，否则会出现
+        「写入时用 A 的向量、记录成 B 的标识」这种更隐蔽的错误。
+        """
+        type_key = ModelType.EMBEDDING.value
+        names = self._typed_models.get(type_key) or []
+        if not names:
+            return "", ""
+        preferred = self._preferred.get(type_key)
+        name = preferred if preferred in names else names[0]
+        primary = self._models[name]
+        return primary.name, primary.model
+
     def clear_all(self):
+        """清空所有模型与指定关系。
+
+        必须连 ``_preferred`` 一起清：重载 provider 后模型名可能已经不存在，
+        残留的指定会让下一次 ``set_preferred`` 之外的路径指向一个已消失的名字。
+        """
         self._models.clear()
         self._typed_models.clear()
+        self._preferred.clear()
 
     def has_type(self, model_type: ModelType) -> bool:
         return model_type.value in self._typed_models

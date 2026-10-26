@@ -16,6 +16,7 @@ from ..utils import log, request
 from .history import History
 from .memes import FaceManager
 from .memory.manage import memory_manager
+from .memory.persona import tag_emotion
 from .sender import ChatSender, OneBotChatSender, QQChatSender
 from .state import feel
 from .telemetry import telemetry
@@ -312,7 +313,7 @@ def register_function_calling():
 
         @classmethod
         def describe_rare(cls) -> str:
-            """当前会话可调用的不常用功能清单，附在 call 的说明后面。"""
+            """当前会话可调用的不常用功能清单。"""
             rare = FunctionCallingManager.get_rare_available()
             if not rare:
                 return ""
@@ -697,6 +698,14 @@ def register_function_calling():
                 description="新增记忆临时长期记忆,超出上限则先入先出,不要添加时间戳,直接输出记忆内容,可选",
             ),
             FunctionCallingArg(
+                name="emotion",
+                _type="float",
+                description=(
+                    "这条记忆对你的情绪冲击，-1.0 到 1.0。被冒犯/难过取负，"
+                    "被夸/开心取正，普通信息接近 0。越强的事你记得越久，可选"
+                ),
+            ),
+            FunctionCallingArg(
                 name="del",
                 _type="list[int]",
                 description="需要删除的记忆列表索引,请积极删除无用与过期的记忆,可选",
@@ -714,13 +723,17 @@ def register_function_calling():
             # 处理记忆变更
             mem = data.data.get("mem")
             del_index = data.data.get("del")
+            emotion = data.data.get("emotion")
             # 新增记忆
             user_info = get_user_info(data.sender_id)
             msg = []
             if mem:
-                user_info.memory.append(
-                    f"{now().strftime('%Y年%m月%d日%a-%H时%M分')} {mem}"
-                )
+                try:
+                    value = float(emotion or 0.0)
+                except (TypeError, ValueError):
+                    value = 0.0
+                stamped = f"{now().strftime('%Y年%m月%d日%a-%H时%M分')} {mem}"
+                user_info.memory.append(tag_emotion(stamped, value))
                 overflow = len(user_info.memory) - USER_MEMORY_LIMIT
                 if overflow > 0:
                     del user_info.memory[:overflow]
@@ -728,7 +741,7 @@ def register_function_calling():
                 else:
                     msg.append("新增记忆成功")
                 log.debug(
-                    f"用户 {data.sender_id} 新增记忆：{now().strftime('%Y年%m月%d日%a-%H时%M分')} {mem}"
+                    f"用户 {data.sender_id} 新增记忆：{now().strftime('%Y年%m月%d日%a-%H时%M分')} {mem} (情绪 {value:+.2f})"
                 )
             if del_index:
                 if type(del_index) is int:
@@ -765,6 +778,14 @@ def register_function_calling():
                     "如「今天被说成机器人，有点不服气」。不要写时间戳"
                 ),
             ),
+            FunctionCallingArg(
+                name="emotion",
+                _type="float",
+                description=(
+                    "这件事对你的情绪冲击，-1.0 到 1.0。委屈/难过取负，"
+                    "开心/被感动取正。越强的事你记得越久，可选"
+                ),
+            ),
         ]
 
         @staticmethod
@@ -772,10 +793,14 @@ def register_function_calling():
             mem = data.data.get("mem")
             if not mem:
                 return "没有内容，未记录"
-            ok = add_self_memory(str(mem))
+            try:
+                value = float(data.data.get("emotion") or 0.0)
+            except (TypeError, ValueError):
+                value = 0.0
+            ok = add_self_memory(str(mem), emotion=value)
             if not ok:
                 return "记录失败"
-            log.debug(f"亚托莉自我记忆：{mem}")
+            log.debug(f"亚托莉自我记忆：{mem} (情绪 {value:+.2f})")
             return f"已记下（共上限 {SELF_MEMORY_LIMIT} 条）"
 
     FunctionCallingManager.register(SelfMemoryFunctionCalling)

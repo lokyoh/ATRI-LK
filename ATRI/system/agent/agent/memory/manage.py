@@ -9,7 +9,7 @@ from ATRI.utils.datetime import today
 from ...llm import ModelRequestError, ModelType, llm_manager
 from ..history import history_logger
 from ..telemetry import telemetry
-from .database import MemoryDB, public_view
+from .database import EMBEDDING_MODEL_KEY, MemoryDB, public_view
 
 MEMORY_BATCH_SIZE = 105
 MEMORY_STEP = 100
@@ -90,12 +90,14 @@ class MemoryManager:
             log.warning(f"记忆查询 embedding 生成失败，跳过检索：{exc}")
             telemetry.memory(queried=False, hits=0, degraded=True)
             return []
+        _, model_id = llm_manager.embedding_identity()
         rows = self.database.query_by_vector(
             vector,
             top_k=top_k,
             min_similarity=min_similarity,
             chat_id=chat_id,
             subject=subject,
+            embedding_model=model_id or None,
         )
         telemetry.memory(
             queried=True,
@@ -134,6 +136,7 @@ class MemoryManager:
             return None
         importance = min(1.0, max(0.0, float(importance)))
         vector: list[float] | None = None
+        meta: dict[str, Any] = {"chat_id": str(chat_id), "source": "daily_summary"}
         if _has_embedding_model():
             try:
                 vectors = (
@@ -142,6 +145,9 @@ class MemoryManager:
                     )
                 ).content
                 vector = vectors[0]
+                _, model_id = llm_manager.embedding_identity()
+                if model_id:
+                    meta[EMBEDDING_MODEL_KEY] = model_id
             except (
                 IndexError,
                 KeyError,
@@ -156,7 +162,7 @@ class MemoryManager:
             content=memory,
             embedding=vector or [],
             importance=importance,
-            metadata={"chat_id": str(chat_id), "source": "daily_summary"},
+            metadata=meta,
             subject=subject,
             emotion=emotion,
         )

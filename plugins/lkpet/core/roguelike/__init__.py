@@ -68,6 +68,7 @@ from .settle import settle_run
 from .tower import (
     _enemy_skill_lines,
     _enemy_skill_note,
+    _floor_segments,
     _gen_monster,
     _is_elite_floor,
     _monster_label,
@@ -76,9 +77,12 @@ from .tower import (
     _region_events,
     boss_floor_set,
     elite_floors,
+    elite_gate_floor,
     enemy_pool,
     monster_trait_text,
     region_of,
+    shop_eligible_floors,
+    special_floors,
 )
 
 __all__ = [
@@ -103,6 +107,7 @@ __all__ = [
     "_enemy_skill_note",
     "_entry_cost",
     "_find_event",
+    "_floor_segments",
     "_gen_monster",
     "_grant_relic",
     "_has_run",
@@ -125,6 +130,7 @@ __all__ = [
     "advance",
     "boss_floor_set",
     "elite_floors",
+    "elite_gate_floor",
     "enemy_pool",
     "floor_rng",
     "get_or_create_rogue",
@@ -143,6 +149,8 @@ __all__ = [
     "resume",
     "retreat",
     "settle_run",
+    "shop_eligible_floors",
+    "special_floors",
     "start",
     "state_from_pending",
 ]

@@ -996,23 +996,30 @@ def _normal_floor_options(
 ) -> tuple[list[str], str, list[str], list[int | None]]:
     """普通层的三选一内容：商店规则优先，其余选项依次判事件，战斗位填不同敌人。
 
-    规则（``roguelike.yaml`` 的 ``floor_choice`` 块）：
+    规则（``roguelike.yaml`` 的 ``shop`` / ``floor_choice`` 块）：
 
-    1. **商店规则优先**：允许出现的层（``shop.no_before_gap`` 之后）按 ``shop.chance``
-       逐层判定（区域级 seed，可复现），不再每层必出；一旦刷出，商店占第 1 个名额，
+    1. **商店规则优先**：只有**可刷层**才判定（见 :func:`tower.shop_eligible_floors`
+       ——前 ``no_before_gap`` 层、遗物/补给/首领三种固定内容层、以及精英守门层都不算），
+       按 ``shop.chance`` 逐层掷骰，并叠加两道**按楼层构成**的保底：
+       ``gap_guarantee`` 只在同一连续段内算间隔（绝不跨过第 10 层遗物层），
+       ``min_per_region`` 保证整区至少一个商店。一旦刷出则占第 1 个名额，
        先于事件判定定下来，不参与概率抽取；
     2. **事件判定**：剩下的名额按顺序用 ``event_chance``（0.1 / 0.2 / 0.3）逐个判定，
        **顺序判定、只会出现一个事件**——一旦命中就停止，后面的选项直接成为战斗。
        因此第 1 位命中即 10%，第 2 位 90%×20%，第 3 位 90%×80%×30%；
     3. **战斗位**：一律从对应敌人池抽**互不相同**的敌人填满——普通层用该区域
-       ``region.monsters``、精英层用 ``region.elites``，保证同一层的几条战斗路线
-       不是同一只怪（精英遭遇的概率/保底规则不变，只改层内各战斗位的抽取方式；
-       旧存档没有预抽下标，沿用 rng 随机生成兜底）；
+       ``region.monsters``、精英层用 ``region.elites``。抽取走**区域级牌堆**
+       （见 :func:`tower._pick_enemy_indices`），相邻层几乎不会撞同一只怪；
+       旧存档没有预抽下标，沿用 rng 随机生成兜底；
     4. **排列**：生成顺序即展示顺序，不再打乱（商店在第 1 位，其余顺延）。
 
     返回 ``(options, event_id, stock, enemies)``，``enemies`` 与 ``options`` 等长。
     """
-    from .tower import _is_elite_floor, _pick_enemy_indices, _region_events
+    from .tower import (
+        _is_elite_floor,
+        _pick_enemy_indices,
+        _region_events,
+    )
 
     choice_cfg = cfg.get("floor_choice", {}) or {}
     slot_count = max(1, int(choice_cfg.get("option_count", 3)))
@@ -1021,12 +1028,8 @@ def _normal_floor_options(
 
     options: list[str] = []
     stock: list[str] = []
-    shop_cfg = cfg.get("shop") or {}
-    gap = int(shop_cfg.get("no_before_gap", 5))
     shop_rng = floor_rng(run.seed, floor, "shop")
-    if floor >= int(region["start"]) + gap and shop_rng.random() < float(
-        shop_cfg.get("chance", 0) or 0
-    ):
+    if _roll_shop(run, region, cfg, floor, shop_rng):
         options.append("shop")
         stock = _shop_stock(run, cfg, shop_rng)
 
@@ -1061,6 +1064,104 @@ def _normal_floor_options(
                 enemies[index] = indices[cursor]
                 cursor += 1
     return options, event_id, stock, enemies
+
+
+def _roll_shop(
+    run: RogueRun,
+    region: dict[str, Any],
+    cfg: dict[str, Any],
+    floor: int,
+    rng: random.Random,
+) -> bool:
+    """本层是否刷出商店：基础概率 + 段内间隔保底 + 整区保底。
+
+    保底必须**按楼层构成**来算，不能按绝对层号：
+
+    - 只有 ``shop_eligible_floors`` 里的层才可能刷商店（前 N 层、以及遗物/补给/
+      首领三种固定内容层都不算，第 18 层这类精英守门层默认也排除）；
+    - 可刷层被固定内容层切成若干**连续段**（例如 6-9 与 11-18），
+      ``gap_guarantee`` 的间隔只在**段内**计算，绝不跨段——否则第 10 层遗物层
+      会被当成「已经空了很多层」，从而把补点算到放不了商店的层上；
+    - ``min_per_region`` 保证每个区域至少刷出商店，消灭「整区一个商店都没有」。
+
+    整个过程是 ``(seed, region, floor)`` 的纯函数，可复现，不需要存状态。
+    """
+    shop_cfg = cfg.get("shop") or {}
+    return floor in _shop_floors(
+        run.seed, region, cfg, chance=float(shop_cfg.get("chance", 0) or 0)
+    )
+
+
+def _shop_floors(
+    seed: int,
+    region: dict[str, Any],
+    cfg: dict[str, Any],
+    *,
+    chance: float | None = None,
+) -> set[int]:
+    """一次算出整个区域「哪些层刷出商店」的集合（``(seed, region, cfg)`` 的纯函数）。
+
+    必须在**区域级**一次算完，而不是每层各自判断：段内间隔保底的锚点要看
+    「前一个商店层」是否成立，而那个层本身可能也是被保底补出来的；逐层独立
+    判断会把保底层当成没有商店，误差逐层累积，间隔最终超标。
+
+    处理顺序：
+    1. 逐层基础掷骰（只有 ``shop_eligible_floors`` 内的层参与）；
+    2. ``gap_guarantee``：在每个**连续段内**，距上一个商店超过 N 层就强制补，
+       补出来的层同样作为后续判断的锚点；
+    3. ``min_per_region``：整区一个都没刷出来时，把该区最后一个可刷层顶成商店。
+    """
+    from .tower import _floor_segments, shop_eligible_floors, special_floors
+
+    shop_cfg = cfg.get("shop") or {}
+    if chance is None:
+        chance = float(shop_cfg.get("chance", 0) or 0)
+    eligible = shop_eligible_floors(region, cfg)
+    if not eligible:
+        return set()
+
+    picked = {f for f in eligible if floor_rng(seed, f, "shop").random() < chance}
+
+    gap_guarantee = int(shop_cfg.get("gap_guarantee", 0) or 0)
+    if gap_guarantee > 0:
+        segments = _floor_segments(
+            int(region["start"]),
+            int(region["end"]),
+            set(special_floors(region, cfg)),
+        )
+        for segment in segments:
+            allowed = [f for f in segment if f in eligible]
+            if not allowed:
+                continue
+            anchor = allowed[0] - 1
+            for floor in allowed:
+                if floor in picked:
+                    anchor = floor
+                elif floor - anchor > gap_guarantee:
+                    picked.add(floor)
+                    anchor = floor
+
+    if int(shop_cfg.get("min_per_region", 0) or 0) > 0 and not picked:
+        picked.add(eligible[-1])
+    return picked
+
+
+def _roll_shop(
+    run: RogueRun,
+    region: dict[str, Any],
+    cfg: dict[str, Any],
+    floor: int,
+    rng: random.Random,
+) -> bool:
+    """本层是否刷出商店（逻辑见 :func:`_shop_floors`）。
+
+    ``rng`` 参数保留是为了调用方签名稳定，实际随机源按
+    ``floor_rng(seed, floor, "shop")`` 派生；商店货架仍用调用方传入的 rng 抽取。
+    """
+    shop_cfg = cfg.get("shop") or {}
+    return floor in _shop_floors(
+        run.seed, region, cfg, chance=float(shop_cfg.get("chance", 0) or 0)
+    )
 
 
 def _shop_stock(run: RogueRun, cfg: dict[str, Any], rng: random.Random) -> list[str]:

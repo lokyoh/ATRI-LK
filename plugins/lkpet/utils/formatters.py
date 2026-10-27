@@ -162,6 +162,21 @@ def _mp_cost_note(spec: dict[str, Any]) -> str:
     return str(cost) if cost > 0 else "无"
 
 
+AOE_TARGETS = frozenset({"all", "all_enemies", "aoe"})
+"""``target`` 取这些值即为群体技能（与 ``battle.BattleSession._is_aoe`` 同口径）。"""
+
+
+def _skill_scope_note(spec: dict[str, Any]) -> str:
+    """技能作用范围的展示后缀：群体技能标「〔群〕」，单体不加任何字符。
+
+    只给群体加标记，避免把每一行都塞满「单体」这种废话；玩家扫一眼就能
+    认出哪几个是清群怪用的。
+    """
+    if str(spec.get("target", "single")).strip().lower() in AOE_TARGETS:
+        return "〔群〕"
+    return ""
+
+
 def format_skill_list(pet, skills_config: dict[str, Any] | None = None) -> str:
     """Render the skill card: equipped slots first, then the collection pool.
 
@@ -215,8 +230,9 @@ def format_skill_list(pet, skills_config: dict[str, Any] | None = None) -> str:
                 lines.append(
                     text(
                         "skill.equipped_line",
-                        "· {name}｜威力 {power}｜耗魔 {mp_cost}｜熟练度 {proficiency}",
+                        "· {name}{scope}｜威力 {power}｜耗魔 {mp_cost}｜熟练度 {proficiency}",
                         name=skill_name(skill_id, cfg),
+                        scope=_skill_scope_note(spec),
                         power=spec.get("power", 0),
                         mp_cost=_mp_cost_note(spec),
                         proficiency=round(

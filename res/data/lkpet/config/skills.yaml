@@ -1,4 +1,4 @@
-﻿# 技能系统（主动 / 被动 + 收集池 + 装备槽）
+# 技能系统（主动 / 被动 + 收集池 + 装备槽）
 #
 # 结构总览
 #   · ``skills``  技能定义表（**列表**，每条带稳定的 ``id``）
@@ -31,7 +31,10 @@
 #   leech      吸血比例：造成伤害按此比例回复局内生命
 #   mp_cost    消耗局内 MP
 #   cooldown   冷却，单位 = 计时条周期（计时条每轮 +10，满 100 全体冷却 -1）
-#   target     single / self（self 目前仅用于治疗类）
+#   target     single（单体，默认）/ all（**群体**，打全部存活敌人）/ self（治疗类）
+#              群体技能每个目标再乘 battle.aoe.factor（默认 0.6），所以
+#              「威力 52 的烈焰波」打 3 只时总伤害约 52×0.6×3 = 93.6 倍基准，
+#              打 1 只只有 0.6 倍 —— 群攻是清群怪用的，单体首领仍应上单体技能。
 #   effects    [{ type: heal, amount }] 回血（要求 power: 0）｜[{ type: mp, amount }] 回蓝
 #
 # === 被动技能字段 ===
@@ -71,6 +74,7 @@ pools:
       - pierce
       - twin_fangs
       - whirl
+      - sweep
       - flame_wave
       - ice_shard
       - thunder_clap
@@ -152,9 +156,11 @@ skills:
   - { id: pierce, name: 贯穿刺, type: active, element: normal, power: 44, mp_cost: 10, cooldown: 1, target: single }
   - { id: twin_fangs, name: 双牙咬, type: active, element: normal, power: 26, strikes: 2, mp_cost: 12, cooldown: 1, target: single }
   - { id: whirl, name: 回旋斩, type: active, element: normal, power: 20, strikes: 3, mp_cost: 16, cooldown: 2, target: single }
-  - { id: flame_wave, name: 烈焰波, type: active, element: fire, power: 52, mp_cost: 18, cooldown: 2, target: single }
+  # 群体：横扫正面所有敌人（每目标按 battle.aoe.factor 衰减）
+  - { id: sweep, name: 横扫千军, type: active, element: normal, power: 34, mp_cost: 18, cooldown: 2, target: all }
+  - { id: flame_wave, name: 烈焰波, type: active, element: fire, power: 52, mp_cost: 22, cooldown: 2, target: all }
   - { id: ice_shard, name: 冰棱刺, type: active, element: ice, power: 46, mp_cost: 12, cooldown: 1, target: single }
-  - { id: thunder_clap, name: 落雷, type: active, element: thunder, power: 54, mp_cost: 20, cooldown: 2, target: single }
+  - { id: thunder_clap, name: 落雷, type: active, element: thunder, power: 54, mp_cost: 24, cooldown: 2, target: all }
   - { id: stone_fist, name: 碎岩拳, type: active, element: earth, power: 48, mp_cost: 14, cooldown: 1, target: single }
   - { id: wind_blade, name: 风刃, type: active, element: wind, power: 42, mp_cost: 8, cooldown: 0, target: single }
   - { id: shadow_cut, name: 影袭, type: active, element: dark, power: 50, mp_cost: 16, cooldown: 2, target: single }
@@ -238,7 +244,7 @@ skills:
     strikes: 4
     mp_cost: 42
     cooldown: 3
-    target: single
+    target: all
   - { id: sam_eternal_blade, name: 永劫之刃, type: active, element: normal, power: 84, mp_cost: 34, cooldown: 2, target: single }
   - { id: sam_aether_bolt, name: 以太爆裂, type: active, element: light, power: 88, mp_cost: 40, cooldown: 3, target: single }
   - id: sam_life_drain

@@ -235,9 +235,46 @@ def _apply_monster_traits(monster: dict[str, Any], cfg: dict[str, Any]) -> None:
             mult = trait.get(f"{stat}_mult")
             if mult:
                 monster[stat] = max(1, round(monster[stat] * float(mult)))
-        for key in ("strikes", "strike_mult", "crit_rate", "leech", "thorns"):
+        for key in ("crit_rate", "leech", "thorns"):
             if key in trait:
                 monster[key] = trait[key]
+        # pack 只登记规格，真正的拆分放到精英倍率之后（见 _gen_monster），
+        # 这样「群袭 + 精英」也是「精英体质 × 只数」而不是「只数 × 普通体质」。
+        pack = trait.get("pack")
+        if isinstance(pack, dict) and pack:
+            monster["pack"] = dict(pack)
+
+
+def _split_pack(monster: dict[str, Any], cfg: dict[str, Any]) -> None:
+    """把带 ``pack`` 的怪拆成真正的一群（就地修改为**单只**的面板）。
+
+    群怪不是一个共用血条：场上会真的站 ``count`` 只，各自一条命、各攒各的
+    攻击条、各自出手，我方也一次只能打掉其中一只。
+
+    * ``hp_share``：群体**总**生命 = 当层公式结果 × hp_share，再平摊到每只；
+    * ``atk_mult / def_mult / spd_mult``：每只的个体乘区（攻击按只数摊薄）。
+
+    带技能或形态的单位（精英/首领）不拆分——技能挂在单一本体上，拆开会变成
+    「三只会召唤的狼王」。这类 `swarm` 视为无效配置，只保留特点标注。
+    """
+    spec = monster.get("pack")
+    if not isinstance(spec, dict) or not spec:
+        return
+    if monster.get("skills") or monster.get("phases"):
+        monster.pop("pack", None)
+        return
+    max_units = max(1, int((cfg.get("battle") or {}).get("max_units", 4)))
+    count = max(1, min(int(spec.get("count", 1) or 1), max_units))
+    if count <= 1:
+        monster.pop("pack", None)
+        return
+
+    total_hp = max(count, round(monster["hp"] * float(spec.get("hp_share", 1.0))))
+    monster["hp"] = max(1, round(total_hp / count))
+    monster["atk"] = max(1, round(monster["atk"] * float(spec.get("atk_mult", 1.0))))
+    monster["def"] = max(0, round(monster["def"] * float(spec.get("def_mult", 1.0))))
+    monster["spd"] = max(1, round(monster["spd"] * float(spec.get("spd_mult", 1.0))))
+    monster["pack"] = {"count": count, "hp_each": monster["hp"]}
 
 
 def monster_trait_text(traits: list[str], cfg: dict[str, Any] | None = None) -> str:
@@ -499,4 +536,6 @@ def _gen_monster(
             coin_range = boss.get("coins", [monster["coins"], monster["coins"]])
             monster["coins"] = rng.randint(int(coin_range[0]), int(coin_range[1]))
             monster["exp"] = int(boss.get("exp", monster["exp"]))
+    # 群怪拆分放在所有倍率之后：先把「一整群」的体质算完，再平摊成每只的面板。
+    _split_pack(monster, cfg)
     return monster

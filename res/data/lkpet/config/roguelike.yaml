@@ -61,6 +61,7 @@ tower:
         - { name: 枯叶刃魔, traits: [swift], desc: 由成千片干枯落叶拼成，掠过时像一阵刮在皮肤上的噪音。 }
         - { name: 夜梟, traits: [thin, crit], desc: 无声地贴着树冠滑过，只有翅膀带起的冷风提醒你还活着。 }
         - { name: 蛊惑花, traits: [leech, thin], desc: 花心散发你最喜欢的气味，凑近时才发现根须已经缠上脚踝。 }
+        - { name: 腐叶虫群, traits: [swarm], desc: 落叶底下的一层会动的东西，一脚踩下去才知道有多少只。 }
       rewards: { coins: 5, coins_per_floor: 1, exp: 60, exp_per_floor: 4 }
       shop: { heal_mult: 2.5 }
       elites:
@@ -90,6 +91,7 @@ tower:
         - { name: 黑曜傀儡, traits: [thick, slow], desc: 黑曜石拼成的巨块，转身很慢，但碰一下就是满手血。 }
         - { name: 火苗精灵, traits: [fragile], desc: 一小簇活着的火苗，呼吸就能吹得它摇晃，也最会烧人。 }
         - { name: 熔岩蟹, traits: [thick, tough], desc: 壳缝里嵌着冷却的岩浆，横着走过来时像一堵移动的矮墙。 }
+        - { name: 火星蚁群, traits: [swarm], desc: 从裂缝里涌出来的一串红点，单个比指甲还小，成群时像流火。 }
       rewards: { coins: 10, coins_per_floor: 2, exp: 140, exp_per_floor: 7 }
       shop: { heal_mult: 5 }
       elites:
@@ -119,6 +121,8 @@ tower:
         - { name: 寒风元素, traits: [swift, fragile], desc: 一股有了方向的寒气，吹散它很容易，被它穿身则很难受。 }
         - { name: 白熊, traits: [thick], desc: 厚膘挡刀，站起来比两个你还高，通常是被吵醒的。 }
         - { name: 冰面猎手, traits: [swift, crit], desc: 在镜面一样的冰上滑行，只在三步之内才让你看见它的脸。 }
+        - { name: 冰晶螨群, traits: [swarm], desc: 冰缝里的一层白霜忽然开始移动，凑近才看清是无数只半透明的螨。 }
+
       rewards: { coins: 18, coins_per_floor: 3, exp: 300, exp_per_floor: 12 }
       shop: { heal_mult: 9 }
       elites:
@@ -168,12 +172,20 @@ elite:
 # 怪物特点：数值乘区/行为参数全部外置在这里（展示用中文标签在 texts.yaml 的 rogue.traits）。
 # region.monsters[].traits 列 0-2 个特点 id；没有特点的怪不显示标注。
 #   *_mult        该属性乘区（特点在精英/首领倍率**之前**作用）
-#   strikes       每次出击命中次数（群袭）；strike_mult 每击伤害乘区
 #   crit_rate     敌方暴击概率（倍率沿用 battle.crit_mult）
 #   leech         吸血：造成损害的回复比例（封顶自身生成时生命）
 #   thorns        棘刺：我方打出的伤害按比例反弹到局内生命
+#   pack          **真正的一群**：拆成 count 只独立单位，各自一条命、各攒各的攻击条
 monster_traits:
-  swarm:   { strikes: 2, strike_mult: 0.6 }
+  # 群怪**不是一个共用血条**，而是场上真的站着 count 只：我方一次只能打掉其中一只，
+  # 其余仍在，它们各自按自己的速度攒条、各自出手。带技能的单位（精英/首领）不拆分。
+  #   count      分裂只数（再受 battle.max_units 约束；被压到 1 时退化为普通单体）
+  #   hp_share   群体**总**生命 = 当层公式生命 × hp_share，再平摊给每一只
+  #   *_mult     每只的个体属性乘区
+  # 输出口径：每只攻击 ×0.4、共 3 只各自独立行动 → 群体总输出约为单体的 1.2 倍，
+  # 比普通怪凶一点，但可以被逐只蚕食掉（打死的不会再出手）。
+  swarm:
+    pack: { count: 3, hp_share: 0.9, atk_mult: 0.4, def_mult: 0.8, spd_mult: 1.0 }
   thick:   { hp_mult: 1.35 }
   thin:    { hp_mult: 0.7 }
   strong:  { atk_mult: 1.3 }
@@ -220,6 +232,14 @@ battle:
   log_limit: 12
   # 场上敌人数量上限（首领本体 + 召唤物）：超过则不再召唤。
   max_units: 4
+  # 群体技能（skills.yaml 里 target: all）：一次打**全部存活敌人**，
+  # 每个目标的伤害再乘 factor —— 打 3 只时总伤 = 威力 × 0.6 × 3 = 1.8 倍，
+  # 打 1 只时只有 0.6 倍。所以群攻清群怪、单体打首领，各有各的场合。
+  #   factor       每目标伤害乘区（默认 0.6）
+  #   max_targets  最多命中几个目标（0 = 跟随 max_units）
+  aoe:
+    factor: 0.6
+    max_targets: 0
   # 敌方技能资源（仅精英/首领及其召唤物使用）：入场满蓝，计时条每满一次回复 regen。
   enemy_mp: { base: 50, elite_mult: 1.6, boss_mult: 2.4, minion_mult: 0.6, regen: 8 }
 

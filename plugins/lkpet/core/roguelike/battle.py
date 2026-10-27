@@ -41,6 +41,15 @@ class BattleResult:
     mp_cap: int = 0
     """局内魔力上限（供 ``_do_battle`` 写回 run，展示「MP x/y」）。"""
 
+    enemy_hp: int = 0
+    """敌方**全体**剩余生命（群怪是所有成员之和，不是单只）。"""
+    enemy_hp_full: int = 0
+    """敌方**全体**入场生命（含群怪全部成员）。"""
+    enemy_units: int = 1
+    """入场时的敌方单位数（群怪 > 1）。"""
+    enemy_alive: int = 0
+    """战斗结束时仍存活的敌方单位数。"""
+
 
 def _damage(
     atk: int, defence: int, variance: list[float], def_factor: float, rng: random.Random
@@ -48,6 +57,17 @@ def _damage(
     """基础伤害公式。"""
     raw = (atk - defence * def_factor) * rng.uniform(*variance)
     return max(1, round(raw))
+
+
+_PACK_MARKS = "①②③④⑤⑥⑦⑧⑨⑩"
+"""群怪成员的编号后缀：让战报里一眼分出「哪一只在出手」。"""
+
+
+def _pack_mark(index: int) -> str:
+    """第 ``index`` 只群怪的后缀（1 起；超出范围回退为 ``#N``）。"""
+    if 1 <= index <= len(_PACK_MARKS):
+        return _PACK_MARKS[index - 1]
+    return f"#{index}"
 
 
 class BattleSession:
@@ -114,6 +134,12 @@ class BattleSession:
         self.max_frames = max(1, self.max_rounds * self.frames_per_turn)
         self.crit_mult = float(battle_cfg.get("crit_mult", 1.8))
         self.max_units = max(1, int(battle_cfg.get("max_units", 4)))
+        # 群体技能（target: all）参数：每个目标的伤害衰减与命中上限。
+        aoe_cfg = battle_cfg.get("aoe", {}) or {}
+        self.aoe_factor = float(aoe_cfg.get("factor", 0.6))
+        self.aoe_max_targets = max(
+            1, int(aoe_cfg.get("max_targets", 0) or self.max_units)
+        )
         # 「不可行动」（眩晕）参数：数值与上限全部外置，便于按首领特点配平。
         self.unactionable = unactionable_cfg(cfg)
         # 局内魔力：每层 / 每个战斗回合（= 我方每次行动）的回复比例。
@@ -133,14 +159,41 @@ class BattleSession:
         self.enemy_phases_cfg: dict[str, Any] = cfg.get("enemy_phases", {}) or {}
         self._setup_enemy_mp()
 
-        # 战斗单位
+        # 战斗单位：群怪（monster["pack"]）入场即拆成多只**独立**单位，
+        # 各自一条命、各攒各的攻击条——不是一个共用血条。
+        # tower._split_pack 已把 hp/atk/def/spd 折算成「单只面板」，这里只负责
+        # 复制出 count 份、按 ①②③ 命名，并把奖励留在第一只身上。
+        pack = monster.get("pack") or {}
+        pack_count = max(1, min(int(pack.get("count", 1) or 1), self.max_units))
+        if pack_count > 1:
+            # 编号从 ① 开始给**每一只**都加：如果第一只不带号，战报里会被
+            # 读者当成「本体」，与「同质的 N 只」这个事实不符。
+            first = dict(monster)
+            first["name"] = f"{monster['name']}{_pack_mark(1)}"
+            first["pack"] = {}
+        else:
+            first = monster
         self.units: list[dict[str, Any]] = [
-            self._spawn_unit(monster, primary=True, minion=False)
+            self._spawn_unit(first, primary=True, minion=False, pack=pack_count > 1)
         ]
+        for index in range(2, pack_count + 1):
+            member = dict(monster)
+            member["hp"] = max(1, int(monster["hp"]))
+            member["name"] = f"{monster['name']}{_pack_mark(index)}"
+            # 掉落只结算一次（挂在第一只身上），否则打 3 只拿 3 份金币/经验。
+            member["coins"] = 0
+            member["exp"] = 0
+            member["pack"] = {}
+            self.units.append(
+                self._spawn_unit(member, primary=False, minion=True, pack=True)
+            )
         self.dots: list[dict[str, Any]] = []
         self.pet_debuffs: list[dict[str, Any]] = []
         self.pet_mods = {"atk_mult": 1.0, "def_mult": 1.0, "spd_mult": 1.0}
         self.current_target: dict[str, Any] | None = None
+        # 敌方全员入场生命（群怪是全部成员之和）：战报的「敌方剩余 x/y」用它，
+        # 不能用 monster["hp"]——那是拆分后的**单只**血量。
+        self.enemy_hp_full = sum(max(0, int(rec["hp_cap"])) for rec in self.units)
 
         # 战斗状态
         self.gauge_pet = 0.0
@@ -317,6 +370,36 @@ class BattleSession:
             (int(e.get("amount", 0)) for e in effects if e.get("type") == "heal"), 0
         )
 
+    @staticmethod
+    def _is_aoe(skill: dict[str, Any]) -> bool:
+        """是否群体技能（``target: all``）。
+
+        群体技能一次打**全部存活敌人**，每个目标按 ``battle.aoe.factor`` 衰减。
+        单体技能仍走 ``target: single``（默认）。``self`` 是治疗类，不算群攻。
+        """
+        return str(skill.get("target", "single")).strip().lower() in (
+            "all",
+            "all_enemies",
+            "aoe",
+        )
+
+    def _skill_priority(self, skill_id: str, skill: dict[str, Any]) -> float:
+        """技能排序权重（越大越先放）。
+
+        在「威力 × 熟练度」之上叠加群体加成：群攻对**多目标**时总收益远高于
+        单体，若仍按单体威力排序，玩家有群攻也永远轮不到它出手（单体威力
+        普遍更高）。这里按「实际目标数」折算期望总伤害来决定优先级：
+
+        * 单体：``威力``
+        * 群体：``威力 × 命中目标数 × aoe_factor``（打 1 只时低于单体，
+          所以只有真的一群怪在场时群攻才会被优先选中）
+        """
+        power = get_skill_power(self.pet, skill_id, self.skills_cfg)
+        if not self._is_aoe(skill):
+            return power
+        hitting = max(1, min(len(self._live_units()), self.aoe_max_targets))
+        return power * hitting * self.aoe_factor
+
     def _strike_back(self, unit: dict[str, Any], dealt: int) -> None:
         """棘刺特点：反弹伤害。"""
         thorns = float(unit.get("thorns", 0.0))
@@ -394,31 +477,52 @@ class BattleSession:
                     for sid, sk in self.active_pairs
                     if self._heal_amount(sk) == 0 and self.cooldowns.get(sid, 0) <= 0
                 ),
-                key=lambda pair: -get_skill_power(self.pet, pair[0], self.skills_cfg),
+                key=lambda pair: -self._skill_priority(pair[0], pair[1]),
             )
             for skill_id, skill in ranked:
                 cost = int(skill.get("mp_cost", 0))
                 if self.pet_mp < cost:
                     continue
                 self.pet_mp -= cost
+                is_aoe = self._is_aoe(skill)
+                # 群体技能打**全部存活敌人**；单体技能打当前目标。
+                targets = self._live_units() if is_aoe else [target]
+                if not targets:
+                    continue
                 factor = (
                     get_skill_power(self.pet, skill_id, self.skills_cfg)
                     / BASE_SKILL_POWER
                 )
+                # 群体技能每个目标按 aoe_factor 衰减（见 roguelike.yaml battle.aoe）。
+                if is_aoe:
+                    factor *= self.aoe_factor
                 strikes = max(1, int(skill.get("strikes", 1) or 1))
                 dealt_total = 0
                 crit_any = False
-                for _ in range(strikes):
-                    if target["unit"]["hp"] <= 0:
-                        break
-                    dmg, is_crit = self._pet_damage(
-                        int(target["unit"]["def"]), bool(target["primary"])
+                for rec in targets:
+                    for _ in range(strikes):
+                        if rec["unit"]["hp"] <= 0:
+                            break
+                        dmg, is_crit = self._pet_damage(
+                            int(rec["unit"]["def"]), bool(rec["primary"])
+                        )
+                        dealt = max(1, round(dmg * factor))
+                        rec["unit"]["hp"] -= dealt
+                        dealt_total += dealt
+                        crit_any = crit_any or is_crit
+                        self._charge_taken(rec, dealt)
+                        self._strike_back(rec["unit"], dealt)
+                if is_aoe:
+                    self._blog(
+                        "log_skill_aoe",
+                        "回合{round} {actor} 使用【{skill}】，"
+                        "对 {count} 名敌人共造成 {dmg} 伤害。",
+                        actor=self.pet.name,
+                        skill=str(skill.get("name") or skill_id),
+                        count=len(targets),
+                        dmg=dealt_total,
                     )
-                    dealt = max(1, round(dmg * factor))
-                    target["unit"]["hp"] -= dealt
-                    dealt_total += dealt
-                    crit_any = crit_any or is_crit
-                if strikes > 1:
+                elif strikes > 1:
                     self._blog(
                         "log_skill_multi",
                         "回合{round} {actor} 使用【{skill}】，{strikes} 连击共 {dmg} 伤害。",
@@ -436,8 +540,8 @@ class BattleSession:
                         dmg=dealt_total,
                     )
                 self._blog_crit(crit_any)
-                self._charge_taken(target, dealt_total)
-                self._strike_back(target["unit"], dealt_total)
+                # 注意：打断累积与棘刺反弹已在逐目标循环里结算过，
+                # 这里不能再对 target 重复调用（否则单体技能会双倍反弹/双倍打断）。
                 # 吸血：按实际伤害比例回复局内生命（不超上限）。
                 leech = float(skill.get("leech", 0.0) or 0.0)
                 if leech > 0 and dealt_total > 0:
@@ -496,15 +600,26 @@ class BattleSession:
         ]
 
     def _spawn_unit(
-        self, unit: dict[str, Any], *, primary: bool, minion: bool
+        self,
+        unit: dict[str, Any],
+        *,
+        primary: bool,
+        minion: bool,
+        pack: bool = False,
     ) -> dict[str, Any]:
-        """生成战斗单位。"""
+        """生成战斗单位。
+
+        ``pack`` 仅标记「这只属于群怪」（同一群里的独立个体）；它与 ``minion``
+        的区别是语义：召唤物在本体倒下时一并消散，群怪成员不会。
+        """
         skills = self._unit_skills(unit)
         mult = self.minion_mp_mult if minion else self.primary_mp_mult
         pool = max(0, int(self.mp_base * mult))
         return {
             "unit": unit,
             "primary": primary,
+            "minion": minion,
+            "pack": pack,
             "hp_cap": max(1, int(unit["hp"])),
             "skills": skills,
             "cd": dict.fromkeys(skills, 0),
@@ -526,6 +641,11 @@ class BattleSession:
             "fired": set(),
         }
 
+    @staticmethod
+    def _is_pack_member(record: dict[str, Any]) -> bool:
+        """该单位是否属于群怪（同群的独立个体，不随本体倒下而消散）。"""
+        return bool(record.get("pack"))
+
     def _live_units(self) -> list[dict[str, Any]]:
         return [rec for rec in self.units if rec["unit"]["hp"] > 0]
 
@@ -543,14 +663,20 @@ class BattleSession:
         )
 
     def _settle_deaths(self) -> None:
-        """击倒结算。"""
+        """击倒结算。
+
+        「本体倒下，召唤物一同消散」只适用于**召唤**出来的援军；群怪
+        （``monster["pack"]``）是各自独立的个体，打掉一只绝不能连带清场——
+        它们本来就不是召唤物，只是同名的同类。
+        """
         primary = self.units[0]
         if primary["unit"]["hp"] <= 0:
             for record in self.units:
-                if record is not primary:
-                    record["charge"] = None
-                    if record["unit"]["hp"] > 0:
-                        record["unit"]["hp"] = 0
+                if record is primary or self._is_pack_member(record):
+                    continue
+                record["charge"] = None
+                if record["unit"]["hp"] > 0:
+                    record["unit"]["hp"] = 0
         for record in self.units:
             if record["unit"]["hp"] <= 0 and not record.get("dead_logged"):
                 record["dead_logged"] = True
@@ -1032,6 +1158,10 @@ class BattleSession:
             monster_acts=self.monster_acts,
             crits=self.crits,
             mp_cap=self.mp_cap,
+            enemy_hp=sum(max(0, int(rec["unit"]["hp"])) for rec in self.units),
+            enemy_hp_full=self.enemy_hp_full,
+            enemy_units=len(self.units),
+            enemy_alive=len(self._live_units()),
         )
 
     def _run_round(self) -> None:
@@ -1232,7 +1362,9 @@ async def _do_battle(
     )
 
     mults = relic_multipliers(rogue)
-    monster_hp_full = int(monster["hp"])
+    # 群怪是多个独立单位：monster["hp"] 只是**单只**血量，战报要用全员合计。
+    pack_count = max(1, int((monster.get("pack") or {}).get("count", 1) or 1))
+    monster_hp_full = int(monster["hp"]) * pack_count
     log_limit = int((cfg.get("battle") or {}).get("log_limit", 0))
     battle_log: list[tuple[int, str]] | None = [] if log_limit > 0 else None
     result = _auto_battle(pet, run, monster, cfg, rng, mults, battle_log)
@@ -1272,6 +1404,16 @@ async def _do_battle(
     trait_line = _monster_trait_line(monster)
     if trait_line:
         lines.append(trait_line)
+    # 群怪：明确告诉玩家「这是 N 只，各自一条命」，别让人以为是共用一个血条。
+    if pack_count > 1:
+        lines.append(
+            _text(
+                "battle_pack_line",
+                "🐝 一群 {count} 只（各自生命 {hp_each}，需逐只击倒）",
+                count=pack_count,
+                hp_each=int(monster["hp"]),
+            )
+        )
     if monster.get("boss") or is_elite:
         lines.extend(_enemy_skill_lines(monster, cfg, hint=True))
     lines.append(
@@ -1306,7 +1448,7 @@ async def _do_battle(
                     "💀 被 {monster} 击败……（{rounds} 回合）我方生命归零，敌方剩余 {monster_hp}/{monster_hp_full}，本局结束，按到达层数结算。",
                     monster=_monster_name(monster),
                     rounds=result.rounds,
-                    monster_hp=max(0, int(monster["hp"])),
+                    monster_hp=result.enemy_hp,
                     monster_hp_full=monster_hp_full,
                 )
             )
@@ -1319,7 +1461,7 @@ async def _do_battle(
                     rounds=result.rounds,
                     hp=run["hp"],
                     hp_max=run["hp_max"],
-                    monster_hp=max(0, int(monster["hp"])),
+                    monster_hp=result.enemy_hp,
                     monster_hp_full=monster_hp_full,
                 )
             )

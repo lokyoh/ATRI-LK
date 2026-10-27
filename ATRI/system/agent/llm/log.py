@@ -1,6 +1,7 @@
 """Agent/LLM 模型输入输出的独立日志。
 
-- 目录：``data/logs/llm``，每次启动新建一轮运行目录，滚动保留最近 3 轮；
+- 目录：``data/logs/llm``，日志文件直接放在该目录下，不按天/按启动创建子目录；
+- 文件：``llm-<启动时间>.log``，每次启动新建一份，滚动保留最近 3 次启动的日志；
 - 单个日志文件最大 10MB，超出后由 loguru 自动轮转；
 - 主日志只保留一行调用摘要，完整的输入/输出仅写入本日志；
 - 文本按“调用”分块记录，图片/音频等二进制内容只记录类型和长度，避免日志爆炸。
@@ -31,7 +32,7 @@ MAX_LOG_SIZE = "10 MB"
 """单个日志文件上限"""
 
 MAX_RUNS = 3
-"""保留最近几次启动的日志"""
+"""保留最近几次启动的日志文件组"""
 
 MAX_TEXT_CHARS = 100_000
 """单段文本最大记录字符数，超出部分会被截断"""
@@ -39,9 +40,10 @@ MAX_TEXT_CHARS = 100_000
 MAX_RECORD_CHARS = 500_000
 """单次调用记录的最大字符数，避免单条记录把日志文件顶过 10MB"""
 
-_RUN_DIR_PATTERN = re.compile(r"^\d{8}-\d{6}(?:-\d+)?$")
+_LOG_FILE_PATTERN = re.compile(r"^llm-(\d{8}-\d{6}(?:-\d+)?)(?:\..*)?\.log$")
+_LEGACY_DIR_PATTERN = re.compile(r"^\d{8}-\d{6}(?:-\d+)?$")
 
-_run_dir: Path | None = None
+_log_file: Path | None = None
 _sink_id: int | None = None
 _initialized = False
 _atexit_registered = False
@@ -49,46 +51,60 @@ _atexit_registered = False
 _llm_logger = logger.bind(**{LLM_LOG_EXTRA: True})
 
 
-def _prepare_run_dir(root: Path) -> Path:
-    """创建本轮运行目录，并删除超过保留轮数的旧目录。"""
-    root.mkdir(parents=True, exist_ok=True)
+def _scan_runs(root: Path) -> dict[str, list[Path]]:
+    """按启动时间分组扫描日志文件（轮转文件与主文件属于同一组）。"""
+    runs: dict[str, list[Path]] = {}
+    for path in root.iterdir():
+        if not path.is_file():
+            continue
+        match = _LOG_FILE_PATTERN.match(path.name)
+        if match:
+            runs.setdefault(match.group(1), []).append(path)
+    return runs
+
+
+def _remove_legacy_run_dirs(root: Path) -> None:
+    """清理旧版按启动时间创建的子目录。"""
+    for path in root.iterdir():
+        if path.is_dir() and _LEGACY_DIR_PATTERN.match(path.name):
+            shutil.rmtree(path, ignore_errors=True)
+
+
+def _new_run_id(root: Path) -> str:
     base = now().strftime("%Y%m%d-%H%M%S")
-    run_dir = root / base
+    existing = _scan_runs(root)
+    run_id = base
     index = 1
-    while run_dir.exists():
-        run_dir = root / f"{base}-{index}"
+    while run_id in existing:
+        run_id = f"{base}-{index}"
         index += 1
-    run_dir.mkdir()
-    _prune_runs(root)
-    return run_dir
+    return run_id
 
 
 def _prune_runs(root: Path) -> None:
-    runs = sorted(
-        (
-            path
-            for path in root.iterdir()
-            if path.is_dir() and _RUN_DIR_PATTERN.match(path.name)
-        ),
-        key=lambda path: path.name,
-    )
-    for outdated in runs[:-MAX_RUNS]:
-        shutil.rmtree(outdated, ignore_errors=True)
+    runs = _scan_runs(root)
+    for run_id in sorted(runs)[:-MAX_RUNS]:
+        for path in runs[run_id]:
+            with contextlib.suppress(OSError):
+                path.unlink()
 
 
 def init_llm_log(log_root: Path | None = None) -> Path | None:
-    """初始化 LLM 日志，返回本轮日志目录；重复调用不会重复创建。"""
-    global _atexit_registered, _initialized, _run_dir, _sink_id
+    """初始化 LLM 日志，返回本轮日志文件；重复调用不会重复创建。"""
+    global _atexit_registered, _initialized, _log_file, _sink_id
     if _initialized:
-        return _run_dir
+        return _log_file
     _initialized = True
     if not _atexit_registered:
         atexit.register(flush_llm_log)
         _atexit_registered = True
     try:
-        _run_dir = _prepare_run_dir(log_root or LLM_LOG_DIR)
+        root = log_root or LLM_LOG_DIR
+        root.mkdir(parents=True, exist_ok=True)
+        _remove_legacy_run_dirs(root)
+        _log_file = root / f"llm-{_new_run_id(root)}.log"
         _sink_id = logger.add(
-            _run_dir / "llm.log",
+            _log_file,
             rotation=MAX_LOG_SIZE,
             enqueue=True,
             encoding="utf-8",
@@ -98,21 +114,22 @@ def init_llm_log(log_root: Path | None = None) -> Path | None:
             backtrace=False,
             diagnose=False,
         )
+        _prune_runs(root)
     except Exception as exc:
-        _run_dir = None
+        _log_file = None
         _sink_id = None
         log.warning(f"LLM 日志初始化失败: {exc}")
-    return _run_dir
+    return _log_file
 
 
 def shutdown_llm_log() -> None:
     """移除 LLM 日志 sink（主要供测试使用）。"""
-    global _initialized, _run_dir, _sink_id
+    global _initialized, _log_file, _sink_id
     if _sink_id is not None:
         with contextlib.suppress(ValueError):
             logger.remove(_sink_id)
     _sink_id = None
-    _run_dir = None
+    _log_file = None
     _initialized = False
 
 

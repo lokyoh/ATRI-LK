@@ -474,6 +474,9 @@ def _build_initiative_context(chat_id: str, bot, opening: Opening):
     synthetic = History(None, chat_id)
     synthetic.sender = None
     synthetic.message = LLMMessage(chat_id, [MessageSegment(opening.text)])
+    # 标记为合成：`add_response` 见到它会跳过回写，避免往真实队列塞
+    # 「你在回复 mid:<合成id>」这种指向不存在消息的记录。
+    synthetic.synthetic = True
 
     chat_msg = ChatMessage(synthetic, [], "", [], args)
 

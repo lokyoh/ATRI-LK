@@ -421,10 +421,22 @@ class History:
                 f"你在{self.time}回复[mid:{self.reply_to_mid}]: "
                 f"{await self.message.get_message(bot)}"
             )
+        # ``sender is None`` 表示**她自己主动说的话**（没有回复对象、没有对话人）。
+        # 这类消息不能走 ``get_name``：那是按用户 ID 查昵称，
+        # 传 None 会在 ``int(user_id)`` 处直接崩。
+        # 主动开口的历史就是这种形状，所以这条分支必须存在。
+        if self.sender is None:
+            body = await self.message.get_message(bot)
+            return f"mid:{self.mid} {self.time} 你主动说: {body}"
         msg = f"mid:{self.mid} {self.time} {await get_name(bot, self.sender, self.chat_id)}[id:{self.sender}]: {await self.message.get_message(bot)}"
         return msg
 
     def add_response(self, response):
+        # 合成上下文（主动开口）不回写：那条 History 不在真实队列里，
+        # 回写会产生「你在回复 mid:<合成id>」这种指向不存在消息的记录。
+        # 主动开口的历史由 `initiative_start.try_speak` 在发送成功后统一写。
+        if getattr(self, "synthetic", False):
+            return
         reply_history = History(None, self.chat_id)
         reply_history.reply_to_mid = self.mid
         reply_history.message = LLMMessage(self.chat_id, [MessageSegment(response)])

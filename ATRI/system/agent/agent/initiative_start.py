@@ -495,7 +495,13 @@ async def compose_opening(chat_id: str, bot, opening: Opening) -> str | None:
     from ..brain import ThinkingModel
     from ..llm import ModelType, llm_manager
 
-    if not llm_manager.has_type(ModelType.CHAT):
+    # 与 `ThinkingModel.thinking` 的选择顺序保持一致：
+    # 优先 ATRI 专用模型，退化到通用 CHAT。只检查 CHAT 会让
+    # 「只配了 atri 类型」的部署永远不主动开口——而那种配置恰恰是推荐配置
+    # （专用模型能提高缓存命中率）。
+    if not (
+        llm_manager.has_type(ModelType.ATRI) or llm_manager.has_type(ModelType.CHAT)
+    ):
         return None
 
     sender = _CaptureSender()

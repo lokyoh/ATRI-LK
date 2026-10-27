@@ -150,10 +150,22 @@ def _passive_effect_note(effect: dict[str, Any]) -> str:
     return "，".join(parts)
 
 
+def _mp_cost_note(spec: dict[str, Any]) -> str:
+    """主动技能的耗魔展示值：``mp_cost`` 为 0（或缺失）时标成「无」。
+
+    直接显示 ``0`` 会让人以为是「不耗魔但也没写」的脏数据，写「无」更清楚。
+    """
+    try:
+        cost = int(spec.get("mp_cost", 0) or 0)
+    except (TypeError, ValueError):
+        cost = 0
+    return str(cost) if cost > 0 else "无"
+
+
 def format_skill_list(pet, skills_config: dict[str, Any] | None = None) -> str:
     """Render the skill card: equipped slots first, then the collection pool.
 
-    装备中的技能带威力 / 熟练度；未装备的只列名字，并提示如何装备。
+    装备中的技能带威力 / **耗魔** / 熟练度；未装备的只列名字，并提示如何装备。
     """
     from ..core.skills import (
         SOURCE_LABELS,
@@ -203,9 +215,10 @@ def format_skill_list(pet, skills_config: dict[str, Any] | None = None) -> str:
                 lines.append(
                     text(
                         "skill.equipped_line",
-                        "· {name}｜威力 {power}｜熟练度 {proficiency}",
+                        "· {name}｜威力 {power}｜耗魔 {mp_cost}｜熟练度 {proficiency}",
                         name=skill_name(skill_id, cfg),
                         power=spec.get("power", 0),
+                        mp_cost=_mp_cost_note(spec),
                         proficiency=round(
                             (getattr(pet, "skill_proficiency", None) or {}).get(
                                 skill_id, 0.0

@@ -21,13 +21,22 @@ ALL_MODEL_RESP_ERR = "所有模型请求失败"
 class ModelType(Enum):
     """预定义的模型类型常量"""
 
-    CHAT = "chat"  # 聊天专用模型
-    IMAGE = "image"  # 图片处理模型
-    WORK = "work"  # 工作模型
-    TOOL = "tool"  # 小型工具模型
-    EMBEDDING = "embedding"  # 嵌入模型
-    TTS = "tts"  # 文本转语音模型
-    SYSTEMONE = "sys1"  # SystemOne模型
+    ATRI = "atri"
+    """ATRIAgent专用模型"""
+    CHAT = "chat"
+    """聊天通用模型"""
+    WORK = "work"
+    """工作通用模型"""
+    TOOL = "tool"
+    """小型工具通用模型"""
+    IMAGE = "image"
+    """图片处理模型"""
+    EMBEDDING = "embedding"
+    """嵌入模型"""
+    TTS = "tts"
+    """文本转语音模型"""
+    SYSTEMONE = "sys1"
+    """SystemOne模型"""
 
 
 class LLMResponse:

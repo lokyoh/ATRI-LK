@@ -277,8 +277,12 @@ class ThinkingModel:
                             LLMContents().text(processing_messages_prompt),
                         )
                     )
+                if llm_manager.has_type(ModelType.ATRI):
+                    m_type = ModelType.ATRI
+                else:
+                    m_type = ModelType.CHAT
                 resp = await llm_manager.call_model_by_type(
-                    ModelType.CHAT, self.messages, "主Agent思考"
+                    m_type, self.messages, "主Agent思考"
                 )
                 _, functions_data, issues = await self.process_resp(resp.content)
                 if not functions_data and not issues:

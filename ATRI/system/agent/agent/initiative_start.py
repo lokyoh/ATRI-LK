@@ -689,7 +689,7 @@ def register_patrol(service) -> None:
             trigger="interval",
             minutes=30,
             misfire_grace_time=300,
-            use_log=False,
+            use_log=True,
         )
         log.info("已注册主动发起巡检（每 30 分钟）")
     except Exception as exc:

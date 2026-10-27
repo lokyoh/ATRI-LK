@@ -718,7 +718,7 @@ def register_patrol(service) -> None:
     巡检只是「看看有没有机会」，真正的开口频率由 `should_speak_now` 决定。
     """
     try:
-        service.scheduler_jobs.add_job(
+        service.scheduler_jobs().add_job(
             patrol_once,
             name="agent-proactive-opening",
             trigger="interval",

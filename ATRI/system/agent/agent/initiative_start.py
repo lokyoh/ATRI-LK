@@ -1,21 +1,3 @@
-"""主动发起：让她在没有入站消息时也能开口。
-
-与既有的「主动聊天」不是一回事。那个（`lkchat` 的 `proactively_chat`）是
-**收到消息之后**判断要不要插话；没有消息就永远不触发。这里是真正由她自己
-发起一段话。
-
-**为什么只做「有事想说」一种动机**
-三种动机里只有这一种「有前因」：她的 `self_memory` 里存着带情绪的经历
-（P3 的 `emotion` 字段），这里给它一个出口。另外两种（被冷落太久、时间节点）
-很容易退化成整点广播——那比沉默更糟。先跑通一条、拿到数据，再谈扩展。
-
-**核心约束**
-1. **新增，不改写**：不动 `ATRIAgent.chat()` 的任何链路。主动发起出错不能
-   连累「有人叫她必须回应」这个基本盘。
-2. **一条经历只说一次**：用 `spoken` 标记，否则同一件事会在每次巡检时重复触发。
-3. **宁可不说**：任何一环拿不准就跳过。没人要求她说话，说错代价更高。
-"""
-
 from __future__ import annotations
 
 import re
@@ -176,7 +158,7 @@ def _save_spoken(spoken: list[str], keep: int = 40) -> None:
         else:
             user_table.insert("ID, DATA", ("__atri_spoken__", payload))
     except Exception as exc:
-        log.debug(f"保存主动发起标记失败（忽略）：{exc}")
+        log.warning(f"保存主动发起标记失败（忽略）：{exc}")
 
 
 def pick_opening(chat_id: str | None = None) -> Opening | None:
@@ -386,7 +368,7 @@ def mark_spoken(chat_id: str, opening: Opening, *, now: float | None = None) -> 
         else:
             user_table.insert("ID, DATA", ("__atri_last_speak__", payload))
     except Exception as exc:
-        log.debug(f"记录主动发起时间失败（忽略）：{exc}")
+        log.warning(f"记录主动发起时间失败（忽略）：{exc}")
 
 
 def _group_is_quiet(chat_id: str, now: float) -> bool:
@@ -478,8 +460,6 @@ class _CaptureSender:
 
 def _build_initiative_context(chat_id: str, bot, opening: Opening):
     """构造「没有对话人」的思考上下文。
-
-    三样东西都是**合成的**，且**不进入任何历史队列**：
 
     - `ChatArgs`：user_id 用占位符，这样 `get_user_info` 读到空档案；
     - `History`：一条代表「她刚想起了这件事」的虚拟消息；
@@ -597,13 +577,10 @@ async def try_speak(chat_id: str, bot) -> str | None:
 
         text = await compose_opening(chat_id, bot, opening)
         if not text:
-            log.debug(f"群 {chat_id} 的主动发言被模型判断为不合适，跳过")
+            log.info(f"群 {chat_id} 的主动发言被模型判断为不合适，跳过")
             return None
 
         await bot.send_group_msg(group_id=_group_id(chat_id), message=text)
-        # **必须进历史**。否则下一轮对话时她不记得自己说过——
-        # 会重复提同一件事，或者与刚说过的话自相矛盾。
-        # 走 add_agent_message（写盘 + 进内存队列），user_id=None 表示机器人。
         _record_to_history(chat_id, text)
         mark_spoken(chat_id, opening)
         telemetry.record(
@@ -620,26 +597,14 @@ async def try_speak(chat_id: str, bot) -> str | None:
 
 
 def whitelisted_groups() -> list[str]:
-    """取允许**主动开口**的群。
-
-    与 `lkchat` 的 `proactively_chat_whit_list` 是**两份独立配置**：
-
-    - 那个是「允许她插话」——有人说话时她可以接；
-    - 这个是「允许她主动发起」——没人说话时她也可以开口。
-
-    拆开是因为两者打扰程度差一个数量级：能接受她偶尔接话的群，
-    未必愿意她自说自话。复用同一份名单等于把「允许接话」偷偷升级成
-    「允许主动找你」。
-
-    读不到配置时返回空列表：宁可不开口，也不要往没授权的群发消息。
-    """
+    """取允许**主动开口**的群。"""
     try:
         from ..config import config
 
         groups = config.get("proactive_start_whitelist") or []
         return [str(g).strip() for g in groups if str(g).strip()]
     except Exception as exc:
-        log.debug(f"读取主动发起白名单失败（按空处理）：{exc}")
+        log.warning(f"读取主动发起白名单失败（按空处理）：{exc}")
         return []
 
 
@@ -658,7 +623,7 @@ async def patrol_once() -> int:
 
     global _patrol_running
     if _patrol_running:
-        log.debug("上一轮主动发起巡检还没结束，跳过本轮")
+        log.warning("上一轮主动发起巡检还没结束，跳过本轮")
         return 0
     _patrol_running = True
     try:
@@ -728,4 +693,4 @@ def register_patrol(service) -> None:
         )
         log.info("已注册主动发起巡检（每 30 分钟）")
     except Exception as exc:
-        log.debug(f"注册主动发起巡检跳过：{exc}")
+        log.warning(f"注册主动发起巡检跳过：{exc}")

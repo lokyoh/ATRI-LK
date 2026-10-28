@@ -58,6 +58,14 @@ def calc_attributes_on_level_up(
                 if key in attributes and isinstance(value, int | float):
                     attributes[key] += int(value * talent_level)
 
+    # 百分比加成（商店的无限成长项）**最后**结算：它乘的是"已经算完的整份属性"，
+    # 所以与平值加成、年龄、天赋互不干扰，也不受结算顺序影响。
+    # 取整仍用 int()（向下），与平值加成口径一致。
+    for key in ATTRIBUTE_KEYS:
+        pct = float(bonuses.get(f"{key}_pct", 0) or 0)
+        if pct:
+            attributes[key] = int(attributes[key] * (1.0 + pct))
+
     return attributes
 
 

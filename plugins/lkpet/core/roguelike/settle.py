@@ -53,9 +53,10 @@ async def settle_run(
     exp_gain = apply_affection_bonus(raw_exp, int(pet.affection)) if raw_exp > 0 else 0
     if exp_gain > 0:
         from ..leveling import check_level_up
+        from ..reincarnation import bonus_for
 
         pet.exp += exp_gain
-        level_result = check_level_up(pet)
+        level_result = check_level_up(pet, permanent_bonus=bonus_for(pet.player_id))
         lines.append(_text("settle_exp", "经验 +{exp}", exp=exp_gain))
         if level_result.get("level_up"):
             lines.append(

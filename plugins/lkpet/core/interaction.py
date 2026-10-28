@@ -411,12 +411,18 @@ async def train(
     pet.fatigue = after["fatigue"]
     pet.mood = after["mood"]
 
+    # 永久加成（成就点兑换的经验 / 属性）在本指令里读一次，经验与升级共用，
+    # 避免同一次训练里两次读库、也避免两处口径不一致。
+    from .reincarnation import bonus_for
+
+    permanent_bonus = bonus_for(pet.player_id)
+
     # 计算经验（带状态修正）
-    exp_gain = calc_exp_gain(base_exp, pet)
+    exp_gain = calc_exp_gain(base_exp, pet, permanent_bonus=permanent_bonus)
     pet.exp += exp_gain
 
     # 检查升级
-    level_result = check_level_up(pet)
+    level_result = check_level_up(pet, permanent_bonus=permanent_bonus)
 
     _mark_interaction(pet, "train_count")
     consume_action_point(pet, "train", daily_config=daily_config)

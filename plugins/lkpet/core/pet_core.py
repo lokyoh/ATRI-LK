@@ -59,8 +59,13 @@ def ensure_initialized(pet, pet_config: dict[str, Any] | None = None) -> bool:
         pet.qualification = _roll_qualification()
         changed = True
     if not pet.attributes:
+        from .reincarnation import bonus_for
+
         cfg = pet_config if pet_config is not None else _load_pet_config()
-        pet.attributes = calc_attributes_on_level_up(pet, cfg)
+        # 永久加成（成就点兑换）必须参与计算，否则玩家买到的属性加成一世都看不到。
+        pet.attributes = calc_attributes_on_level_up(
+            pet, cfg, permanent_bonus=bonus_for(pet.player_id)
+        )
         changed = True
     if ensure_skill_storage(pet):
         changed = True

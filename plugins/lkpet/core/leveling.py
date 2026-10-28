@@ -33,7 +33,14 @@ def calc_exp_gain(
     fatigue_mod = 1.0 - fatigue / 200
     personality_mod = get_personality_exp_mod(pet.personality, config)
     age_mod = max(0.5, 1.0 - max(0, pet.age_days) / 500)
-    reincarnation_mod = 1.0 + (permanent_bonus or {}).get("exp_bonus", 0.0)
+    # 商店的两种经验加成口径不同、互不替代：
+    #   exp_bonus  平值乘区（旧特权，0.1 = +10%），一次性生效
+    #   exp_pct    百分比乘区（新商店的无限成长，0.01 = +1%/级）
+    # 两者叠乘，因此老存档与新的无限成长可以共存。
+    bonus = permanent_bonus or {}
+    reincarnation_mod = (1.0 + float(bonus.get("exp_bonus", 0.0) or 0)) * (
+        1.0 + float(bonus.get("exp_pct", 0.0) or 0)
+    )
 
     total = (
         base_exp

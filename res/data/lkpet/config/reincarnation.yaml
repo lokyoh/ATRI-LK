@@ -2,13 +2,31 @@ max_level: 100
 min_level_for_manual: 30
 
 point_weights:
-  per_level: 2
-  per_100_attr: 1
-  per_skill: 3
-  per_200_affection: 2     # 好感量表 0-1000，每 200 点计一次
-  per_10_days: 1
-  full_lifespan_bonus: 50
+  # 等级分：**边际递增**，满级（max_level=100）时累计恰好 max_total。
+  # 曲线 quadratic = 累计随等级平方增长，即「越往后每级收益越高」：
+  #   Lv30 累计 225（该级 +15）｜Lv50 累计 625（+25）
+  #   Lv80 累计 1600（+40）｜Lv100 累计 2500（+50）
+  # curve 可选 linear / quadratic / cubic；也兼容旧的线性写法 ``per_level: 2``。
+  per_level:
+    max_total: 2500
+    max_level: 100
+    curve: quadratic
 
+  # 其余权重与等级分**同一量级**，保证「只刷等级」不是唯一最优解：
+  # 满级 Lv100（好感 1000、寿终）时非等级项合计约 1100 分 = 等级分的 44%；
+  # 等级低时等级分占比反而更小，因为曲线把分数堆在高等级。
+  per_100_attr: 20         # 属性总和每 100 点 → 20 分（Lv100 属性总和约 736 → 140 分）
+  per_skill: 8             # 每个已掌握技能 8 分（Lv100 约 31 个 → 248 分）
+  per_200_affection: 20    # 好感每 200 点 → 20 分（满好感 1000 → 100 分）
+  per_10_days: 10          # 每存活 10 天 → 10 分（活满 120 天 → 120 分）
+  full_lifespan_bonus: 500 # 寿终正寝额外 500 分（与等级分同量级的大奖）
+
+# ---------------------------------------------------------------------------
+# 旧版特权（5 条，无等级、无上限、买完不刷新属性）
+#
+# **暂时保留**：``/宠物.特权`` 仍在读这个块，商店指令落地并替换它之后才删。
+# 新逻辑一律走下面的 ``shop`` 块，不再往这里加东西。
+# ---------------------------------------------------------------------------
 perks:
   bonus_exp:
     name: 经验加成
@@ -30,3 +48,117 @@ perks:
     name: 初始等级 10
     cost: 500
     effect: { start_level_bonus: 9 }
+
+# ---------------------------------------------------------------------------
+# 轮回商店（成就点消费）
+#
+# 编号规则：分类编号 = ``categories[].order``（**显式写，不靠列表位置**），
+# 条目编号 = ``分类编号-该分类内序号``。后续期次在中间插入分类时，
+# 已有 ``order`` 不变，玩家收藏的「1-3」永远指向同一件东西。
+#
+# 字段约定
+#   name        展示名
+#   category    必须是 categories 里的某个 id
+#   level       等级形态：infinite（默认，无上限）/ capped（需配 max_level）
+#   max_level   仅 capped 需要：等级上限
+#   cost        定价，三种写法：
+#                 cost: 5000                      每级同价
+#                 cost: [120, 250, 420]           逐级定价（长度 = max_level）
+#                 cost: { start: 3000, mult: 1.3 } 几何涨价，第 n 级 = start × 1.3^(n-1)
+#   effect      **每级**效果，总效果 = effect × 已买等级
+#   consumable  true = 买完立刻生效、不涨等级（消耗品）
+#   consume_on  reincarnation = 效果只对下一次轮回生效，用掉即清零
+#   unlock      { cycles: N } 需累计轮回 N 次才开放；省略 = 不设门槛
+#
+# effect 可用键（全部已接上消费者）
+#   平值（加到属性上，与百分比可叠加）
+#     atk_bonus / def_bonus / hp_bonus / spd_bonus / mp_bonus / exp_bonus
+#     start_level_bonus（加新世代的起始等级）
+#   百分比（乘区，0.01 = +1%；无限成长项用这个）
+#     atk_pct / def_pct / hp_pct / spd_pct / mp_pct / exp_pct
+# 新增键必须同时改 core/shop.py 的 PERK_EFFECT_KEYS 与它的消费者。
+# ---------------------------------------------------------------------------
+shop:
+  # 洗点：每完成一次轮回赠送 1 张券；退款比例 1.0 = 全额退还。
+  respec:
+    free_per_cycle: 1
+    refund_ratio: 1.0
+  # 低于此价格免二次确认（直接「/宠物.商店 1-1」就买）；
+  # 高于它要先看详情再「确认」。当前所有商品都 3000+，所以实际都要确认。
+  confirm_threshold: 200
+
+  categories:
+    - id: legacy
+      order: 1
+      name: 前世传承
+      desc: 每一世都会在灵魂上留下一点什么。
+    - id: origin
+      order: 2
+      name: 转世起点
+      desc: 下一世，从哪里开始。
+    # order 3 = 技艺、order 4 = 生涯：留给后续期次，先占位不填。
+
+  items:
+    # ---- 1 前世传承：百分比成长，无限等级 ----
+    # 全部采用 ``*_pct`` 百分比 effect：每级 +1%，等级无上限，
+    # 价格每级 ×1.5。收益线性、价格指数 —— 越往后每一点成长越贵，
+    # 长期目标因此是"边际收益递减的钱坑"，而不是"买满就毕业"。
+    #
+    # 前世心得起始 3000：它是唯一的经验乘区，对全部成长产生复利，
+    # 因此比单条属性更贵。
+    legacy_exp:
+      name: 前世心得
+      category: legacy
+      desc: 读过的书忘了，读得快这件事没忘。
+      level: infinite
+      cost: { start: 3000, mult: 1.3 }
+      effect: { exp_pct: 0.01 }
+    legacy_atk:
+      name: 前世武艺
+      category: legacy
+      desc: 手上的茧比记忆更诚实。
+      level: infinite
+      cost: { start: 3000, mult: 1.3 }
+      effect: { atk_pct: 0.01 }
+    legacy_def:
+      name: 前世坚壁
+      category: legacy
+      desc: 挨过的那些打，最后都长成了骨头。
+      level: infinite
+      cost: { start: 3000, mult: 1.3 }
+      effect: { def_pct: 0.01 }
+    legacy_hp:
+      name: 前世体魄
+      category: legacy
+      desc: 这副身体记得每一场硬仗。
+      level: infinite
+      cost: { start: 3000, mult: 1.3 }
+      effect: { hp_pct: 0.01 }
+    legacy_mp:
+      name: 前世灵泉
+      category: legacy
+      desc: 有一口泉在很深的地方，一直没干。
+      level: infinite
+      cost: { start: 3000, mult: 1.3 }
+      effect: { mp_pct: 0.01 }
+    legacy_spd:
+      name: 前世疾风
+      category: legacy
+      desc: 身体比念头先动的那一下，是上一世练的。
+      level: infinite
+      cost: { start: 3000, mult: 1.3 }
+      effect: { spd_pct: 0.01 }
+
+    # ---- 2 转世起点 ----
+    # 每级让**下一次**轮回的起始等级 +1，最高 20 级（起始 Lv21）。
+    # ``consume_on: reincarnation`` 表示买下的等级只对新一世的开局生效，
+    # 轮回结束即清零 —— 它不是永久属性，而是一张"这一世起步更高"的门票。
+    origin_start:
+      name: 转世起点
+      category: origin
+      desc: 不必再从最弱的那一天开始。
+      level: capped
+      max_level: 20
+      consume_on: reincarnation
+      cost: { start: 3000, mult: 1.3 }
+      effect: { start_level_bonus: 1 }

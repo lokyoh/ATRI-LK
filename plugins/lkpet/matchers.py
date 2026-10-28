@@ -31,7 +31,20 @@ pet_log_matcher = plugin.cmd_as_group("日志", "查看最近的每日日志")
 pet_reincarnate_matcher = plugin.cmd_as_group(
     "轮回", "查看轮回条件；加「确认」执行轮回"
 )
-pet_perks_matcher = plugin.cmd_as_group("特权", "查看或兑换成就点特权")
+pet_perks_matcher = plugin.on_command(
+    ("宠物", "特权"),
+    "旧版特权指令（已并入轮回商店，保留作别名）",
+)
+"""``/宠物.特权`` 作为 ``/宠物.商店`` 的别名保留。
+
+**必须用 ``on_command`` 而不是 ``cmd_as_group(aliases=...)``**：
+``ATRI.service.Service.cmd_as_group`` 会把 ``aliases`` 参数直接 pop 掉
+（见 ``ATRI/service.py`` 的该函数），传了也会被静默丢弃。
+"""
+
+pet_shop_matcher = plugin.cmd_as_group(
+    "商店", "轮回商店：查看 / 购买 / 洗点。发送「/宠物.商店」开始"
+)
 pet_love_matcher = plugin.cmd_as_group("好感度", "查询宠物亲密度")
 pet_rename_matcher = plugin.cmd_as_group("改名", "为自己的宠物改名")
 pet_instruction_matcher = plugin.cmd_as_group("设定", "更改宠物的设定（聊天人设）")

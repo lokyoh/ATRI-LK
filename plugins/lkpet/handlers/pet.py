@@ -59,6 +59,7 @@ from ..matchers import (
     pet_rename_matcher,
     pet_rest_matcher,
     pet_rogue_matcher,
+    pet_shop_matcher,
     pet_skill_matcher,
     pet_status_matcher,
     pet_talent_matcher,
@@ -68,10 +69,14 @@ from ..utils.formatters import (
     format_biography,
     format_daily_logs,
     format_daily_report,
-    format_perk_list,
     format_pet_status,
     format_reincarnation_check,
     format_reincarnation_result,
+    format_shop_category,
+    format_shop_item,
+    format_shop_overview,
+    format_shop_purchase,
+    format_shop_respec,
     format_skill_list,
     format_talent_list,
 )
@@ -434,28 +439,150 @@ async def handle_reincarnate(bot: Bot, event: Event, args: Message = CommandArg(
     await pet_reincarnate_matcher.finish(format_reincarnation_result(result))
 
 
-@pet_perks_matcher.handle()
-async def handle_perks(bot: Bot, event: Event, args: Message = CommandArg()):
-    await _guard(pet_perks_matcher)
+# ---------------------------------------------------------------------------
+# 轮回商店
+#
+# 参数语法（全部按空格切，与 /宠物.技能 一致）：
+#   （空）            概览
+#   1                 分类 1
+#   1-3               商品详情
+#   确认 1-3          购买
+#   洗点 / 洗点 确认   洗点预览 / 执行
+# ---------------------------------------------------------------------------
+
+
+async def _shop_dispatch(matcher, event: Event, args: Message) -> None:
+    """``/宠物.商店`` 与 ``/宠物.特权`` 共用的实现。
+
+    所有分支都以 ``matcher.finish`` 结束，因此本函数不会正常返回。
+    """
+    from ..core import shop
+
     player_id = int(event.get_user_id())
-
     reinc = await reincarnation.get_or_create_reincarnation(player_id)
-    available = reinc.achievement_points - reinc.spent_points
+    raw = args.extract_plain_text().strip()
 
-    perk_id = args.extract_plain_text().strip()
-    if not perk_id:
-        from ..config_loader import load_config
+    # 概览
+    if not raw:
+        await matcher.finish(format_shop_overview(reinc))
 
-        await pet_perks_matcher.finish(
-            format_perk_list(load_config("reincarnation"), available)
+    # 洗点：``洗点`` 预览 / ``洗点 确认`` 执行
+    if raw.split()[0] == "洗点":
+        rest = raw.split()[1:]
+        try:
+            if rest and rest[0] == CONFIRM_WORD:
+                result = shop.respec(reinc)
+                await _save_reinc(reinc)
+                pet = await pet_core.get_pet(player_id)
+                if pet is not None:
+                    reincarnation.refresh_pet_attributes(pet, reinc.permanent_bonuses)
+                    await pet_core.save_pet(pet)
+                await matcher.finish(format_shop_respec(result, done=True))
+            preview = shop.respec_refund(reinc)
+            if preview["tickets"] <= 0:
+                await matcher.finish(text("shop.respec_no_ticket", "没有洗点券了。"))
+            if not preview["cleared"]:
+                await matcher.finish(
+                    text("shop.respec_none", "现在没有任何可洗的商品。")
+                )
+            await matcher.finish(format_shop_respec(preview))
+        except ValueError as exc:
+            await matcher.finish(text("shop.unknown", "❌ {msg}", msg=str(exc)))
+
+    parts = raw.split()
+    # 购买：``确认 1-3``
+    if parts[0] == CONFIRM_WORD:
+        if len(parts) < 2:
+            await matcher.finish(
+                text("shop.unknown", "❌ {msg}", msg="用法：/宠物.商店 确认 1-3")
+            )
+        await _shop_buy(matcher, player_id, reinc, parts[1])
+
+    token = parts[0]
+    # 分类：``1``
+    if token.isdigit():
+        cat = next(
+            (c for c in shop.categories() if int(c.get("order", 999)) == int(token)),
+            None,
         )
+        if cat is None:
+            await matcher.finish(
+                text("shop.unknown", "❌ {msg}", msg=f"没有分类 {token}")
+            )
+        await matcher.finish(format_shop_category(reinc, str(cat.get("id"))))
+
+    # 商品详情或直接购买：``1-3`` / ``legacy_atk`` / ``前世武艺``
+    try:
+        item_id = shop.resolve_item(token)
+    except ValueError as exc:
+        await matcher.finish(text("shop.unknown", "❌ {msg}", msg=str(exc)))
+
+    spec = shop.catalog().get(item_id) or {}
+    price = shop.next_price(reinc, spec)
+    # 便宜的东西免二次确认（阈值见 shop.confirm_threshold），贵的要先看详情。
+    if price is not None and price <= _shop_confirm_threshold():
+        await _shop_buy(matcher, player_id, reinc, item_id)
+    await matcher.finish(format_shop_item(reinc, item_id))
+
+
+def _shop_confirm_threshold() -> int:
+    """低于此价格免二次确认；读配置，缺省 200。"""
+    from ..config_loader import load_config
+
+    node = load_config("reincarnation").get("shop") or {}
+    try:
+        return int(node.get("confirm_threshold", 200) or 0)
+    except (TypeError, ValueError):
+        return 200
+
+
+async def _save_reinc(reinc) -> None:
+    """保存轮回行（商店的所有写操作最终都落到这里）。"""
+    from datetime import datetime
+
+    from ..database import save_reincarnation
+
+    reinc.updated_at = datetime.now()
+    save_reincarnation(reinc)
+
+
+async def _shop_buy(matcher, player_id: int, reinc, token: str) -> None:
+    """购买一件商品并立即把加成落到宠物属性上。"""
+    from ..core import shop
 
     try:
-        result = await reincarnation.spend_achievement_points(player_id, perk_id)
+        item_id = shop.resolve_item(token)
+        spec = shop.catalog().get(item_id) or {}
+        result = shop.purchase(reinc, item_id)
     except ValueError as exc:
-        await pet_perks_matcher.finish(f"❌ {exc}")
+        await matcher.finish(text("shop.unknown", "❌ {msg}", msg=str(exc)))
 
-    await pet_perks_matcher.finish(text("perk.granted", "", **result))
+    result["consumable_on_reincarnation"] = bool(
+        result.get("consumed_on_reincarnation")
+    ) or shop.consumes_on_reincarnation(spec)
+    await _save_reinc(reinc)
+
+    # 买完立刻重算属性：否则玩家要等到下次升级才看得见加成。
+    pet = await pet_core.get_pet(player_id)
+    if pet is not None:
+        reincarnation.refresh_pet_attributes(pet, reinc.permanent_bonuses)
+        await pet_core.save_pet(pet)
+
+    await matcher.finish(format_shop_purchase(result))
+
+
+@pet_shop_matcher.handle()
+async def handle_shop(bot: Bot, event: Event, args: Message = CommandArg()):
+    """``/宠物.商店`` —— 概览 / 分类 / 详情 / 购买 / 洗点。"""
+    await _guard(pet_shop_matcher)
+    await _shop_dispatch(pet_shop_matcher, event, args)
+
+
+@pet_perks_matcher.handle()
+async def handle_perks(bot: Bot, event: Event, args: Message = CommandArg()):
+    """``/宠物.特权`` —— 旧指令，转发到商店（行为完全一致）。"""
+    await _guard(pet_perks_matcher)
+    await _shop_dispatch(pet_perks_matcher, event, args)
 
 
 # ---------------------------------------------------------------------------

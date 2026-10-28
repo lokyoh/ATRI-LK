@@ -466,7 +466,11 @@ def format_perk_list(
     reincarnation_config: dict[str, Any],
     available: int,
 ) -> str:
-    """List the perks exchangeable with achievement points."""
+    """List the perks exchangeable with achievement points.
+
+    旧版特权列表（``reincarnation.yaml`` 的 ``perks`` 块）。商店上线后
+    ``/宠物.特权`` 已改走 :func:`format_shop_overview`，这里保留只为兼容。
+    """
     perks = reincarnation_config.get("perks", {})
     lines = [text("perk.title", "🏅 成就点特权", available=available)]
     if not perks:
@@ -481,4 +485,330 @@ def format_perk_list(
                 cost=perk.get("cost", 0),
             )
         )
+    return "\n".join(line for line in lines if line)
+
+
+# ---------------------------------------------------------------------------
+# 轮回商店
+# ---------------------------------------------------------------------------
+
+SHOP_EFFECT_LABELS = {
+    "exp_bonus": "经验",
+    "atk_bonus": "攻击",
+    "def_bonus": "防御",
+    "hp_bonus": "生命",
+    "spd_bonus": "速度",
+    "mp_bonus": "魔力",
+    "start_level_bonus": "起始等级",
+    "exp_pct": "经验",
+    "atk_pct": "攻击",
+    "def_pct": "防御",
+    "hp_pct": "生命",
+    "spd_pct": "速度",
+    "mp_pct": "魔力",
+}
+"""商店效果键的中文名（展示层专用，不进 texts.yaml）。"""
+
+
+def format_shop_effect(effect: dict[str, float] | None) -> str:
+    """把效果 dict 渲染成「攻击 +1%｜生命 +1%」或「起始等级 +1 级」。
+
+    百分比键（``*_pct``）按 ``0.01 = +1%`` 展示；平值键展示为整数；
+    ``start_level_bonus`` 单独标注单位。空效果返回「无」。
+    """
+    if not effect:
+        return text("shop.effect_none", "无")
+    parts = []
+    for key, value in effect.items():
+        label = SHOP_EFFECT_LABELS.get(key, key)
+        if key.endswith("_pct"):
+            parts.append(f"{label} +{round(float(value) * 100, 2):g}%")
+        elif "start_level" in key:
+            parts.append(f"{label} +{int(value)} 级")
+        else:
+            parts.append(f"{label} +{int(value)}")
+    return "｜".join(parts)
+
+
+def _shop_level_text(info: dict[str, Any]) -> str:
+    """「2/20」或「已买 3 级」（无限等级没有分母）。"""
+    cap = info.get("cap")
+    if cap:
+        return text(
+            "shop.item_level_max",
+            "{owned}/{cap}",
+            owned=info.get("owned", 0),
+            cap=cap,
+        )
+    return text("shop.item_level_inf", "已买 {owned} 级", owned=info.get("owned", 0))
+
+
+def format_shop_overview(reinc) -> str:
+    """``/宠物.商店`` —— 可用点数 + 分类列表。"""
+    from ..core import shop
+
+    cfg = _load_config("reincarnation")
+    specs = shop.catalog(cfg)
+    if not specs:
+        return (
+            text("shop.overview_title", "🏛 轮回商店", available=0)
+            + "\n"
+            + text("shop.empty", "商店里还没有任何商品。")
+        )
+
+    available = shop.available_points(reinc)
+    lines = [
+        text(
+            "shop.overview_title",
+            "🏛 轮回商店｜可用 {available} 点",
+            available=available,
+            total=int(getattr(reinc, "achievement_points", 0) or 0),
+            spent=int(getattr(reinc, "spent_points", 0) or 0),
+        )
+    ]
+    for cat in shop.categories(cfg):
+        order = int(cat.get("order", 999))
+        members = [
+            spec for spec in specs.values() if str(spec.get("category")) == cat["id"]
+        ]
+        if not members:
+            continue
+        infinite = any(shop.level_mode(s) == shop.LEVEL_INFINITE for s in members)
+        mode = text(
+            "shop.overview_mode_infinite" if infinite else "shop.overview_mode_capped",
+            "无限成长" if infinite else "有限等级",
+        )
+        lines.append(
+            text(
+                "shop.overview_line",
+                "{order}. {name}",
+                order=order,
+                name=str(cat.get("name") or cat.get("id")),
+                count=len(members),
+                mode=mode,
+            )
+        )
+
+    lines.append(text("shop.overview_hint", "发送「/宠物.商店 1」查看分类。"))
+
+    respec_cfg = (cfg.get("shop") or {}).get("respec") or {}
+    tickets = int(getattr(reinc, "respec_tickets", 0) or 0)
+    if respec_cfg:
+        lines.append(
+            text(
+                "shop.overview_respec",
+                "♻️ 洗点券 {tickets} 张",
+                tickets=tickets,
+                free=int(respec_cfg.get("free_per_cycle", 0) or 0),
+            )
+        )
+    return "\n".join(line for line in lines if line)
+
+
+def format_shop_category(reinc, category_id: str) -> str:
+    """``/宠物.商店 1`` —— 某分类下的商品行。"""
+    from ..core import shop
+
+    cfg = _load_config("reincarnation")
+    cat = next(
+        (c for c in shop.categories(cfg) if str(c.get("id")) == str(category_id)),
+        None,
+    )
+    if cat is None:
+        raise ValueError("没有这个分类")
+
+    order = int(cat.get("order", 999))
+    members = [
+        spec
+        for spec in shop.catalog(cfg).values()
+        if str(spec.get("category")) == cat["id"]
+    ]
+    lines = [
+        text(
+            "shop.category_title",
+            "🏛 {name}",
+            name=str(cat.get("name") or cat.get("id")),
+            desc=str(cat.get("desc") or ""),
+        )
+    ]
+    if not members:
+        lines.append(text("shop.category_empty", "这个分类还没有商品。"))
+        return "\n".join(lines)
+
+    for spec in members:
+        info = shop.describe_item(reinc, spec, cfg)
+        if not info["unlocked"]:
+            price_text = text(
+                "shop.item_locked",
+                "（未开放）",
+                cycles=(spec.get("unlock") or {}).get("cycles", 1),
+            )
+        elif info["price"] is None:
+            price_text = text("shop.item_maxed", "（已满级）")
+        else:
+            price_text = text("shop.item_price", "{price} 点", price=info["price"])
+            if not info["affordable"]:
+                price_text += text(
+                    "shop.item_gap", "（还差 {gap} 点）", gap=info["gap"]
+                )
+        lines.append(
+            text(
+                "shop.item_line",
+                "· {number} {name}",
+                number=info["number"],
+                name=info["name"],
+                level=_shop_level_text(info),
+                price=price_text,
+                gap="",
+            )
+        )
+
+    lines.append(
+        text(
+            "shop.category_hint",
+            "发送「/宠物.商店 {number}」查看详情。",
+            order=order,
+            number=f"{order}-1",
+        )
+    )
+    return "\n".join(line for line in lines if line)
+
+
+def format_shop_item(reinc, item_id: str) -> str:
+    """``/宠物.商店 1-3`` —— 单件详情。"""
+    from ..core import shop
+
+    cfg = _load_config("reincarnation")
+    spec = shop.catalog(cfg).get(str(item_id))
+    if spec is None:
+        raise ValueError("商品不存在")
+    info = shop.describe_item(reinc, spec, cfg)
+
+    cat = next(
+        (c for c in shop.categories(cfg) if str(c.get("id")) == info["category"]),
+        {},
+    )
+    lines = [
+        text(
+            "shop.detail_title",
+            "🏛 {number} {name}",
+            category=str(cat.get("name") or ""),
+            number=info["number"],
+            name=info["name"],
+        ),
+        text("shop.detail_level", "当前：{level}", level=_shop_level_text(info)),
+        text(
+            "shop.detail_effect",
+            "效果：{effect}",
+            effect=format_shop_effect(info["per_level"]) + "/级",
+        ),
+    ]
+    if info["desc"]:
+        lines.append(f"「{info['desc']}」")
+
+    if not info["unlocked"]:
+        cycles = (spec.get("unlock") or {}).get("cycles", 1)
+        lines.append(
+            text(
+                "shop.detail_locked", "需要累计轮回 {cycles} 次才开放。", cycles=cycles
+            )
+        )
+    elif info["price"] is None:
+        lines.append(text("shop.detail_maxed", "这条已经买满了。"))
+        lines.append(
+            text(
+                "shop.detail_next",
+                "累计：{next}",
+                next=format_shop_effect(info["current_effect"]),
+            )
+        )
+    else:
+        lines.append(
+            text(
+                "shop.detail_next",
+                "下一级：{next}",
+                next=format_shop_effect(info["next_effect"]),
+            )
+        )
+        lines.append(
+            text(
+                "shop.detail_price",
+                "价格：{price} 点（可用 {available}）",
+                price=info["price"],
+                available=info["available"],
+            )
+        )
+        if info["affordable"]:
+            lines.append(
+                text(
+                    "shop.detail_confirm",
+                    "发送「/宠物.商店 确认 {number}」购买。",
+                    number=info["number"],
+                )
+            )
+        else:
+            lines.append(
+                text(
+                    "shop.detail_short",
+                    "还差 {gap} 点。多轮回几次再来吧。",
+                    gap=info["gap"],
+                )
+            )
+    return "\n".join(line for line in lines if line)
+
+
+def format_shop_purchase(result: dict[str, Any]) -> str:
+    """购买成交回执。"""
+    if result.get("consumable"):
+        return text(
+            "shop.bought_respec",
+            "✅ 已购买「{name}」（-{price} 点，剩余 {remaining}）。现有洗点券 {tickets} 张。",
+            **result,
+        )
+    lines = [
+        text(
+            "shop.bought",
+            "✅ 已购买「{name}」第 {level} 级（-{price} 点，剩余 {remaining}）",
+            **result,
+        ),
+        text(
+            "shop.bought_effect",
+            "效果：{before} → {after}",
+            before=format_shop_effect(result.get("before")),
+            after=format_shop_effect(result.get("after")),
+        ),
+    ]
+    if result.get("consumable_on_reincarnation"):
+        lines.append(
+            text(
+                "shop.bought_consumed",
+                "★ 这份起始等级会在下一次轮回时生效，用掉即清零。",
+            )
+        )
+    lines.append(text("shop.bought_hint", "发送「/宠物.商店」继续浏览。"))
+    return "\n".join(line for line in lines if line)
+
+
+def format_shop_respec(preview: dict[str, Any], *, done: bool = False) -> str:
+    """洗点预览 / 完成回执。"""
+    if done:
+        return text(
+            "shop.respec_done",
+            "♻️ 洗点完成：退还 {refund} 点，清空 {items} 条共 {levels} 级（剩余券 {tickets} 张）。",
+            **preview,
+        )
+    lines = [
+        text("shop.respec_title", "♻️ 洗点预览"),
+        text(
+            "shop.respec_body",
+            "将退还 {refund} 点，清空 {items} 条共 {levels} 级。",
+            **preview,
+        ),
+        text(
+            "shop.respec_tickets",
+            "现有洗点券 {tickets} 张。",
+            tickets=preview.get("tickets", 0),
+        ),
+        text("shop.respec_confirm", "发送「/宠物.商店 洗点 确认」执行。"),
+    ]
     return "\n".join(line for line in lines if line)

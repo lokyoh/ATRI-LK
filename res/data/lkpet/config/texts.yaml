@@ -145,6 +145,55 @@ perk:
   line: "· {perk_id} - {name}（{cost} 点）"
   granted: "✅ 兑换成功：{perk}\n剩余成就点：{remaining_points}"
 
+# ---- 轮回商店 ----
+shop:
+  overview_title: "🏛 轮回商店｜可用 {available} 点（累计 {total}，已用 {spent}）"
+  overview_line: "{order}. {name}　{count} 项 · {mode}"
+  overview_mode_infinite: "无限成长"
+  overview_mode_capped: "有限等级"
+  overview_hint: "发送「/宠物.商店 1」查看分类；「/宠物.商店 1-3」直接看某件。"
+  overview_respec: "♻️ 洗点券 {tickets} 张（每完成一次轮回赠送 {free} 张）"
+
+  category_title: "🏛 {name}｜{desc}"
+  category_empty: "这个分类还没有商品。"
+  item_line: "· {number} {name}　{level}　{price}{gap}"
+  item_level_max: "{owned}/{cap}"
+  item_level_inf: "已买 {owned} 级"
+  item_price: "{price} 点"
+  item_gap: "（还差 {gap} 点）"
+  item_maxed: "（已满级）"
+  item_locked: "（需轮回 {cycles} 次）"
+  item_consumed: "（本轮已买，下次轮回生效）"
+  category_hint: "发送「/宠物.商店 {order}-1」查看详情；「/宠物.商店 确认 {number}」购买。"
+
+  detail_title: "🏛 {category} · {number} {name}"
+  detail_level: "当前：{level}"
+  detail_effect: "效果：{effect}"
+  detail_next: "下一级：{next}"
+  detail_price: "价格：{price} 点（可用 {available}）"
+  detail_maxed: "这条已经买满了。"
+  detail_locked: "需要累计轮回 {cycles} 次才开放。"
+  detail_confirm: "发送「/宠物.商店 确认 {number}」购买。"
+  detail_hint_none: "发送「/宠物.商店」返回概览。"
+
+  bought: "✅ 已购买「{name}」第 {level} 级（-{price} 点，剩余 {remaining}）"
+  bought_effect: "效果：{before} → {after}"
+  bought_max: "已满级"
+  bought_consumed: "★ 这份起始等级会在下一次轮回时生效，用掉即清零。"
+  bought_respec: "✅ 已购买「{name}」（-{price} 点，剩余 {remaining}）。现有洗点券 {tickets} 张。"
+  bought_hint: "发送「/宠物.商店」继续浏览。"
+
+  respec_title: "♻️ 洗点预览"
+  respec_body: "将退还 {refund} 点，清空 {items} 条共 {levels} 级。"
+  respec_tickets: "现有洗点券 {tickets} 张。"
+  respec_confirm: "发送「/宠物.商店 洗点 确认」执行。"
+  respec_done: "♻️ 洗点完成：退还 {refund} 点，清空 {items} 条共 {levels} 级（剩余券 {tickets} 张）。"
+  respec_none: "现在没有任何可洗的商品。"
+  respec_no_ticket: "没有洗点券了（每完成一次轮回赠送 1 张）。"
+
+  unknown: "❌ {msg}"
+  disabled: "养成系统当前已关闭。"
+
 common:
   no_pet: "请先创建宠物：/宠物.创建 <性格> <名字>"
 

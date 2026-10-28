@@ -4,16 +4,13 @@ from typing import ClassVar
 
 import anyio
 from nonebot.adapters import Bot, Event
-from nonebot.adapters.qq import Bot as QQBot
 from nonebot.exception import IgnoredException
 from nonebot.message import run_preprocessor
 from pydantic import Field
 
 from ATRI import driver
-from ATRI.bot.model import NewPanel, Panel, PanelItem
+from ATRI.bot.model import PanelItem
 from ATRI.dir import SYS_CONFIG_DIR
-from ATRI.event import ATRIEventBus
-from ATRI.log import log
 from ATRI.permission import MASTER_LIST
 from ATRI.utils.model import BaseModel
 
@@ -170,32 +167,32 @@ def _compare_panel(panel_items: list[PanelItem], online_panel: list[dict]):
 async def _(bot: Bot):
     bot_id = str(bot.self_id)
     BotStatus.add_bot_statu(bot_id)
-    if isinstance(bot, QQBot):
-        if bot_id in panel_status:
-            return
-        panel_status.append(bot_id)
-        from .utils import BotUtils
+    # if isinstance(bot, QQBot):
+    #     if bot_id in panel_status:
+    #         return
+    #     panel_status.append(bot_id)
+    #     from .utils import BotUtils
 
-        panel_items = await ATRIEventBus.publish("set_panel", source="ATRI")
-        if panel_items:
-            panel = Panel(items=panel_items)
-            if not os.path.exists(QQ_PANEL_PATH):
-                new_panel = NewPanel(scope="group", target_type="all", panel=panel)
-                re = await BotUtils.add_qq_panel(bot, new_panel)
-                pid = re["panel_id"]
-                log.info(f"创建面板:{pid}")
-                await _save_panel(re)
-                return
-            async with await anyio.open_file(QQ_PANEL_PATH, "r", encoding="utf-8") as f:
-                content = json.loads(await f.read())
-            pid = content["panel_id"]
-            re = await BotUtils.get_qq_panel(bot, pid)
-            online_panel = re["panel"]["items"]
-            if not _compare_panel(panel_items, online_panel):
-                log.info(f"重构面板:{pid}")
-                panel.remark = f"从{re['version']}重构面板"
-                re = await BotUtils.set_qq_panel(bot, pid, panel)
-                log.info(f"面板版本:{re['version']}")
+    #     panel_items = await ATRIEventBus.publish("set_panel", source="ATRI")
+    #     if panel_items:
+    #         panel = Panel(items=panel_items)
+    #         if not os.path.exists(QQ_PANEL_PATH):
+    #             new_panel = NewPanel(scope="group", target_type="all", panel=panel)
+    #             re = await BotUtils.add_qq_panel(bot, new_panel)
+    #             pid = re["panel_id"]
+    #             log.info(f"创建面板:{pid}")
+    #             await _save_panel(re)
+    #             return
+    #         async with await anyio.open_file(QQ_PANEL_PATH, "r", encoding="utf-8") as f:
+    #             content = json.loads(await f.read())
+    #         pid = content["panel_id"]
+    #         re = await BotUtils.get_qq_panel(bot, pid)
+    #         online_panel = re["panel"]["items"]
+    #         if not _compare_panel(panel_items, online_panel):
+    #             log.info(f"重构面板:{pid}")
+    #             panel.remark = f"从{re['version']}重构面板"
+    #             re = await BotUtils.set_qq_panel(bot, pid, panel)
+    #             log.info(f"面板版本:{re['version']}")
 
 
 @driver().on_bot_disconnect

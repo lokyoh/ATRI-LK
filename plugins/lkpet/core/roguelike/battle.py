@@ -51,11 +51,39 @@ class BattleResult:
     """战斗结束时仍存活的敌方单位数。"""
 
 
+def _mitigation_rate(defence: int, def_softness: float) -> float:
+    """防御的百分比减伤率：``def / (n + def)``。
+
+    ``n`` = ``battle.def_softness``（默认 100）。性质：
+
+    * 防御 0 → 减伤 0%；防御 = n → 减伤 50%；防御 → ∞ 减伤趋近 100% 但**永远到不了**；
+    * 边际递减：每点防御的收益递减，不会出现「堆到某个值就完全免疫」；
+    * 与攻击力**无关**：旧公式 ``atk - def × def_factor`` 的等效减伤率是
+      ``def × 0.5 / atk``，攻击越高防御越没用（深渊首领减伤只有 10%），
+      而且前期攻击低时又会把伤害压到 1 点下限（几乎无敌）。
+    """
+    if defence <= 0:
+        return 0.0
+    n = max(1.0, float(def_softness))
+    return float(defence) / (n + float(defence))
+
+
 def _damage(
-    atk: int, defence: int, variance: list[float], def_factor: float, rng: random.Random
+    atk: int,
+    defence: int,
+    variance: list[float],
+    def_softness: float,
+    rng: random.Random,
 ) -> int:
-    """基础伤害公式。"""
-    raw = (atk - defence * def_factor) * rng.uniform(*variance)
+    """基础伤害公式（百分比减伤）。
+
+    ``伤害 = atk × n / (n + def) × 浮动``
+
+    保留伤害比例 = ``n / (n + def)``，即减伤率 = ``def / (n + def)``。
+    最低 1 点，避免高防御把伤害压成 0（那样会变成无敌）。
+    """
+    keep = 1.0 - _mitigation_rate(defence, def_softness)
+    raw = atk * keep * rng.uniform(*variance)
     return max(1, round(raw))
 
 
@@ -120,9 +148,11 @@ class BattleSession:
         # 战斗参数
         battle_cfg = cfg.get("battle", {})
         self.variance = battle_cfg.get("variance", [0.85, 1.15])
-        self.def_factor = float(battle_cfg.get("def_factor", 0.5))
+        self.def_softness = float(battle_cfg.get("def_softness", 100))
         self.max_rounds = int(battle_cfg.get("max_rounds", 500))
         self.gauge_rate_mult = float(battle_cfg.get("gauge_rate_mult", 5))
+        # 速度 → 攻击条的曲线指数：1.0 = 线性（旧行为），0.5 = 开平方（增长变慢）。
+        self.spd_exponent = float(battle_cfg.get("spd_exponent", 1.0))
         self.timer_gain = float(battle_cfg.get("timer_gain", 10))
         # 一个「回合」= 战斗计时条走满一次 = 内部跑多少帧。
         # 计时条每帧 +timer_gain、满 100 清零，所以默认 10 帧 = 1 回合。
@@ -134,6 +164,12 @@ class BattleSession:
         self.max_frames = max(1, self.max_rounds * self.frames_per_turn)
         self.crit_mult = float(battle_cfg.get("crit_mult", 1.8))
         self.max_units = max(1, int(battle_cfg.get("max_units", 4)))
+        # 防御上限：单帧内最多结算多少次行动。正常情况下每帧最多
+        # 「攒点 / 100」次，这个值只用于兜住配置异常（比如系数调到离谱）
+        # 导致的死循环，不应该在正常数值下被触发。
+        self.max_actions_per_frame = max(
+            8, int(battle_cfg.get("max_actions_per_frame", 64))
+        )
         # 群体技能（target: all）参数：每个目标的伤害衰减与命中上限。
         aoe_cfg = battle_cfg.get("aoe", {}) or {}
         self.aoe_factor = float(aoe_cfg.get("factor", 0.6))
@@ -333,6 +369,24 @@ class BattleSession:
     def _pet_spd_eff(self) -> int:
         return max(1, round(self.pet_spd * self.pet_mods["spd_mult"]))
 
+    def _spd_gauge_gain(self, speed: float) -> float:
+        """速度 → 每帧攻击条积攒量（**平方根曲线**，增长逐渐变慢）。
+
+        ``gain = gauge_rate_mult × speed ** spd_exponent``
+
+        * ``spd_exponent = 1.0``：线性（旧行为），速度翻倍则出手频率翻倍，
+          高速度直接压过一切，越到后期越失控；
+        * ``spd_exponent = 0.5``（默认）：开平方，速度 **翻 4 倍才让出手频率翻倍**。
+          速度 12 → 22 → 44 → 88 的相对收益是 1 : 1.35 : 1.91 : 2.71，
+          边际明显递减，但高速度仍然有意义，不会出现「堆到某个值就完全无用」。
+
+        曲线只作用于「速度 → 攒条」这一步；速度的其它用途（出手排序、
+        「不可行动」抵扣）仍用原始速度值。
+        """
+        if speed <= 0 or self.gauge_rate_mult <= 0:
+            return 0.0
+        return float(self.gauge_rate_mult) * float(speed) ** float(self.spd_exponent)
+
     def _pet_damage(self, defence: int, bossy: bool) -> tuple[int, bool]:
         """我方输出（遗物 vs_boss_mult × 被动 dmg_mult × 好感加成 × 暴击）。
 
@@ -348,7 +402,7 @@ class BattleSession:
                     self._pet_atk_eff(),
                     defence,
                     self.variance,
-                    self.def_factor,
+                    self.def_softness,
                     self.rng,
                 )
                 * mult
@@ -443,12 +497,8 @@ class BattleSession:
         if target is None:
             return
 
-        if self.current_target is not None and target is not self.current_target:
-            self._blog(
-                "log_target",
-                "回合{round} 你的攻击转向 {name}。",
-                name=str(target["unit"]["name"]),
-            )
+        # 转向不写日志：一条「你的攻击转向 X」既占战报条数又不影响结果，
+        # 目标变化从随后的伤害行就能看出来。
         self.current_target = target
 
         acted = False
@@ -770,12 +820,6 @@ class BattleSession:
         if cfg.get("reset_gauge", True):
             rec["gauge"] = 0.0
             rec["skip_round"] = True
-        self._blog(
-            "log_unactionable",
-            "回合{round} {actor} 陷入「不可行动」（{value} 点，需以速度抵扣）。",
-            actor=rec["unit"]["name"],
-            value=round(gain),
-        )
 
     def _unit_phases(self, rec: dict[str, Any]) -> None:
         """形态触发。"""
@@ -917,7 +961,7 @@ class BattleSession:
                             int(unit["atk"]),
                             self._pet_def_eff(),
                             self.variance,
-                            self.def_factor,
+                            self.def_softness,
                             self.rng,
                         )
                         * (power / BASE_SKILL_POWER)
@@ -1044,7 +1088,7 @@ class BattleSession:
                 int(unit["atk"]),
                 self._pet_def_eff(),
                 self.variance,
-                self.def_factor,
+                self.def_softness,
                 self.rng,
             )
             if rate > 0 and self.rng.random() < rate:
@@ -1165,47 +1209,56 @@ class BattleSession:
         )
 
     def _run_round(self) -> None:
-        """执行一轮。"""
-        # 攻击条积攒
-        self.gauge_pet = min(
-            100.0, self.gauge_pet + self._pet_spd_eff() * self.gauge_rate_mult
-        )
+        """执行一轮（帧）。"""
+        # 攻击条积攒：**不截断**到 100，多出的点数保留下来。
+        # 旧写法 min(100, gauge + fill) 会把高速度多攒的点直接丢弃——
+        # 速度 25 每帧攒 125，被压成 100，行动一次后归零，白丢 25 点，
+        # 于是 20 以上全部卡在每回合 10 次（速度投资完全无效）。
+        self.gauge_pet += self._spd_gauge_gain(self._pet_spd_eff())
         for rec in self._live_units():
             speed = self._spend_stun(rec)
-            rec["gauge"] = min(100.0, rec["gauge"] + speed * self.gauge_rate_mult)
+            rec["gauge"] += self._spd_gauge_gain(speed)
 
-        # 决定行动顺序
-        actors: list[tuple[str, int, dict[str, Any] | None]] = []
-        if self.gauge_pet >= 100.0:
-            actors.append(("pet", self._pet_spd_eff(), None))
-        for rec in self._live_units():
-            if rec["gauge"] >= 100.0:
-                actors.append(("monster", int(rec["unit"]["spd"]), rec))
-        actors.sort(key=lambda a: -a[1])
-
-        # 执行行动
-        for who, _, rec in actors:
+        # 决定行动顺序并执行；同一帧内攒够 200 点就能连动两次。
+        # 每次行动即扣 100，剩余点数带入下一次，行动条不再有上限封顶。
+        # 注意：每个 break 都必须跳出**整个 while**（用标志位 + 统一的
+        # ``battle_over`` 判断），否则战斗结束后 while 还会继续空转——
+        # 因为此时没人能消耗掉剩下的行动条，就是一个死循环。
+        guard = 0
+        max_actions = self.max_actions_per_frame
+        while guard < max_actions:
             if self.pet_hp <= 0 or self._pick_target() is None:
                 break
-            if rec is not None and rec["unit"]["hp"] <= 0:
-                continue
-            if who == "pet":
-                self._pet_action()
-                if self.pet_hp <= 0:
+            actors: list[tuple[str, float, dict[str, Any] | None]] = []
+            if self.gauge_pet >= 100.0:
+                actors.append(("pet", float(self._pet_spd_eff()), None))
+            for rec in self._live_units():
+                if rec["gauge"] >= 100.0:
+                    actors.append(("monster", float(rec["unit"]["spd"]), rec))
+            if not actors:
+                break
+            actors.sort(key=lambda a: -a[1])
+
+            for who, _, rec in actors:
+                guard += 1
+                if guard > max_actions:
                     break
-            else:
-                assert rec is not None
-                # 本轮被「不可行动」打断并取消行动的，直接跳过（见 _apply_unactionable）。
-                if rec.pop("skip_round", False):
-                    self._blog(
-                        "log_unactionable_skip",
-                        "回合{round} {actor} 因「不可行动」未能出手。",
-                        actor=rec["unit"]["name"],
-                    )
+                if self.pet_hp <= 0 or self._pick_target() is None:
+                    break
+                if rec is not None and rec["unit"]["hp"] <= 0:
                     continue
-                rec["gauge"] -= 100.0
-                self.monster_acts += 1
-                self._enemy_action(rec)
+                if who == "pet":
+                    self._pet_action()
+                else:
+                    assert rec is not None
+                    # 本轮被「不可行动」打断并取消行动的：扣掉行动条直接跳过，
+                    # 不写日志（控制本身已经由「被打断了」那条说明）。
+                    if rec.pop("skip_round", False):
+                        rec["gauge"] -= 100.0
+                        continue
+                    rec["gauge"] -= 100.0
+                    self.monster_acts += 1
+                    self._enemy_action(rec)
 
         # 轮末处理
         self._end_of_round()
@@ -1225,19 +1278,8 @@ class BattleSession:
         used = min(speed, remaining)
         left = remaining - used
         rec["stun"] = left
-        self._blog(
-            "log_unactionable_tick",
-            "回合{round} {actor} 处于「不可行动」，速度被抵消 {used} 点（剩余 {left}）。",
-            actor=rec["unit"]["name"],
-            used=round(used),
-            left=round(left),
-        )
-        if left <= 0:
-            self._blog(
-                "log_unactionable_end",
-                "回合{round} {actor} 挣脱了「不可行动」。",
-                actor=rec["unit"]["name"],
-            )
+        # 抵扣过程不写日志：每帧一条会把 10 条战报名额吃掉，
+        # 玩家只需要知道「蓄力被打断了」，不需要看它逐点抵扣。
         return max(0.0, speed - used)
 
     def _end_of_round(self) -> None:
@@ -1426,6 +1468,8 @@ async def _do_battle(
             crits=result.crits,
         )
     )
+    # 逐条战报（battle.log_limit 条，默认 10）：取最后 N 条。
+    # log_limit = 0 时整个段落不渲染，只留标题、描述、节奏与结果。
     if battle_log is not None:
         shown = battle_log[-log_limit:]
         lines.append(

@@ -253,10 +253,6 @@ rogue:
   mp_floor: "🔵 前进整备：魔力 +{gain}（{mp}/{mp_max}）"
   mp_floor_rest: "🔵 休息层整备：魔力 +{gain}（{mp}/{mp_max}）"
   mp_event: "🔵 魔力 {delta:+d}（现有 {mp}/{mp_max}）"
-  log_unactionable: "回合{round} {actor} 陷入「不可行动」（{value} 点，需以速度抵扣）。"
-  log_unactionable_tick: "回合{round} {actor} 因「不可行动」被抵消速度 {used} 点（剩余 {left}）。"
-  log_unactionable_end: "回合{round} {actor} 挣脱了「不可行动」。"
-  log_unactionable_skip: "回合{round} {actor} 因「不可行动」未能出手。"
   skill_note_mp: "耗蓝 {cost}"
   boss_desc: "—— {desc}"
   # 怪物特点中文标签（roguelike.yaml monster_traits 的 id → 展示词）
@@ -336,7 +332,6 @@ rogue:
   log_summon: "回合{round} {actor} 召唤了 {count} 只 {name}。"
   log_summon_full: "回合{round} {actor} 想召唤 {name}，但场上已满。"
   log_slain: "回合{round} {name} 被击倒。"
-  log_target: "回合{round} 你的攻击转向 {name}。"
   log_leech: "回合{round} {actor} 吸血回复 {heal} 点。"
   log_thorns: "回合{round} 棘刺反弹 {dmg} 点伤害。"
   log_dot_tick: "回合{round} 持续伤害造成 {dmg} 点（你剩余 {hp}）。"

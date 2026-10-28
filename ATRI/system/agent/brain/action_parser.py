@@ -1,11 +1,12 @@
 """Agent 动作解释器：把模型的文本输出解析成可执行的功能调用。
 
-模型约定：先写思考内容，再用一个代码块（标头 text）列出调用，每行一个
-「功能名(参数名=参数值, ...)」。真实模型经常偏离约定，这里一律按
-「宁可宽容解析，也不让整轮思考崩掉」处理：
+模型约定：先写思考内容，再逐行写调用「功能名(参数名=参数值, ...)」。
+调用**不要求**包在代码块里——提示词已经不这么要求；但旧对话历史里仍可能
+出现 ```text 代码块，围栏只是装饰，剥掉后就是同一份正文。真实模型经常
+偏离约定，这里一律按「宁可宽容解析，也不让整轮思考崩掉」处理：
 
 - 按括号配平切出调用，容忍字符串里直接换行、调用跨行书写；
-- 合并多个代码块；解析不出调用的块按正文保留，不静默丢弃；
+- 裸调用必须独占一行；正文里的英文括号（``Note (…)``）不会被当成调用；
 - 兼容模型自发的 DSML 原生工具调用，并把它连同参数值从正文里剥除；
 - 裸值（未加引号的字符串）按字符串回落，全角引号视同引号；
 - 按功能声明的参数名 / 类型校验，把问题变成可回填给模型的提示。
@@ -29,14 +30,12 @@ class ActionParseError(ValueError):
     """一处调用无法解析；由调用方转成回填给模型的提示。"""
 
 
-#: 代码块围栏（三个反引号）
+#: 代码块围栏（三个以上反引号，可带 text 之类的语言标注）
 _FENCE = "\x60" * 3
-#: 从模型输出里提取代码块（语言标注可有可无）
-_CALL_BLOCK_RE = re.compile(
-    rf"{_FENCE}(?P<lang>[A-Za-z]*)[ \t]*\n?(?P<body>[\s\S]*?)\n?{_FENCE}"
+#: 整行围栏：连同行尾换行一起吃掉，避免剥离后留下空行把行号顶偏
+_FENCE_RE = re.compile(
+    rf"^[ \t]*{_FENCE}`*[ \t]*[A-Za-z_+-]*[ \t]*(?:\r?\n|$)", re.MULTILINE
 )
-#: 合法语言标注：只有这类首行才当作标注剥掉，避免误吃调用的第一行
-_LANG_TAG_RE = re.compile(r"[A-Za-z][\w+-]*")
 #: 一次调用的起点：行首（允许列表符号）的「功能名(」
 _CALL_START_RE = re.compile(
     r"^[ \t]*(?:[-*+•>]|\d+[.)、])?[ \t]*(?P<name>[A-Za-z_]\w*)[ \t]*\(", re.MULTILINE
@@ -92,34 +91,109 @@ _FALSE_WORDS = {"false", "no", "off", "0", "否", "假"}
 def split_response(text: str) -> tuple[str, list[dict[str, Any]], list[str]]:
     """把模型输出拆成「(正文, 调用列表, 待回填的问题)」。
 
-    兼容三种写法：约定的单个代码块、拆成多个的代码块（逐块解析后合并），
-    以及模型自发的 DSML 原生调用。解析不出调用的代码块按正文保留，
-    避免整段叙述被静默丢掉；单处调用的问题收集进第三个返回值，
-    交给调用方回填给模型，而不是让整轮思考崩掉。
+    只有一种写法：调用直接写在正文里，每行一个。代码块（旧约定）不单独
+    走一套解析——围栏只是装饰，剥掉后就是同一份正文，因此旧输出照样能解析。
+    外加模型自发的 DSML 原生调用。单处调用的问题收集进第三个返回值，交给
+    调用方回填给模型，而不是让整轮思考崩掉。
     """
     issues: list[str] = []
     calls: list[dict[str, Any]] = []
 
-    raw = text or ""
-    dsml_calls, raw = extract_dsml(raw)
+    text = text or ""
+    dsml_calls, text = extract_dsml(text)
     calls.extend(dsml_calls)
 
-    parts: list[str] = []
-    last = 0
-    for match in _CALL_BLOCK_RE.finditer(raw):
-        parts.append(raw[last : match.start()])
-        block = match.group("body")
-        block_calls = parse_calls(block, issues)
-        if block_calls:
-            calls.extend(block_calls)
-        elif block.strip():
-            # 解析不出调用：当正文保留，宁可多一段原文，也不吞掉叙述。
-            parts.append(_strip_lang_tag(block, match.group("lang")))
-        last = match.end()
-    parts.append(raw[last:])
+    # 围栏只是装饰：剥掉后旧输出与裸调用是同一种形态，不必维护两套解析
+    text = _strip_fences(text)
 
-    content = "\n\n".join(part.strip() for part in parts if part.strip())
-    return content, calls, issues
+    content, bare_calls = _split_bare_calls(text, issues)
+    calls.extend(bare_calls)
+    return content.strip(), calls, issues
+
+
+def _strip_fences(text: str) -> str:
+    """剥掉代码块围栏与语言标注，只留块内正文。
+
+    围栏（``` / ````，可带 ``text`` 之类标注）对解析没有意义，剥掉后旧输出
+    与裸调用是同一种形态。未闭合的围栏按普通文本处理，不额外报错。
+    """
+    if not text or _FENCE not in text:
+        return text
+    return _FENCE_RE.sub("", text)
+
+
+def _split_bare_calls(
+    text: str,
+    issues: list[str],
+) -> tuple[str, list[dict[str, Any]]]:
+    """从正文里摘出裸调用，返回「(剩余正文, 调用列表)」。
+
+    一行要被认作调用，必须**独占一行**（允许缩进 / 列表符号）、括号配平、
+    且括号里是「参数名=参数值」写法（空括号也算）。
+
+    名字是否已注册**不**参与判断：模型写了没注册的功能，正确的反馈是
+    「未知的功能：xxx」（由 ``do_action`` 回填），而不是把它当正文悄悄丢掉——
+    那样模型会以为自己调用成功，回复里就会出现「已经帮你做了」。
+
+    这样 ``Note (…)``、句中英文括号、以及「调用之后还接着说半句」的行
+    都原样留在正文里。
+    """
+    if not text:
+        return text, []
+
+    calls: list[dict[str, Any]] = []
+    kept: list[str] = []
+    pos = 0
+    for line_no, start, end in _iter_spans(text, issues):
+        segment = text[start:end]
+        line_start = text.rfind("\n", 0, start) + 1
+        line_end = text.find("\n", end)
+        if line_end < 0:
+            line_end = len(text)
+        prefix = text[line_start:start].strip()
+        if text[end:line_end].strip() or not _is_bullet(prefix):
+            continue
+        if not _keyword_params_only(segment):
+            continue
+        try:
+            func_name, args = _parse_call(segment, line_no)
+        except ActionParseError as e:
+            _note(str(e), issues)
+            continue
+        kept.append(text[pos:line_start])
+        calls.append({"function": func_name, "args": args, "line": line_no})
+        pos = line_end + 1
+    kept.append(text[pos:])
+    return "".join(kept), calls
+
+
+def _keyword_params_only(segment: str) -> bool:
+    """判断一行是否**像调用**（决定要不要把它当调用处理）。
+
+    认作调用：``send_message(msg="hi")``、``stop_thinking()``，以及
+    ``send_message("位置参数")`` 这种写错了的调用——后者必须进 ``issues``
+    回填给模型，而不是当正文丢掉。排除叙述里的英文括号：括号里含空格、
+    且不是「参数名=」开头的（``Note (this is fine)``）。
+    """
+    match = _CALL_LINE_RE.match(segment.strip())
+    if not match:
+        return False
+    body = match.group("args").strip()
+    if not body:
+        return True
+    if _KEYWORD_RE.match(body):
+        return True
+    # 写错参数（位置参数 / 裸值）也当调用，交给 _parse_call 报问题
+    return not re.search(r"\s", body, re.UNICODE)
+
+
+def _is_bullet(prefix: str) -> bool:
+    """判断调用前的前缀是否只是缩进 / 列表符号（调用独占一行）。"""
+    if not prefix:
+        return True
+    if prefix in {"-", "*", "+", "•", ">", "、"}:
+        return True
+    return bool(re.fullmatch(r"\d+[.)、]", prefix))
 
 
 def parse_calls(text: str, issues: list[str] | None = None) -> list[dict[str, Any]]:
@@ -132,12 +206,7 @@ def parse_calls(text: str, issues: list[str] | None = None) -> list[dict[str, An
     后跳过，不影响同块里的其它调用。
     """
     calls: list[dict[str, Any]] = []
-    try:
-        segments = list(_iter_calls(text or ""))
-    except ActionParseError as e:
-        _note(str(e), issues)
-        return calls
-    for line_no, segment in segments:
+    for line_no, segment in _iter_calls(text or "", issues):
         try:
             name, args = _parse_call(segment, line_no)
         except ActionParseError as e:
@@ -207,8 +276,23 @@ def normalize_args(func: Any, args: dict[str, Any]) -> tuple[dict[str, Any], lis
     return clean, issues
 
 
-def _iter_calls(text: str) -> Iterator[tuple[int, str]]:
+def _iter_calls(
+    text: str, issues: list[str] | None = None
+) -> Iterator[tuple[int, str]]:
     """按括号配平切出「功能名(...)」片段，产出 (起始行号, 片段)。"""
+    for line_no, start, end in _iter_spans(text, issues):
+        yield line_no, text[start:end]
+
+
+def _iter_spans(
+    text: str, issues: list[str] | None = None
+) -> Iterator[tuple[int, int, int]]:
+    """按括号配平切出调用片段的位置，产出 (起始行号, 起, 止)。
+
+    与 :func:`_iter_calls` 同一个切分逻辑，只是交出位置而不是截好的字符串——
+    裸调用要从正文里把这一段摘掉，需要知道自己占了哪几个字符。括号没闭合
+    时记一条问题、跳过这一段继续找后面的调用，而不是让整份输出作废。
+    """
     pos = 0
     total = len(text)
     while pos < total:
@@ -240,9 +324,10 @@ def _iter_calls(text: str) -> Iterator[tuple[int, str]]:
                     break
             idx += 1
         else:
-            raise ActionParseError(f"第 {line_no} 行的调用括号没有闭合")
+            _note(f"第 {line_no} 行的调用括号没有闭合", issues)
+            return
         # 从功能名起切，丢掉行首的列表符号 / 缩进
-        yield line_no, text[match.start("name") : idx]
+        yield line_no, match.start("name"), idx
         pos = idx
 
 
@@ -326,16 +411,6 @@ def _match_quote(raw: str, pos: int) -> str:
         if raw.startswith(quote, pos):
             return quote
     return ""
-
-
-def _strip_lang_tag(block: str, lang: str) -> str:
-    """去掉代码块首行的语言标注，只留正文。"""
-    lines = block.splitlines()
-    if lang and lines and lines[0].strip() == lang:
-        return "\n".join(lines[1:])
-    if lines and _LANG_TAG_RE.fullmatch(lines[0].strip()):
-        return "\n".join(lines[1:])
-    return block
 
 
 def _note(message: str, issues: list[str] | None) -> None:

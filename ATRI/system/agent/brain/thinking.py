@@ -198,9 +198,7 @@ class ThinkingModel:
         }
 
 功能调用格式：
-``` text
 功能名(参数名=参数值, ...)
-```
 """
 
     @staticmethod
@@ -212,7 +210,7 @@ class ThinkingModel:
 - 不要输出无关解释
 - 请及时结束本次任务:可以调用stop_thinking或不输出功能调用结束本次任务
 - 每行一个调用
-- 所有调用写在同一个代码块里
+- 调用直接写在正文里，不要用代码块包裹
 - 禁止使用 XML / DSML 等其它调用格式
 - 无参数功能写()
 - 字符串用双引号
@@ -221,9 +219,8 @@ class ThinkingModel:
 输出格式：
 我该怎么做的思考内容。
 
-```text
-见功能调用格式...
-```"""
+功能名(参数名=参数值, ...)
+功能名(参数名=参数值, ...)"""
 
     async def thinking(
         self,
@@ -358,7 +355,7 @@ class ThinkingModel:
             calling_back.append(
                 f"本次输出有 {len(issues)} 处调用无法解析：{detail}。"
                 "请严格按「功能名(参数名=参数值, ...)」格式重写：字符串用双引号，"
-                "需要换行写 \\n，所有调用放在同一个代码块里"
+                "需要换行写 \\n，每个调用独占一行，不要用代码块包裹"
             )
         for func in functions_data:
             func_name = func["function"]

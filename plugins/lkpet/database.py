@@ -88,7 +88,23 @@ class Reincarnation(BaseModel):
     best_age_days: int = 0
     best_attributes: dict[str, int] = Field(default_factory=dict)
     permanent_bonuses: dict[str, int | float] = Field(default_factory=dict)
+    """永久加成，由 ``PERK_LEVELS`` 派生出来的**缓存**。
+
+    不要直接增减这个字段：改 ``perk_levels`` 后必须重算一次，
+    否则会出现"等级在涨、加成不动"的不一致。
+    """
+    perk_levels: dict[str, int] = Field(default_factory=dict)
+    """商店持有情况的**唯一真相**：``{商品 id: 已买等级}``。
+
+    商品 id 与等级上限来自 ``reincarnation.yaml`` 的商店配置；未定稿前恒为空。
+    """
+    respec_tickets: int = 0
+    """洗点券张数（每完成一次轮回赠送，也可在商店购买）。"""
     unlocked_perks: list[str] = Field(default_factory=list)
+    """**只读遗留列**：旧版"已兑换特权"列表。
+
+    迁移折算进 :attr:`perk_levels` 后不再写入，仅保留以便旧档排查与回滚。
+    """
     past_pets: list[dict[str, Any]] = Field(default_factory=list)
     achievements_unlocked: list[str] = Field(default_factory=list)
     created_at: datetime = Field(default_factory=datetime.now)
@@ -328,6 +344,14 @@ def _migrate_pet_skills_v2(connection, cursor) -> None:
             )
 
 
+REINCARNATION_VERSION = 1
+"""PETREINCARNATION 表结构版本。
+
+0 = 初版（成绩点 + 特权列表）。
+1 = 商店改版：新增 PERK_LEVELS（等级化持有）与 RESPEC_TICKETS（洗点券）。
+    ``UNLOCKED_PERKS`` 降级为只读遗留列——迁移时折算进 ``PERK_LEVELS``，之后不再写它。
+"""
+
 REINCARNATION_COLUMNS = """
 PLAYER_ID             TEXT PRIMARY KEY,
 ACHIEVEMENT_POINTS    INTEGER NOT NULL DEFAULT 0,
@@ -337,12 +361,34 @@ BEST_LEVEL            INTEGER NOT NULL DEFAULT 1,
 BEST_AGE_DAYS         INTEGER NOT NULL DEFAULT 0,
 BEST_ATTRIBUTES       TEXT NOT NULL DEFAULT '{}',
 PERMANENT_BONUSES     TEXT NOT NULL DEFAULT '{}',
+PERK_LEVELS           TEXT NOT NULL DEFAULT '{}',
+RESPEC_TICKETS        INTEGER NOT NULL DEFAULT 0,
 UNLOCKED_PERKS        TEXT NOT NULL DEFAULT '[]',
 PAST_PETS             TEXT NOT NULL DEFAULT '[]',
 ACHIEVEMENTS_UNLOCKED TEXT NOT NULL DEFAULT '[]',
 CREATED_AT            TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
 UPDATED_AT            TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
 """
+
+REINCARNATION_MIGRATION_COLUMNS = {
+    "PERK_LEVELS": "TEXT NOT NULL DEFAULT '{}'",
+    "RESPEC_TICKETS": "INTEGER NOT NULL DEFAULT 0",
+}
+"""v0 → v1 及之后所有版本共用：``PRAGMA table_info`` 缺什么补什么（幂等）。
+
+与 ``PETDATA_MIGRATION_COLUMNS`` / ``ROGUE_MIGRATION_COLUMNS`` 同一策略：
+不看版本号本身，只补列，因此可重复执行。
+"""
+
+LEGACY_PERK_MAP: dict[str, tuple[str, int, int]] = {
+    # 旧 id → (新商品 id, 折算级数, 旧单价)。**新商品 id 一旦定下就不能再改**，
+    # 它同时是 PERK_LEVELS 的键与商店配置的键。
+    #
+    # 目前**故意留空**：商店商品尚未定稿，旧特权的归属需要人工决定
+    # （一个旧 id 可能拆成多个新商品，或合并进同一个商品的不同等级）。
+    # 留空时 ``_migrate_perks_v1`` 会把 UNLOCKED_PERKS 原样保留、不折算、
+    # 不退款，玩家数据零损失，等商品定稿后补一行映射即可生效。
+}
 
 BIOGRAPHY_COLUMNS = """
 PLAYER_ID      TEXT PRIMARY KEY,
@@ -399,11 +445,127 @@ def update_rogue_db(connection, version: int) -> None:
         cursor.close()
 
 
+def update_reincarnation_db(connection, version: int) -> None:
+    """PETREINCARNATION 迁移：补列 + 把 UNLOCKED_PERKS 折算进 PERK_LEVELS。
+
+    两步都与版本号无关，只看实际列与数据，因此可重复执行：
+    1. ``PRAGMA table_info`` 补齐缺失列；
+    2. ``LEGACY_PERK_MAP`` 非空时，把仍为空 ``PERK_LEVELS`` 的行折算一次。
+       已经折算过的行（``PERK_LEVELS`` 非 ``'{}'``）跳过，不会重复退款。
+    """
+    cursor = connection.cursor()
+    try:
+        existing = {
+            str(row[1]).upper()
+            for row in cursor.execute("PRAGMA table_info(PETREINCARNATION)")
+        }
+        with connection:
+            for column, definition in REINCARNATION_MIGRATION_COLUMNS.items():
+                if column not in existing:
+                    cursor.execute(
+                        f"ALTER TABLE PETREINCARNATION ADD COLUMN {column} {definition}"
+                    )
+        _migrate_legacy_perks(connection, cursor)
+    finally:
+        cursor.close()
+
+
+def _migrate_legacy_perks(connection, cursor) -> None:
+    """把旧 ``UNLOCKED_PERKS`` 的次数折算成 ``PERK_LEVELS`` 的等级。
+
+    ``LEGACY_PERK_MAP`` 为空时**直接返回**，玩家数据原样不动——商品未定稿前
+    不应该替玩家做任何决定。映射就位后才开始折算：
+
+    * 出现次数 = 等级；``(新 id, 级数, 旧单价)`` 里的级数用于"一次算几级"
+      （旧商店里 ``start_level_5`` 与 ``start_level_10`` 是两条独立商品，
+      各自折算成新商品的 1 级 / 2 级）；
+    * 超出上限的部分按**旧单价**退：减 ``SPENT_POINTS``，因为
+      可用点数 = ``ACHIEVEMENT_POINTS - SPENT_POINTS``，减后者等价于退款，
+      且不需要动累计值。
+    """
+    if not LEGACY_PERK_MAP:
+        return
+
+    try:
+        from .core.shop import catalog, recompute_bonuses, spec_level_cap
+    except ImportError:  # 商店模块尚未落地时跳过折算，下次启动再试
+        return
+
+    rows = list(
+        cursor.execute(
+            "SELECT PLAYER_ID, UNLOCKED_PERKS, SPENT_POINTS FROM PETREINCARNATION"
+        )
+    )
+    if not rows:
+        return
+
+    try:
+        catalog_map = catalog()
+    except (FileNotFoundError, TypeError, ValueError):
+        # 配置还没写（商品未定稿）时不算，避免把玩家数据写坏。
+        return
+    if not catalog_map:
+        return
+
+    with connection:
+        for player_id, raw_perks, spent in rows:
+            try:
+                perks = json.loads(raw_perks or "[]")
+            except (TypeError, ValueError):
+                continue
+            if not isinstance(perks, list) or not perks:
+                continue
+
+            levels: dict[str, int] = {}
+            refund = 0
+            handled = False
+            for perk_id in perks:
+                mapped = LEGACY_PERK_MAP.get(str(perk_id))
+                if mapped is None:
+                    continue
+                handled = True
+                item_id, step, legacy_cost = mapped
+                spec = catalog_map.get(item_id)
+                if spec is None:
+                    continue
+                cap = spec_level_cap(spec)
+                current = levels.get(item_id, 0)
+                room = max(0, cap - current)
+                take = min(step, room)
+                if take:
+                    levels[item_id] = current + take
+                # 超出上限的级数按旧单价退还（含"部分放不下"的情况）。
+                refund += (step - take) * legacy_cost
+
+            if not handled:
+                continue
+
+            bonus = recompute_bonuses(levels)
+            # **把 UNLOCKED_PERKS 清空，作为"已折算"标记**。
+            # 不能用 ``PERK_LEVELS`` 当标记：合法折算的结果可能就是空 dict
+            # （旧 id 全部被上限截断时），于是"已处理"与"未处理"无法区分。
+            # 实测不清空时，重跑迁移会把退款重复扣（210 → 60）。
+            cursor.execute(
+                "UPDATE PETREINCARNATION SET PERK_LEVELS = ?, PERMANENT_BONUSES = ?, "
+                "SPENT_POINTS = MAX(0, ? - ?), UNLOCKED_PERKS = '[]' WHERE PLAYER_ID = ?",
+                (
+                    json.dumps(levels, ensure_ascii=False),
+                    json.dumps(bonus, ensure_ascii=False),
+                    int(spent or 0),
+                    refund,
+                    player_id,
+                ),
+            )
+
+
 pet_table: DBTable = lk_db.get_table(
     "PETDATA", PETDATA_COLUMNS, PETDATA_VERSION, update_pet_db
 )
 reincarnation_table: DBTable = lk_db.get_table(
-    "PETREINCARNATION", REINCARNATION_COLUMNS, 0
+    "PETREINCARNATION",
+    REINCARNATION_COLUMNS,
+    REINCARNATION_VERSION,
+    update_reincarnation_db,
 )
 biography_table: DBTable = lk_db.get_table("PETBIOGRAPHY", BIOGRAPHY_COLUMNS, 0)
 rogue_table: DBTable = lk_db.get_table(
@@ -510,8 +672,12 @@ def save_model(table: DBTable, model: BaseModel, key_column: str) -> None:
         table.insert(content)
 
 
-def load_reincarnation(player_id: int) -> Reincarnation | None:
-    """Read a player's reincarnation row, or ``None`` when never created."""
+def load_reincarnation(player_id: str | int) -> Reincarnation | None:
+    """Read a player's reincarnation row, or ``None`` when never created.
+
+    ``player_id`` 收 ``str`` 也收 ``int``：调用方从事件拿到的通常是 ``int``，
+    而 ``Pet.player_id`` 落库是 ``str``。两者都按 ``int`` 归一后查库。
+    """
     return load_model(
         reincarnation_table, Reincarnation, REINCARNATION_KEY_COLUMN, int(player_id)
     )

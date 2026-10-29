@@ -26,7 +26,7 @@ from .public import init_public
 plugin = Service(
     service="WebAPI",
     docs="ATRI的webapi",
-    version="0.0.8",
+    version="0.0.9",
     type_=Service.ServiceType.HIDDEN,
 )
 

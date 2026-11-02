@@ -327,6 +327,10 @@ class ThinkingModel:
                 duration=time.perf_counter() - started,
                 hit_limit=thinking_times >= limit,
                 failed=failed,
+                # 主动开口的 trace 必须能和正常回复区分开。
+                # 之前漏传这个字段，导致 9 天真实数据里 proactive 全是 0，
+                # 「主动开口花了多少轮/多久」根本查不出来。
+                proactive=initiative,
             )
 
     @staticmethod

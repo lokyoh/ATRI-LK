@@ -576,12 +576,22 @@ async def try_speak(chat_id: str, bot) -> str | None:
 
     try:
         ok, reason = should_speak_now(chat_id)
+        # 拒绝也要记：真实数据里 305 条 initiative 全是插话判断，
+        # 主动开口的拒绝（时段/冷却/冷群）一条都没留，
+        # 于是「她为什么一整天不开口」只能靠猜。
+        telemetry.initiative(chat_id=chat_id, allowed=ok, reason=reason, kind="start")
         if not ok:
             log.debug(f"群 {chat_id} 不主动开口：{reason}")
             return None
 
         opening = pick_opening(chat_id)
         if opening is None:
+            telemetry.initiative(
+                chat_id=chat_id,
+                allowed=False,
+                reason="没有值得说的素材（或都已说过）",
+                kind="start",
+            )
             return None
 
         text = await compose_opening(chat_id, bot, opening)

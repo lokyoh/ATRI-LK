@@ -149,9 +149,23 @@ class Telemetry:
             content_preview=self.preview(text),
         )
 
-    def initiative(self, *, chat_id: str, allowed: bool, reason: str = "") -> None:
+    def initiative(
+        self, *, chat_id: str, allowed: bool, reason: str = "", kind: str = "reply"
+    ) -> None:
+        """记录一次「要不要说话」的判断。
+
+        :param kind: ``reply`` = 有人说话时的插话判断（P2 限流）；
+            ``start`` = 无人说话时主动开口的判断。
+            **两者必须区分**：真实数据里 305 条 initiative 全部来自 reply，
+            主动开口的拒绝（时段/冷却/冷群）一条都没记，
+            导致「她为什么不主动开口」完全查不出来。
+        """
         self.record(
-            "initiative", chat_id=chat_id, allowed=allowed, reason=reason or None
+            "initiative",
+            chat_id=chat_id,
+            allowed=allowed,
+            reason=reason or None,
+            kind=kind,
         )
 
     def feel(self, *, mood: float, irritation: float, source: str) -> None:

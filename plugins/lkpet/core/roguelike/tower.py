@@ -290,22 +290,33 @@ def monster_trait_text(traits: list[str], cfg: dict[str, Any] | None = None) -> 
 
 
 def _monster_label(monster: dict[str, Any]) -> str:
-    """展示名：``名称（特点）``；没有特点的怪只显示名字。
+    """展示名：``名称 Lv.N（特点）``；没有特点时省略括号。
 
     **用于楼层三选一的路线预告**（``FloorChoiceState.render`` /
     ``BattleState.render``）：选项行必须让人一眼看出「这条路线打的是什么、
-    有什么特点」，所以特点内嵌在括号里。
+    多少级、有什么特点」，所以等级与特点都内嵌在同一行。
 
     战斗详情**不要**用它——战报里的标题/胜利行/失败行用 :func:`_monster_name`，
     特点另起一行（:func:`_monster_trait_line`），否则会与玩家技能括号混在一起。
     """
+    name = _monster_name(monster)
     note = monster_trait_text(monster.get("traits") or [])
-    return f"{monster['name']}（{note}）" if note else str(monster["name"])
+    return f"{name}（{note}）" if note else name
 
 
 def _monster_name(monster: dict[str, Any]) -> str:
-    """纯名字（不带特点标注），供战斗详情的标题/胜负行使用。"""
-    return str(monster["name"])
+    """名字 + 等级（``冰封骑士 Lv.80``）；没有等级字段时只回名字。
+
+    改造后所有怪物都有 ``level``（= 层号），战报与预告都该让玩家看见它，
+    否则「等级差影响伤害」这件事在界面上是不可见的。
+    """
+    name = str(monster["name"])
+    level = int(monster.get("level") or 0)
+    if level <= 0:
+        return name
+    from ...utils.texts import text
+
+    return text("rogue.monster_level_tag", "{name} Lv.{level}", name=name, level=level)
 
 
 def _monster_trait_line(monster: dict[str, Any]) -> str:
@@ -444,6 +455,59 @@ def _enemy_skill_lines(
     return lines
 
 
+def _template_panel(
+    level: int,
+    archetype: str,
+    cfg: dict[str, Any],
+    rng=None,
+) -> dict[str, int]:
+    """按「1 级模板 + 每级成长 × 等级」算出怪物面板（**未套 tier/区域倍率**）。
+
+    公式与宠物完全一致（见 ``pet.yaml`` 的 ``base_attributes`` / ``growth``）::
+
+        属性 = base[stat] + growth[stat] × 等级
+
+    区别只在 ``archetype``：它按 ``weight`` 让成长值在四项之间**温和偏移**，
+    而不是完全重新分配（完全重分配会把「迅捷」的 spd 拉成普通的 2 倍）。
+
+    偏移量按 ``archetype_strength`` 与原成长插值::
+
+        growth_new = growth × (1 + strength × (权重 / 平均权重 - 1))
+
+    ``strength = 0`` 等价于不受定位影响，``1`` 是完全重分配。
+    """
+    tpl = cfg.get("monster_templates") or {}
+    base = tpl.get("base") or {}
+    growth = tpl.get("growth") or {}
+    stats = ("hp", "atk", "def", "spd")
+
+    arch = (tpl.get("archetypes") or {}).get(archetype) or {}
+    weight = arch.get("weight") or {}
+    strength = float(tpl.get("archetype_strength", 0.45) or 0.0)
+
+    # 平均权重 = 四项权重的均值；用它做基准，保证定位只改「形状」不改「总量」。
+    weights = [float(weight.get(k, 1.0)) for k in stats]
+    avg_weight = sum(weights) / len(weights) if weights else 1.0
+
+    panel: dict[str, int] = {}
+    for key in stats:
+        raw_growth = float(growth.get(key, 0))
+        if avg_weight > 0 and raw_growth > 0:
+            ratio = float(weight.get(key, 1.0)) / avg_weight
+            per_level = raw_growth * (1.0 + strength * (ratio - 1.0))
+        else:
+            per_level = raw_growth
+        value = float(base.get(key, 1)) + per_level * float(level)
+        panel[key] = max(1, round(value))
+
+    # 同层同种怪也有 ±variance 的强弱差；不传 rng 时取中值（用于预览/校验）。
+    if rng is not None:
+        lo, hi = (tpl.get("variance") or [1.0, 1.0])[:2]
+        for key in stats:
+            panel[key] = max(1, round(panel[key] * rng.uniform(float(lo), float(hi))))
+    return panel
+
+
 def _gen_monster(
     floor: int,
     region: dict[str, Any],
@@ -454,15 +518,28 @@ def _gen_monster(
     pool_index: int | None = None,
     elite_index: int | None = None,
 ) -> dict[str, Any]:
-    """按区域公式生成敌人；``elite`` 生成精英，``boss_index`` 生成候选首领。
+    """生成敌人；``elite`` 生成精英，``boss_index`` 生成候选首领。
+
+    面板口径（改造后统一走模板，不再各区域手写 base/growth）::
+
+        面板 = 1 级模板 + 成长 × 怪物等级     ← archetype 决定成长方向
+             × 区域 power_mult                ← 区域决定强度档位
+             × tier 倍率（normal/elite/boss）  ← 类型决定数值
+             × 特点 traits 乘区
+             × ±variance
+
+    **怪物等级 = 层号**，所以「第 80 层的怪就是 80 级」，可以与宠物等级直接
+    对比（战斗里的 ``battle.level_power`` 就是用这两个等级算修正）。
 
     ``pool_index`` / ``elite_index`` 指定敌人在 ``monsters`` / ``elites`` 池里的下标
     （普通层三选一按选项预先抽好、互不相同）；省略时仍按 rng 随机抽取。
     """
+    level = max(1, int(floor))
     scale = floor - int(region["start"])
-    base = region["monster"]["base"]
-    growth = region["monster"]["growth"]
     rewards = region.get("rewards", {})
+    tpl = cfg.get("monster_templates") or {}
+    tiers = tpl.get("tiers") or {}
+
     pool = region.get("monsters") or [{"name": "敌人"}]
     if pool_index is None:
         picked = pool[rng.randrange(len(pool))]
@@ -473,6 +550,8 @@ def _gen_monster(
     name = picked.get("name", "敌人")
     desc = picked.get("desc", "")
     traits = list(picked.get("traits") or [])
+    archetype = str(picked.get("archetype") or "balanced")
+
     is_elite = bool(elite)
     elite_skills: list[str] = []
     elite_phases: list[str] = []
@@ -488,16 +567,41 @@ def _gen_monster(
             name = chosen.get("name", name)
             desc = chosen.get("desc", "")
             traits = list(chosen.get("traits") or [])
+            archetype = str(chosen.get("archetype") or archetype)
             elite_skills = [str(s) for s in (chosen.get("skills") or [])]
             elite_phase = chosen.get("phase")
             if elite_phase:
                 elite_phases = [str(elite_phase)]
+
+    # 1) 1 级模板 + 成长 × 怪物等级（archetype 决定成长方向）
+    panel = _template_panel(level, archetype, cfg, rng=None)
+
+    # 2) 区域强度档位
+    power_mult = float(region.get("power_mult", 1.0) or 1.0)
+    for key in ("hp", "atk", "def", "spd"):
+        panel[key] = max(1, round(panel[key] * power_mult))
+
+    # 3) 类型（tier）倍率
+    tier_id = "boss" if boss_index is not None else ("elite" if is_elite else "normal")
+    tier = tiers.get(tier_id) or {}
+    for key in ("hp", "atk", "def", "spd"):
+        mult = float(tier.get(f"{key}_mult", 1.0) or 1.0)
+        if mult != 1.0:
+            panel[key] = max(1, round(panel[key] * mult))
+
+    # 4) 属性随机浮动（同层同种怪也有强弱差）
+    lo, hi = (tpl.get("variance") or [1.0, 1.0])[:2]
+    for key in ("hp", "atk", "def", "spd"):
+        panel[key] = max(1, round(panel[key] * rng.uniform(float(lo), float(hi))))
+
     monster = {
         "name": name,
-        "hp": int(base["hp"] + growth["hp"] * scale),
-        "atk": int(base["atk"] + growth["atk"] * scale),
-        "def": int(base["def"] + growth["def"] * scale),
-        "spd": int(base["spd"] + growth["spd"] * scale),
+        "level": level,
+        "archetype": archetype,
+        "hp": panel["hp"],
+        "atk": panel["atk"],
+        "def": panel["def"],
+        "spd": panel["spd"],
         "coins": int(
             rewards.get("coins", 2) + rewards.get("coins_per_floor", 1) * scale
         ),
@@ -509,17 +613,20 @@ def _gen_monster(
         "skills": list(elite_skills),
         "phases": list(elite_phases),
     }
+
+    # 5) 特点乘区（精英/首领在特点之前，保持「特点在倍率之前作用」的旧口径）
     if boss_index is None:
         _apply_monster_traits(monster, cfg)
+
+    # 6) 掉落倍率
     if is_elite:
-        elite_cfg = cfg.get("elite", {}) or {}
         monster["elite"] = True
-        stats_mult = float(elite_cfg.get("stats_mult", 1.6))
-        reward_mult = elite_cfg.get("reward_mult", {}) or {}
-        for key in ("hp", "atk", "def", "spd"):
-            monster[key] = max(1, round(monster[key] * stats_mult))
-        monster["coins"] = round(monster["coins"] * float(reward_mult.get("coins", 1)))
-        monster["exp"] = round(monster["exp"] * float(reward_mult.get("exp", 1)))
+        monster["coins"] = round(
+            monster["coins"] * float(tier.get("reward_coins", 1.0))
+        )
+        monster["exp"] = round(monster["exp"] * float(tier.get("reward_exp", 1.0)))
+
+    # 7) 首领：个体倍率覆盖 tier 的兜底值
     if boss_index is not None:
         candidates = (cfg.get("bosses") or {}).get(region.get("id", ""), [])
         if 0 <= boss_index < len(candidates):
@@ -529,13 +636,16 @@ def _gen_monster(
             monster["desc"] = boss.get("desc", "")
             monster["skills"] = [str(s) for s in (boss.get("skills") or [])]
             monster["phases"] = [str(p) for p in (boss.get("phases") or [])]
-            monster["hp"] = int(monster["hp"] * boss.get("hp_mult", 1))
-            monster["atk"] = int(monster["atk"] * boss.get("atk_mult", 1))
-            monster["def"] = int(monster["def"] * boss.get("def_mult", 1))
-            monster["spd"] = int(monster["spd"] * boss.get("spd_mult", 1))
+            # 首领倍率是**相对 tier 兜底值**的增量，避免两套倍率相乘两次。
+            for key in ("hp", "atk", "def", "spd"):
+                fallback = float(tier.get(f"{key}_mult", 1.0) or 1.0)
+                wanted = float(boss.get(f"{key}_mult", fallback) or fallback)
+                if fallback > 0:
+                    monster[key] = max(1, round(monster[key] / fallback * wanted))
             coin_range = boss.get("coins", [monster["coins"], monster["coins"]])
             monster["coins"] = rng.randint(int(coin_range[0]), int(coin_range[1]))
             monster["exp"] = int(boss.get("exp", monster["exp"]))
+
     # 群怪拆分放在所有倍率之后：先把「一整群」的体质算完，再平摊成每只的面板。
     _split_pack(monster, cfg)
     return monster

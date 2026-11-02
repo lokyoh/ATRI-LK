@@ -161,6 +161,96 @@ def unactionable_cfg(cfg: dict[str, Any] | None = None) -> dict[str, Any]:
     return merged
 
 
+# ---------------------------------------------------------------------------
+# 等级战力（等级进入战斗公式）
+# ---------------------------------------------------------------------------
+
+
+def level_power_cfg(cfg: dict[str, Any] | None = None) -> dict[str, Any]:
+    """``battle.level_power`` 块：等级对战斗力的乘区参数。
+
+    设计意图：让「练级」成为真正的战力来源，而不是只靠遗物与技能。敌方没有
+    等级概念（难度只由层数决定），因此把**层号换算成期望等级**当基准：
+
+    ``期望等级 = floor × ref_level_per_floor``
+
+    低于期望等级 → 输出/减伤乘区 < 1（打不动、也不耐打）；高于 → > 1。
+
+    见 :func:`level_combat_mults`。
+    """
+    defaults = {
+        "enabled": True,
+        "ref_level_per_floor": 1.0,
+        "atk_per_level": 0.01,
+        "def_per_level": 0.012,
+        "min_mult": 0.5,
+        "max_mult": 1.9,
+        "apply_to": "both",
+    }
+    node = ((cfg or {}).get("battle") or {}).get("level_power")
+    merged = dict(defaults)
+    if isinstance(node, dict):
+        merged.update(node)
+    return merged
+
+
+def level_combat_mults(
+    pet_level: int,
+    enemy_level: int,
+    cfg: dict[str, Any] | None = None,
+) -> tuple[float, float]:
+    """按「宠物等级 vs 怪物等级」算出 ``(我方输出乘区, 我方承伤乘区)``。
+
+    这是等级进入战斗公式的地方——**双方等级直接对比**，不再用层号换算：
+
+    * **输出乘区**乘在我方造成的伤害上（普攻与技能都走 ``_pet_damage``）；
+    * **承伤乘区**乘在敌方打到我方之后的伤害上——``< 1`` 表示更耐打。
+
+    两个值都由 ``1 + 每级百分点 × (宠物等级 - 怪物等级)`` 得到，再钳制到
+    ``[min_mult, max_mult]``；承伤额外取倒数，所以「等级高 → 更耐打」。
+
+    例（默认 atk 0.01 / def 0.012、怪物等级 = 层号 = 80）：
+
+    ====== ====== ========== ==========
+    宠物   怪物   输出乘区   承伤乘区
+    ====== ====== ========== ==========
+    18     80     0.50(下限) 1.72
+    50     80     0.70       1.44
+    80     80     1.00       1.00
+    100    80     1.20       0.86
+    ====== ====== ========== ==========
+
+    ``apply_to`` 控制只加哪一侧（``atk`` / ``def`` / ``both``）；
+    ``enabled: false`` 时恒为 ``(1.0, 1.0)``，即退回改动前的行为。
+    """
+    node = level_power_cfg(cfg)
+    if not node.get("enabled", True):
+        return 1.0, 1.0
+
+    # 怪物等级即层号（见 tower._gen_monster）；这里只做等级差。
+    delta = float(pet_level) - float(max(1, int(enemy_level)))
+
+    lo = float(node.get("min_mult", 0.5))
+    hi = float(node.get("max_mult", 1.9))
+    apply_to = str(node.get("apply_to", "both")).lower()
+
+    def _mult(per_level: float) -> float:
+        return max(lo, min(hi, 1.0 + float(per_level) * delta))
+
+    atk_mult = (
+        _mult(node.get("atk_per_level", 0.01)) if apply_to in ("both", "atk") else 1.0
+    )
+    if apply_to in ("both", "def"):
+        # 耐打度越高 → 实际承伤越低。取倒数后同样钳制到 [min_mult, max_mult]，
+        # 让两个乘区的**语义一致**（都是「倍率区间」），
+        # 而不是输出最多 ×1.9、承伤却能到 ×2.0。
+        taken_mult = 1.0 / max(1e-6, _mult(node.get("def_per_level", 0.012)))
+        taken_mult = max(lo, min(hi, taken_mult))
+    else:
+        taken_mult = 1.0
+    return atk_mult, taken_mult
+
+
 async def get_or_create_rogue(player_id: str | int):
     """取回肉鸽进度行；不存在时按默认值建行。"""
     from ...database import Rogue, load_rogue, save_rogue

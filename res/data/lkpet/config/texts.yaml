@@ -342,6 +342,8 @@ rogue:
   battle_header: "⚔️ 第 {floor} 层 · {region}：{name} VS {monster}"
   elite_header: "⚠️ 精英战 · 第 {floor} 层 · {region}：{name} VS {monster}"
   battle_pack_line: "🐝 一群 {count} 只（各自生命 {hp_each}，需逐只击倒）"
+  # 战斗标题里的怪物等级标注（战报/预告共用这一条格式）
+  monster_level_tag: "{name} Lv.{level}"
   battle_pace: "⏱ 共 {rounds} 回合｜出击：你 {pa} 次 / 敌 {ma} 次（暴击 {crits} 次）"
   battle_win: "✅ 战胜 {monster}！（{rounds} 回合）生命 {hp}/{hp_max}，局内金币 +{coins}（现有 {total}），本局经验 +{exp}"
   battle_loss: "💀 被 {monster} 击败……（{rounds} 回合）我方生命归零，敌方剩余 {monster_hp}/{monster_hp_full}，本局结束，按到达层数结算。"

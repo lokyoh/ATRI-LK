@@ -14,6 +14,7 @@ from ._common import (
     BASE_SKILL_POWER,
     _load_skills_config,
     _text,
+    level_combat_mults,
     mp_regen_pct,
     rogue_mp_max,
     unactionable_cfg,
@@ -98,6 +99,23 @@ def _pack_mark(index: int) -> str:
     return f"#{index}"
 
 
+def _state_floor(state: Any) -> int:
+    """从局内状态取出层号。
+
+    战斗入口传进来的 ``run`` 是 ``rogue.run_state`` 的 **dict**，但
+    :class:`RogueRun` 数据类也可能被直接传入（单元测试/内部复用），
+    两种形态都要能读，否则等级战力会静默退化成「第 1 层」。
+    """
+    if isinstance(state, dict):
+        value = state.get("floor", 1)
+    else:
+        value = getattr(state, "floor", 1)
+    try:
+        return max(1, int(value))
+    except (TypeError, ValueError):
+        return 1
+
+
 class BattleSession:
     """ATB 自动战斗引擎。
 
@@ -164,6 +182,17 @@ class BattleSession:
         self.max_frames = max(1, self.max_rounds * self.frames_per_turn)
         self.crit_mult = float(battle_cfg.get("crit_mult", 1.8))
         self.max_units = max(1, int(battle_cfg.get("max_units", 4)))
+        # 等级战力：等级进入战斗公式（battle.level_power）。
+        # **宠物等级 vs 怪物等级**直接对比——怪物等级 = 层号（见 tower._gen_monster）。
+        # 入场时算一次并固定：局内升级不会立刻变强，避免刷级流。
+        # run 在战斗入口是 dict（_do_battle 里 run = rogue.run_state），
+        # 但 RogueRun 数据类也可能传进来，两种都要认。
+        self.enemy_level = int(monster.get("level") or _state_floor(self.state))
+        self.level_atk_mult, self.level_taken_mult = level_combat_mults(
+            int(getattr(pet, "level", 1) or 1),
+            self.enemy_level,
+            cfg,
+        )
         # 防御上限：单帧内最多结算多少次行动。正常情况下每帧最多
         # 「攒点 / 100」次，这个值只用于兜住配置异常（比如系数调到离谱）
         # 导致的死循环，不应该在正常数值下被触发。
@@ -388,13 +417,17 @@ class BattleSession:
         return float(self.gauge_rate_mult) * float(speed) ** float(self.spd_exponent)
 
     def _pet_damage(self, defence: int, bossy: bool) -> tuple[int, bool]:
-        """我方输出（遗物 vs_boss_mult × 被动 dmg_mult × 好感加成 × 暴击）。
+        """我方输出（等级战力 × 遗物 vs_boss_mult × 被动 dmg_mult × 好感加成 × 暴击）。
+
+        ``level_atk_mult`` 是等级战力乘区（``battle.level_power``）：等级低于该层
+        期望等级时 < 1（打不动），高于时 > 1。它乘在**基础伤害**上，与暴击、
+        遗物乘区并列，所以练级是独立于装备的一条成长线。
 
         好感乘区最多 +10%。基础伤害**先按原口径 round**，好感加成叠在这个整数
         之上再 floor（``apply_affection_bonus``）——这样好感为 0 时伤害与改动前
         逐点相同，加成只对「已经确定的伤害」生效，不会顺带把基线压下去。
         """
-        mult = (self.out_mult if bossy else 1.0) * self.dmg_mult
+        mult = (self.out_mult if bossy else 1.0) * self.dmg_mult * self.level_atk_mult
         base = max(
             1,
             round(
@@ -954,21 +987,11 @@ class BattleSession:
             for _ in range(strikes):
                 if self.pet_hp <= 0 or unit["hp"] <= 0:
                     break
-                dmg = max(
-                    1,
-                    round(
-                        _damage(
-                            int(unit["atk"]),
-                            self._pet_def_eff(),
-                            self.variance,
-                            self.def_softness,
-                            self.rng,
-                        )
-                        * (power / BASE_SKILL_POWER)
-                    ),
+                dmg = self._enemy_damage_to_pet(
+                    int(unit["atk"]),
+                    multiplier=power / BASE_SKILL_POWER,
+                    crit_rate=rate,
                 )
-                if rate > 0 and self.rng.random() < rate:
-                    dmg = max(1, round(dmg * self.crit_mult))
                 self.pet_hp -= dmg
                 dealt += dmg
 
@@ -1074,6 +1097,32 @@ class BattleSession:
         if spec:
             self._enemy_summon(rec, spec)
 
+    def _enemy_damage_to_pet(
+        self,
+        atk: int,
+        *,
+        multiplier: float = 1.0,
+        crit_rate: float = 0.0,
+    ) -> int:
+        """敌方打到我方的单次伤害（统一口径，含等级承伤乘区）。
+
+        敌方普攻与技能都走这里：基础伤害 → 技能/多段威力系数 → 暴击 →
+        **等级承伤乘区**（``level_taken_mult``，等级低于该层期望等级时 > 1，
+        即挨得更痛）。集中一处避免两条路径的乘区口径分叉。
+        """
+        dmg = _damage(
+            int(atk),
+            self._pet_def_eff(),
+            self.variance,
+            self.def_softness,
+            self.rng,
+        )
+        dmg = max(1, round(dmg * float(multiplier)))
+        if crit_rate > 0 and self.rng.random() < crit_rate:
+            dmg = max(1, round(dmg * self.crit_mult))
+        dmg = max(1, round(dmg * self.level_taken_mult))
+        return dmg
+
     def _enemy_plain(self, rec: dict[str, Any]) -> None:
         """普攻。"""
         unit = rec["unit"]
@@ -1084,16 +1133,9 @@ class BattleSession:
         for _ in range(strikes):
             if self.pet_hp <= 0 or unit["hp"] <= 0:
                 break
-            dmg = _damage(
-                int(unit["atk"]),
-                self._pet_def_eff(),
-                self.variance,
-                self.def_softness,
-                self.rng,
+            dmg = self._enemy_damage_to_pet(
+                int(unit["atk"]), multiplier=strike_mult, crit_rate=rate
             )
-            if rate > 0 and self.rng.random() < rate:
-                dmg = max(1, round(dmg * self.crit_mult))
-            dmg = max(1, round(dmg * strike_mult))
             self.pet_hp -= dmg
             dealt += dmg
         self._unit_leech(rec, dealt)

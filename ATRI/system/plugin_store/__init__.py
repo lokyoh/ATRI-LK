@@ -10,7 +10,7 @@ from ATRI.service import Service, ServiceTools
 from .data_source import PluginManager, PluginRuntimeManager
 
 plugin = Service(
-    "插件商店", "插件商店", "0.4.4", Service.ServiceType.SYSTEM
+    "插件商店", "插件商店", "0.4.5", Service.ServiceType.SYSTEM
 ).permission(MASTER)
 
 plugins = plugin.on_command("插件列表", "查看插件列表")
@@ -70,22 +70,16 @@ async def _(args: Message = CommandArg()):
     if plugin_name not in plugin_list:
         await plugin_info.finish(f"找不到插件 {plugin_name}")
     _plugin = plugin_list[plugin_name]
-    install = "未安装"
+    install = "×未安装"
     version = _plugin["version"]
     if plugin_name in ServiceTools.service_list:
         if version == "github":
             r = await PluginManager.check_github_plugin_update(_plugin["repo"])
-            if r["has_update"]:
-                install = "需更新"
-            else:
-                install = "已安装"
+            install = "×需更新" if r["has_update"] else "√已安装"
             version = r["local_version"]
         else:
             now_version = ServiceTools(plugin_name).load_service().version
-            if now_version != version:
-                install = "需更新"
-            else:
-                install = "已安装"
+            install = "×需更新" if now_version != version else "√已安装"
     message = (
         MessageBuilder()
         .text(f"{plugin_name} [{install}]")

@@ -419,9 +419,15 @@ class EventState(FloorState):
         event = _find_event(self.event_id, region, cfg)
         if event is None:
             return _text("event_missing", "事件丢失，继续前进。")
-        lines = [
-            _text("event_prompt", "🎲 遭遇事件，回复编号选择行动：", text=event["text"])
-        ]
+        lines: list[str] = []
+        # 分类标签（福缘/抉择/灾厄/赌局/诱饵/险境/机遇/见闻）：让玩家先看清性质，
+        # 再决定要不要细读文案。没有 kind 的旧事件不显示标签。
+        tag = _event_kind_tag(str(event.get("kind") or ""))
+        if tag:
+            lines.append(tag)
+        lines.append(
+            _text("event_prompt", "🎲 {text}\n回复编号选择行动：", text=event["text"])
+        )
         event_id = str(event.get("id", ""))
         heal_mult = 1.0
         if self.supply:
@@ -652,6 +658,25 @@ def _has_run(rogue) -> bool:
 def _chosen_set(rogue) -> set[str]:
     """该玩家历史选过的事件选项集合（"事件id:编号"）。"""
     return set(getattr(rogue, "choices", None) or [])
+
+
+def _event_kind_tag(kind: str) -> str:
+    """事件分类标签（``🌟 福缘``）；未知或空 kind 返回空串。
+
+    分类见 ``rogue_events.yaml`` 的 ``kind`` 字段与 ``texts.yaml`` 的
+    ``rogue.event_kinds``：blessing 福缘 / trade 抉择 / disaster 灾厄 /
+    gamble 赌局 / trap 诱饵 / peril 险境 / boon 机遇 / flavor 见闻。
+    """
+    if not kind:
+        return ""
+    from ...utils.texts import text as _raw_text
+    from ._common import _text as _t
+
+    icon = _raw_text(f"rogue.event_kinds.{kind}.icon", "")
+    name = _raw_text(f"rogue.event_kinds.{kind}.name", "")
+    if not name:
+        return ""
+    return _t("event_kind_tag", "{icon} {name}", icon=icon, name=name).strip()
 
 
 async def start(pet, rogue) -> str:

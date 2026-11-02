@@ -319,12 +319,24 @@ rogue:
     leech: 吸血
     thorns: 棘刺
   event_prompt: "🎲 {text}\n回复编号选择行动："
+  # 事件分类标签：显示在事件正文前，让玩家一眼看出性质（福缘/抉择/灾厄/赌局/诱饵/险境/机遇/见闻）。
+  event_kind_tag: "{icon} {name}"
+  event_kinds:
+    blessing: { icon: 🌟, name: 福缘 }
+    trade: { icon: ⚖️, name: 抉择 }
+    disaster: { icon: 💀, name: 灾厄 }
+    gamble: { icon: 🎰, name: 赌局 }
+    trap: { icon: 🕳, name: 诱饵 }
+    peril: { icon: ⚡, name: 险境 }
+    boon: { icon: 🎁, name: 机遇 }
+    flavor: { icon: 🍃, name: 见闻 }
   event_result: "→ {choice}"
   event_missing: "事件丢失，继续前进。"
   ev_coins: "局内金币 {delta:+d}（现有 {coins}）"
   ev_hp: "局内生命 {delta:+d}（现有 {hp}/{hp_max}）"
   ev_exp: "本局经验 {delta:+d}（累计 {exp}）"
   ev_no_effect: "没有效果"
+  ev_roll_note: "结果不定"
   shop_header: "🛒 商店（金币 {coins}）"
   shop_empty: "空空如也"
   shop_reply: "回复编号购买，回复 0 离开。"

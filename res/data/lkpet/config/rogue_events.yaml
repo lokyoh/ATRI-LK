@@ -1,173 +1,236 @@
-﻿# 肉鸽区域事件（任务书 §12）：每个区域 30 个，按区域分组，由 rogue_events.yaml 独立承载。
-# 抽取规则：进入该区域的非首领层后，三选一选中「事件」时按层与 seed 从本区域事件中抽一个。
-# 效果只作用于局内资源：run_hp（局内生命，事件伤害下限 1，不致死）、coins（局内金币）、
-# exp（本局经验，结算时才写回宠物）。数值按区域难度分档，跨区域不可直接比较。
+﻿# 肉鸽区域事件（任务书 §12）：每个区域 30 个，按区域分组。
+# 抽取规则：进入该区域的非首领层后，三选一选中「事件」时按层与 seed 从本区域事件中抽一个；
+#           一次 run 每个事件只触发一次（seen_events）。
+#
+# 效果只作用于局内资源：run_hp（局内生命，事件伤害下限 1，不致死）、run_mp / run_mp_pct（局内魔力）、
+# coins（局内金币）、exp（本局经验，结算时才写回宠物）、relic（局内遗物）。
+# 数值按区域难度分档，跨区域不可直接比较。
+#
+# 事件分类（kind）—— 八类，每区域配比 4/5/4/4/4/3/2/4：
+#   blessing 福缘  纯收益，怎么选都不亏
+#   trade    抉择  每个选项都有代价，按当前血量/金币取舍
+#   disaster 灾厄  全是损失，只能选怎么亏得少
+#   gamble   赌局  结果由 roll 随机决定，可能大赚也可能大亏
+#   trap     诱饵  表面是收益，实际是坑
+#   peril    险境  明示的高风险高回报
+#   boon     机遇  稀有大奖
+#   flavor   见闻  纯氛围，几乎无影响
 #
 # 结构：
-#   - { id: xx01, text: "场景描述", choices: [ { text: 行动, effect: {...} }, … ] }
+#   - id: xxNN                # 区域前缀 + 序号，used by seen_events 与 choice 历史
+#     kind: 分类
+#     text: "场景描述"
+#     choices:
+#       - text: 行动
+#         effect: {...}                                  # 固定效果
+#         effect: { roll: [ {weight, text, effect}, … ] }  # 随机效果（按权重抽一个分支）
+#
+# roll 的随机源以 (seed, floor, "event:<事件id>:<选项号>") 派生，同 seed 同层可复现。
+# roll 分支的 text 会在结算回执里显示（「骰子滚出三个六。」），让玩家知道抽到了什么。
 
 events:
-  # ============ 区域一：青草平原（第 1-10 层）============
+
+  # ============ 青草平原（第 1-20 层）============
   plains:
-    - { id: pl01, text: "野花开得正盛，一只蝴蝶落在你鼻尖上不肯走，翅膀上的花纹像一枚小小的眼睛。", choices: [ { text: "屏息观察花纹", effect: { exp: 12 } }, { text: "追着蝴蝶跑", effect: { run_hp: -6, coins: 6 } }, { text: "轻轻吹走它", effect: {} } ] }
-    - { id: pl02, text: "清浅的溪流里银鱼成群，阳光把水底的卵石照得发亮，看起来很好捞。", choices: [ { text: "下水摸鱼", effect: { run_hp: 8, coins: 8 } }, { text: "捧水解渴", effect: { run_hp: 12, run_mp: 8 } }, { text: "在岸边歇脚", effect: {} } ] }
-    - { id: pl03, text: "一位牧童骑在牛背上吹笛，牛铃叮当。他朝你眨眨眼，说前面的石堆下埋着好东西。", choices: [ { text: "按他指的路去找", effect: { coins: 14, run_hp: -5 } }, { text: "和他学吹一段笛子", effect: { exp: 15 } }, { text: "道谢后继续赶路", effect: {} } ] }
-    - { id: pl04, text: "路边堆着一座小小的石堆玛尼，压着褪色的经幡，风一吹就猎猎作响。", choices: [ { text: "添一块石头祈愿", effect: { run_hp: 15 } }, { text: "翻找石缝", effect: { coins: 10, run_hp: -4 } }, { text: "默然经过", effect: {} } ] }
-    - { id: pl05, text: "草丛里插着半截断剑，剑柄上的家徽已经磨平，泥土下隐约有个剑鞘的轮廓。", choices: [ { text: "拔出断剑", effect: { exp: 20, run_hp: -8, relic: event01 } }, { text: "只取剑鞘上的宝石", effect: { coins: 16 } }, { text: "为无名者合十", effect: { run_hp: 8 } } ] }
-    - { id: pl06, text: "蝴蝶群突然从草丛里涌出，像一阵有颜色的风，绕着你盘旋不散。", choices: [ { text: "张开手臂打转", effect: { run_hp: 10, exp: 8 } }, { text: "扑捉最亮的那只", effect: { run_hp: -7, coins: 9 } }, { text: "静立不动", effect: {} } ] }
-    - { id: pl07, text: "一处野餐残迹：格子布还铺着，果酱瓶见了底，蚂蚁正排队搬运最后一点糖渣。", choices: [ { text: "翻找剩下的食物", effect: { run_hp: 18, coins: 5 } }, { text: "拿走玻璃瓶", effect: { coins: 7 } }, { text: "收拾干净再走", effect: { exp: 10 } } ] }
-    - { id: pl08, text: "一只兔子被困在倒扣的篮子里，后腿受了伤，正用黑亮的眼睛盯着你。", choices: [ { text: "放它出来包扎", effect: { exp: 18, run_hp: 6 } }, { text: "换它一顿兔肉（拒绝）", effect: { run_hp: 14 } }, { text: "掀开篮子就走", effect: {} } ] }
-    - { id: pl09, text: "风车只剩骨架还在吱呀转动，叶片的影子在草地上一格一格地爬。", choices: [ { text: "爬上去眺望远方", effect: { exp: 14 } }, { text: "拆齿轮卖废铁", effect: { coins: 12, run_hp: -6 } }, { text: "在影子里乘凉", effect: { run_hp: 6 } } ] }
-    - { id: pl10, text: "旷野中央立着一圈巨石，正午的影子却只落在其中一块上，像某种指针。", choices: [ { text: "站上影指的石头", effect: { exp: 22 } }, { text: "撬石下的土", effect: { coins: 18, run_hp: -10 } }, { text: "记下方位离开", effect: {} } ] }
-    - { id: pl11, text: "稻草人歪戴着帽子，袖口停着两只乌鸦。它的稻草手指似乎悄悄指向了东边。", choices: [ { text: "顺着它指的方向走", effect: { coins: 15, exp: 10 } }, { text: "给它整理帽子", effect: { run_hp: 8 } }, { text: "无视它", effect: {} } ] }
-    - { id: pl12, text: "整片蒲公英同时炸开，白絮漫天，逆光看像一场安静的雪。", choices: [ { text: "深吸一口气再吹", effect: { run_hp: 16 } }, { text: "收集绒毛卖钱", effect: { coins: 9 } }, { text: "屏住呼吸穿过", effect: { exp: 8 } } ] }
-    - { id: pl13, text: "古井的绳索还算结实，井壁长满青苔，往下望能看见水面映着一小块圆圆的天。", choices: [ { text: "打一桶水痛饮", effect: { run_hp: 20, run_mp: 10 } }, { text: "投币许愿再捞回", effect: { coins: 11 } }, { text: "探头看看就走", effect: { run_hp: -4, exp: 9 } } ] }
-    - { id: pl14, text: "赶集的牛车辘辘驶过，车上堆着陶罐与粗布，车夫冲你吆喝要不要捎一段。", choices: [ { text: "搭车省一段脚力", effect: { exp: 12 } }, { text: "买一罐麦酒", effect: { run_hp: 14, coins: -8 } }, { text: "帮车夫推一段坡", effect: { coins: 10, run_hp: -5 } } ] }
-    - { id: pl15, text: "废弃磨坊里石磨还在惯性空转，灰尘在光柱里缓缓翻腾，像金色的雾。", choices: [ { text: "检查磨盘缝隙", effect: { coins: 13 } }, { text: "关掉磨盘省粮食", effect: { exp: 11 } }, { text: "在光柱里站一会儿", effect: { run_hp: 9 } } ] }
-    - { id: pl16, text: "远处的狼群伏低身体盯着你，头狼却没有进攻，只是低声呜咽着让开了路。", choices: [ { text: "留下半块干粮", effect: { run_hp: 10, coins: -5 } }, { text: "对视着缓缓退走", effect: { exp: 16 } }, { text: "大步冲过去", effect: { run_hp: -14, exp: 8 } } ] }
-    - { id: pl17, text: "雨云毫无征兆地压下来，豆大的雨点砸出泥土腥气，草原上无处可躲。", choices: [ { text: "找洼地蜷起来", effect: { run_hp: -8 } }, { text: "张嘴接雨水", effect: { run_hp: 12 } }, { text: "冒雨赶路", effect: { exp: 13, run_hp: -6 } } ] }
-    - { id: pl18, text: "前人营火的灰烬还温着，压着半张没写完的字条：「它在夜里跟着我……」", choices: [ { text: "翻找营地遗留", effect: { coins: 17, relic: event02 } }, { text: "烧掉字条安心", effect: { run_hp: 8 } }, { text: "续燃篝火到天亮", effect: { exp: 15, run_hp: -5 } } ] }
-    - { id: pl19, text: "长满浮萍的池塘中央立着一尊石像，掌心的凹槽里积着水，闪着碎光。", choices: [ { text: "扔一枚硬币许愿", effect: { coins: -6, run_hp: 18 } }, { text: "捞干池底", effect: { coins: 14, run_hp: -9 } }, { text: "洗净手上的血口", effect: { run_hp: 10 } } ] }
-    - { id: pl20, text: "老槐树上挂着硕大的蜂巢，蜜香飘出很远，几只工蜂在你面前来回巡逻。", choices: [ { text: "小心割蜜", effect: { run_hp: 22, coins: -4, exp: 10 } }, { text: "用长棍捅一下", effect: { run_hp: -16, coins: 6 } }, { text: "绕着走", effect: {} } ] }
-    - { id: pl21, text: "石桥不长，桥下溪水湍急。桥栏上刻着一行小字：「过桥者留名」。", choices: [ { text: "刻下自己的名字", effect: { exp: 14 } }, { text: "刮下刻痕里的金粉", effect: { coins: 12, run_hp: -5 } }, { text: "快步过桥", effect: {} } ] }
-    - { id: pl22, text: "流浪艺人在路边摆开架势，手风琴一响，路过的云都停了停。", choices: [ { text: "听完整首曲子", effect: { run_hp: 15 } }, { text: "跟着节拍跳舞", effect: { exp: 12, run_hp: -4 } }, { text: "往琴盒里丢钱", effect: { coins: -7, run_hp: 12 } } ] }
-    - { id: pl23, text: "麦田中央一圈麦秆整齐倒伏，形成完美的圆，中心散着烧焦的羽毛。", choices: [ { text: "站进圆心冥想", effect: { exp: 20, run_mp_pct: 0.25 } }, { text: "顺走烧焦的羽毛", effect: { coins: 9, run_hp: -6 } }, { text: "拍下记号绕行", effect: {} } ] }
-    - { id: pl24, text: "旧界碑半埋土里，一面刻着褪色的国名，另一面被凿去了什么，只剩凹痕。", choices: [ { text: "拂去尘土细读", effect: { exp: 16 } }, { text: "撬碑座找埋藏物", effect: { coins: 15, run_hp: -12 } }, { text: "靠碑歇脚", effect: { run_hp: 8 } } ] }
-    - { id: pl25, text: "雁群从头顶掠过，队形整齐得像被风剪出来，叫声把黄昏拉得很长。", choices: [ { text: "目送它们消失", effect: { run_hp: 12 } }, { text: "射一只下来加餐", effect: { run_hp: 16, exp: 12, coins: -3 } }, { text: "记下飞行方向", effect: { exp: 10 } } ] }
-    - { id: pl26, text: "一口枯井趴在草里，井口的藤蔓被什么重物压断过，井底黑得没有回声。", choices: [ { text: "缒下去探看", effect: { coins: 20, run_hp: -14 } }, { text: "丢石子测深", effect: { exp: 9 } }, { text: "离开这口邪门的井", effect: {} } ] }
-    - { id: pl27, text: "溪湾里卡着一只木箱，盖子半开，露出浸湿的布包和一只木雕小鸟。", choices: [ { text: "拖上岸撬开", effect: { coins: 16, run_hp: -6 } }, { text: "只拿走木雕小鸟", effect: { run_hp: 8 } }, { text: "把箱子推回水中", effect: { exp: 11 } } ] }
-    - { id: pl28, text: "夜幕落下，草尖的萤火虫一盏盏亮起来，像谁把星星种进了草里。", choices: [ { text: "捧一掌萤火照明", effect: { exp: 14 } }, { text: "捉进玻璃瓶带走", effect: { coins: 8, run_hp: -4 } }, { text: "躺着看它们发呆", effect: { run_hp: 18 } } ] }
-    - { id: pl29, text: "雨后初晴，一道双彩虹横跨草原，尽头似乎正好落在某个土丘上。", choices: [ { text: "奔向彩虹尽头", effect: { exp: 18, run_hp: -7 } }, { text: "闭眼许愿", effect: { run_hp: 14 } }, { text: "驻足欣赏", effect: {} } ] }
-    - { id: pl30, text: "一丛不起眼的草药开着紫色小花，根部的泥土有被翻动过的痕迹。", choices: [ { text: "采下捣敷伤口", effect: { run_hp: 24 } }, { text: "连根挖走卖药", effect: { coins: 13, run_hp: -5 } }, { text: "留种让它长", effect: { exp: 12 } } ] }
+    # —— blessing（4）——
+    - { id: pl01, kind: blessing, text: "路边的野果熟透了，红得发亮，藤蔓上还挂着晨露。", choices: [ { text: "摘下来吃个饱", effect: { run_hp: 40 } }, { text: "装一兜带走", effect: { run_hp: 20 } }, { text: "摘几颗收进包里慢慢吃", effect: { run_hp: 20, coins: 5 } } ] }
+    - { id: pl02, kind: blessing, text: "一口泉水从石缝里渗出来，清得能看见底下的沙。", choices: [ { text: "痛饮一通", effect: { run_hp: 40 } }, { text: "灌满水囊", effect: { run_hp: 20, coins: 5 } }, { text: "洗把脸提神", effect: { run_hp: 10, run_mp: 8 } } ] }
+    - { id: pl03, kind: blessing, text: "前人留下的营火还没熄，灰烬下压着半块干粮和一枚铜钱。", choices: [ { text: "烤火取暖", effect: { run_hp: 40 } }, { text: "翻找遗留", effect: { coins: 10 } }, { text: "摊开地图研究", effect: { exp: 15 } } ] }
+    - { id: pl04, kind: blessing, text: "一株开着白花的老药草长在背阴处，叶片肥厚，根茎有淡淡的苦香。", choices: [ { text: "生嚼止血", effect: { run_hp: 40 } }, { text: "收起来备用", effect: { run_hp: 20, run_mp: 10 } }, { text: "试着辨识药性", effect: { exp: 15 } } ] }
+    # —— trade（5）——
+    - { id: pl05, kind: trade, text: "溪水对岸有一片没被踩过的野果林，但水有点深，石头滑。", choices: [ { text: "脱鞋淌过去", effect: { run_hp: -20, coins: 20 } }, { text: "绕远路找浅滩", effect: { run_hp: -10, exp: 15 } }, { text: "不去了", effect: { exp: 8 } } ] }
+    - { id: pl06, kind: trade, text: "一只受伤的野兔蜷在草丛里，后腿上的伤口还在渗血。", choices: [ { text: "撕下衣襟替它包扎", effect: { run_hp: -20, exp: 30 } }, { text: "留着布料自己用", effect: { run_hp: 20, coins: 10 } }, { text: "当作今天的口粮", effect: { run_hp: 60, coins: 5, exp: -15 } } ] }
+    - { id: pl07, kind: trade, text: "赶车的行商停下来，说愿意捎你一段，但要你帮他推上那个坡。", choices: [ { text: "帮他推车", effect: { run_hp: -40, coins: 20 } }, { text: "付钱搭车", effect: { coins: -20, run_hp: 20 } }, { text: "讲讲价", effect: { coins: -10, exp: 15 } } ] }
+    - { id: pl08, kind: trade, text: "田埂边的稻草堆里露出一个布包，看着有些年头了。", choices: [ { text: "整个抱走", effect: { coins: 10, run_hp: -40 } }, { text: "先抖开看看", effect: { exp: 15, run_hp: -10 } }, { text: "原样放回去", effect: { run_hp: 20 } } ] }
+    - { id: pl09, kind: trade, text: "同行的旅人想换你一包干粮，说前头的村子会重重报答。", choices: [ { text: "换给他", effect: { run_hp: -40, exp: 15, coins: 20 } }, { text: "只要他手里的旧地图", effect: { run_hp: 20, coins: 5 } }, { text: "不留情面", effect: { run_hp: 20 } } ] }
+    # —— disaster（4）——
+    - { id: pl10, kind: disaster, text: "脚下一块土埂塌了，你半个身子滑进沟里，小腿被碎石划开几道口子。", choices: [ { text: "忍着痛先爬出来", effect: { run_hp: -40 } }, { text: "花时间慢慢挪", effect: { run_hp: -20, exp: 15 } }, { text: "用背包垫脚硬撑", effect: { run_hp: -20, coins: -10 } } ] }
+    - { id: pl11, kind: disaster, text: "一阵怪风卷过，你护住头，但背上的包袱系带断了。", choices: [ { text: "回头捡回大半", effect: { run_hp: -20, coins: -10 } }, { text: "优先护住干粮", effect: { run_hp: -10, coins: -20 } }, { text: "只留最要紧的", effect: { run_hp: -10, exp: 15 } } ] }
+    - { id: pl12, kind: disaster, text: "夜里有什么东西咬了你的铺盖，醒来时随身的东西被翻得七零八落。", choices: [ { text: "整夜守着伤口", effect: { run_hp: -20 } }, { text: "重新打包清点", effect: { coins: -10, exp: 15 } }, { text: "立刻动身", effect: { run_hp: -10, run_mp: -10 } } ] }
+    - { id: pl13, kind: disaster, text: "水囊漏了，你不知道漏了多久，剩下的水只够润润嗓子。", choices: [ { text: "省着分几口喝", effect: { run_hp: -20 } }, { text: "忍到下一处水源", effect: { run_hp: -10, exp: 15 } }, { text: "拿钱找农户买", effect: { run_hp: -10, coins: -10 } } ] }
+    # —— gamble（4）——
+    - { id: pl14, kind: gamble, text: "路边石头上刻着一盘没下完的棋，旁边压着一句「赢了拿走」。", choices: [ { text: "接这盘棋", effect: { roll: [ { weight: 1, text: "你走出一步妙手，棋盘旁的布袋归你了。", effect: { coins: 30, exp: 15 } }, { weight: 2, text: "这盘棋早就输了，你只是白费力气。", effect: { run_mp: -10 } }, { weight: 2, text: "棋子在指尖碎成了粉。", effect: { run_hp: -20 } } ] } }, { text: "换一盘重开", effect: { roll: [ { weight: 1, text: "竟然真赢了。", effect: { coins: 10, exp: 8 } }, { weight: 2, text: "下到一半觉得没意思。", effect: {  } } ] } }, { text: "不碰", effect: {} } ] }
+    - { id: pl15, kind: gamble, text: "岔路口坐着个蒙眼的老太，说能替你指一条「运气好」的路。", choices: [ { text: "听她的", effect: { roll: [ { weight: 3, text: "她指的路确实好走，还捡到东西。", effect: { run_hp: 40, coins: 10 } }, { weight: 1, text: "那条路绕了很远，什么也没有。", effect: { exp: -15 } } ] } }, { text: "自己选一条", effect: { roll: [ { weight: 1, text: "选对了。", effect: { exp: 30 } }, { weight: 2, text: "走进了一片没路的荒草。", effect: { run_hp: -20 } } ] } } ] }
+    - { id: pl16, kind: gamble, text: "一只黑猫停在路中间，眼睛一眨不眨地盯着你。老话说跟它走有好运。", choices: [ { text: "跟着它", effect: { roll: [ { weight: 2, text: "它把你领到一堆旧铜钱前。", effect: { coins: 20 } }, { weight: 2, text: "它把你领进了荆棘丛。", effect: { run_hp: -40 } }, { weight: 1, text: "它把你领到了蛇窝。", effect: { run_hp: -40, coins: -5 } } ] } }, { text: "绕开它", effect: { roll: [ { weight: 1, text: "它追上来蹭了蹭你的裤脚。", effect: { run_hp: 20 } }, { weight: 3, text: "它只是看着你走远。", effect: {  } } ] } } ] }
+    - { id: pl17, kind: gamble, text: "老槐树的树洞里塞着一只口袋，摸着沉甸甸的，可是洞口边缘有齿痕。", choices: [ { text: "伸手去掏", effect: { roll: [ { weight: 1, text: "里面全是铜钱。", effect: { coins: 30 } }, { weight: 3, text: "被什么东西咬了手。", effect: { run_hp: -40 } } ] } }, { text: "拿棍子捅一捅", effect: { roll: [ { weight: 1, text: "掉出来几枚。", effect: { coins: 10 } }, { weight: 2, text: "捅出来一窝虫子。", effect: { run_hp: -20 } } ] } } ] }
+    # —— trap（4）——
+    - { id: pl18, kind: trap, text: "一只木箱敞着口放在路中央，里面的铜钱亮得不太自然。", choices: [ { text: "直接伸手", effect: { run_hp: -40, coins: 10 } }, { text: "用长棍拨一拨", effect: { run_hp: -10, coins: 10 } }, { text: "退开", effect: { exp: 15 } } ] }
+    - { id: pl19, kind: trap, text: "前面有个和你一模一样的人背对着你，听见脚步也不回头。", choices: [ { text: "拍他肩膀", effect: { run_hp: -40, run_mp: -15 } }, { text: "绕到正面看", effect: { exp: 15, run_hp: -10 } }, { text: "原地等他动", effect: { exp: 8 } } ] }
+    - { id: pl20, kind: trap, text: "地上摊着一卷看起来不错的地图，边角写着「通往捷径」。", choices: [ { text: "照着走", effect: { run_hp: -40, exp: 8 } }, { text: "先照抄一份", effect: { exp: 15 } }, { text: "不捡", effect: {} } ] }
+    - { id: pl21, kind: trap, text: "一位老汉蹲在路边招手，脚边摆着一只看起来很沉的包袱。", choices: [ { text: "过去帮他", effect: { run_hp: -40, coins: 5 } }, { text: "先问他要什么", effect: { exp: 15, coins: -5 } }, { text: "摆摆手", effect: {} } ] }
+    # —— peril（3）——
+    - { id: pl22, kind: peril, text: "沟对面立着一把还映着光的柴刀，这沟宽得需要助跑。", choices: [ { text: "助跑跳过去", effect: { run_hp: -60, exp: 30, coins: 20 } }, { text: "扔绳子套", effect: { run_hp: -20, coins: 10 } }, { text: "算了", effect: { run_hp: 20 } } ] }
+    - { id: pl23, kind: peril, text: "一头野猪睡在路中间，肚子底下压着几枚发亮的东西。", choices: [ { text: "从它肚子底下拿", effect: { run_hp: -60, coins: 30 } }, { text: "绕开", effect: { run_hp: -10, exp: 15 } }, { text: "等它自己走", effect: { run_hp: 20, exp: 8 } } ] }
+    - { id: pl24, kind: peril, text: "一棵老树顶上挂着个蜂巢，树干又高又直。", choices: [ { text: "徒手攀爬", effect: { run_hp: -40, coins: 20 } }, { text: "削一根长杆", effect: { run_hp: -10, coins: 10 } }, { text: "不冒险", effect: {} } ] }
+    # —— boon（2）——
+    - { id: pl25, kind: boon, text: "路旁的石台上摆着一件东西，像是被人特意留在这里等你。", choices: [ { text: "拿起来仔细看", effect: { coins: 20, exp: 30 } }, { text: "拜三拜再走", effect: { run_hp: 40, exp: 15 } }, { text: "什么也不碰", effect: { run_hp: 20 } } ] }
+    - { id: pl26, kind: boon, text: "田埂边的一口旧井居然还有水，井底沉着个锈迹斑斑的铁盒。", choices: [ { text: "想办法捞上来", effect: { coins: 30, run_hp: -10 } }, { text: "只打一桶水", effect: { run_hp: 20, exp: 15 } }, { text: "不惊动", effect: { exp: 15 } } ] }
+    # —— flavor（4）——
+    - { id: pl27, kind: flavor, text: "夕阳把整片草原染成琥珀色，风把草压向同一个方向。", choices: [ { text: "停下来看一会儿", effect: { exp: 3 } }, { text: "边走边看", effect: { run_hp: 4 } }, { text: "埋头赶路", effect: {} } ] }
+    - { id: pl28, kind: flavor, text: "远处有一群雁排成人字飞过，叫声落下来的时候已经听不真切了。", choices: [ { text: "数一共有几只", effect: { exp: 3 } }, { text: "学它们叫", effect: { run_hp: 4 } }, { text: "继续走", effect: {} } ] }
+    - { id: pl29, kind: flavor, text: "麦田里立着一个歪戴帽子的稻草人，袖口停着两只麻雀。", choices: [ { text: "替它扶正帽子", effect: { run_hp: 4 } }, { text: "跟它说两句话", effect: { exp: 3 } }, { text: "绕过去", effect: {} } ] }
+    - { id: pl30, kind: flavor, text: "夜里的风把云推开一条缝，露出一点很亮的星空。", choices: [ { text: "躺在草地上看", effect: { run_hp: 4 } }, { text: "认一认星星", effect: { exp: 3 } }, { text: "闭眼睡", effect: {} } ] }
 
-  # ============ 区域二：迷雾森林（第 11-20 层）============
+  # ============ 迷雾森林（第 21-40 层）============
   forest:
-    - { id: fo01, text: "雾深处透出一点昏黄灯火，窗后有人影来回走动，可你确定这一带本没有屋子。", choices: [ { text: "敲门询问", effect: { exp: 30, run_hp: -10 } }, { text: "隔窗偷看", effect: { coins: 22, exp: 15 } }, { text: "熄灯绕行", effect: {} } ] }
-    - { id: fo02, text: "一个倒吊的人影挂在枝头，衣摆垂落——走近才看清是件被风干的旧外套。", choices: [ { text: "取下外套御寒", effect: { run_hp: 25 } }, { text: "检查口袋", effect: { coins: 18, run_hp: -6 } }, { text: "吓得转身就跑", effect: { run_hp: -8, exp: 10 } } ] }
-    - { id: fo03, text: "老树的树洞里塞着一个包裹，洞口边缘有爪痕，里面的东西还在微微发热。", choices: [ { text: "直接拿走", effect: { coins: 30, run_hp: -14 } }, { text: "留下等主人", effect: { exp: 28 } }, { text: "放把火烤干洞里潮气", effect: { run_hp: -10, exp: 18 } } ] }
-    - { id: fo04, text: "雾里传来断断续续的哭声，像是孩子，又像是风穿过空心树干。", choices: [ { text: "循声去找", effect: { exp: 35, run_hp: -18 } }, { text: "唱歌盖过哭声", effect: { run_hp: 20, exp: 12 } }, { text: "捂住耳朵快走", effect: { run_hp: -6 } } ] }
-    - { id: fo05, text: "月光下蘑菇围成完美的圆圈，圈心的草叶上落着露水，像一层薄薄的鳞。", choices: [ { text: "踩进圈心", effect: { exp: 40, run_hp: -22 } }, { text: "采最外围的蘑菇", effect: { run_hp: 28, coins: 10 } }, { text: "绕圈数了一圈", effect: { exp: 16 } } ] }
-    - { id: fo06, text: "猎人小屋的门虚掩着，桌上摆着没吃完的晚餐，刀叉还保持着主人离开的姿势。", choices: [ { text: "搜刮储物柜", effect: { coins: 26, run_hp: 14 } }, { text: "替主人收拾屋子", effect: { exp: 24 } }, { text: "睡一觉再走", effect: { run_hp: 35, exp: -10, run_mp_pct: 0.3 } } ] }
-    - { id: fo07, text: "两树之间垂着藤蔓编成的桥，下面是深不见底的雾谷，风从谷底往上灌。", choices: [ { text: "快速通过", effect: { exp: 26, run_hp: -8 } }, { text: "边走边割藤蔓卖", effect: { coins: 20, run_hp: -20 } }, { text: "退回原路", effect: { run_hp: 6 } } ] }
-    - { id: fo08, text: "苔藓覆盖的石碑只露出两个字：「……勿应」。后半截埋在土里。", choices: [ { text: "挖出全文", effect: { exp: 38, run_hp: -12 } }, { text: "拓下字迹收藏", effect: { coins: 15, exp: 18 } }, { text: "不碰，走人", effect: {} } ] }
-    - { id: fo09, text: "猫头鹰立在枝头歪头看你，喙里还叼着半只老鼠，眼神像在评估什么。", choices: [ { text: "回它一个歪头", effect: { run_hp: 18 } }, { text: "抢它的猎物", effect: { run_hp: -14, exp: 20 } }, { text: "递过去一点肉干", effect: { coins: -8, exp: 30 } } ] }
-    - { id: fo10, text: "雾里坐着一个迷路的旅人，背包带断了，他用发抖的手向你比划方向。", choices: [ { text: "分他一半补给", effect: { run_hp: -12, exp: 40 } }, { text: "指个大概方向", effect: { exp: 12 } }, { text: "拿走他的指南针", effect: { coins: 24, run_hp: -8, exp: -15 } } ] }
-    - { id: fo11, text: "废弃营地的篝火早已冷透，几具骸骨围火而坐，其中一具的手仍指着东北。", choices: [ { text: "顺它指的方向探路", effect: { exp: 34 } }, { text: "搜骸骨身上的遗物", effect: { coins: 32, run_hp: -18 } }, { text: "为他们合十", effect: { run_hp: 22 } } ] }
-    - { id: fo12, text: "林间有一口被月光照亮的古井，水面像镜子，映出的却是你不认识的星空。", choices: [ { text: "凝视井中星空", effect: { exp: 45, run_hp: -10, relic: event03 } }, { text: "打一桶月光水", effect: { run_hp: 34 } }, { text: "遮住井口离开", effect: { run_hp: 8 } } ] }
-    - { id: fo13, text: "蛛网封住的洞口中央，一只磨盘大的蜘蛛正缓慢地修补着网，丝线闪着银光。", choices: [ { text: "斩网强闯", effect: { run_hp: -24, exp: 30 } }, { text: "等它补完再过", effect: { exp: 20, run_hp: 10 } }, { text: "收走一把银丝", effect: { coins: 28, run_hp: -6 } } ] }
-    - { id: fo14, text: "一只乌鸦落在你肩上，开口说了人话：「往西，别信戴帽子的。」说完就飞走了。", choices: [ { text: "听它的往西走", effect: { exp: 36, coins: 12 } }, { text: "追上去问清楚", effect: { run_hp: -12, exp: 24 } }, { text: "当没听见", effect: {} } ] }
-    - { id: fo15, text: "远处传来规律的伐木声，咔、咔、咔——可那声音始终没有变近，也没有变远。", choices: [ { text: "循声探查", effect: { exp: 32, run_hp: -16 } }, { text: "学它砍两下木头", effect: { run_hp: -6, exp: 18 } }, { text: "远离声源", effect: { run_hp: 6 } } ] }
-    - { id: fo16, text: "你回头时，自己的影子慢了半拍才跟上，然后朝相反方向摆了摆手。", choices: [ { text: "按住影子对质", effect: { exp: 44, run_hp: -20 } }, { text: "闭眼不看", effect: { run_hp: 12 } }, { text: "抢先做一个动作", effect: { exp: 26, run_hp: -8 } } ] }
-    - { id: fo17, text: "雾气里藏着一小片温泉，水汽氤氲，泡进去的瞬间骨头都松了。", choices: [ { text: "泡到皮肤发红", effect: { run_hp: 46, exp: -8, run_mp_pct: 0.35 } }, { text: "取些热水装瓶", effect: { run_hp: 20, coins: 8 } }, { text: "只洗把脸", effect: { run_hp: 12 } } ] }
-    - { id: fo18, text: "老橡树的树干上有一张酷似人脸的纹路，此刻那张「脸」正缓缓睁开眼睛。", choices: [ { text: "向它问路", effect: { exp: 42 } }, { text: "在树下刻记号", effect: { run_hp: -10, exp: 20 } }, { text: "快步离开", effect: { run_hp: -4 } } ] }
-    - { id: fo19, text: "篝火余烬尚有余温，压在灰下的铁锅里居然还炖着一锅热汤。", choices: [ { text: "喝个底朝天", effect: { run_hp: 40 } }, { text: "带走铁锅", effect: { coins: 18, run_hp: 10 } }, { text: "下点料再走", effect: { exp: 22, coins: -6 } } ] }
-    - { id: fo20, text: "泥地上躺着一副鹿的骸骨，角却完好无损，断口处泛着不自然的黑。", choices: [ { text: "取下鹿角", effect: { coins: 30, run_hp: -12 } }, { text: "研究黑断口", effect: { exp: 38, run_hp: -6 } }, { text: "掩埋骸骨", effect: { run_hp: 24 } } ] }
-    - { id: fo21, text: "雾中传来钟声，一下、两下……可森林里根本没有钟楼。第三声像是从地底来的。", choices: [ { text: "循声挖地三尺", effect: { coins: 34, run_hp: -22 } }, { text: "数到第七声", effect: { exp: 40 } }, { text: "捂住耳朵不数", effect: { run_hp: 8 } } ] }
-    - { id: fo22, text: "一位盲眼老者坐在树根上，脚边摆着几只木雕动物，他朝你的方向「看」了一眼。", choices: [ { text: "买一只木雕", effect: { coins: -12, exp: 34 } }, { text: "请他占卜前路", effect: { exp: 30, run_hp: -8 } }, { text: "悄悄拿一只走", effect: { coins: 14, run_hp: -18, exp: -20 } } ] }
-    - { id: fo23, text: "苔藓墙上的纹路天然排成迷宫图案，中心点有一小簇发光的白苔。", choices: [ { text: "徒手走完纹路", effect: { exp: 46, run_hp: -10 } }, { text: "刮下白苔", effect: { run_hp: 30, exp: 12 } }, { text: "拍张记号走人", effect: {} } ] }
-    - { id: fo24, text: "倒扣的树冠里藏着一个萤巢，成百上千的光点受惊腾起，照亮了整片雾。", choices: [ { text: "在光里辨路", effect: { exp: 28 } }, { text: "抠走蜂窝里的蜜", effect: { run_hp: 26, coins: 14, exp: -6 } }, { text: "等光点落下", effect: { run_hp: 14 } } ] }
-    - { id: fo25, text: "落叶下是一口捕兽坑，削尖的木刺泛着幽蓝——涂了东西。", choices: [ { text: "小心绕开并记下", effect: { exp: 20 } }, { text: "把木刺拔来自用", effect: { coins: 16, run_hp: -9 } }, { text: "填平这坑", effect: { exp: 26, run_hp: -6 } } ] }
-    - { id: fo26, text: "一棵空心树的内壁上刻满名字，最新一个的刻痕里还渗着树脂，像刚刻完。", choices: [ { text: "刻上自己的名字", effect: { exp: 32, run_hp: -6 } }, { text: "读完所有名字", effect: { exp: 24, run_hp: -4 } }, { text: "在树洞里藏点东西", effect: { coins: 12, run_hp: 8 } } ] }
-    - { id: fo27, text: "一汪静止的水洼映出你的脸——但倒影比你先笑了一下。", choices: [ { text: "伸手触碰倒影", effect: { exp: 50, run_hp: -28 } }, { text: "打碎水面", effect: { run_hp: -8, exp: 22 } }, { text: "转身不看", effect: { run_hp: 10 } } ] }
-    - { id: fo28, text: "背药篓的采药人卡在石缝里直哼哼，篓子里的草药洒了一地。", choices: [ { text: "救他并还他草药", effect: { run_hp: -10, exp: 44 } }, { text: "先拿草药再救人", effect: { run_hp: 24, coins: 20, exp: -12 } }, { text: "见死不救", effect: { exp: -25 } } ] }
-    - { id: fo29, text: "一只断了尾巴的狐狸蹲在路中，嘴里叼着一只磨损的钱包，直直望着你。", choices: [ { text: "接钱包并道谢", effect: { coins: 26, exp: 20 } }, { text: "给它包扎尾巴", effect: { run_hp: 18, exp: 28 } }, { text: "追它抢钱包", effect: { run_hp: -20, coins: 8 } } ] }
-    - { id: fo30, text: "雾的中心开着一朵半透明的花，花瓣里封着一小团流动的光，像被困住的萤火。", choices: [ { text: "摘下封光花", effect: { exp: 55, run_hp: -25, relic: event04 } }, { text: "俯身闻香", effect: { run_hp: 38, exp: 15 } }, { text: "绕开花继续走", effect: {} } ] }
+    # —— blessing（4）——
+    - { id: fo01, kind: blessing, text: "雾里透出一小块空地，苔藓厚得像毯子，踩上去还有余温。", choices: [ { text: "躺下歇一会儿", effect: { run_hp: 90 } }, { text: "采些苔藓带走", effect: { run_hp: 45, coins: 12 } }, { text: "辨认苔藓种类", effect: { exp: 45 } } ] }
+    - { id: fo02, kind: blessing, text: "一丛发光的菌子长在倒木上，光是淡蓝色的，照得见路。", choices: [ { text: "摘下来当灯", effect: { run_hp: 45, run_mp: 12 } }, { text: "小心采进罐子", effect: { coins: 25 } }, { text: "研究它为什么发光", effect: { exp: 45 } } ] }
+    - { id: fo03, kind: blessing, text: "树洞里积着一窝雨水，水面浮着几片叶子，干净得能直接喝。", choices: [ { text: "痛饮", effect: { run_hp: 90 } }, { text: "灌满水囊", effect: { run_hp: 45, coins: 12 } }, { text: "洗去脸上血迹", effect: { run_hp: 68 } } ] }
+    - { id: fo04, kind: blessing, text: "前人的营地还没完全散架，油布棚子能挡雨，火塘里留着炭。", choices: [ { text: "睡一觉", effect: { run_hp: 90 } }, { text: "搜刮遗留", effect: { coins: 25, exp: 22 } }, { text: "在棚子里读旧笔记", effect: { exp: 45 } } ] }
+    # —— trade（5）——
+    - { id: fo05, kind: trade, text: "一只被困在藤蔓里的幼鹿正挣扎，藤蔓上有刺。", choices: [ { text: "徒手解开", effect: { run_hp: -45, exp: 90 } }, { text: "用刀慢慢割", effect: { run_hp: -22, exp: 45 } }, { text: "不管它", effect: { run_hp: 45 } } ] }
+    - { id: fo06, kind: trade, text: "林间小屋里住着个采药人，说愿意给你治伤，但要你替他采一味药。", choices: [ { text: "去采", effect: { run_hp: -90, exp: 45 } }, { text: "付钱", effect: { coins: -50, run_hp: 45 } }, { text: "自己包扎", effect: { run_hp: -45 } } ] }
+    - { id: fo07, kind: trade, text: "地上躺着一具猎人的骸骨，背包还完好，只是压在骨头底下。", choices: [ { text: "翻出背包", effect: { coins: 50, run_hp: -45 } }, { text: "就地掩埋", effect: { exp: 45, run_hp: 45 } }, { text: "只取水囊", effect: { run_hp: 45 } } ] }
+    - { id: fo08, kind: trade, text: "雾里有个和你同路的影子，它走得比你快，却总在路口等你。", choices: [ { text: "跟紧它", effect: { run_hp: -45, exp: 90 } }, { text: "超过它", effect: { run_hp: -68 } }, { text: "停下来", effect: { run_hp: 22 } } ] }
+    - { id: fo09, kind: trade, text: "一棵树的树皮被剥掉一大块，露出里面淡红的新木质，渗着汁液。", choices: [ { text: "接汁液喝", effect: { run_hp: 90, coins: -12 } }, { text: "割更多带走", effect: { coins: 38, run_hp: -45 } }, { text: "替它包上", effect: { exp: 45 } } ] }
+    # —— disaster（4）——
+    - { id: fo10, kind: disaster, text: "你踩空掉进一个落叶坑，坑底积着腐水和断枝。", choices: [ { text: "立刻爬出来", effect: { run_hp: -90 } }, { text: "先检查有没有划伤", effect: { run_hp: -45, exp: 45 } }, { text: "把能用的枝子带走", effect: { run_hp: -68, coins: 12 } } ] }
+    - { id: fo11, kind: disaster, text: "雾太浓，你在一棵树上做了记号，走了半刻钟又看见同一道记号。", choices: [ { text: "认命地重找方向", effect: { run_hp: -68 } }, { text: "坐下来理清思路", effect: { run_hp: -22, exp: 45 } }, { text: "烧掉记号换路", effect: { run_hp: -45, run_mp: -10 } } ] }
+    - { id: fo12, kind: disaster, text: "一群毒虫从树冠里掉下来，你护着脸滚进了灌木。", choices: [ { text: "拍打全身", effect: { run_hp: -90 } }, { text: "先冲出这片林子", effect: { run_hp: -45, run_mp: -10 } }, { text: "找泥巴糊住露出的皮肤", effect: { run_hp: -22, exp: 45 } } ] }
+    - { id: fo13, kind: disaster, text: "夜里下了整宿的雨，醒来时铺盖湿透，火折子也受了潮。", choices: [ { text: "挤干衣服继续走", effect: { run_hp: -68 } }, { text: "花时间生火烘干", effect: { run_hp: -22, exp: 45 } }, { text: "扔掉湿透的行李", effect: { coins: -38 } } ] }
+    # —— gamble（4）——
+    - { id: fo14, kind: gamble, text: "雾中传来摇铃声，有人在喊「抽一支签，问问前路」。", choices: [ { text: "抽一支", effect: { roll: [ { weight: 1, text: "上上签，签文说「遇木则吉」。", effect: { run_hp: 90, coins: 25 } }, { weight: 2, text: "中签，签文语焉不详。", effect: { exp: 22 } }, { weight: 2, text: "下下签，签文就一个字：「退」。", effect: { run_hp: -68 } } ] } }, { text: "不抽，只听着", effect: { roll: [ { weight: 1, text: "摇铃声渐渐远去，你觉得安心。", effect: { exp: 45 } }, { weight: 2, text: "摇了很久，吵得你头疼。", effect: { run_mp: -12 } } ] } } ] }
+    - { id: fo15, kind: gamble, text: "林间有一座很小的石龛，供着的不是神像，而是一枚硬币。", choices: [ { text: "投一枚换一枚", effect: { roll: [ { weight: 1, text: "换到的硬币是银的。", effect: { coins: 50 } }, { weight: 2, text: "两枚都不见了。", effect: { coins: -25 } }, { weight: 2, text: "石龛里传出笑声。", effect: { run_hp: -68 } } ] } }, { text: "上供不动它", effect: { roll: [ { weight: 2, text: "心里踏实了些。", effect: { exp: 22 } }, { weight: 1, text: "供品被什么叼走了。", effect: { coins: -12 } } ] } } ] }
+    - { id: fo16, kind: gamble, text: "一只白鹿停在林间，传说跟着它就能找到宝物。", choices: [ { text: "跟上去", effect: { roll: [ { weight: 1, text: "它领你到一片没人来过的地方。", effect: { coins: 50, exp: 45 } }, { weight: 3, text: "它跳进雾里不见了。", effect: { run_hp: -45 } } ] } }, { text: "远远看着", effect: { roll: [ { weight: 1, text: "它回头看了你很久。", effect: { exp: 45 } }, { weight: 2, text: "它转身走了。", effect: {  } } ] } } ] }
+    - { id: fo17, kind: gamble, text: "雾最浓的地方有片蘑菇圈，传说踩进去会被带到别处。", choices: [ { text: "踩进去", effect: { roll: [ { weight: 2, text: "你出现在一片从没见过的林子里。", effect: { coins: 25, exp: 45 } }, { weight: 2, text: "你在原地转了三圈。", effect: { run_hp: -68 } } ] } }, { text: "在外围采蘑菇", effect: { roll: [ { weight: 1, text: "采到几朵能吃的。", effect: { run_hp: 45 } }, { weight: 2, text: "有毒，你赶紧吐了。", effect: { run_hp: -22 } } ] } } ] }
+    # —— trap（4）——
+    - { id: fo18, kind: trap, text: "一棵树上挂着用绳子捆好的包裹，绳结看起来很讲究。", choices: [ { text: "解开它", effect: { run_hp: -90, coins: 25 } }, { text: "用刀割断", effect: { run_hp: -22, coins: 25 } }, { text: "走开", effect: { exp: 45 } } ] }
+    - { id: fo19, kind: trap, text: "雾里坐着个浑身湿透的人，说他只是掉进水里，求你拉一把。", choices: [ { text: "拉他起来", effect: { run_hp: -90, run_mp: -15 } }, { text: "先问清来路", effect: { exp: 45, run_hp: -22 } }, { text: "绕开", effect: {} } ] }
+    - { id: fo20, kind: trap, text: "一具鹿的骸骨躺在路上，鹿角完整，断口处泛着不自然的黑。", choices: [ { text: "取下鹿角", effect: { coins: 38, run_hp: -90 } }, { text: "研究黑断口", effect: { exp: 45, run_hp: -22 } }, { text: "掩埋骸骨", effect: { run_hp: 45 } } ] }
+    - { id: fo21, kind: trap, text: "树根下有个黑洞，洞口的泥很新，像是刚被挖开的。", choices: [ { text: "伸手进去", effect: { run_hp: -90, coins: 25 } }, { text: "拿棍子探", effect: { run_hp: -22, exp: 45 } }, { text: "不碰", effect: {} } ] }
+    # —— peril（3）——
+    - { id: fo22, kind: peril, text: "两树之间垂着一座藤桥，下面是深不见底的雾谷。", choices: [ { text: "快速通过", effect: { run_hp: -90, exp: 90, coins: 25 } }, { text: "抓着藤蔓慢慢挪", effect: { run_hp: -45, exp: 45 } }, { text: "退回原路", effect: { run_hp: 22, exp: -22 } } ] }
+    - { id: fo23, kind: peril, text: "一只巨大的蜘蛛正在补网，网的中央挂着个发亮的东西。", choices: [ { text: "等它补完再过", effect: { exp: 45, run_hp: 45 } }, { text: "斩网强闯", effect: { run_hp: -135, coins: 50 } }, { text: "收走一把银丝", effect: { coins: 38, run_hp: -45 } } ] }
+    - { id: fo24, kind: peril, text: "一汪静止的水洼映出你的脸，但倒影比你先笑了一下。", choices: [ { text: "伸手触碰倒影", effect: { run_hp: -135, exp: 135 } }, { text: "打碎水面", effect: { run_hp: -45, exp: 45 } }, { text: "转身不看", effect: { run_hp: 22 } } ] }
+    # —— boon（2）——
+    - { id: fo25, kind: boon, text: "雾散开的一瞬间，你看见一小片从没被人踏足的林间空地。", choices: [ { text: "冲进去搜一遍", effect: { coins: 50, exp: 90 } }, { text: "先在外围观察", effect: { exp: 45, run_hp: 45 } }, { text: "谢过就走", effect: { exp: 45 } } ] }
+    - { id: fo26, kind: boon, text: "一棵枯死的老树忽然从裂缝里透出金色的光。", choices: [ { text: "掰开看", effect: { coins: 75, run_hp: -22 } }, { text: "退后三步", effect: { exp: 45 } }, { text: "抚过树干", effect: { run_hp: 45, exp: 45 } } ] }
+    # —— flavor（4）——
+    - { id: fo27, kind: flavor, text: "雾把整片森林泡得发软，声音传出去两步就没了。", choices: [ { text: "站着听一会儿", effect: { exp: 9 } }, { text: "小声哼歌", effect: { run_hp: 9 } }, { text: "继续赶路", effect: {} } ] }
+    - { id: fo28, kind: flavor, text: "一只猫头鹰歪着头看你，喙里叼着半只老鼠。", choices: [ { text: "回它一个歪头", effect: { run_hp: 9 } }, { text: "注视它", effect: { exp: 9 } }, { text: "走开", effect: {} } ] }
+    - { id: fo29, kind: flavor, text: "雨后的苔藓泛着油亮的绿，踩上去滑得很。", choices: [ { text: "小心地走", effect: { exp: 9 } }, { text: "干脆坐下来", effect: { run_hp: 9 } }, { text: "大步趟过去", effect: {} } ] }
+    - { id: fo30, kind: flavor, text: "一根倒木横在林间，上面长满了层层叠叠的菌。", choices: [ { text: "数一数有几层", effect: { exp: 9 } }, { text: "在木头上歇脚", effect: { run_hp: 9 } }, { text: "绕过它", effect: {} } ] }
 
-  # ============ 区域三：熔岩洞窟（第 21-30 层）============
+  # ============ 熔岩洞窟（第 41-60 层）============
   lava:
-    - { id: la01, text: "熔岩河在脚下翻涌，一块块踏脚石时隐时现，对岸的黑曜石闪着诱人的光。", choices: [ { text: "踏石强渡", effect: { exp: 60, run_hp: -40 } }, { text: "等石块转稳再过", effect: { exp: 30, run_hp: -10 } }, { text: "在近岸捞浮石", effect: { coins: 35, run_hp: -18 } } ] }
-    - { id: la02, text: "废弃矿车卡在铁轨尽头，车厢里散落着几块成色不错的矿石和半张路线图。", choices: [ { text: "装走所有矿石", effect: { coins: 45, run_hp: -15 } }, { text: "研究路线图", effect: { exp: 44 } }, { text: "推车沿轨滑一段", effect: { exp: 35, run_hp: -22 } } ] }
-    - { id: la03, text: "一团人那么高的火焰在空腔里打转，它似乎注意到了你，温度骤然升高。", choices: [ { text: "以水浇之", effect: { run_hp: -30, exp: 55 } }, { text: "绕开它走", effect: { run_hp: 8 } }, { text: "投掷矿石引开", effect: { coins: -12, exp: 40 } } ] }
-    - { id: la04, text: "石桥中段塌了，下面是滚烫的岩浆湖，对面的洞口冒着诱人的凉风。", choices: [ { text: "纵身跃过", effect: { exp: 65, run_hp: -35 } }, { text: "搭绳荡过去", effect: { exp: 40, run_hp: -12 } }, { text: "退回找别的路", effect: { run_hp: 12, exp: -15 } } ] }
-    - { id: la05, text: "一只宝箱半埋在灰里，盖子被烤得通红，锁孔里淌出融化的锡。", choices: [ { text: "垫布撬开", effect: { coins: 60, run_hp: -25 } }, { text: "先浇冷水再开", effect: { coins: 50, run_hp: -8 } }, { text: "太烫了，算了", effect: { run_hp: 6 } } ] }
-    - { id: la06, text: "地热喷口规律地吐着白汽，汽柱后藏着一小片被烤干的药草。", choices: [ { text: "趁间隙采药", effect: { run_hp: 45, exp: 20 } }, { text: "被汽烫到", effect: { run_hp: -20, exp: 25 } }, { text: "在汽柱边烤干衣服", effect: { run_hp: 15, run_mp: 18 } } ] }
-    - { id: la07, text: "厚厚的灰烬堆下埋着前人行囊，背带还完好，只是主人不知去了哪里。", choices: [ { text: "翻遍行囊", effect: { coins: 55, run_hp: -12 } }, { text: "只拿水囊", effect: { run_hp: 32 } }, { text: "留下字条提醒后来者", effect: { exp: 36 } } ] }
-    - { id: la08, text: "抬头是火山的「眼睛」——天窗一样的洞口外，灰云正缓缓旋转。", choices: [ { text: "攀上去看天", effect: { exp: 70, run_hp: -30 } }, { text: "接灰雨净水", effect: { run_hp: 30 } }, { text: "在洞眼正下冥想", effect: { exp: 45, run_hp: -15 } } ] }
-    - { id: la09, text: "硫磺泉咕嘟冒着黄泡，刺鼻的气味呛得人睁不开眼，泉底却有金属反光。", choices: [ { text: "憋气捞反光物", effect: { coins: 58, run_hp: -28 } }, { text: "蒸汽熏蒸解乏", effect: { run_hp: 36, exp: -8, run_mp_pct: 0.3 } }, { text: "绕泉而行", effect: {} } ] }
-    - { id: la10, text: "石台上架着一具烤架，上面还有一条被遗忘的烤鱼，居然还没凉透。", choices: [ { text: "吃掉烤鱼", effect: { run_hp: 50 } }, { text: "带走烤架", effect: { coins: 22, run_hp: 12 } }, { text: "检查鱼有没有毒", effect: { exp: 34, run_hp: 18 } } ] }
-    - { id: la11, text: "岩壁上凝着一簇赤色结晶，像冻结的火焰，触碰前指尖已经开始发麻。", choices: [ { text: "整簇敲下", effect: { coins: 65, run_hp: -32, relic: event05 } }, { text: "只取一颗", effect: { coins: 30, run_hp: -8, exp: 20 } }, { text: "临摹结晶纹路", effect: { exp: 48 } } ] }
-    - { id: la12, text: "洞顶簌簌落灰——小规模塌方要来了，碎石开始像雨点一样砸落。", choices: [ { text: "顶着盾牌冲过去", effect: { run_hp: -26, exp: 52 } }, { text: "躲进凹槽", effect: { run_hp: -8, exp: 20 } }, { text: "抢救地上的矿车", effect: { coins: 40, run_hp: -35 } } ] }
-    - { id: la13, text: "火蜥的巢穴里铺着一层温热的卵，其中一颗已经裂开细缝，里面在发光。", choices: [ { text: "取走裂纹卵", effect: { coins: 70, run_hp: -30, exp: 30 } }, { text: "帮它破壳", effect: { exp: 60, run_hp: -12 } }, { text: "悄悄退出去", effect: { run_hp: 10 } } ] }
-    - { id: la14, text: "岩浆从洞壁淌成一道火瀑布，火帘后隐约是个能容一人通过的夹缝。", choices: [ { text: "穿火帘而过", effect: { exp: 75, run_hp: -45 } }, { text: "等火势小些", effect: { exp: 40, run_hp: -10 } }, { text: "取一瓢岩浆", effect: { coins: 48, run_hp: -20 } } ] }
-    - { id: la15, text: "前人搭的冷却台还立着，石槽里存着半槽水，旁边压着一把修好的矿锄。", choices: [ { text: "喝水并带走矿锄", effect: { run_hp: 40, coins: 26 } }, { text: "只喝水", effect: { run_hp: 34 } }, { text: "拆台子的铁件", effect: { coins: 34, run_hp: -14 } } ] }
-    - { id: la16, text: "一条废弃铁轨伸向黑暗深处，矿车轮印里凝着黑色的油，还能推动。", choices: [ { text: "推车探一段", effect: { exp: 55, run_hp: -15 } }, { text: "拆铁轨卖", effect: { coins: 52, run_hp: -30 } }, { text: "沿轨标记返回路", effect: { exp: 30 } } ] }
-    - { id: la17, text: "洞壁凿着一排凹槽，槽里残存的油脂让火把重新烧了起来，照亮整条甬道。", choices: [ { text: "举火把前进", effect: { exp: 42, run_hp: 10 } }, { text: "刮取油脂", effect: { coins: 28, run_hp: -6 } }, { text: "吹灭火把摸黑走", effect: { exp: 35, run_hp: -20 } } ] }
-    - { id: la18, text: "一池熔金在凹陷处缓缓冒泡，表面浮着几枚未熔尽的古币，边缘已经发软。", choices: [ { text: "长钳捞币", effect: { coins: 75, run_hp: -25 } }, { text: "舀一勺金液", effect: { coins: 55, run_hp: -18, exp: 20 } }, { text: "记下位置日后开采", effect: { exp: 40 } } ] }
-    - { id: la19, text: "烟道里灌进来的风把火苗压得极低，可尽头隐约有星光透进来。", choices: [ { text: "爬向星光", effect: { exp: 68, run_hp: -22 } }, { text: "在烟道里歇脚避热", effect: { run_hp: 28 } }, { text: "收集烟道里的冷凝水", effect: { run_hp: 22, coins: 15 } } ] }
-    - { id: la20, text: "一窝熔岩蛋裹在温热的灰里，最大的那枚表面浮着岩浆纹路，像活的。", choices: [ { text: "抱走最大的蛋", effect: { coins: 80, run_hp: -35, relic: event06 } }, { text: "烤熟当干粮", effect: { run_hp: 55, exp: 15 } }, { text: "替它们垒灰保温", effect: { exp: 45, run_hp: 8 } } ] }
-    - { id: la21, text: "黑曜石断面像一面黑色镜子，映出的你比现实慢了半秒眨眼。", choices: [ { text: "敲下镜面带走", effect: { coins: 62, run_hp: -20 } }, { text: "练习与慢半秒的自己同步", effect: { exp: 66 } }, { text: "砸碎它", effect: { exp: 30, run_hp: -10 } } ] }
-    - { id: la22, text: "新落的火山灰松软如粉，灰下埋着半截梯子，通向一处未探的上层平台。", choices: [ { text: "爬上去探平台", effect: { exp: 72, run_hp: -18 } }, { text: "装灰当掩护", effect: { run_hp: 15, exp: 25 } }, { text: "挖灰下的遗物", effect: { coins: 46, run_hp: -24 } } ] }
-    - { id: la23, text: "地面猛地震动，碎石滚落，一条新的裂缝在脚边裂开，底下红光闪闪。", choices: [ { text: "跳到裂缝另一侧", effect: { exp: 78, run_hp: -40 } }, { text: "伏低等震动过去", effect: { run_hp: -6, exp: 26 } }, { text: "探头看裂缝深处", effect: { exp: 50, run_hp: -16 } } ] }
-    - { id: la24, text: "岔路口悬着一盏熄灭的铜灯，灯座上刻着「点灯者得路，吹灯者得眠」。", choices: [ { text: "点亮铜灯", effect: { exp: 52, coins: 20 } }, { text: "吹一口气装作点灯", effect: { run_hp: -18, exp: 44 } }, { text: "摘走铜灯", effect: { coins: 38, run_hp: -12 } } ] }
-    - { id: la25, text: "几只熔岩蟹横着爬过铁轨，壳缝里夹着亮晶晶的碎矿，走得不紧不慢。", choices: [ { text: "按住一只取矿", effect: { coins: 44, run_hp: -16 } }, { text: "跟着蟹群走", effect: { exp: 50 } }, { text: "给它们让路", effect: { run_hp: 8 } } ] }
-    - { id: la26, text: "防水铁盒里装着前人的遗书，最后一行墨迹未干：「……它跟着光下来了」。", choices: [ { text: "读完全文", effect: { exp: 58, run_hp: -10 } }, { text: "拿走盒底的金牙", effect: { coins: 50, run_hp: -14, exp: -20 } }, { text: "放回原处", effect: { run_hp: 14, exp: 20 } } ] }
-    - { id: la27, text: "热浪一阵阵扑面，皮肤发紧，前方的空气都在扭曲，像一面晃动的玻璃。", choices: [ { text: "浸湿衣服冲过去", effect: { exp: 46, run_hp: -12 } }, { text: "硬抗热浪", effect: { run_hp: -38, exp: 38 } }, { text: "退回阴凉处", effect: { run_hp: 14 } } ] }
-    - { id: la28, text: "泉眼中心悬浮着一颗拳头大的火珠，它似乎在随着你的心跳明灭。", choices: [ { text: "伸手握珠", effect: { exp: 85, run_hp: -50 } }, { text: "以水汽降温后收下", effect: { coins: 68, run_hp: -15 } }, { text: "静静观察它的节奏", effect: { exp: 55, run_hp: 10 } } ] }
-    - { id: la29, text: "岩缝里开出一株赤晶花，花瓣边缘跳着细小的火苗，根部缠着一枚戒指。", choices: [ { text: "连花带戒取下", effect: { coins: 72, run_hp: -22 } }, { text: "只摘花瓣入药", effect: { run_hp: 48, exp: 22 } }, { text: "只拿戒指", effect: { coins: 40, run_hp: -6 } } ] }
-    - { id: la30, text: "通道尽头是一道向下的深渊裂缝，裂缝边缘的石头正在缓缓软化、坠落。", choices: [ { text: "缒绳下探裂缝", effect: { exp: 90, run_hp: -45 } }, { text: "投石测深", effect: { exp: 40, run_hp: 8 } }, { text: "远离裂缝", effect: { run_hp: 12 } } ] }
+    # —— blessing（4）——
+    - { id: la01, kind: blessing, text: "岩壁缝隙里渗出一股不烫的泉水，在熔岩地带显得很不真实。", choices: [ { text: "喝个够", effect: { run_hp: 180 } }, { text: "灌满水囊", effect: { run_hp: 90, coins: 28 } }, { text: "洗去皮肤上的灰", effect: { run_hp: 90, run_mp: 10 } } ] }
+    - { id: la02, kind: blessing, text: "一处背风的石凹里还留着前人的铺盖和半锅没吃完的炖菜。", choices: [ { text: "吃干净", effect: { run_hp: 180 } }, { text: "翻找遗留", effect: { coins: 55 } }, { text: "研究前人留下的刻痕", effect: { exp: 95 } } ] }
+    - { id: la03, kind: blessing, text: "一丛红色的苔在热石上缓慢生长，贴近能感觉到凉意。", choices: [ { text: "敷在伤口上", effect: { run_hp: 180 } }, { text: "包一片带走", effect: { run_hp: 90, run_mp: 12 } }, { text: "取样观察", effect: { exp: 95 } } ] }
+    - { id: la04, kind: blessing, text: "地热喷口的节奏变得平稳，趁这个间隙能安全地烤干衣服。", choices: [ { text: "烤火歇息", effect: { run_hp: 180 } }, { text: "顺便热一热干粮", effect: { run_hp: 90, coins: 28 } }, { text: "观察喷口的规律", effect: { exp: 95 } } ] }
+    # —— trade（5）——
+    - { id: la05, kind: trade, text: "一只熔岩蟹横着爬过来，壳缝里夹着一小块亮晶晶的碎矿。", choices: [ { text: "按住它取矿", effect: { run_hp: -135, coins: 110 } }, { text: "跟着它走", effect: { exp: 95 } }, { text: "给它让路", effect: { run_hp: 90 } } ] }
+    - { id: la06, kind: trade, text: "一条废弃的铁轨伸向黑暗，矿车还能推动，但车上装着东西。", choices: [ { text: "推车探一段", effect: { run_hp: -90, exp: 142 } }, { text: "搬走车上货物", effect: { coins: 110, run_hp: -90 } }, { text: "沿轨做记号返回", effect: { exp: 95 } } ] }
+    - { id: la07, kind: trade, text: "硫磺泉咕嘟冒泡，泉底有金属反光，气味刺鼻。", choices: [ { text: "憋气捞", effect: { coins: 110, run_hp: -180 } }, { text: "用蒸汽熏解开疲劳", effect: { run_hp: 135, exp: 48 } }, { text: "绕开", effect: {} } ] }
+    - { id: la08, kind: trade, text: "一位烤火的矿工说可以分你一半干粮，但要你替他下一趟深井。", choices: [ { text: "下井", effect: { run_hp: -180, coins: 110, exp: 95 } }, { text: "拿钱换", effect: { coins: -82, run_hp: 90 } }, { text: "不接", effect: { run_hp: 45 } } ] }
+    - { id: la09, kind: trade, text: "岩壁上凝着一簇赤色结晶，像冻结的火焰。", choices: [ { text: "整簇敲下", effect: { coins: 110, run_hp: -135 } }, { text: "只取一颗", effect: { coins: 55, exp: 48 } }, { text: "临摹纹路", effect: { exp: 142 } } ] }
+    # —— disaster（4）——
+    - { id: la10, kind: disaster, text: "洞顶簌簌落灰，小规模塌方开始，碎石像雨点一样砸下来。", choices: [ { text: "顶着硬冲", effect: { run_hp: -225 } }, { text: "躲进凹槽", effect: { run_hp: -90, exp: 95 } }, { text: "抢救装备", effect: { coins: -82, run_hp: -90 } } ] }
+    - { id: la11, kind: disaster, text: "脚下的地面忽然发软，一层薄壳下面全是滚烫的灰。", choices: [ { text: "连滚带爬退回去", effect: { run_hp: -180 } }, { text: "先探清楚再走", effect: { run_hp: -90, exp: 95 } }, { text: "用外衣垫脚", effect: { run_hp: -135, coins: -55 } } ] }
+    - { id: la12, kind: disaster, text: "热浪一阵阵扑面，皮肤发紧，前方的空气都在扭曲。", choices: [ { text: "浸湿衣服冲过去", effect: { run_hp: -135 } }, { text: "硬抗热浪", effect: { run_hp: -225, exp: 95 } }, { text: "退回阴凉处", effect: { run_hp: -45, exp: -48 } } ] }
+    - { id: la13, kind: disaster, text: "一阵火星扑到脸上，眉毛烧掉一小撮，眼睛也涩得睁不开。", choices: [ { text: "用水冲洗", effect: { run_hp: -90 } }, { text: "闭眼缓一缓", effect: { run_hp: -45, exp: 95 } }, { text: "强行前进", effect: { run_hp: -135, run_mp: -15 } } ] }
+    # —— gamble（4）——
+    - { id: la14, kind: gamble, text: "一池熔金在凹陷处冒泡，表面浮着几枚未熔尽的古币。", choices: [ { text: "长钳去捞", effect: { roll: [ { weight: 2, text: "捞上来三枚。", effect: { coins: 165 } }, { weight: 2, text: "钳子被烫弯了。", effect: { run_hp: -135 } }, { weight: 1, text: "你失手碰到了金液。", effect: { run_hp: -270 } } ] } }, { text: "舀一勺金液", effect: { roll: [ { weight: 1, text: "凝成一块不小的金饼。", effect: { coins: 138 } }, { weight: 2, text: "泼洒了一地。", effect: { run_hp: -180 } } ] } }, { text: "记下位置", effect: { exp: 95 } } ] }
+    - { id: la15, kind: gamble, text: "岔路口悬着一盏熄灭的铜灯，灯座上刻着「点灯者得路，吹灯者得眠」。", choices: [ { text: "点亮它", effect: { roll: [ { weight: 2, text: "灯亮起一条清晰的岔道。", effect: { exp: 142, coins: 55 } }, { weight: 1, text: "灯芯爆了一下，差点烧到手。", effect: { run_hp: -90 } } ] } }, { text: "吹一口气", effect: { roll: [ { weight: 1, text: "灯灭了，你睡得格外沉。", effect: { run_hp: 180 } }, { weight: 2, text: "灯没灭，反而烫了你的嘴唇。", effect: { run_hp: -135 } } ] } } ] }
+    - { id: la16, kind: gamble, text: "洞壁上一排凹槽，槽里残存的油脂能让火把重新烧起来，但不知道会照亮什么。", choices: [ { text: "全部点着", effect: { roll: [ { weight: 2, text: "整条甬道亮如白昼，你看见地上的暗格。", effect: { coins: 110, exp: 95 } }, { weight: 2, text: "火光惊动了什么，暗处传来爬行声。", effect: { run_hp: -180 } } ] } }, { text: "只点一支", effect: { roll: [ { weight: 1, text: "够看清脚下就行。", effect: { exp: 48 } }, { weight: 2, text: "只照亮了一小片空白。", effect: {  } } ] } } ] }
+    - { id: la17, kind: gamble, text: "火蜥的巢里铺着一层温热的卵，其中一颗已经裂开细缝，里面在发光。", choices: [ { text: "等它破壳", effect: { roll: [ { weight: 1, text: "孵出来的小东西蹭了蹭你的手。", effect: { exp: 190, run_hp: 90 } }, { weight: 2, text: "母蜥回来了。", effect: { run_hp: -270 } } ] } }, { text: "取走裂纹卵", effect: { roll: [ { weight: 1, text: "卵在包里一直发热。", effect: { coins: 138 } }, { weight: 2, text: "卵在半路碎了。", effect: { run_hp: -90 } } ] } } ] }
+    # —— trap（4）——
+    - { id: la18, kind: trap, text: "石台上架着烤架，上面还有一条被遗忘的烤鱼，居然还没凉透。", choices: [ { text: "吃掉它", effect: { run_hp: 180, exp: 48 } }, { text: "检查有没有毒", effect: { exp: 95, run_hp: 45 } }, { text: "带走烤架", effect: { coins: 55, run_hp: 45 } } ] }
+    - { id: la19, kind: trap, text: "一条矿道笔直向下，风从里面吹出来是凉的，说明通向外面。", choices: [ { text: "直接下去", effect: { run_hp: -225, exp: 95 } }, { text: "先扔石头听回声", effect: { exp: 95, run_hp: -45 } }, { text: "另找路", effect: { run_hp: 45 } } ] }
+    - { id: la20, kind: trap, text: "地上散落着几块成色不错的矿石，旁边有拖拽的痕迹。", choices: [ { text: "全装走", effect: { coins: 82, run_hp: -180 } }, { text: "先看痕迹", effect: { exp: 95, run_hp: -45 } }, { text: "不捡", effect: { run_hp: 45 } } ] }
+    - { id: la21, kind: trap, text: "温泉边立着块木牌：「泡浴免费，请勿带走毛巾」。", choices: [ { text: "泡个够", effect: { run_hp: 180, exp: 48 } }, { text: "先看看水色", effect: { exp: 95 } }, { text: "不泡", effect: {} } ] }
+    # —— peril（3）——
+    - { id: la22, kind: peril, text: "岩浆从洞壁淌成一道火帘，帘后隐约是个能容一人通过的夹缝。", choices: [ { text: "穿火帘而过", effect: { run_hp: -270, exp: 190, coins: 110 } }, { text: "等火势小些", effect: { run_hp: -90, exp: 95 } }, { text: "取一瓢岩浆", effect: { coins: 82, run_hp: -135 } } ] }
+    - { id: la23, kind: peril, text: "石桥中段塌了，下面是滚烫的岩浆湖，对面有凉风吹来。", choices: [ { text: "纵身跃过", effect: { run_hp: -270, exp: 238 } }, { text: "搭绳荡过去", effect: { run_hp: -90, exp: 142 } }, { text: "退回找别的路", effect: { run_hp: 45, exp: -48 } } ] }
+    - { id: la24, kind: peril, text: "泉眼中心悬浮着一颗拳头大的火珠，它似乎在随着你的心跳明灭。", choices: [ { text: "伸手握珠", effect: { run_hp: -270, exp: 285, coins: 55 } }, { text: "以水汽降温后收下", effect: { coins: 110, run_hp: -90 } }, { text: "观察它的节奏", effect: { exp: 190, run_hp: 45 } } ] }
+    # —— boon（2）——
+    - { id: la25, kind: boon, text: "通道尽头忽然豁开，一片没被熔岩碰过的石室静静立在那里。", choices: [ { text: "仔细搜一遍", effect: { coins: 138, exp: 190 } }, { text: "先站在门口看", effect: { exp: 95, run_hp: 90 } }, { text: "只取水就走", effect: { run_hp: 90 } } ] }
+    - { id: la26, kind: boon, text: "岩缝里开出一株赤晶花，花瓣边缘跳着细小的火苗，根部缠着一枚戒指。", choices: [ { text: "连花带戒取下", effect: { coins: 165, run_hp: -90 } }, { text: "只摘花瓣", effect: { run_hp: 180, exp: 95 } }, { text: "只拿戒指", effect: { coins: 82, exp: 48 } } ] }
+    # —— flavor（4）——
+    - { id: la27, kind: flavor, text: "熔岩河在脚下缓缓流动，红光把整条通道照得忽明忽暗。", choices: [ { text: "站着看一会儿", effect: { exp: 19 } }, { text: "烤烤手", effect: { run_hp: 18 } }, { text: "快步走过", effect: {} } ] }
+    - { id: la28, kind: flavor, text: "几块浮石在岩浆上慢慢打转，像某种迟钝的舞。", choices: [ { text: "数它们的节奏", effect: { exp: 19 } }, { text: "往里面丢石子", effect: { run_hp: 18 } }, { text: "离开", effect: {} } ] }
+    - { id: la29, kind: flavor, text: "洞顶垂下的石钟乳被熏得发黑，一滴水正慢慢地凝。", choices: [ { text: "等它掉下来", effect: { exp: 19 } }, { text: "接一口", effect: { run_hp: 18 } }, { text: "走开", effect: {} } ] }
+    - { id: la30, kind: flavor, text: "黑曜石断面像一面黑镜，映出的你比现实慢了半秒眨眼。", choices: [ { text: "练习同步", effect: { exp: 19 } }, { text: "摸摸镜面", effect: { run_hp: 18 } }, { text: "砸碎它", effect: {} } ] }
 
-  # ============ 区域四：冰封王座（第 31-40 层）============
+  # ============ 冰封王座（第 61-80 层）============
   frost:
-    - { id: fr01, text: "冰镜走廊里立着数十面冰镜，每一面映出的你都保持着不同的姿势。", choices: [ { text: "打碎姿势最怪的那面", effect: { exp: 120, run_hp: -60 } }, { text: "与镜中的自己对视", effect: { exp: 80, run_hp: -20 } }, { text: "贴墙快步通过", effect: { run_hp: 15 } } ] }
-    - { id: fr02, text: "整片湖面冻得透明，冰下游动着一条巨大的白鱼，鳞片像碎银。", choices: [ { text: "凿冰抓鱼", effect: { run_hp: 90, exp: 40, coins: -10 } }, { text: "趴在冰上看它游", effect: { run_hp: 30, exp: 55 } }, { text: "绕湖而行", effect: {} } ] }
-    - { id: fr03, text: "一座冰棺停在回廊中央，棺中人的睫毛上结着霜，嘴角竟然带着笑。", choices: [ { text: "推开棺盖", effect: { exp: 140, run_hp: -80 } }, { text: "拂去棺上的霜读铭文", effect: { exp: 90, coins: 30 } }, { text: "鞠躬后离开", effect: { run_hp: 25 } } ] }
-    - { id: fr04, text: "穹顶裂口外极光正流淌，绿与紫的光落在冰面上，被反射成万千碎片。", choices: [ { text: "在极光下练剑", effect: { exp: 130, run_hp: -30 } }, { text: "张嘴接住一片光", effect: { run_hp: 70, exp: 60 } }, { text: "闭眼许愿", effect: { run_hp: 40 } } ] }
-    - { id: fr05, text: "坡顶积雪开始滑动——雪崩的第一声闷响从背后传来，没有回头的时间。", choices: [ { text: "扑向岩石缝隙", effect: { run_hp: -35, exp: 100 } }, { text: "迎着雪崩冲刺", effect: { run_hp: -90, exp: 150 } }, { text: "滑向下坡抢先脱身", effect: { run_hp: -20, exp: 70 } } ] }
-    - { id: fr06, text: "一排冰雕士兵整齐列队，每个都举着不同的兵器，冰层里封着真实的甲胄。", choices: [ { text: "取走一柄封存的剑", effect: { coins: 90, run_hp: -40 } }, { text: "按队列顺序观察招式", effect: { exp: 125 } }, { text: "向冰雕敬礼", effect: { run_hp: 35, exp: 45 } } ] }
-    - { id: fr07, text: "雪堆里露出半截手臂，是个冻僵的旅人，胸口还有微弱的起伏。", choices: [ { text: "背他到暖处救活", effect: { run_hp: -50, exp: 160 } }, { text: "取走他的行囊", effect: { coins: 95, run_hp: -25, exp: -40 } }, { text: "留下食物与火折", effect: { run_hp: -15, exp: 90 } } ] }
-    - { id: fr08, text: "冰晶花在墙缝里一瓣瓣绽开，碰一下就簌簌碎成粉，散发出薄荷似的凉。", choices: [ { text: "含一片在嘴里", effect: { run_hp: 65, exp: 35 } }, { text: "收集整簇", effect: { coins: 70, run_hp: -20 } }, { text: "呵气让它们开得更久", effect: { exp: 75 } } ] }
-    - { id: fr09, text: "霜狼的尸体仍保持着扑击的姿势，冻得像石头，狼牙完好无损。", choices: [ { text: "敲下狼牙", effect: { coins: 75, run_hp: -25 } }, { text: "研究它为何而死", effect: { exp: 110 } }, { text: "堆雪掩埋", effect: { run_hp: 30, exp: 50 } } ] }
-    - { id: fr10, text: "冰层下三尺，一条红鲤被困在气泡里，尾巴还在微弱地摆。", choices: [ { text: "凿冰救鱼", effect: { run_hp: -30, exp: 145 } }, { text: "凿冰抓鱼", effect: { run_hp: 60, coins: 40, exp: -25 } }, { text: "对它哈气暖一暖", effect: { run_hp: 25, exp: 60 } } ] }
-    - { id: fr11, text: "避风角落里有座小暖炉，火苗只有豆大，却把方圆一米烤得如春。", choices: [ { text: "烤火到全身发热", effect: { run_hp: 95, exp: -20, run_mp_pct: 0.35 } }, { text: "带走火种", effect: { run_hp: 40, coins: 25 } }, { text: "添柴让火烧旺", effect: { run_hp: 55, exp: 65 } } ] }
-    - { id: fr12, text: "冰桥断口宽约两丈，对面就是向上的阶梯，桥下白雾翻涌看不见底。", choices: [ { text: "冲刺跳跃", effect: { exp: 150, run_hp: -70 } }, { text: "掷出抓钩绳", effect: { exp: 95, run_hp: -20 } }, { text: "寻找绕行冰阶", effect: { run_hp: 30, exp: -30 } } ] }
-    - { id: fr13, text: "冰柱洞里垂着成百上千的冰锥，敲击会发出风铃般的声响，回声久久不散。", choices: [ { text: "敲出一段旋律", effect: { run_hp: 45, exp: 85 } }, { text: "折下最晶莹的一根", effect: { coins: 65, run_hp: -18 } }, { text: "屏息听回声", effect: { exp: 70 } } ] }
-    - { id: fr14, text: "雪地里坐着一只通体雪白的狐狸，脖子上系着一枚铜铃，正歪头打量你。", choices: [ { text: "跟它走", effect: { exp: 160, run_hp: -35 } }, { text: "摇它的铜铃", effect: { run_hp: -45, exp: 110 } }, { text: "分它一半食物", effect: { run_hp: -20, exp: 130, coins: -15 } } ] }
-    - { id: fr15, text: "半塌的藏书阁里，书页冻得脆硬，一卷《霜典》摊开在冰台上，字迹泛蓝。", choices: [ { text: "通读《霜典》", effect: { exp: 170, run_hp: -25 } }, { text: "撕下几页防潮", effect: { coins: 55, exp: -30 } }, { text: "合上书放回原处", effect: { run_hp: 30, exp: 60 } } ] }
-    - { id: fr16, text: "风口的狂风能把人掀飞，但风隙里藏着一条仅容侧身的安全线。", choices: [ { text: "贴壁侧身挪过", effect: { exp: 105, run_hp: -25 } }, { text: "顶风硬闯", effect: { run_hp: -75, exp: 95 } }, { text: "系绳缓行", effect: { exp: 75, run_hp: -10 } } ] }
-    - { id: fr17, text: "冰层下居然有眼温泉，热水顶着冰盖冒泡，掀开冰口便白汽蒸腾。", choices: [ { text: "跳进去泡着", effect: { run_hp: 110, exp: -30 } }, { text: "取水装满所有水囊", effect: { run_hp: 55, coins: 30 } }, { text: "在泉边垂钓", effect: { run_hp: 45, exp: 70, run_mp_pct: 0.3 } } ] }
-    - { id: fr18, text: "洞顶垂下的冰钟乳内部封着一只展翅的雪枭，羽毛纤毫毕现。", choices: [ { text: "取下整根冰钟乳", effect: { coins: 85, run_hp: -35 } }, { text: "贴近观察雪枭", effect: { exp: 95, run_hp: 15 } }, { text: "敲碎取羽", effect: { coins: 45, run_hp: -12, exp: -20 } } ] }
-    - { id: fr19, text: "水晶棺中躺着与你身形相仿的人，胸膛起伏——他也活着，只是醒不来。", choices: [ { text: "以体温唤醒他", effect: { run_hp: -60, exp: 185, relic: event07 } }, { text: "取走他手中的权杖", effect: { coins: 110, run_hp: -40, exp: -35 } }, { text: "留字提醒后来者", effect: { exp: 80, run_hp: 10 } } ] }
-    - { id: fr20, text: "冻湖中央裂开一圈细纹，冰下传来「咯吱」的呻吟，裂纹正向你蔓延。", choices: [ { text: "冲刺到对岸", effect: { exp: 135, run_hp: -55 } }, { text: "伏低分散重量", effect: { run_hp: -25, exp: 85 } }, { text: "朝裂纹中心跳", effect: { exp: 175, run_hp: -95 } } ] }
-    - { id: fr21, text: "誓约碑上刻着两行字：一行是「守护」，另一行被凿去，只余深深的凿痕。", choices: [ { text: "以手抚过凿痕", effect: { exp: 120, run_hp: -30 } }, { text: "补刻自己的誓约", effect: { exp: 155, run_hp: -15 } }, { text: "拓下旧字迹", effect: { coins: 60, exp: 70 } } ] }
-    - { id: fr22, text: "雪原上支着一顶猎人的圆顶屋，门帘压着雪，里面炉火噼啪作响。", choices: [ { text: "进去取暖过夜", effect: { run_hp: 105, exp: -25, run_mp_pct: 0.4 } }, { text: "搜刮猎人的储藏", effect: { coins: 95, run_hp: 15, exp: -30 } }, { text: "帮猎人加固屋顶", effect: { run_hp: -20, exp: 120 } } ] }
-    - { id: fr23, text: "墙上挂着一支冰封的号角，角身缠着褪色的绶带，凑近能听见闷闷的嗡鸣。", choices: [ { text: "吹响号角", effect: { exp: 190, run_hp: -75 } }, { text: "取走号角", effect: { coins: 120, run_hp: -30 } }, { text: "只解下绶带", effect: { coins: 35, exp: 50 } } ] }
-    - { id: fr24, text: "极寒夜骤然降临，气温在几息之间跌到呵气成冰，视野里只剩雪沫乱飞。", choices: [ { text: "挖雪洞躲进去", effect: { run_hp: -20, exp: 80 } }, { text: "奔跑取暖", effect: { run_hp: -45, exp: 110 } }, { text: "抱紧斗篷硬撑", effect: { run_hp: -85, exp: 60 } } ] }
-    - { id: fr25, text: "冰莲在黑水潭中缓缓开合，每开一次，潭边的霜就化一圈。", choices: [ { text: "摘下冰莲", effect: { run_hp: 120, exp: 90, coins: -20, relic: event08 } }, { text: "守到它开满三轮", effect: { exp: 145, run_hp: 20 } }, { text: "取潭水", effect: { run_hp: 60, coins: 40 } } ] }
-    - { id: fr26, text: "雪原上散落着人与马的白骨，都朝着同一个方向——王座，没有一具回头。", choices: [ { text: "搜检遗物", effect: { coins: 105, run_hp: -35 } }, { text: "默数骸骨数量", effect: { exp: 115, run_hp: -10 } }, { text: "为他们立十字", effect: { run_hp: 40, exp: 75 } } ] }
-    - { id: fr27, text: "巨大的冰封门扉半掩，门缝里漏出金色的光和细微的乐声。", choices: [ { text: "推门而入", effect: { exp: 200, run_hp: -85 } }, { text: "从门缝偷看", effect: { exp: 130, run_hp: -30 } }, { text: "听完乐声再走", effect: { run_hp: 50, exp: 90 } } ] }
-    - { id: fr28, text: "废弃篝火只剩一捧白灰，灰里插着半截未烧尽的蜡烛，烛芯焦黑。", choices: [ { text: "重新点燃蜡烛", effect: { run_hp: 55, exp: 85 } }, { text: "带走蜡烛", effect: { coins: 30, run_hp: 25 } }, { text: "拂去白灰", effect: { exp: 60, run_hp: -12 } } ] }
-    - { id: fr29, text: "成群的冰蝶停在断柱上，翅膀开合间洒下亮晶晶的鳞粉，像碎钻。", choices: [ { text: "拢起双手接鳞粉", effect: { coins: 80, run_hp: -15 } }, { text: "引蝶群照亮前路", effect: { exp: 125, run_hp: 20 } }, { text: "屏息等它们飞走", effect: { exp: 65 } } ] }
-    - { id: fr30, text: "王座回廊的尽头，一幅巨大的冰壁画描绘着登塔者失败的九十九种结局。", choices: [ { text: "看完全部壁画", effect: { exp: 210, run_hp: -40 } }, { text: "找画中与你相似的人", effect: { exp: 150, run_hp: -20 } }, { text: "凿下最亮的一角", effect: { coins: 130, run_hp: -50 } } ] }
+    # —— blessing（4）——
+    - { id: fr01, kind: blessing, text: "冰缝里居然有一小汪不冻的水，水面浮着薄薄一层雾。", choices: [ { text: "喝个够", effect: { run_hp: 350 } }, { text: "灌满水囊", effect: { run_hp: 175, coins: 52 } }, { text: "洗去脸上的血痂", effect: { run_hp: 175, run_mp: 10 } } ] }
+    - { id: fr02, kind: blessing, text: "避风角落里有个小暖炉，火苗只有豆大，却把方圆一米烤得如春。", choices: [ { text: "烤到全身发热", effect: { run_hp: 350 } }, { text: "添柴让火烧旺", effect: { run_hp: 262, exp: 95 } }, { text: "带走火种", effect: { run_hp: 175, coins: 52 } } ] }
+    - { id: fr03, kind: blessing, text: "一具冻僵的旅人靠在岩壁上，怀里还抱着个没打开的补给包。", choices: [ { text: "替他合上眼睛，取走补给", effect: { run_hp: 175, coins: 105 } }, { text: "只取食物", effect: { run_hp: 350 } }, { text: "堆雪掩埋", effect: { exp: 190 } } ] }
+    - { id: fr04, kind: blessing, text: "冰晶花在墙缝里一瓣瓣绽开，碰一下就簌簌碎成粉，散发出薄荷似的凉。", choices: [ { text: "含一片在嘴里", effect: { run_hp: 350 } }, { text: "收集整簇", effect: { coins: 105 } }, { text: "呵气让它们开得更久", effect: { exp: 285 } } ] }
+    # —— trade（5）——
+    - { id: fr05, kind: trade, text: "雪堆里露出半截手臂，是个冻僵的人，胸口还有微弱的起伏。", choices: [ { text: "背他到暖处", effect: { run_hp: -438, exp: 475 } }, { text: "取走他的行囊", effect: { coins: 210, run_hp: -175, exp: -190 } }, { text: "留下火折子", effect: { run_hp: -175, exp: 285 } } ] }
+    - { id: fr06, kind: trade, text: "冰层下三尺，一条红鲤被困在气泡里，尾巴还在微弱地摆。", choices: [ { text: "凿冰救鱼", effect: { run_hp: -262, exp: 380 } }, { text: "凿冰抓鱼", effect: { run_hp: 350, coins: 105, exp: -190 } }, { text: "对它哈气", effect: { run_hp: 175, exp: 190 } } ] }
+    - { id: fr07, kind: trade, text: "一位披着厚裘的老者坐在冰阶上，说能教你一手，代价是陪他坐一夜。", choices: [ { text: "陪他坐", effect: { run_hp: -350, exp: 570 } }, { text: "给他些食物", effect: { run_hp: -175, coins: -105, exp: 380 } }, { text: "婉拒", effect: { run_hp: 88 } } ] }
+    - { id: fr08, kind: trade, text: "一排冰雕士兵举着不同的兵器，冰层里封着真实的甲胄。", choices: [ { text: "取走一柄封存的剑", effect: { coins: 210, run_hp: -350 } }, { text: "按顺序观察招式", effect: { exp: 475 } }, { text: "向冰雕敬礼", effect: { run_hp: 262, exp: 190 } } ] }
+    - { id: fr09, kind: trade, text: "风口把雪吹成一面墙，绕过它要多走半天，硬闯则要挨冻。", choices: [ { text: "顶风硬闯", effect: { run_hp: -438, exp: 380 } }, { text: "绕远路", effect: { run_hp: -175, exp: 95 } }, { text: "挖雪洞等风停", effect: { run_hp: -88, exp: 190 } } ] }
+    # —— disaster（4）——
+    - { id: fr10, kind: disaster, text: "雪坡开始滑动，第一声闷响从背后传来，没有回头的时间。", choices: [ { text: "扑向岩缝", effect: { run_hp: -350 } }, { text: "迎着冲", effect: { run_hp: -525, exp: 285 } }, { text: "滑向下坡", effect: { run_hp: -262 } } ] }
+    - { id: fr11, kind: disaster, text: "极寒夜骤然降临，气温在几息之间跌到呵气成冰。", choices: [ { text: "挖雪洞钻进去", effect: { run_hp: -262 } }, { text: "奔跑取暖", effect: { run_hp: -350, exp: 190 } }, { text: "抱紧斗篷硬撑", effect: { run_hp: -438, exp: 285 } } ] }
+    - { id: fr12, kind: disaster, text: "冰面裂开一圈细纹，呻吟声正向你蔓延。", choices: [ { text: "冲刺到对岸", effect: { run_hp: -350 } }, { text: "伏低分散重量", effect: { run_hp: -175, exp: 190 } }, { text: "抛弃重物", effect: { coins: -210 } } ] }
+    - { id: fr13, kind: disaster, text: "你的手指开始失去知觉，指甲盖泛着不自然的青。", choices: [ { text: "用体温捂回来", effect: { run_hp: -175 } }, { text: "找雪搓热", effect: { run_hp: -262, exp: 190 } }, { text: "忍着继续走", effect: { run_hp: -350 } } ] }
+    # —— gamble（4）——
+    - { id: fr14, kind: gamble, text: "冰壁上嵌着一排铜环，传说拉对哪一个就能打开通路。", choices: [ { text: "随便拉一个", effect: { roll: [ { weight: 1, text: "石壁无声地滑开了。", effect: { coins: 210, exp: 285 } }, { weight: 3, text: "只听见空洞的回响。", effect: { run_hp: -175 } }, { weight: 2, text: "墙里有什么东西动了。", effect: { run_hp: -438 } } ] } }, { text: "先看铜环上的刻痕", effect: { roll: [ { weight: 2, text: "你辨认出了规律。", effect: { exp: 285 } }, { weight: 2, text: "刻痕冻得太深，什么也看不出来。", effect: {  } } ] } } ] }
+    - { id: fr15, kind: gamble, text: "雪地里坐着一只通体雪白的狐狸，脖子上系着一枚铜铃。", choices: [ { text: "跟它走", effect: { roll: [ { weight: 1, text: "它领你到一处补给点。", effect: { coins: 210, run_hp: 175 } }, { weight: 3, text: "它在雪里消失了，你迷了路。", effect: { run_hp: -350 } } ] } }, { text: "摇它的铜铃", effect: { roll: [ { weight: 1, text: "铃声回荡，山谷亮了一下。", effect: { exp: 380 } }, { weight: 2, text: "狐狸受惊咬了你的手。", effect: { run_hp: -262 } } ] } } ] }
+    - { id: fr16, kind: gamble, text: "一口冰封的古井，水面像镜子，映出的却是你不认识的星空。", choices: [ { text: "凝视井中的星空", effect: { roll: [ { weight: 1, text: "你看见了一条从没走过的路。", effect: { exp: 570, coins: 105 } }, { weight: 2, text: "星空开始旋转，你差点栽进去。", effect: { run_hp: -438 } } ] } }, { text: "打一桶井水", effect: { roll: [ { weight: 2, text: "水是温的。", effect: { run_hp: 350 } }, { weight: 1, text: "桶提上来时只剩冰。", effect: {  } } ] } } ] }
+    - { id: fr17, kind: gamble, text: "废弃篝火只剩白灰，灰里插着半截未烧尽的蜡烛，烛芯焦黑。", choices: [ { text: "重新点燃", effect: { roll: [ { weight: 2, text: "火光照出一圈影子。", effect: { run_hp: 262, exp: 190 } }, { weight: 1, text: "火苗忽然爆开，燎了你的手。", effect: { run_hp: -262 } } ] } }, { text: "带走蜡烛", effect: { roll: [ { weight: 1, text: "它在包里一直温着。", effect: { coins: 105, run_hp: 175 } }, { weight: 2, text: "它断了。", effect: {  } } ] } } ] }
+    # —— trap（4）——
+    - { id: fr18, kind: trap, text: "冰棺停在回廊中央，棺中人的睫毛上结着霜，嘴角竟然带着笑。", choices: [ { text: "推开棺盖", effect: { run_hp: -525, exp: 190 } }, { text: "拂去霜读铭文", effect: { exp: 285, coins: 52 } }, { text: "鞠躬后离开", effect: { run_hp: 175 } } ] }
+    - { id: fr19, kind: trap, text: "雪原上支着一顶圆顶屋，门帘压着雪，里面炉火噼啪作响。", choices: [ { text: "进去取暖", effect: { run_hp: 350, exp: 95 } }, { text: "先绕屋看一圈", effect: { exp: 190 } }, { text: "搜刮储藏", effect: { coins: 158, run_hp: -262 } } ] }
+    - { id: fr20, kind: trap, text: "墙缝里卡着一个布包，绳口封着火漆，火漆上是个陌生的纹章。", choices: [ { text: "拆开", effect: { coins: 158, run_hp: -262 } }, { text: "先看纹章", effect: { exp: 190 } }, { text: "不动", effect: {} } ] }
+    - { id: fr21, kind: trap, text: "洞顶垂下的冰钟乳内部封着一只展翅的雪枭，羽毛纤毫毕现。", choices: [ { text: "取下整根", effect: { coins: 210, run_hp: -350 } }, { text: "贴近观察", effect: { exp: 285, run_hp: 88 } }, { text: "敲碎取羽", effect: { coins: 105, run_hp: -175 } } ] }
+    # —— peril（3）——
+    - { id: fr22, kind: peril, text: "冰桥断口宽约两丈，对面就是向上的阶梯，桥下白雾翻涌。", choices: [ { text: "冲刺跳跃", effect: { run_hp: -525, exp: 570 } }, { text: "掷出抓钩绳", effect: { run_hp: -175, exp: 285 } }, { text: "寻找绕行冰阶", effect: { run_hp: -88, exp: -95 } } ] }
+    - { id: fr23, kind: peril, text: "墙上挂着一支冰封的号角，角身缠着褪色的绶带，凑近能听见嗡鸣。", choices: [ { text: "吹响号角", effect: { run_hp: -525, exp: 570, coins: 105 } }, { text: "取走号角", effect: { coins: 210, run_hp: -175 } }, { text: "只解下绶带", effect: { coins: 52, exp: 190 } } ] }
+    - { id: fr24, kind: peril, text: "巨大的冰封门扉半掩，门缝里漏出金色的光和细微的乐声。", choices: [ { text: "推门而入", effect: { run_hp: -525, exp: 665 } }, { text: "从门缝偷看", effect: { exp: 380, run_hp: -175 } }, { text: "听完乐声再走", effect: { run_hp: 175, exp: 285 } } ] }
+    # —— boon（2）——
+    - { id: fr25, kind: boon, text: "冰莲在黑水潭中缓缓开合，每开一次，潭边的霜就化一圈。", choices: [ { text: "摘下冰莲", effect: { run_hp: 438, exp: 380, coins: -52 } }, { text: "守到它开满三轮", effect: { exp: 475, run_hp: 175 } }, { text: "取潭水", effect: { run_hp: 262, coins: 52 } } ] }
+    - { id: fr26, kind: boon, text: "王座回廊的尽头，一幅巨大的冰壁画描绘着登塔者失败的九十九种结局。", choices: [ { text: "看完全部壁画", effect: { exp: 570, run_hp: -175 } }, { text: "找画中与你相似的人", effect: { exp: 380, run_hp: -88 } }, { text: "凿下最亮的一角", effect: { coins: 210, run_hp: -262 } } ] }
+    # —— flavor（4）——
+    - { id: fr27, kind: flavor, text: "呼出的白汽在睫毛上结了一层细霜，眨眼时会掉下来。", choices: [ { text: "对着手心哈气", effect: { run_hp: 35 } }, { text: "看霜花的形状", effect: { exp: 38 } }, { text: "继续走", effect: {} } ] }
+    - { id: fr28, kind: flavor, text: "成群的冰蝶停在断柱上，翅膀开合间洒下亮晶晶的鳞粉。", choices: [ { text: "拢起双手接", effect: { coins: 21 } }, { text: "屏息等它们飞走", effect: { exp: 38 } }, { text: "挥手赶开", effect: {} } ] }
+    - { id: fr29, kind: flavor, text: "冰柱洞里垂着成百上千的冰锥，敲击会发出风铃般的声响。", choices: [ { text: "敲一段旋律", effect: { run_hp: 35 } }, { text: "屏息听回声", effect: { exp: 38 } }, { text: "走过去", effect: {} } ] }
+    - { id: fr30, kind: flavor, text: "雪原上散落着人与马的白骨，都朝着同一个方向，没有一具回头。", choices: [ { text: "默数数量", effect: { exp: 38 } }, { text: "为他们立个记号", effect: { run_hp: 35 } }, { text: "快步离开", effect: {} } ] }
 
-  # ============ 区域五：深渊之巅（第 41-50 层）============
+  # ============ 深渊回廊（第 81-100 层）============
   abyss:
-    - { id: ab01, text: "脚下是倒悬的星海，星光像瀑布一样向「下方」坠落，站久了会分不清上下。", choices: [ { text: "闭眼凭直觉走直线", effect: { exp: 320, run_hp: -80 } }, { text: "数够一百颗坠星", effect: { exp: 250, run_hp: -40 } }, { text: "坐下发呆适应眩晕", effect: { run_hp: 70, exp: 120, run_mp_pct: 0.35 } } ] }
-    - { id: ab02, text: "回廊没有墙壁，栏杆外就是虚无。每隔九步有一盏不亮的灯，灯座上刻着编号。", choices: [ { text: "点亮所有灯", effect: { exp: 380, run_hp: -120 } }, { text: "按编号推算出口", effect: { exp: 300, run_hp: -50 } }, { text: "数着编号快走", effect: { exp: 180, run_hp: -20 } } ] }
-    - { id: ab03, text: "一个和你一模一样的影子从墙里走出，摊开手心：左手金币，右手旧照片。", choices: [ { text: "接金币", effect: { coins: 320, run_hp: -140, exp: 100 } }, { text: "接照片", effect: { exp: 420, run_hp: -60 } }, { text: "两个都不要", effect: { run_hp: 60, exp: 260 } } ] }
-    - { id: ab04, text: "深渊的低语像潮水一样漫上来，念的全是你会说的语言，句式却错得诡异。", choices: [ { text: "跟它对答", effect: { exp: 450, run_hp: -180 } }, { text: "默念心法过滤杂音", effect: { run_hp: 80, exp: 240 } }, { text: "用外语骂回去", effect: { exp: 300, run_hp: -60 } } ] }
-    - { id: ab05, text: "半截沉船悬浮在虚空中，桅杆上还挂着破帆，船舱透出微弱的灯。", choices: [ { text: "登船搜舱", effect: { coins: 380, run_hp: -110, exp: 180 } }, { text: "解下船钟", effect: { coins: 260, run_hp: -60, exp: 140 } }, { text: "绕船而过", effect: { exp: 150 } } ] }
-    - { id: ab06, text: "一段段平台呈螺旋向上，每踩一块，它就静静下沉半寸，再不回头。", choices: [ { text: "全速连跳", effect: { exp: 400, run_hp: -90 } }, { text: "稳扎稳打", effect: { exp: 260, run_hp: -35 } }, { text: "边走边刻记号", effect: { exp: 200, run_hp: -50, coins: 60 } } ] }
-    - { id: ab07, text: "虚空中裂开一道缝隙，缝里是晴朗的下午操场，有孩子在跑，笑声很近。", choices: [ { text: "伸手进去", effect: { run_hp: 160, exp: 350, coins: -50 } }, { text: "只听一会儿", effect: { run_hp: 90, exp: 220 } }, { text: "立刻补上裂缝", effect: { exp: 340, run_hp: -70 } } ] }
-    - { id: ab08, text: "碎片般的记忆浮在空中：有人喊你的名字，语气既像告别又像挽留。", choices: [ { text: "触碰最大的碎片", effect: { exp: 480, run_hp: -150, relic: event09 } }, { text: "拼合最近的三片", effect: { exp: 360, run_hp: -70 } }, { text: "闭眼绕行", effect: { run_hp: 50, exp: 160 } } ] }
-    - { id: ab09, text: "一轮黑太阳悬在头顶，日冕是惨白的，照不出影子——你的影子不见了。", choices: [ { text: "找回影子", effect: { exp: 430, run_hp: -130 } }, { text: "在无影处练刀", effect: { exp: 330, run_hp: -60 } }, { text: "适应没有影子", effect: { run_hp: 65, exp: 250 } } ] }
-    - { id: ab10, text: "无声的钟悬在空中，指针乱转。你凑近，忽然听见自己的心跳被放大了十倍。", choices: [ { text: "按下钟摆", effect: { exp: 460, run_hp: -170 } }, { text: "校准指针", effect: { exp: 340, run_hp: -60 } }, { text: "不碰，快步离开", effect: { run_hp: 45, exp: 170 } } ] }
-    - { id: ab11, text: "一面立在虚无里的穿衣镜，镜中的你衣着华贵、神情倨傲，开口说了句话。", choices: [ { text: "听它说什么", effect: { exp: 500, run_hp: -200 } }, { text: "一拳打碎镜子", effect: { run_hp: -90, exp: 380, coins: 90 } }, { text: "整理衣冠后离开", effect: { run_hp: 55, exp: 280 } } ] }
-    - { id: ab12, text: "锁链从虚空垂下，链环上刻着密密麻麻的小字，全是没能说出口的话。", choices: [ { text: "拉动锁链", effect: { exp: 470, run_hp: -160 } }, { text: "读链环上的字", effect: { exp: 350, run_hp: -70 } }, { text: "解开一节带走", effect: { coins: 300, run_hp: -60, exp: 200 } } ] }
-    - { id: ab13, text: "向上的阶梯断成漂浮的碎块，缓慢自转，缝隙里能看到无底的黑暗。", choices: [ { text: "看准节奏连跳", effect: { exp: 440, run_hp: -120 } }, { text: "等石块转到最近", effect: { exp: 280, run_hp: -35 } }, { text: "掷绳套住再荡", effect: { exp: 330, run_hp: -55, coins: -20 } } ] }
-    - { id: ab14, text: "一条星尘汇成的河横贯回廊，河底沉着细小的光粒，像碎掉的月亮。", choices: [ { text: "涉水而过", effect: { exp: 390, run_hp: -100 } }, { text: "掬一捧星尘", effect: { coins: 340, run_hp: -70, exp: 190 } }, { text: "沿岸溯行", effect: { exp: 240, run_hp: -40 } } ] }
-    - { id: ab15, text: "穹顶高处睁开了唯一一只巨眼，虹膜里倒映着整座塔，它正在缓缓下移。", choices: [ { text: "与它对视", effect: { exp: 550, run_hp: -230 } }, { text: "避开视线伏地", effect: { run_hp: 40, exp: 230 } }, { text: "朝它挥手", effect: { exp: 360, run_hp: -80 } } ] }
-    - { id: ab16, text: "地面积着一层薄薄的「影尘」，踩上去会印出你此刻最真实的念头化作的字。", choices: [ { text: "踩出一句真话", effect: { exp: 410, run_hp: -60 } }, { text: "扫起影尘带走", effect: { coins: 290, exp: -40 } }, { text: "擦掉别人的字迹", effect: { run_hp: -70, exp: 300 } } ] }
-    - { id: ab17, text: "一只巨大的沙漏横在路中，上半部的沙早已流尽，下半部却纹丝不动。", choices: [ { text: "倒转沙漏", effect: { exp: 520, run_hp: -210 } }, { text: "敲开底座取沙", effect: { coins: 360, run_hp: -90 } }, { text: "刻下时间继续走", effect: { exp: 260, run_hp: -25 } } ] }
-    - { id: ab18, text: "虚空中漂着一页页空白的书页，唯有一页写着半句话：「当你读到这句时……」", choices: [ { text: "续写下半句", effect: { exp: 560, run_hp: -180 } }, { text: "带走那半句", effect: { exp: 330, coins: 120 } }, { text: "吹散所有书页", effect: { exp: 250, run_hp: -50 } } ] }
-    - { id: ab19, text: "一株彼岸花开在虚无里，花与叶隔着一步永远无法相触，红得刺眼。", choices: [ { text: "摘下花朵", effect: { run_hp: 220, exp: 400, coins: -80, relic: event10 } }, { text: "连土掘起", effect: { coins: 420, run_hp: -160, exp: 150 } }, { text: "替它们挪近一步", effect: { exp: 480, run_hp: -40 } } ] }
-    - { id: ab20, text: "头顶的行星群逆着轨迹缓缓倒退，其中一颗正对着你不断变大。", choices: [ { text: "接住坠来的小行星", effect: { coins: 450, run_hp: -240 } }, { text: "计算它的落点", effect: { exp: 470, run_hp: -80 } }, { text: "躲进环形山阴影", effect: { run_hp: 75, exp: 240 } } ] }
-    - { id: ab21, text: "路边支着一顶不属于任何世界的帐篷，帘上写着「用记忆换货物」。", choices: [ { text: "用三天记忆换补给", effect: { run_hp: 260, exp: -120, coins: 150 } }, { text: "用回忆换情报", effect: { exp: 530, run_hp: -60 } }, { text: "掀帘就走", effect: { run_hp: 30, exp: 200 } } ] }
-    - { id: ab22, text: "失重的墓园里，一座座石碑缓缓自转，碑文朝向四面八方，无一相同。", choices: [ { text: "读完一百座碑", effect: { exp: 540, run_hp: -140 } }, { text: "扶正一座碑", effect: { exp: 310, run_hp: 60 } }, { text: "收集碑前供品", effect: { coins: 330, run_hp: -60, exp: -50 } } ] }
-    - { id: ab23, text: "回声聚成一具骨架的形状，学着你的动作鼓掌，节奏分毫不差。", choices: [ { text: "教它新的动作", effect: { exp: 420, run_hp: -70 } }, { text: "拆散骨架", effect: { run_hp: -90, exp: 350, coins: 100 } }, { text: "与它同步起舞", effect: { exp: 460, run_hp: 40 } } ] }
-    - { id: ab24, text: "虚空中悬着一盏深渊灯火，焰心是反的，火苗朝下燃烧，却不滴落。", choices: [ { text: "取火引燃自己的灯", effect: { exp: 490, run_hp: -80 } }, { text: "以手拢焰取暖", effect: { run_hp: 190, exp: 210, run_mp_pct: 0.4 } }, { text: "吹灭它", effect: { exp: 380, run_hp: -130 } } ] }
-    - { id: ab25, text: "空间在前方撕开一道口子，透过裂口能看到自己站在不同的岔路上。", choices: [ { text: "钻进裂口换一条路", effect: { exp: 570, run_hp: -200 } }, { text: "观察各条岔路结局", effect: { exp: 500, run_hp: -90 } }, { text: "抚平裂口", effect: { run_hp: 70, exp: 300 } } ] }
-    - { id: ab26, text: "一座天平立在路中央，左盘放着你的旧伤，右盘空着，等待等重之物。", choices: [ { text: "放上全部补给", effect: { run_hp: 300, exp: 350, coins: -200 } }, { text: "放上一截头发", effect: { run_hp: 90, exp: 430 } }, { text: "把天平掀了", effect: { exp: 440, run_hp: -150, coins: 120 } } ] }
-    - { id: ab27, text: "无名碑上没有字，只有一道新鲜的刻痕，深度与你惯用武器的口子一致。", choices: [ { text: "补刻自己的名字", effect: { exp: 580, run_hp: -170 } }, { text: "临摹那道刻痕", effect: { exp: 420, run_hp: -80 } }, { text: "推倒石碑", effect: { run_hp: -110, exp: 360, coins: 140 } } ] }
-    - { id: ab28, text: "黑洞的边缘在不远处缓缓转动，光被拉成细丝，你的身体也开始被轻轻拽长。", choices: [ { text: "再靠近一步", effect: { exp: 620, run_hp: -280 } }, { text: "锚定自身稳住重心", effect: { exp: 380, run_hp: -70 } }, { text: "掠取一圈光丝", effect: { coins: 500, run_hp: -190, exp: 200 } } ] }
-    - { id: ab29, text: "虚空中飘来一张烫金请柬，署名是「深渊」，邀你赴一场只有你一人的婚宴。", choices: [ { text: "赴宴", effect: { run_hp: 350, exp: 560, coins: -120 } }, { text: "回帖婉拒", effect: { exp: 470, run_hp: 50 } }, { text: "撕碎请柬", effect: { run_hp: -140, exp: 520 } } ] }
-    - { id: ab30, text: "终焉之门在回廊尽头合拢又张开，门缝里的光每次开合都换一种颜色。", choices: [ { text: "在它张到最大时穿过", effect: { exp: 700, run_hp: -250 } }, { text: "数够七次开合再过", effect: { exp: 520, run_hp: -100 } }, { text: "卡住门缝研究构造", effect: { coins: 480, exp: 400, run_hp: -160 } } ] }
+    # —— blessing（4）——
+    - { id: ab01, kind: blessing, text: "虚空中浮着一小团「影尘」，踩上去会印出你此刻最真实的念头。", choices: [ { text: "踩出一句真话", effect: { run_hp: 495, exp: 360 } }, { text: "扫起来收好", effect: { coins: 200 } }, { text: "绕开它", effect: { run_hp: 330 } } ] }
+    - { id: ab02, kind: blessing, text: "一段回廊意外地安静，没有低语也没有回声，只有你自己的呼吸。", choices: [ { text: "坐下休息", effect: { run_hp: 660 } }, { text: "趁机整理装备", effect: { run_hp: 330, coins: 100 } }, { text: "默数呼吸", effect: { run_hp: 330, run_mp: 12 } } ] }
+    - { id: ab03, kind: blessing, text: "半截沉船悬浮在虚空中，船舱里透着微弱但稳定的灯。", choices: [ { text: "登船取暖", effect: { run_hp: 660 } }, { text: "搜舱", effect: { coins: 200, exp: 180 } }, { text: "研究船的构造", effect: { exp: 360 } } ] }
+    - { id: ab04, kind: blessing, text: "一池静止的星光积在低洼处，掬起来会从指缝漏掉，但很暖。", choices: [ { text: "捧一掌焐手", effect: { run_hp: 660 } }, { text: "抹在伤口上", effect: { run_hp: 495, run_mp: 10 } }, { text: "观察它为什么不流走", effect: { exp: 540 } } ] }
+    # —— trade（5）——
+    - { id: ab05, kind: trade, text: "一个和你一模一样的影子从墙里走出，摊开手心：左手金币，右手旧照片。", choices: [ { text: "接金币", effect: { coins: 400, run_hp: -660, exp: 180 } }, { text: "接照片", effect: { exp: 900, run_hp: -165 } }, { text: "两个都不要", effect: { run_hp: 330, exp: 540 } } ] }
+    - { id: ab06, kind: trade, text: "路边支着一顶不属于任何世界的帐篷，帘上写着「用记忆换货物」。", choices: [ { text: "用三天记忆换补给", effect: { run_hp: 825, exp: -540, coins: 200 } }, { text: "用回忆换情报", effect: { exp: 1080, run_hp: -330 } }, { text: "掀帘就走", effect: { run_hp: 165, exp: 360 } } ] }
+    - { id: ab07, kind: trade, text: "一座天平立在路中央，左盘放着你的旧伤，右盘空着，等待等重之物。", choices: [ { text: "放上全部补给", effect: { run_hp: 825, exp: 720, coins: -300 } }, { text: "放上一截头发", effect: { run_hp: 330, exp: 900 } }, { text: "把天平掀了", effect: { exp: 900, run_hp: -660, coins: 200 } } ] }
+    - { id: ab08, kind: trade, text: "深渊的低语念的全是你会说的语言，句式却错得诡异。", choices: [ { text: "跟它对答", effect: { exp: 1080, run_hp: -825 } }, { text: "默念心法过滤", effect: { run_hp: 330, exp: 540 } }, { text: "用外语骂回去", effect: { exp: 720, run_hp: -330 } } ] }
+    - { id: ab09, kind: trade, text: "锁链从虚空垂下，链环上刻着密密麻麻的小字，全是没能说出口的话。", choices: [ { text: "拉动锁链", effect: { exp: 1080, run_hp: -660 } }, { text: "读链环上的字", effect: { exp: 720, run_hp: -330 } }, { text: "解开一节带走", effect: { coins: 400, run_hp: -330, exp: 360 } } ] }
+    # —— disaster（4）——
+    - { id: ab10, kind: disaster, text: "脚下的平台忽然开始下沉，每踩一块就走低半寸，再不回头。", choices: [ { text: "全速连跳", effect: { run_hp: -660 } }, { text: "稳扎稳打", effect: { run_hp: -330, exp: 360 } }, { text: "掷绳固定", effect: { run_hp: -495, coins: -200 } } ] }
+    - { id: ab11, kind: disaster, text: "深渊的低语忽然变得清晰，在念你的名字，一遍比一遍近。", choices: [ { text: "捂住耳朵冲", effect: { run_hp: -495, run_mp: -15 } }, { text: "大声唱回来", effect: { run_hp: -660, exp: 540 } }, { text: "停下与它对视", effect: { run_hp: -825, exp: 720 } } ] }
+    - { id: ab12, kind: disaster, text: "黑太阳的日冕闪了一下，你的影子不见了。", choices: [ { text: "立刻找回来", effect: { run_hp: -495, exp: 360 } }, { text: "先适应没有影子", effect: { run_hp: -330 } }, { text: "继续走", effect: { run_hp: -660, run_mp: -10 } } ] }
+    - { id: ab13, kind: disaster, text: "空间在前方裂开一道口子，你的身体被轻轻拽长。", choices: [ { text: "锚定自身", effect: { run_hp: -495, exp: 360 } }, { text: "全力后退", effect: { run_hp: -330 } }, { text: "硬扛过去", effect: { run_hp: -825, exp: 540 } } ] }
+    # —— gamble（4）——
+    - { id: ab14, kind: gamble, text: "一轮黑太阳悬在头顶，日冕是惨白的，照不出影子。", choices: [ { text: "站到原本该有影子的地方", effect: { roll: [ { weight: 1, text: "影子回来了，还带了点东西。", effect: { coins: 400, run_hp: 330 } }, { weight: 3, text: "什么也没发生，只是眼睛酸。", effect: { run_mp: -12 } } ] } }, { text: "闭眼适应", effect: { roll: [ { weight: 1, text: "闭眼时反而看清了路。", effect: { exp: 720 } }, { weight: 2, text: "闭眼后更难辨方向。", effect: { run_hp: -330 } } ] } } ] }
+    - { id: ab15, kind: gamble, text: "一只巨大的沙漏横在路中，上半部的沙早已流尽，下半部却纹丝不动。", choices: [ { text: "倒转沙漏", effect: { roll: [ { weight: 1, text: "沙子开始流动，你感觉好些了。", effect: { run_hp: 660, run_mp: 20 } }, { weight: 2, text: "沙子开始流动，你感觉更糟。", effect: { run_hp: -825 } } ] } }, { text: "敲开底座取沙", effect: { roll: [ { weight: 1, text: "沙粒在掌心化成金。", effect: { coins: 600 } }, { weight: 2, text: "沙粒割破了手。", effect: { run_hp: -495 } } ] } } ] }
+    - { id: ab16, kind: gamble, text: "虚空中漂着一页页空白的书页，唯有一页写着半句话。", choices: [ { text: "续写下半句", effect: { roll: [ { weight: 1, text: "字迹自己接了下去，你读懂了。", effect: { exp: 1080 } }, { weight: 2, text: "墨迹晕开，什么也没留下。", effect: { run_mp: -15 } } ] } }, { text: "带走那半句", effect: { roll: [ { weight: 1, text: "书页在包里一直发烫。", effect: { coins: 300, exp: 360 } }, { weight: 2, text: "书页在半路化成了灰。", effect: {  } } ] } } ] }
+    - { id: ab17, kind: gamble, text: "回声聚成一具骨架的形状，学着你的动作鼓掌，节奏分毫不差。", choices: [ { text: "教它新的动作", effect: { roll: [ { weight: 2, text: "它学会了，还教回你一招。", effect: { exp: 720, run_hp: 330 } }, { weight: 2, text: "它学歪了，拍得你头疼。", effect: { run_mp: -15 } } ] } }, { text: "拆散骨架", effect: { roll: [ { weight: 1, text: "骨架里掉出东西。", effect: { coins: 400 } }, { weight: 2, text: "骨架散了又聚。", effect: { run_hp: -495 } } ] } } ] }
+    # —— trap（4）——
+    - { id: ab18, kind: trap, text: "虚空中悬着一盏深渊灯火，焰心是反的，火苗朝下燃烧。", choices: [ { text: "取火引燃自己的灯", effect: { exp: 720, run_hp: -660 } }, { text: "以手拢焰取暖", effect: { run_hp: 660, exp: 180 } }, { text: "吹灭它", effect: { exp: 540, run_hp: -660 } } ] }
+    - { id: ab19, kind: trap, text: "一面立在虚无里的穿衣镜，镜中的你衣着华贵、神情倨傲，开口说了句话。", choices: [ { text: "听它说什么", effect: { exp: 1080, run_hp: -990 } }, { text: "一拳打碎镜子", effect: { run_hp: -495, exp: 720, coins: 200 } }, { text: "整理衣冠后离开", effect: { run_hp: 330, exp: 540 } } ] }
+    - { id: ab20, kind: trap, text: "一株彼岸花开在虚无里，花与叶隔着一步永远无法相触。", choices: [ { text: "摘下花朵", effect: { run_hp: 660, exp: 720, coins: -200 } }, { text: "连土掘起", effect: { coins: 500, run_hp: -660, exp: 180 } }, { text: "替它们挪近一步", effect: { exp: 900, run_hp: -165 } } ] }
+    - { id: ab21, kind: trap, text: "失重的墓园里，一座座石碑缓缓自转，碑文朝向四面八方。", choices: [ { text: "读完一百座碑", effect: { exp: 1080, run_hp: -495 } }, { text: "扶正一座碑", effect: { exp: 540, run_hp: 330 } }, { text: "收集碑前供品", effect: { coins: 400, run_hp: -330, exp: -180 } } ] }
+    # —— peril（3）——
+    - { id: ab22, kind: peril, text: "地面积着一层薄薄的影尘，踩上去会印出你此刻最真实的念头。", choices: [ { text: "踩进最深处", effect: { run_hp: -660, exp: 1080 } }, { text: "踩出一句真话", effect: { exp: 720, run_hp: -165 } }, { text: "擦掉别人的字迹", effect: { run_hp: -495, exp: 720 } } ] }
+    - { id: ab23, kind: peril, text: "黑洞的边缘在不远处缓缓转动，你的身体开始被轻轻拽长。", choices: [ { text: "再靠近一步", effect: { run_hp: -1155, exp: 1440 } }, { text: "锚定自身稳住", effect: { exp: 720, run_hp: -330 } }, { text: "掠取一圈光丝", effect: { coins: 600, run_hp: -825, exp: 360 } } ] }
+    - { id: ab24, kind: peril, text: "终焉之门在回廊尽头合拢又张开，门缝里的光每次开合都换一种颜色。", choices: [ { text: "在最大时穿过", effect: { run_hp: -1155, exp: 1440, coins: 200 } }, { text: "数够七次开合", effect: { exp: 900, run_hp: -330 } }, { text: "卡住门缝研究", effect: { coins: 500, exp: 720, run_hp: -660 } } ] }
+    # —— boon（2）——
+    - { id: ab25, kind: boon, text: "一页页空白的书页忽然齐齐转向你，像是等你写下第一句。", choices: [ { text: "写下自己的名字", effect: { exp: 1260, coins: 200 } }, { text: "只读不写", effect: { exp: 900 } }, { text: "合上它们", effect: { run_hp: 495, exp: 360 } } ] }
+    - { id: ab26, kind: boon, text: "一座天平在回廊中央自己缓缓摆动，两盘都空着。", choices: [ { text: "放上自己的一段记忆", effect: { exp: 1440, run_hp: -330 } }, { text: "看着它摆", effect: { exp: 720, run_hp: 330 } }, { text: "按住它", effect: { run_mp: 20, exp: 360 } } ] }
+    # —— flavor（4）——
+    - { id: ab27, kind: flavor, text: "回廊没有墙壁，栏杆外就是虚无，站久了会分不清上下。", choices: [ { text: "闭眼凭直觉走", effect: { exp: 72 } }, { text: "扶着栏杆慢慢走", effect: { run_hp: 66 } }, { text: "坐下适应", effect: {} } ] }
+    - { id: ab28, kind: flavor, text: "星星在「下方」组成一条河，缓缓地流。", choices: [ { text: "数一数", effect: { exp: 72 } }, { text: "伸手去够", effect: { run_hp: 66 } }, { text: "看着就好", effect: {} } ] }
+    - { id: ab29, kind: flavor, text: "无声的钟悬在空中，指针乱转，靠近时能听见自己被放大的心跳。", choices: [ { text: "听一会儿", effect: { exp: 72 } }, { text: "把手按在钟面", effect: { run_hp: 66 } }, { text: "快步走开", effect: {} } ] }
+    - { id: ab30, kind: flavor, text: "虚空中漂着一张烫金请柬，署名只有一个词：「深渊」。", choices: [ { text: "读一遍", effect: { exp: 72 } }, { text: "收进怀里", effect: { run_hp: 66 } }, { text: "任它飘走", effect: {} } ] }

@@ -2,7 +2,13 @@
 
 from typing import Any
 
-from ._common import _find_event, _load_rogue_config, _persist, _text
+from ._common import (
+    _find_event,
+    _load_rogue_config,
+    _persist,
+    _text,
+    floor_rng,
+)
 from .relics import (
     _grant_relic,
     _run_relics,
@@ -22,8 +28,57 @@ from .run_state import (
 from .tower import region_of
 
 
+def resolve_event_effect(
+    effect: dict[str, Any],
+    rng,
+) -> tuple[dict[str, Any], str]:
+    """把事件效果里的 ``roll`` 随机结果**就地解析**成确定值。
+
+    事件效果支持两种写法：
+
+    * 固定效果（旧写法，兼容）：``{ run_hp: -6, exp: 12 }``
+    * 随机效果：``roll: [ { weight: 3, effect: {...} }, { weight: 1, effect: {...} } ]``
+      —— 按权重抽**一个**分支，再与同一 dict 里的其它固定效果合并。
+
+    返回 ``(解析后的效果, 命中分支的文案)``；没有 ``roll`` 时文案为空串。
+
+    随机源由调用方给（``floor_rng(seed, floor, "event:<id>:<n>")``），
+    保证同 seed 同层同选项可复现——重放不会抽到不同结果。
+    """
+    node = effect.get("roll")
+    if not isinstance(node, list) or not node:
+        return effect, ""
+
+    # 过滤出合法分支（必须有 effect dict），权重至少 1。
+    branches = [
+        item
+        for item in node
+        if isinstance(item, dict) and isinstance(item.get("effect"), dict)
+    ]
+    if not branches:
+        return {k: v for k, v in effect.items() if k != "roll"}, ""
+
+    weights = [max(1, int(item.get("weight", 1) or 1)) for item in branches]
+    total = sum(weights)
+    pick = rng.randrange(total)
+    chosen = branches[0]
+    for branch, weight in zip(branches, weights, strict=False):
+        pick -= weight
+        if pick < 0:
+            chosen = branch
+            break
+
+    # 合并：固定效果（去掉 roll）+ 命中分支的 effect（分支优先）。
+    merged = {k: v for k, v in effect.items() if k != "roll"}
+    merged.update(chosen.get("effect") or {})
+    return merged, str(chosen.get("text") or "")
+
+
 def _choice_effect_note(effect: dict[str, Any]) -> str:
-    """事件选项效果的紧凑标注。"""
+    """事件选项效果的紧凑标注。
+
+    ``roll`` 随机效果只提示「结果不定」，不剧透具体分支——剧透会让赌局失去意义。
+    """
     parts: list[str] = []
     hp = int(effect.get("run_hp", 0))
     if hp:
@@ -46,6 +101,8 @@ def _choice_effect_note(effect: dict[str, Any]) -> str:
         note = relic_effect_note(spec.get("effect") or {})
         name = spec.get("name", str(relic_id))
         parts.append(f"获得遗物（{name}：{note}）" if note else f"获得遗物（{name}）")
+    if effect.get("roll"):
+        parts.append(_text("ev_roll_note", "结果不定"))
     return "，".join(parts) or _text("ev_no_effect", "没有效果")
 
 
@@ -149,6 +206,18 @@ async def _resolve_event(pet, rogue, cfg: dict[str, Any], number: int) -> str:
         await _persist(rogue)
 
     lines = [_text("event_result", "→ {choice}", choice=choices[number - 1]["text"])]
+
+    # 随机效果（roll）：用「本层 + 事件 + 选项」派生的独立随机源，
+    # 同 seed 同层同选项可复现，重放不会抽到不同结果。
+    if effect.get("roll"):
+        event_id = str(event.get("id") or pending.get("event_id") or "")
+        effect, roll_text = resolve_event_effect(
+            effect,
+            floor_rng(run.seed, run.floor, f"event:{event_id}:{number}"),
+        )
+        if roll_text:
+            lines.append(roll_text)
+
     coins = int(effect.get("coins", 0))
     if coins:
         run.coins = max(0, run.coins + coins)

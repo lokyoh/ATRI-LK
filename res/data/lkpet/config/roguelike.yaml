@@ -33,12 +33,34 @@ tower:
         - { name: 强盗野兔, traits: [crit], desc: 后腿蹬地的瞬间弹射，专挑膝盖与喉咙这种软处下手。, archetype: swift }
         - { name: 磷光蝶群, traits: [swarm, thin], desc: 翅膀的磷粉有毒，落在皮肤上会亮起一小片痒。, archetype: swift }
         - { name: 稻草傀儡, traits: [thick, slow], desc: 田里立了一季的稻草人自己走下来了，塞满稻壳的身体很耐打。, archetype: tank }
+        - { name: 旱地蜥, traits: [tough, slow], desc: 腹鳞擦过干土发出沙沙声，晒了一整天的石头就是它的家。, archetype: tank }
+        - { name: 落单的牧羊犬, traits: [swift, crit], desc: 项圈上还挂着半截绳子，它已经分不清谁是羊群了。, archetype: swift }
+        - { name: 麦田乌鸦群, traits: [swarm], desc: 一整片麦子忽然黑了一下，然后才听见翅膀声。, archetype: swift }
+        - { name: 鼹鼠掘工, traits: [thick], desc: 前爪像两把小铲，一晚上能把整条田埂翻过来。, archetype: tank }
+        - { name: 迷路的商队骡, traits: [strong, dull], desc: 驮货的骡子被什么吓疯了，包里的锅碗一路响。, archetype: brute }
+        - { name: 花粉团, traits: [thin, crit], desc: 一团浓得看不清的花粉，吸进去就开始打喷嚏。, archetype: caster }
+        - { name: 石磨精, traits: [tough], desc: 废弃磨坊的石盘自己转了起来，碾碎的东西没人想知道。, archetype: tank }
+        - { name: 田埂土蛇, traits: [thin, crit], desc: 藏在干草里的一截会动的东西，咬完就溜。, archetype: swift }
+        - { name: 啄谷麻雀群, traits: [swarm], desc: 落在田里像一阵灰雨，飞走时谷穗全空。, archetype: swift }
+        - { name: 流浪稻草犬, traits: [thick], desc: 用稻草和旧布缝的，跑起来掉一路草屑。, archetype: tank }
+        - { name: 暴晒南瓜怪, traits: [leech], desc: 熟过头之后裂开的东西，里面不是瓤。, archetype: tank }
+        - { name: 犁头铁虫, traits: [tough], desc: 壳硬得像犁头崩下来的铁片。, archetype: tank }
+        - { name: 野蜂后, traits: [crit], desc: 蜂群绕着她转，她自己几乎不动。, archetype: caster }
+        - { name: 干涸水鬼, traits: [fragile, leech], desc: 井干了，它还在井底等水。, archetype: caster }
+        - { name: 碎石傀儡, traits: [thick, slow], desc: 田里的碎石头攒成了人形。, archetype: tank }
+        - { name: 迷路的羊羔, traits: [thin], desc: 叫着往你这边跑，身后跟着一整片阴影。, archetype: swift }
+        - { name: 麦浪精灵, traits: [swift, crit], desc: 风一过，麦浪里就多出一道影子。, archetype: swift }
+        - { name: 蚯蚓巨怪, traits: [thick, dull], desc: 被雨水泡胀了的一截土，在泥里翻。, archetype: tank }
+        - { name: 稻草人新郎, traits: [strong], desc: 穿着不合身的礼服，手里攥着一束枯花。, archetype: brute }
+        - { name: 晚归的牧童, traits: [leech, crit], desc: 天都黑了还站在坡上，数着不该数的东西。, archetype: caster }
       rewards: { coins: 2, coins_per_floor: 1, exp: 20, exp_per_floor: 2 }
       shop: { heal_mult: 1 }
-      elites:  # 每区域 5 个精英备选（战斗路线按区域 seed 抽，遭遇次数受 elite.max_per_region 限制）
+      elites:  # 每区域 7 个精英备选（战斗路线按区域 seed 抽，遭遇次数受 elite.max_per_region 限制）
         - { name: 铁角原牛, traits: [strong], skills: [e_charge_horn], desc: 低头犁地的巨牛，一对铁角能掀翻货车。, archetype: brute }
         - { name: 疾风隼王, traits: [swift], skills: [e_dive], desc: 循风而猎的巨隼，俯冲时像一支白羽箭。, archetype: swift }
         - { name: 毒刺巨蜂, traits: [crit], skills: [e_venom_sting], desc: 尾针有小指长，振翅声像锯木头。, archetype: swift }
+        - { name: 老田鼠王, traits: [thick], skills: [e_web], desc: 肥得像一袋谷子，牙齿却能咬穿铁锹。, archetype: tank }
+        - { name: 走失的战马, traits: [strong, swift], skills: [e_roll], desc: 鞍上没人，蹄铁却还是新的。, archetype: brute }
         - { name: 断牙头狼, traits: [swarm], skills: [e_summon_wolf], desc: 狼群的王，左犬齿断了一半，从不落单。, archetype: brute }
         - { name: 禾田稻魔, traits: [thick], skills: [e_root], desc: 稻草束成的人形，夜里在田里自己走路。, archetype: tank }
     - id: forest
@@ -61,6 +83,25 @@ tower:
         - { name: 夜梟, traits: [thin, crit], desc: 无声地贴着树冠滑过，只有翅膀带起的冷风提醒你还活着。, archetype: swift }
         - { name: 蛊惑花, traits: [leech, thin], desc: 花心散发你最喜欢的气味，凑近时才发现根须已经缠上脚踝。, archetype: caster }
         - { name: 腐叶虫群, traits: [swarm], desc: 落叶底下的一层会动的东西，一脚踩下去才知道有多少只。, archetype: swift }
+        - { name: 雾苔行者, traits: [thick, slow], desc: 走得很慢，但每一步都踩在你刚才站过的地方。, archetype: tank }
+        - { name: 绣眼鬼面蛛, traits: [crit, swift], desc: 背上的花纹像一张笑脸，只是笑得位置不对。, archetype: swift }
+        - { name: 断枝麋鹿, traits: [strong], desc: 鹿角断了一半，剩下的那半挂着不属于它的东西。, archetype: brute }
+        - { name: 腐木嚎客, traits: [tough], desc: 从空心树里钻出来的声音，先听见嚎叫才看见形状。, archetype: caster }
+        - { name: 蛛卵囊, traits: [thin, thorns], desc: 半透明的卵囊挂在枝条上，里面有东西在缓慢地动。, archetype: caster }
+        - { name: 拾荒地精, traits: [crit], desc: 手里的刀是从三具尸体上拼出来的。, archetype: swift }
+        - { name: 雾中吹笛人, traits: [leech], desc: 笛声从雾里飘出来，跟着跟着就走了岔路。, archetype: caster }
+        - { name: 缠藤幼兽, traits: [tough], desc: 被藤蔓裹了一半的身体，还在试着往前扑。, archetype: tank }
+        - { name: 苔藓獾, traits: [thick], desc: 一身绿毛，钻进腐木里就再也找不出来。, archetype: tank }
+        - { name: 腐果蝇群, traits: [swarm, thin], desc: 落在烂果子上的东西，一起飞起来像一团烟。, archetype: swift }
+        - { name: 树瘤人, traits: [tough, slow], desc: 树干上鼓起的那一坨，忽然睁开了眼。, archetype: tank }
+        - { name: 迷雾走蛾, traits: [fragile, swift], desc: 翅膀上的粉在雾里发着微弱的光。, archetype: swift }
+        - { name: 寄根草, traits: [leech], desc: 根须扎在别的活物身上，慢慢把颜色抽走。, archetype: caster }
+        - { name: 断角公鹿, traits: [strong, crit], desc: 鹿角只剩一边，撞过来时整个林子都在抖。, archetype: brute }
+        - { name: 菌伞巫医, traits: [crit], desc: 伞盖下挂着一圈小瓶子，里面装的东西还在动。, archetype: caster }
+        - { name: 林间灯笼, traits: [fragile], desc: 提着自己脑袋走路的火，照到谁谁就迷路。, archetype: caster }
+        - { name: 腐尸搬运工, traits: [thick, leech], desc: 背着比自己还大的东西，走得很稳。, archetype: tank }
+        - { name: 湿苔爬行者, traits: [slow, thorns], desc: 贴在潮湿岩面上移动的一层绿。, archetype: tank }
+        - { name: 林中低语群, traits: [swarm, thin], desc: 听不清在说什么，但明显在叫你的名字。, archetype: swift }
       rewards: { coins: 5, coins_per_floor: 1, exp: 60, exp_per_floor: 4 }
       shop: { heal_mult: 2.5 }
       elites:
@@ -69,6 +110,8 @@ tower:
         - { name: 腐沼鳄, traits: [thick], skills: [e_roll], desc: 潜在浮萍之下，背脊看去只是一截烂木。, archetype: brute }
         - { name: 巨钳螳螂, traits: [swift], skills: [e_double], desc: 双臂镰刃磨得发亮，专剪经过的脖子。, archetype: swift }
         - { name: 雾隐枭人, traits: [leech], skills: [e_siphon], phase: ph_swift, desc: 半人半枭，雾越浓越难被看见。, archetype: caster }
+        - { name: 苍苔石像鬼, traits: [tough, slow], skills: [e_harden], desc: 在雨里泡了几十年，忽然想起自己是有翅膀的。, archetype: tank }
+        - { name: 瘴气鹿母, traits: [leech], skills: [e_venom_sting], desc: 呼吸带着甜腥，走近的草木都低着头。, archetype: caster }
     - id: lava
       name: 熔岩洞窟
       desc: 地面滚烫、岩浆在暗处发亮，呼吸都带着硫磺味的灼热迷宫。
@@ -89,6 +132,25 @@ tower:
         - { name: 火苗精灵, traits: [fragile], desc: 一小簇活着的火苗，呼吸就能吹得它摇晃，也最会烧人。, archetype: caster }
         - { name: 熔岩蟹, traits: [thick, tough], desc: 壳缝里嵌着冷却的岩浆，横着走过来时像一堵移动的矮墙。, archetype: tank }
         - { name: 火星蚁群, traits: [swarm], desc: 从裂缝里涌出来的一串红点，单个比指甲还小，成群时像流火。, archetype: swift }
+        - { name: 焦壳蜥, traits: [tough], desc: 皮肤像烧裂的陶，裂口里露出还在流动的东西。, archetype: tank }
+        - { name: 熔渣行者, traits: [thick, slow], desc: 半融的矿渣聚成人形，走过留下一条发亮的痕。, archetype: tank }
+        - { name: 火口雀, traits: [swift, crit], desc: 在热浪里成群盘旋，叫声像石子划过铁皮。, archetype: swift }
+        - { name: 沸泉蟹将, traits: [tough, strong], desc: 螯上覆着硫磺结晶，夹断过比它大得多的东西。, archetype: brute }
+        - { name: 灰烬僧, traits: [leech], desc: 从灰里走出来的人形，边走边把身上的灰抖向你。, archetype: caster }
+        - { name: 熔滴蛛, traits: [crit], desc: 丝是半凝固的岩浆，碰断一根就溅一脸。, archetype: caster }
+        - { name: 岩流爬虫, traits: [swift], desc: 在凝固的岩壳下面游，壳面鼓起一道会动的线。, archetype: swift }
+        - { name: 热浪幽灵, traits: [fragile, crit], desc: 看得见扭曲，看不见形状。, archetype: caster }
+        - { name: 熔渣犬, traits: [strong], desc: 毛是烧焦的，跑过的地方留下火星。, archetype: brute }
+        - { name: 硫气袋, traits: [fragile, thorns], desc: 鼓得很满，戳破就是一脸毒烟。, archetype: caster }
+        - { name: 火口蝙蝠群, traits: [swarm, swift], desc: 从洞顶扑下来的一阵热风。, archetype: swift }
+        - { name: 赤铁螳螂, traits: [crit, swift], desc: 前肢是两块淬过火的黑铁。, archetype: swift }
+        - { name: 熔岩龟, traits: [tough, slow], desc: 壳下是半凝的岩浆，走得极慢却没有破绽。, archetype: tank }
+        - { name: 灰烬祭司, traits: [leech], desc: 在灰里画圈，圈里的东西会站起来。, archetype: caster }
+        - { name: 裂石者, traits: [strong, thick], desc: 一拳能把通道打窄三尺。, archetype: brute }
+        - { name: 焦骨弓手, traits: [crit, fragile], desc: 弦是烧剩的筋，箭是它自己的骨头。, archetype: caster }
+        - { name: 火山蠕虫, traits: [thick, leech], desc: 从岩壁里钻出来，又钻回去，留下一排洞。, archetype: tank }
+        - { name: 熔金史莱姆, traits: [leech, tough], desc: 吞过太多矿物，表面浮着一层金属光。, archetype: tank }
+        - { name: 火种幼体, traits: [fragile, swarm], desc: 一小团还没长开的东西，见了风就炸。, archetype: caster }
       rewards: { coins: 10, coins_per_floor: 2, exp: 140, exp_per_floor: 7 }
       shop: { heal_mult: 5 }
       elites:
@@ -97,6 +159,8 @@ tower:
         - { name: 灰烬骑士, traits: [thick], skills: [e_quake], desc: 甲胄里空无一人，灰烬从缝隙不断漏出。, archetype: tank }
         - { name: 火山凶豚, traits: [strong], skills: [e_slam], desc: 拱起的背像一块烧红的铁砧。, archetype: brute }
         - { name: 焰翅蝠王, traits: [swarm], skills: [e_summon_bat], phase: ph_swift, desc: 翅膜上跳动着细小的火苗。, archetype: swift }
+        - { name: 熔核守卫, traits: [tough, slow], skills: [e_harden], desc: 守着一扇早就烧化的门，姿势还没变过。, archetype: tank }
+        - { name: 硫火妖僧, traits: [leech], skills: [e_siphon], desc: 念的是经文，吐出来的是火。, archetype: caster }
     - id: frost
       name: 冰封王座
       desc: 永冻的宫殿与断裂的冰桥，呼出的白霜会立刻在睫毛上结冰。
@@ -117,7 +181,25 @@ tower:
         - { name: 白熊, traits: [thick], desc: 厚膘挡刀，站起来比两个你还高，通常是被吵醒的。, archetype: brute }
         - { name: 冰面猎手, traits: [swift, crit], desc: 在镜面一样的冰上滑行，只在三步之内才让你看见它的脸。, archetype: swift }
         - { name: 冰晶螨群, traits: [swarm], desc: 冰缝里的一层白霜忽然开始移动，凑近才看清是无数只半透明的螨。, archetype: swift }
-
+        - { name: 冻骨鹿, traits: [swift, fragile], desc: 骨头外面只裹着一层薄冰，跑起来叮当作响。, archetype: swift }
+        - { name: 雪崩余骸, traits: [thick], desc: 被雪压了整冬的东西，现在自己站起来了。, archetype: tank }
+        - { name: 霜纹术士, traits: [leech], desc: 指尖划过的空气会留下白色的字，写完就冻住你。, archetype: caster }
+        - { name: 冰锥鸦群, traits: [swarm, crit], desc: 一片黑点掠过冰原，落下时带着清脆的碎裂声。, archetype: swift }
+        - { name: 冻土掘虫, traits: [tough, slow], desc: 在永冻土里挖洞的东西，牙比冰还硬。, archetype: tank }
+        - { name: 雪原游魂, traits: [fragile, swift], desc: 走在你前面，脚印却出现在你身后。, archetype: swift }
+        - { name: 冰缝潜伏者, traits: [crit, swift], desc: 只在你踩碎薄冰的那一瞬出现。, archetype: swift }
+        - { name: 冻羽鸟群, traits: [swarm, swift], desc: 翅膀一硬就掉下来，掉下来就碎。, archetype: swift }
+        - { name: 雪原狼群, traits: [swarm, strong], desc: 白毛白气，只有牙是黄的。, archetype: brute }
+        - { name: 冰甲蟹, traits: [tough, slow], desc: 壳上结着一层永远不化的霜。, archetype: tank }
+        - { name: 霜蚀僧, traits: [leech], desc: 念经时呼出的气会凝成小冰锥。, archetype: caster }
+        - { name: 冻湖食尸鱼, traits: [leech, crit], desc: 冰化开一道缝，它就伸上来半张嘴。, archetype: caster }
+        - { name: 极寒风精, traits: [swift, fragile], desc: 一股有了方向的雪沫。, archetype: swift }
+        - { name: 雪坟守卫, traits: [tough, thick], desc: 守着一座没有名字的坟，不允许任何人靠近。, archetype: tank }
+        - { name: 冰棱投手, traits: [crit, slow], desc: 掰下自己的骨头当标枪。, archetype: caster }
+        - { name: 白化巨熊, traits: [strong, thick], desc: 在雪地里完全看不见，直到它站起来。, archetype: brute }
+        - { name: 霜花寄生体, traits: [leech, thorns], desc: 开在尸体上的花，花瓣是冰做的。, archetype: caster }
+        - { name: 冻土掘手, traits: [tough], desc: 从雪下伸出来的手，抓住脚踝就不松。, archetype: tank }
+        - { name: 碎冰傀儡, traits: [fragile, thorns], desc: 拼得很粗，一碰就散，散的时候扎人。, archetype: tank }
       rewards: { coins: 18, coins_per_floor: 3, exp: 300, exp_per_floor: 12 }
       shop: { heal_mult: 9 }
       elites:
@@ -126,6 +208,8 @@ tower:
         - { name: 冻原食人魔, traits: [strong], skills: [e_maul], desc: 肩上扛着半截结冰的路牌。, archetype: brute }
         - { name: 雪腹巨蛛, traits: [swarm], skills: [e_summon_spider], desc: 白色绒毛与雪地融为一体。, archetype: brute }
         - { name: 冰镜魅影, traits: [leech], skills: [e_frost_nova], phase: ph_undying, desc: 从冰面里坐起来的另一个"你"。, archetype: caster }
+        - { name: 极寒守夜人, traits: [tough], skills: [e_harden], desc: 提着一盏早就冻灭的灯，还在按时巡夜。, archetype: tank }
+        - { name: 霜语女巫, traits: [crit], skills: [e_ice_lance], desc: 说出的每个字都在半空结成冰锥。, archetype: caster }
     - id: abyss
       name: 深渊之巅
       desc: 塔顶之上的倒悬深渊，星光从脚下坠落，连影子都会背叛你。
@@ -145,6 +229,26 @@ tower:
         - { name: 黑日鸦, traits: [crit, swift], desc: 栖在看不见的枝上，扑下的瞬间像一小块日食。, archetype: swift }
         - { name: 失重骷髅, traits: [fragile], desc: 骨头浮在身上没有重量，一推就散，但会被它重新拼回一次。, archetype: brute }
         - { name: 命运织蛛, traits: [leech, crit], desc: 把可能的结局织成网，你每一次挣扎都在帮它收紧。, archetype: caster }
+        - { name: 塔影残兵, traits: [tough], desc: 还保持着列队的姿势，只是队形已经歪了很久。, archetype: tank }
+        - { name: 星屑蠕行体, traits: [thick, slow], desc: 由无数细小光点挤成的团块，缓慢地往一个方向挪。, archetype: tank }
+        - { name: 无声钟摆, traits: [crit, fragile], desc: 摆过一次，你就少记得一件事。, archetype: caster }
+        - { name: 逆行者, traits: [swift, crit], desc: 它的方向和你相反，但脚步完全同步。, archetype: swift }
+        - { name: 空壳神像, traits: [tough, strong], desc: 供台早空了，神像还在按旧规矩收贡品。, archetype: brute }
+        - { name: 低语群, traits: [swarm, thin], desc: 一句听不清的话重复了一千遍，最后有了形状。, archetype: swift }
+        - { name: 虚空触须, traits: [leech, slow], desc: 从看不见的孔里探出来，摸到就抽走一点什么。, archetype: caster }
+        - { name: 星尘浮游体, traits: [fragile, swarm], desc: 一片散开的光点，聚起来才有形状。, archetype: caster }
+        - { name: 倒悬行者, traits: [swift, crit], desc: 头朝下走在天花板上，脚步却和你同步。, archetype: swift }
+        - { name: 深渊唱诗班, traits: [swarm, leech], desc: 合唱的声音从四面八方来，没有一个在附近。, archetype: caster }
+        - { name: 空壳骑士, traits: [tough, thick], desc: 甲胄里灌满了虚无，刀砍进去没有回响。, archetype: tank }
+        - { name: 影缝者, traits: [crit], desc: 把两个影子缝在一起，其中一个就不再是你的。, archetype: caster }
+        - { name: 坠落之星, traits: [strong, crit], desc: 还在往下掉的一块陨石，砸到哪都算你倒霉。, archetype: brute }
+        - { name: 遗忘之口, traits: [thick, leech], desc: 张开时你在想别的事，合上时你已经忘了。, archetype: tank }
+        - { name: 逆光行者, traits: [swift, fragile], desc: 逆着所有光走，所以你看不清它的正面。, archetype: swift }
+        - { name: 虚数甲虫, traits: [tough, swarm], desc: 数不清有几只，因为数到一半会重来。, archetype: tank }
+        - { name: 残响魔像, traits: [thick, slow], desc: 由无数回声压实成的块，走一步响三声。, archetype: tank }
+        - { name: 无面朝圣者, traits: [leech, crit], desc: 脸的位置是空的，里面能看见路。, archetype: caster }
+        - { name: 塔底守望者, traits: [strong, tough], desc: 从第一层就站在那儿，一直没换过姿势。, archetype: brute }
+        - { name: 沉星祭坛兽, traits: [thick, strong], desc: 趴在祭坛上的东西，祭坛早被它压塌了。, archetype: brute }
       rewards: { coins: 30, coins_per_floor: 4, exp: 560, exp_per_floor: 20 }
       shop: { heal_mult: 15 }
       elites:
@@ -153,6 +257,8 @@ tower:
         - { name: 裂魂双子, traits: [swarm], skills: [e_summon_shade], desc: 共享一具身体的两个影子，各朝一方拉扯。, archetype: swift }
         - { name: 深渊灯水母, traits: [leech], skills: [e_drain], desc: 伞盖下的光是诱饵，触须垂进虚无。, archetype: caster }
         - { name: 影噬巨口, traits: [thick], skills: [e_annihilate], phase: ph_berserk, desc: 没有身体，只有一张缓缓张开的嘴。, archetype: brute }
+        - { name: 万籁执笔人, traits: [crit], skills: [e_void_gaze], desc: 记录每个登塔者的结局，写到你时停了笔。, archetype: caster }
+        - { name: 逆时巨像, traits: [tough, slow], skills: [e_harden], desc: 每挡住一次攻击，它就年轻一分。, archetype: tank }
 
 # ===========================================================================
 # 怪物模板：**1 级基准 + 每级成长**，怪物等级 = 层号。

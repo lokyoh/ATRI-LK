@@ -306,6 +306,57 @@ def monster_trait_text(traits: list[str], cfg: dict[str, Any] | None = None) -> 
     return "，".join(labels)
 
 
+def elite_passive_name(passive_id: str) -> str:
+    """精英专属机制的展示名（``rogue.elite_passives.<id>``）。"""
+    from ...utils.texts import text
+
+    return text(f"rogue.elite_passives.{passive_id}", passive_id)
+
+
+def elite_passive_desc(passive_id: str, spec: dict[str, Any]) -> str:
+    """机制的说明文字。
+
+    文案模板放在 ``texts.yaml``（``rogue.elite_passive_desc.<id>``），**数值仍从
+    ``elite_passives`` 填进去**——这样调平衡只改 YAML 数字，文案自动跟着变，
+    不会出现「说明写 20%、实际 15%」这种两处维护的漂移。
+    """
+    from ...utils.texts import text
+
+    fields: dict[str, Any] = {
+        # pct 的语义随机制不同（抽蓝=魔力比例、蚀骨=每层防御跌幅），
+        # 所以按配置里实际存在的键取值，避免在文案层写死机制名。
+        "pct": round(
+            float(spec.get("pct", spec.get("def_per_stack", 0.0)) or 0.0) * 100
+        ),
+        "atk_pct": round(float(spec.get("atk_per_stack", 0.0) or 0.0) * 100),
+        "max": int(spec.get("max_stacks", 0) or 0),
+        "min": int(spec.get("min", 0) or 0),
+        "ticks": int(spec.get("ticks", 0) or 0),
+        "frac": round(float(spec.get("frac", 0.0) or 0.0) * 100),
+    }
+    return text(f"rogue.elite_passive_desc.{passive_id}", "", **fields)
+
+
+def elite_passive_lines(monster: dict[str, Any], cfg: dict[str, Any]) -> list[str]:
+    """精英专属机制的预告行；没有机制或 id 无效时返回空列表。"""
+    from ...utils.texts import text
+
+    passive_id = str(monster.get("passive") or "")
+    if not passive_id:
+        return []
+    spec = (cfg.get("elite_passives") or {}).get(passive_id)
+    if not isinstance(spec, dict):
+        return []
+    return [
+        text(
+            "rogue.elite_passive_line",
+            "🛡 专属机制：{name} —— {desc}",
+            name=elite_passive_name(passive_id),
+            desc=elite_passive_desc(passive_id, spec),
+        )
+    ]
+
+
 def _monster_label(monster: dict[str, Any]) -> str:
     """展示名：``名称 Lv.N（特点）``；没有特点时省略括号。
 
@@ -420,6 +471,9 @@ def _enemy_skill_lines(
     if monster.get("phase"):
         phase_ids.append(str(monster["phase"]))
     phase_ids = [pid for pid in phase_ids if pid in phase_cfg]
+    # 专属机制排在最前：它是这只精英「好不好打」的第一判断依据，
+    # 排在技能/形态前面玩家才不会被后面的细节挤掉。
+    lines.extend(elite_passive_lines(monster, cfg))
     if hint and (skill_ids or phase_ids):
         lines.append(
             text(
@@ -759,6 +813,10 @@ def _gen_monster(
         "traits": [] if boss_index is not None else traits,
         "skills": list(elite_skills),
         "phases": list(elite_phases),
+        # 精英专属机制 id（elite_passives）；小怪与首领留空。
+        # 只存 id、不展开数值：数值全部在 roguelike.yaml 的 elite_passives，
+        # 换精英只需改一个 id，不必逐只抄一遍数字。
+        "passive": str((chosen or {}).get("passive") or "") if is_elite else "",
     }
 
     # 5) 特点乘区（精英/首领在特点之前，保持「特点在倍率之前作用」的旧口径）

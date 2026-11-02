@@ -324,6 +324,19 @@ rogue:
     undying: 难杀
     volatile: 爆裂
     unstable: 崩解
+  # 精英专属机制（roguelike.yaml elite_passives 的 id → 展示词与说明）
+  # 说明里的数值由 elite_passives 填入，改平衡只需改那边的数字。
+  elite_passives:
+    rage: 受击叠怒
+    siphon: 抽蓝
+    bulwark: 护盾
+    erode: 蚀骨
+  elite_passive_desc:
+    rage: 每次被命中积一层怒气，每层攻击 +{atk_pct}%，最多 {max} 层
+    siphon: 每个回合结束抽走你 {pct}% 的魔力（至少 {min} 点）
+    bulwark: 开场带着生命上限 {pct}% 的护盾，先扣护盾再扣生命，护盾不回补
+    erode: 每个回合腐蚀你的护甲，每层防御 -{pct}%，最多 {max} 层
+  elite_passive_line: "🛡 专属机制：{name} —— {desc}"
   event_prompt: "🎲 {text}\n回复编号选择行动："
   event_result: "→ {choice}"
   event_missing: "事件丢失，继续前进。"
@@ -406,6 +419,11 @@ rogue:
   log_death_burst: "回合{round} {name} 倒下时炸开，造成 {dmg} 伤害（你剩余 {hp}）。"
   log_dot_tick: "回合{round} 持续伤害造成 {dmg} 点（你剩余 {hp}）。"
   log_dot_end: "回合{round} 持续伤害结束。"
+  # —— 精英专属机制（见 roguelike.yaml 的 elite_passives）——
+  log_passive_shield_break: "回合{round} {name} 的护盾碎裂了！"
+  log_passive_rage: "回合{round} {name} 被激怒了（攻击 +{pct}%，{stacks}/{cap} 层）。"
+  log_passive_siphon: "回合{round} {name} 抽走了你 {amount} 点魔力（剩余 {mp}）。"
+  log_passive_erode: "回合{round} {name} 的腐蚀爬上你的护甲（防御 -{pct}%，{stacks}/{cap} 层）。"
   log_debuff_end: "回合{round} 你身上的削弱效果消退。"
   log_crit: "（暴击）"
   log_over: "回合{round} 战斗在第 {max} 回合上限处中止。"

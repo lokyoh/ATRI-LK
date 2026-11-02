@@ -222,6 +222,8 @@ class BattleSession:
         # 敌方配置
         self.enemy_skills_cfg: dict[str, Any] = cfg.get("enemy_skills", {}) or {}
         self.enemy_phases_cfg: dict[str, Any] = cfg.get("enemy_phases", {}) or {}
+        # 精英专属机制：数值取自 elite_passives，单位上的 passive 字段只写 id。
+        self.elite_passives_cfg: dict[str, Any] = cfg.get("elite_passives", {}) or {}
         self._setup_enemy_mp()
 
         # 战斗单位：群怪（monster["pack"]）入场即拆成多只**独立**单位，
@@ -596,11 +598,15 @@ class BattleSession:
                             int(rec["unit"]["def"]), bool(rec["primary"])
                         )
                         dealt = max(1, round(dmg * factor))
-                        rec["unit"]["hp"] -= dealt
+                        # 护盾先吃伤害；真正落到生命上的才计打断累积
+                        # （打碎护盾不该等于「打疼了它」），而主伤害行仍报威力。
+                        hp_dealt = self._absorb_shield(rec, dealt)
+                        rec["unit"]["hp"] -= hp_dealt
                         dealt_total += dealt
                         crit_any = crit_any or is_crit
-                        self._charge_taken(rec, dealt)
+                        self._charge_taken(rec, hp_dealt)
                         self._strike_back(rec["unit"], dealt)
+                        self._unit_rage(rec)
                 if dealt_total <= 0 and dodged > 0:
                     # 全部落空：单独一条，避免出现「造成 0 伤害」这种怪句子。
                     self._blog(
@@ -676,7 +682,8 @@ class BattleSession:
                 dmg, is_crit = self._pet_damage(
                     int(target["unit"]["def"]), bool(target["primary"])
                 )
-                target["unit"]["hp"] -= dmg
+                hp_dealt = self._absorb_shield(target, dmg)
+                target["unit"]["hp"] -= hp_dealt
                 self._blog(
                     "log_attack",
                     "回合{round} {actor} 普攻，造成 {dmg} 伤害。",
@@ -684,8 +691,9 @@ class BattleSession:
                     dmg=dmg,
                 )
                 self._blog_crit(is_crit)
-                self._charge_taken(target, dmg)
+                self._charge_taken(target, hp_dealt)
                 self._strike_back(target["unit"], dmg)
+                self._unit_rage(target)
 
         self._settle_deaths()
 
@@ -737,7 +745,7 @@ class BattleSession:
         skills = self._unit_skills(unit)
         mult = self.minion_mp_mult if minion else self.primary_mp_mult
         pool = max(0, int(self.mp_base * mult))
-        return {
+        record = {
             "unit": unit,
             "primary": primary,
             "minion": minion,
@@ -762,6 +770,40 @@ class BattleSession:
             ],
             "fired": set(),
         }
+        self._init_passive(record)
+        return record
+
+    def _init_passive(self, record: dict[str, Any]) -> None:
+        """套用精英专属机制（``elite_passives``）。
+
+        ``unit["passive"]`` 只存 id，数值从配置读——这样同一套机制换区域、
+        换精英都只改一个 id，不用逐只抄一遍数字。id 写错时**静默忽略**：
+        一个手误不该让整场战斗炸掉或变成无机制（只是退化）。
+
+        护盾在入场就落地（``record["shield"]``），其余机制在各自时机触发：
+        受击叠怒在每次被命中、抽蓝在开场与回合结束、蚀骨在它的每次行动。
+        """
+        passive_id = str(record["unit"].get("passive") or "")
+        spec = self.elite_passives_cfg.get(passive_id)
+        if not isinstance(spec, dict):
+            record["passive"] = ""
+            return
+        record["passive"] = passive_id
+        if passive_id == "bulwark":
+            record["shield"] = max(
+                1, round(int(record["hp_cap"]) * float(spec.get("pct", 0.0)))
+            )
+        elif passive_id == "rage":
+            record["rage_per_stack"] = float(spec.get("atk_per_stack", 0.0) or 0.0)
+            record["rage_max"] = max(0, int(spec.get("max_stacks", 0) or 0))
+            record["rage"] = 0
+        elif passive_id == "siphon":
+            record["siphon_pct"] = float(spec.get("pct", 0.0) or 0.0)
+            record["siphon_min"] = max(0, int(spec.get("min", 0) or 0))
+        elif passive_id == "erode":
+            record["erode_per_stack"] = float(spec.get("def_per_stack", 0.0) or 0.0)
+            record["erode_max"] = max(0, int(spec.get("max_stacks", 0) or 0))
+            record["erode_stacks"] = 0
 
     @staticmethod
     def _is_pack_member(record: dict[str, Any]) -> bool:
@@ -854,6 +896,140 @@ class BattleSession:
             dmg=dmg,
             hp=self.pet_hp,
         )
+
+    # -------------------------------------------------------------------------
+    # 精英专属机制（elite_passives）
+    # -------------------------------------------------------------------------
+    #
+    # 四个机制的共同原则：**每一步都留痕**。它们存在的意义不是「偷偷变强」，
+    # 而是让玩家在战报里看到「护盾碎了 / 它被激怒了 / 蓝被抽走 / 护甲被腐蚀」，
+    # 从而复盘这场为什么打不过——所以每次触发都单独播报一行。
+
+    def _absorb_shield(self, rec: dict[str, Any], dealt: int) -> int:
+        """护盾吸收（``bulwark``），返回**真正落在生命上**的伤害。
+
+        护盾不吃治疗、不会回补，只按入场值的上限单向消耗。战报里主伤害行仍报
+        **命中威力**（``dealt``），差额由护盾行解释——否则满盾吸收会显示成
+        「造成 0 伤害」，看起来像攻击失效。
+        """
+        shield = int(rec.get("shield", 0) or 0)
+        if shield <= 0 or dealt <= 0:
+            return dealt
+        absorbed = min(shield, dealt)
+        rec["shield"] = shield - absorbed
+        if rec["shield"] <= 0 and not rec.get("shield_broken"):
+            rec["shield_broken"] = True
+            self._blog(
+                "log_passive_shield_break",
+                "回合{round} {name} 的护盾碎裂了！",
+                name=str(rec["unit"]["name"]),
+            )
+        return dealt - absorbed
+
+    def _unit_rage(self, rec: dict[str, Any]) -> None:
+        """受击叠怒（``rage``）：每次被命中 +1 层，攻击按层数线性提高。
+
+        只有**真的被打到**才叠：闪避掉的那次不算。封顶 ``max_stacks``，
+        所以最多 ``atk_per_stack × max_stacks`` 的加成。
+        """
+        per = float(rec.get("rage_per_stack", 0.0) or 0.0)
+        cap = int(rec.get("rage_max", 0) or 0)
+        if per <= 0 or cap <= 0:
+            return
+        stacks = int(rec.get("rage", 0) or 0)
+        if stacks >= cap:
+            return
+        stacks += 1
+        rec["rage"] = stacks
+        # 只在第 1 层与封顶层播报：中间层静默。否则多段/群攻技能会在一场
+        # 短战斗里刷出 5 条「被激怒」，把真正决定胜负的行挤出 10 条战报窗口。
+        if stacks != 1 and stacks < cap:
+            return
+        self._blog(
+            "log_passive_rage",
+            "回合{round} {name} 被激怒了（攻击 +{pct}%，{stacks}/{cap} 层）。",
+            name=str(rec["unit"]["name"]),
+            pct=round(per * stacks * 100),
+            stacks=stacks,
+            cap=cap,
+        )
+
+    def _passive_siphon(self) -> None:
+        """抽蓝（``siphon``）：抽走我方一部分魔力，并转成自身魔力。
+
+        触发两次：**开场一次** + 之后每个回合结束各一次。开场那次是刻意的
+        ——精英战通常只有 1 个回合（ATB 一回合 10 帧，双方各出手 4~6 次），
+        只挂在「回合结束」上的话，一场没跑满 10 帧的战斗里这条机制完全不出现，
+        玩家根本看不到「这只在抽我的蓝」。
+
+        抽多少 = 上限 × ``pct``，且不低于 ``min``；自己有多少就抽多少，
+        所以 0 蓝时不会有任何播报（避免空刷一条）。
+        """
+        if self.pet_mp <= 0:
+            return
+        for rec in self._live_units():
+            pct = float(rec.get("siphon_pct", 0.0) or 0.0)
+            if pct <= 0:
+                continue
+            want = max(int(rec.get("siphon_min", 0) or 0), round(self.mp_cap * pct))
+            steal = min(self.pet_mp, max(1, int(want)))
+            if steal <= 0:
+                continue
+            self.pet_mp -= steal
+            rec["mp"] = min(rec["mp_cap"], rec["mp"] + steal)
+            self._blog(
+                "log_passive_siphon",
+                "回合{round} {name} 抽走了你 {amount} 点魔力（剩余 {mp}）。",
+                name=str(rec["unit"]["name"]),
+                amount=steal,
+                mp=self.pet_mp,
+            )
+
+    def _passive_erode(self, rec: dict[str, Any]) -> None:
+        """蚀骨（``erode``）：它**每次行动**都腐蚀我方护甲一层，层层叠加。
+
+        挂在「它的行动」而不是「回合结束」上：精英战往往跑不满一个回合，
+        按回合结算的话这条机制大多数战斗都不会出现。按行动结算还更符合直觉
+        ——「它的每一击都带着腐蚀」。
+
+        复用 ``self.pet_debuffs`` 的**乘区**机制：每叠一层追加一条
+        ``def_mult = 1 - def_per_stack`` 的常驻条目，``_refresh_pet_mods()``
+        会把它们连乘起来，所以不需要另写一套「叠加层数」的状态。
+
+        每层 ``frames`` 给一个极大值——它**不该自然消退**，封顶只由
+        ``max_stacks`` 决定。播报只在第 1 层与封顶层，中间层静默：
+        否则一场短战斗的战报会被几条同样的「防御下降」挤满。
+        """
+        per = float(rec.get("erode_per_stack", 0.0) or 0.0)
+        cap = int(rec.get("erode_max", 0) or 0)
+        if per <= 0 or cap <= 0:
+            return
+        stacks = int(rec.get("erode_stacks", 0) or 0)
+        if stacks >= cap:
+            return
+        stacks += 1
+        rec["erode_stacks"] = stacks
+        self.pet_debuffs.append(
+            {
+                "id": f"passive:erode:{id(rec)}",
+                "frames": 10**9,
+                "rounds": 0,
+                "def_mult": max(0.0, 1.0 - per),
+            }
+        )
+        self._refresh_pet_mods()
+        if stacks == 1 or stacks >= cap:
+            # 报**累计**跌幅而不是层数 × 单层：连乘 0.85³ 实际是 -38.6%，
+            # 按 3 × 15% 报 -45% 会让玩家对不上伤害表。
+            lost = 1.0 - (1.0 - per) ** stacks
+            self._blog(
+                "log_passive_erode",
+                "回合{round} {name} 的腐蚀爬上你的护甲（防御 -{pct}%，{stacks}/{cap} 层）。",
+                name=str(rec["unit"]["name"]),
+                pct=round(lost * 100),
+                stacks=stacks,
+                cap=cap,
+            )
 
     def _unit_leech(
         self, rec: dict[str, Any], dealt: int, ratio: float | None = None
@@ -1076,6 +1252,7 @@ class BattleSession:
                     int(unit["atk"]),
                     multiplier=power / BASE_SKILL_POWER,
                     crit_rate=rate,
+                    rec=rec,
                 )
                 self.pet_hp -= dmg
                 dealt += dmg
@@ -1196,12 +1373,14 @@ class BattleSession:
         *,
         multiplier: float = 1.0,
         crit_rate: float = 0.0,
+        rec: dict[str, Any] | None = None,
     ) -> int:
         """敌方打到我方的单次伤害（统一口径，含等级承伤乘区）。
 
         敌方普攻与技能都走这里：基础伤害 → 技能/多段威力系数 → 暴击 →
         **等级承伤乘区**（``level_taken_mult``，等级低于该层期望等级时 > 1，
-        即挨得更痛）。集中一处避免两条路径的乘区口径分叉。
+        即挨得更痛）→ **受击叠怒**（``rage`` 层数加成）。集中一处避免两条
+        路径的乘区口径分叉。
         """
         dmg = _damage(
             int(atk),
@@ -1214,6 +1393,11 @@ class BattleSession:
         if crit_rate > 0 and self.rng.random() < crit_rate:
             dmg = max(1, round(dmg * self.crit_mult))
         dmg = max(1, round(dmg * self.level_taken_mult))
+        if rec is not None:
+            stacks = int(rec.get("rage", 0) or 0)
+            per = float(rec.get("rage_per_stack", 0.0) or 0.0)
+            if stacks > 0 and per > 0:
+                dmg = max(1, round(dmg * (1.0 + stacks * per)))
         return dmg
 
     def _enemy_plain(self, rec: dict[str, Any]) -> None:
@@ -1227,7 +1411,7 @@ class BattleSession:
             if self.pet_hp <= 0 or unit["hp"] <= 0:
                 break
             dmg = self._enemy_damage_to_pet(
-                int(unit["atk"]), multiplier=strike_mult, crit_rate=rate
+                int(unit["atk"]), multiplier=strike_mult, crit_rate=rate, rec=rec
             )
             self.pet_hp -= dmg
             dealt += dmg
@@ -1241,6 +1425,8 @@ class BattleSession:
 
     def _enemy_action(self, rec: dict[str, Any]) -> None:
         """敌方行动。"""
+        # 「蚀骨」挂在它的**每次行动**上（含蓄力那一次）：一次出手剥一层护甲。
+        self._passive_erode(rec)
         charge = rec["charge"]
         if charge is not None:
             charge["left"] -= 1
@@ -1307,6 +1493,9 @@ class BattleSession:
         循环与 ``max_rounds`` 上限按**内部帧**计（`battle.max_frames`），
         ``BattleResult.rounds`` 回报的是**对外回合**。
         """
+        # 战斗开场：先结算一次「抽蓝」。精英战常常跑不满一个回合，只挂在
+        # 回合结束上的话这条机制在短战斗里完全不出现（见 _passive_siphon）。
+        self._passive_siphon()
         while (
             self.frames < self.max_frames
             and self.pet_hp > 0
@@ -1452,6 +1641,9 @@ class BattleSession:
             # 敌方再生（monster_traits 的 regen_pct）：按回合结算，
             # 因为它本来就是「随时间回复」而非「按出手次数回复」。
             self._unit_regen()
+            # 精英专属机制「抽蓝」：同样按回合结算，紧跟在双方回蓝之后，
+            # 所以同一个回合里玩家看到的是「先回一点、又被抽走一截」。
+            self._passive_siphon()
 
         # —— 削弱消退：每个 debuff **各自**从施加时起累积帧 ——
         # 与冷却同样的理由：旧写法挂在「回合末」，施加减益后一跨过回合边界

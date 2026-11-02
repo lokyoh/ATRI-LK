@@ -225,7 +225,17 @@ def _pick_enemy_indices(
 
 
 def _apply_monster_traits(monster: dict[str, Any], cfg: dict[str, Any]) -> None:
-    """按 monster['traits'] 应用特点的数值乘区与行为参数（就地修改）。"""
+    """按 monster['traits'] 应用特点的数值乘区与行为参数（就地修改）。
+
+    数值乘区：``{stat}_mult``（hp/atk/def/spd）。
+    行为参数：逐项复制到 monster 上，供战斗引擎读取——
+
+    * ``crit_rate`` / ``leech`` / ``thorns`` —— 已有的静态行为；
+    * ``dodge`` —— 闪避率（0~1）：我方对它的每次命中都有这个概率落空；
+    * ``regen_pct`` —— 每回合回复自身生命上限的比例（0~1）；
+    * ``death_burst`` —— 被击倒时对我方造成的伤害 = 自身攻击 × 本值；
+    * ``pack`` —— 群怪拆分规格（不直接复制，由 _split_pack 处理）。
+    """
     trait_defs = cfg.get("monster_traits") or {}
     for trait_id in monster.get("traits") or []:
         trait = trait_defs.get(trait_id)
@@ -235,7 +245,14 @@ def _apply_monster_traits(monster: dict[str, Any], cfg: dict[str, Any]) -> None:
             mult = trait.get(f"{stat}_mult")
             if mult:
                 monster[stat] = max(1, round(monster[stat] * float(mult)))
-        for key in ("crit_rate", "leech", "thorns"):
+        for key in (
+            "crit_rate",
+            "leech",
+            "thorns",
+            "dodge",
+            "regen_pct",
+            "death_burst",
+        ):
             if key in trait:
                 monster[key] = trait[key]
         # pack 只登记规格，真正的拆分放到精英倍率之后（见 _gen_monster），

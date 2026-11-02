@@ -582,10 +582,16 @@ class BattleSession:
                 strikes = max(1, int(skill.get("strikes", 1) or 1))
                 dealt_total = 0
                 crit_any = False
+                dodged = 0
                 for rec in targets:
                     for _ in range(strikes):
                         if rec["unit"]["hp"] <= 0:
                             break
+                        # 闪避：每次命中独立判定，落空则本次不造成伤害
+                        # （不计入打断累积、也不触发棘刺反弹）。
+                        if self._dodged(rec):
+                            dodged += 1
+                            continue
                         dmg, is_crit = self._pet_damage(
                             int(rec["unit"]["def"]), bool(rec["primary"])
                         )
@@ -595,7 +601,15 @@ class BattleSession:
                         crit_any = crit_any or is_crit
                         self._charge_taken(rec, dealt)
                         self._strike_back(rec["unit"], dealt)
-                if is_aoe:
+                if dealt_total <= 0 and dodged > 0:
+                    # 全部落空：单独一条，避免出现「造成 0 伤害」这种怪句子。
+                    self._blog(
+                        "log_dodged_all",
+                        "回合{round} {actor} 使用【{skill}】，但被对手闪开了。",
+                        actor=self.pet.name,
+                        skill=str(skill.get("name") or skill_id),
+                    )
+                elif is_aoe:
                     self._blog(
                         "log_skill_aoe",
                         "回合{round} {actor} 使用【{skill}】，"
@@ -652,25 +666,41 @@ class BattleSession:
 
         # 普攻
         if not acted:
-            dmg, is_crit = self._pet_damage(
-                int(target["unit"]["def"]), bool(target["primary"])
-            )
-            target["unit"]["hp"] -= dmg
-            self._blog(
-                "log_attack",
-                "回合{round} {actor} 普攻，造成 {dmg} 伤害。",
-                actor=self.pet.name,
-                dmg=dmg,
-            )
-            self._blog_crit(is_crit)
-            self._charge_taken(target, dmg)
-            self._strike_back(target["unit"], dmg)
+            if self._dodged(target):
+                self._blog(
+                    "log_attack_dodged",
+                    "回合{round} {actor} 普攻，被对手闪开了。",
+                    actor=self.pet.name,
+                )
+            else:
+                dmg, is_crit = self._pet_damage(
+                    int(target["unit"]["def"]), bool(target["primary"])
+                )
+                target["unit"]["hp"] -= dmg
+                self._blog(
+                    "log_attack",
+                    "回合{round} {actor} 普攻，造成 {dmg} 伤害。",
+                    actor=self.pet.name,
+                    dmg=dmg,
+                )
+                self._blog_crit(is_crit)
+                self._charge_taken(target, dmg)
+                self._strike_back(target["unit"], dmg)
 
         self._settle_deaths()
 
     # -------------------------------------------------------------------------
     # 敌方侧
     # -------------------------------------------------------------------------
+
+    def _dodged(self, rec: dict[str, Any]) -> bool:
+        """目标是否闪开了这一次命中（``monster_traits`` 的 ``dodge``）。
+
+        每次命中独立判定，与暴击判定互不影响。闪避成功时本次不造成伤害，
+        也不计打断累积、不触发棘刺反弹——它根本没打到。
+        """
+        rate = float(rec["unit"].get("dodge", 0.0) or 0.0)
+        return rate > 0 and self.rng.random() < rate
 
     def _cooldown_frames(self, skill: dict[str, Any]) -> int:
         """技能的冷却时长（换算成**帧**）。
@@ -778,6 +808,52 @@ class BattleSession:
                     "回合{round} {name} 被击倒。",
                     name=str(record["unit"]["name"]),
                 )
+                self._death_burst(record)
+
+    def _unit_regen(self) -> None:
+        """敌方每回合再生（``monster_traits`` 的 ``regen_pct``）。
+
+        回复量 = **自身生命上限** × ``regen_pct``（不是当前生命，避免低血时
+        回复量骤减到没有意义），封顶上限。按回合结算，不按出手次数。
+        """
+        for rec in self._live_units():
+            pct = float(rec["unit"].get("regen_pct", 0.0) or 0.0)
+            if pct <= 0:
+                continue
+            unit = rec["unit"]
+            heal = min(
+                max(0, round(int(rec["hp_cap"]) * pct)),
+                max(0, int(rec["hp_cap"]) - int(unit["hp"])),
+            )
+            if heal <= 0:
+                continue
+            unit["hp"] += heal
+            self._blog(
+                "log_enemy_regen",
+                "回合{round} {name} 正在愈合，回复 {heal} 点生命。",
+                name=str(unit["name"]),
+                heal=heal,
+            )
+
+    def _death_burst(self, rec: dict[str, Any]) -> None:
+        """死亡爆炸（``monster_traits`` 的 ``death_burst``）。
+
+        被击倒时对我方造成 ``自身攻击 × death_burst`` 的伤害。**不致死**：
+        最多把我方压到 1 血，与 DoT / 棘刺同一口径——否则「赢了却被尸体炸死」
+        会让战斗结果变得不可理解。
+        """
+        ratio = float(rec["unit"].get("death_burst", 0.0) or 0.0)
+        if ratio <= 0 or self.pet_hp <= 0:
+            return
+        dmg = max(1, round(int(rec["unit"]["atk"]) * ratio))
+        self.pet_hp = max(1, self.pet_hp - dmg)
+        self._blog(
+            "log_death_burst",
+            "回合{round} {name} 倒下时炸开，造成 {dmg} 伤害（你剩余 {hp}）。",
+            name=str(rec["unit"]["name"]),
+            dmg=dmg,
+            hp=self.pet_hp,
+        )
 
     def _unit_leech(
         self, rec: dict[str, Any], dealt: int, ratio: float | None = None
@@ -1365,7 +1441,7 @@ class BattleSession:
                 if rec["cd"][skill_id] > 0:
                     rec["cd"][skill_id] -= 1
 
-        # —— 计时条：满 100 = 一个回合结束（只做回蓝）——
+        # —— 计时条：满 100 = 一个回合结束（回蓝 + 敌方回血）——
         self.battle_timer += self.timer_gain
         if self.battle_timer >= 100.0:
             self.battle_timer -= 100.0
@@ -1373,6 +1449,9 @@ class BattleSession:
             self._regen_turn_mp()
             for rec in self._live_units():
                 rec["mp"] = min(rec["mp_cap"], rec["mp"] + self.mp_regen)
+            # 敌方再生（monster_traits 的 regen_pct）：按回合结算，
+            # 因为它本来就是「随时间回复」而非「按出手次数回复」。
+            self._unit_regen()
 
         # —— 削弱消退：每个 debuff **各自**从施加时起累积帧 ——
         # 与冷却同样的理由：旧写法挂在「回合末」，施加减益后一跨过回合边界

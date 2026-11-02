@@ -318,6 +318,12 @@ rogue:
     crit: 高暴击
     leech: 吸血
     thorns: 棘刺
+    dodgy: 灵巧
+    evasive: 飘忽
+    regen: 自愈
+    undying: 难杀
+    volatile: 爆裂
+    unstable: 崩解
   event_prompt: "🎲 {text}\n回复编号选择行动："
   event_result: "→ {choice}"
   event_missing: "事件丢失，继续前进。"
@@ -393,6 +399,11 @@ rogue:
   log_slain: "回合{round} {name} 被击倒。"
   log_leech: "回合{round} {actor} 吸血回复 {heal} 点。"
   log_thorns: "回合{round} 棘刺反弹 {dmg} 点伤害。"
+  # —— 怪物动态机制（见 roguelike.yaml 的 monster_traits：dodge / regen_pct / death_burst）——
+  log_dodged_all: "回合{round} {actor} 使用【{skill}】，但被对手闪开了。"
+  log_attack_dodged: "回合{round} {actor} 普攻，被对手闪开了。"
+  log_enemy_regen: "回合{round} {name} 正在愈合，回复 {heal} 点生命。"
+  log_death_burst: "回合{round} {name} 倒下时炸开，造成 {dmg} 伤害（你剩余 {hp}）。"
   log_dot_tick: "回合{round} 持续伤害造成 {dmg} 点（你剩余 {hp}）。"
   log_dot_end: "回合{round} 持续伤害结束。"
   log_debuff_end: "回合{round} 你身上的削弱效果消退。"

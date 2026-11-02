@@ -362,7 +362,7 @@ rogue:
   enemy_skills: "📜 {monster} 专属技能：{skills}"
   enemy_phases: "🌀 形态：{phases}"
   skill_item: "{name}（{note}）"
-  skill_note_charge: "蓄力 {rounds} 回合，累积伤害可打断"
+  skill_note_charge: "蓄力 {rounds} 次行动，累积伤害可打断"
   skill_note_summon: "召唤 {count} 只"
   skill_note_heal: "自我回复"
   skill_note_buff: "自我强化"

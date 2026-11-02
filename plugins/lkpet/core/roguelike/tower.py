@@ -358,7 +358,7 @@ def _enemy_skill_note(skill: dict[str, Any]) -> str:
         parts.append(
             text(
                 "rogue.skill_note_charge",
-                "蓄力 {rounds} 回合，累积伤害可打断",
+                "蓄力 {rounds} 次行动，累积伤害可打断",
                 rounds=int(skill["charge"]),
             )
         )

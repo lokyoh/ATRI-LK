@@ -405,7 +405,10 @@ battle:
 #   self_buff     自身增益乘区 { atk_mult / def_mult / spd_mult }（持续整场）
 #   debuff        削弱我方 { atk_mult / def_mult / spd_mult, rounds }（rounds 单位 = 计时条周期数）
 #   dot           我方持续伤害 { frac, rounds }：按敌方攻击力比例，每轮结算一次、不致死
-#   charge        蓄力轮数：>0 即蓄力终极技，蓄力期间可被打断
+#   charge        蓄力次数：>0 即蓄力终极技。单位是**该单位自己的行动次数**，不是帧也不是回合：
+#                 开始蓄力用掉一次行动，之后每出手一次 left-1，归零时释放。
+#                 所以速度越快的首领，同样的 charge 会用更少的帧数/回合数完成。
+#                 蓄力期间可被打断（阈值见下）。
 #   interrupt     打断阈值：判定依据是蓄力期间的**累积伤害**，而非单次伤害 —— 某单位蓄力中时，
 #                 我方对它造成的每一次伤害都会累加，累计达到 自身生命上限 × interrupt 即被打断
 #   summon        召唤 { name, desc, count, hp_mult, atk_mult, def_mult, spd_mult, skills }

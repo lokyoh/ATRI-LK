@@ -1,4 +1,5 @@
 import asyncio
+import contextlib
 import hashlib
 import importlib
 import locale
@@ -9,6 +10,7 @@ import stat
 import subprocess
 import sys
 from pathlib import Path
+from typing import ClassVar
 
 import anyio
 import httpx
@@ -74,7 +76,7 @@ def _safe_rmtree(path: Path):
             pass
 
     # 最多重试 3 次
-    for attempt in range(3):
+    for _ in range(3):
         try:
             shutil.rmtree(path, onerror=_remove_readonly)
             if not path.exists():
@@ -101,13 +103,37 @@ def _safe_rmtree(path: Path):
         pass
 
 
-def uninstall_package(path: Path):
+def _to_plugin_path(path: str | Path) -> Path:
+    """
+    把 plugin.json 里登记的插件路径统一成 ``Path``。
+
+    登记值通常是点分模块路径（``plugins.anti_effort``），也兼容文件系统路径
+    （``plugins/anti_effort``、``plugins/anti_effort.py``）。已经是 ``Path``
+    的入参原样返回，所有下游都可以安全地访问 ``.name`` / ``.suffix`` 等属性。
+    """
+    if isinstance(path, Path):
+        return path
+    raw = str(path).strip().replace("\\", "/")
+    if not raw:
+        raise PluginError("插件路径为空，无法定位插件目录")
+    if "/" in raw:
+        return Path(raw)
+    parts = raw.split(".")
+    # 点分写法末尾的 ``py`` 是文件后缀而非目录层级：plugins.coser.py
+    if len(parts) > 1 and parts[-1].lower() == "py":
+        resolved = Path(*parts[:-1])
+        return resolved.with_name(f"{resolved.name}.py")
+    return Path(*parts)
+
+
+def uninstall_package(path: str | Path):
+    path = _to_plugin_path(path)
     plugin_name = path.name
     requirements_file = path / "requirements.txt"
     if requirements_file.exists():
         try:
             log.debug(f"开始处理插件 {plugin_name} 的依赖")
-            with open(requirements_file, "r", encoding="utf-8") as f:
+            with open(requirements_file, encoding="utf-8") as f:
                 lines = f.readlines()
             pm = PackageManager()
             uninstall_packages = []
@@ -168,10 +194,8 @@ class PluginRuntimeManager:
                 if plugin_id in getattr(manager, "_searched_plugin_ids", {}):
                     del manager._searched_plugin_ids[plugin_id]
             if not manager.controlled_modules:
-                try:
+                with contextlib.suppress(ValueError):
                     nb_plugin._managers.remove(manager)
-                except ValueError:
-                    pass
 
     @staticmethod
     def resolve_plugin_name(plugin_name: str) -> str:
@@ -204,7 +228,7 @@ class PluginRuntimeManager:
 
 
 class PluginManager:
-    plugin_list = {}
+    plugin_list: ClassVar[dict] = {}
 
     @classmethod
     async def fresh_list(cls):
@@ -322,13 +346,22 @@ class PluginManager:
             await cls.remove_github_plugin(repo)
             await PluginRuntimeManager.unload_plugin(plugin_name)
             return
-        path = cls.plugin_list[plugin_name]["path"].replace(".", "/")
-        if not cls.plugin_list[plugin_name]["is_dir"]:
-            path += ".py"
-            os.remove(path)
+        raw_path = _plugin.get("path")
+        if not raw_path:
+            raise PluginError(f"插件 {plugin_name} 未登记路径信息，请手动卸载")
+        path = _to_plugin_path(raw_path)
+        if not _plugin.get("is_dir", True):
+            if path.suffix != ".py":
+                path = path.with_name(f"{path.name}.py")
+            if path.exists():
+                os.remove(path)
+            else:
+                log.warning(f"插件文件 {path} 不存在，跳过删除")
         else:
             uninstall_package(path)
-            shutil.rmtree(path)
+            _safe_rmtree(path)
+            if path.exists():
+                log.warning(f"插件目录 {path} 未能完全删除，请手动清理")
         await PluginRuntimeManager.unload_plugin(plugin_name)
         log.info(f"插件`{plugin_name}`移除成功")
 

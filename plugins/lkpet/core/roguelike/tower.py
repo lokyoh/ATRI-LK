@@ -630,6 +630,7 @@ def _gen_monster(
     is_elite = bool(elite)
     elite_skills: list[str] = []
     elite_phases: list[str] = []
+    chosen: dict[str, Any] | None = None
     if is_elite:
         epool = region.get("elites") or []
         if elite_index is None:
@@ -651,12 +652,25 @@ def _gen_monster(
     # 1) 1 级模板 + 成长 × 怪物等级（archetype 决定成长方向）
     panel = _template_panel(level, archetype, cfg, rng=None)
 
-    # 2) 区域强度档位
+    # 2) 个体特色覆盖：`stats: { hp: 1.4, atk: 0.8, ... }` 乘在模板面板上。
+    #    与 archetype 的分工——archetype 是**同类共享的成长方向**（粗粒度），
+    #    stats 是**这一只怪自己的特色**（细粒度，只影响它自己）：
+    #    「血厚但攻低」「速快但脆」「防高但慢」这类差异都用它表达。
+    #    两者可叠加：archetype 先决定曲线形状，stats 再按个体微调。
+    #    精英的 stats 取自 elites[]（chosen），普通怪取自 monsters[]（picked）。
+    source = chosen if (is_elite and chosen) else picked
+    stats_override = source.get("stats") or {}
+    for key in ("hp", "atk", "def", "spd"):
+        mult = float(stats_override.get(key, 1.0) or 1.0)
+        if mult != 1.0:
+            panel[key] = max(1, round(panel[key] * mult))
+
+    # 3) 区域强度档位
     power_mult = float(region.get("power_mult", 1.0) or 1.0)
     for key in ("hp", "atk", "def", "spd"):
         panel[key] = max(1, round(panel[key] * power_mult))
 
-    # 3) 类型（tier）倍率
+    # 4) 类型（tier）倍率
     tier_id = "boss" if boss_index is not None else ("elite" if is_elite else "normal")
     tier = tiers.get(tier_id) or {}
     for key in ("hp", "atk", "def", "spd"):
@@ -664,7 +678,7 @@ def _gen_monster(
         if mult != 1.0:
             panel[key] = max(1, round(panel[key] * mult))
 
-    # 4) 属性随机浮动（同层同种怪也有强弱差）
+    # 5) 属性随机浮动（同层同种怪也有强弱差）
     lo, hi = (tpl.get("variance") or [1.0, 1.0])[:2]
     for key in ("hp", "atk", "def", "spd"):
         panel[key] = max(1, round(panel[key] * rng.uniform(float(lo), float(hi))))

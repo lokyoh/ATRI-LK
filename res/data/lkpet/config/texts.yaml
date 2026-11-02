@@ -397,7 +397,6 @@ rogue:
   log_dot_end: "回合{round} 持续伤害结束。"
   log_debuff_end: "回合{round} 你身上的削弱效果消退。"
   log_crit: "（暴击）"
-  log_timer: "回合{round} ⏱ 计时条满：双方技能冷却 -1。"
   log_over: "回合{round} 战斗在第 {max} 回合上限处中止。"
   log_none: "（战斗过于漫长，战报已截断）"
   battle_skill_hint: "（⚠️ {monster} 会用专属技能，注意蓄力打断）"

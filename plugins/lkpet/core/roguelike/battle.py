@@ -545,7 +545,7 @@ class BattleSession:
                 if amount and self.pet_mp >= cost:
                     self.pet_mp -= cost
                     self.pet_hp = min(self.hp_max, self.pet_hp + amount)
-                    self.cooldowns[skill_id] = int(skill.get("cooldown", 0))
+                    self.cooldowns[skill_id] = self._cooldown_frames(skill)
                     increase_proficiency(
                         self.pet, skill_id, skills_config=self.skills_cfg
                     )
@@ -645,7 +645,7 @@ class BattleSession:
                         self.pet_mp = min(
                             self.mp_cap, self.pet_mp + int(effect.get("amount", 0))
                         )
-                self.cooldowns[skill_id] = int(skill.get("cooldown", 0))
+                self.cooldowns[skill_id] = self._cooldown_frames(skill)
                 increase_proficiency(self.pet, skill_id, skills_config=self.skills_cfg)
                 acted = True
                 break
@@ -671,6 +671,15 @@ class BattleSession:
     # -------------------------------------------------------------------------
     # 敌方侧
     # -------------------------------------------------------------------------
+
+    def _cooldown_frames(self, skill: dict[str, Any]) -> int:
+        """技能的冷却时长（换算成**帧**）。
+
+        配置里的 ``cooldown`` 单位仍是一个**回合**（= ``frames_per_turn`` 帧），
+        但内部记的是剩余帧数，每帧 -1——这样冷却只取决于释放时刻，
+        不会因为「刚好跨过回合边界」而白送一次 -1。
+        """
+        return int(skill.get("cooldown", 0) or 0) * self.frames_per_turn
 
     def _skill_label(self, skill: dict[str, Any], skill_id: str) -> str:
         return str(skill.get("name") or skill_id)
@@ -797,7 +806,7 @@ class BattleSession:
         skill_id = charge["skill_id"]
         skill = self.enemy_skills_cfg.get(skill_id) or {}
         rec["charge"] = None
-        rec["cd"][skill_id] = int(skill.get("cooldown", 0))
+        rec["cd"][skill_id] = self._cooldown_frames(skill)
         self._blog(
             "log_interrupt",
             "回合{round} {actor} 的【{skill}】被打断了！",
@@ -1061,9 +1070,13 @@ class BattleSession:
 
         debuff = skill.get("debuff") or {}
         if debuff:
+            rounds = max(1, int(debuff.get("rounds", 1)))
             entry: dict[str, Any] = {
                 "id": skill_id,
-                "rounds": max(1, int(debuff.get("rounds", 1))),
+                # frames = 剩余帧数。用 frames 而不是「回合末 -1」，
+                # 才能让持续时间只取决于施加时刻，与回合边界无关。
+                "frames": rounds * self.frames_per_turn,
+                "rounds": rounds,
             }
             for stat in ("atk", "def", "spd"):
                 entry[f"{stat}_mult"] = float(debuff.get(f"{stat}_mult", 1.0))
@@ -1079,11 +1092,15 @@ class BattleSession:
 
         dot = skill.get("dot") or {}
         if dot:
+            ticks = max(1, int(dot.get("rounds", 1)))
             self.dots.append(
                 {
                     "atk": int(unit["atk"]),
                     "frac": float(dot.get("frac", 0.0)),
-                    "rounds": max(1, int(dot.get("rounds", 1))),
+                    # 第一次结算在一个回合之后，之后每满一个回合结算一次。
+                    "frames": self.frames_per_turn,
+                    "ticks": ticks,
+                    "rounds": ticks,
                 }
             )
             self._blog(
@@ -1173,7 +1190,7 @@ class BattleSession:
 
         skill_id, skill = picked
         rec["mp"] = max(0, rec["mp"] - int(skill.get("mp_cost", 0)))
-        rec["cd"][skill_id] = int(skill.get("cooldown", 0))
+        rec["cd"][skill_id] = self._cooldown_frames(skill)
         charge_rounds = int(skill.get("charge", 0))
         if charge_rounds > 0:
             rec["charge"] = {
@@ -1325,30 +1342,46 @@ class BattleSession:
         return max(0.0, speed - used)
 
     def _end_of_round(self) -> None:
-        """帧末处理：计时条、冷却、持续伤害。
+        """帧末处理：冷却、计时条、削弱与持续伤害。
 
-        计时条每帧 +timer_gain，走满 100 即「一个回合结束」——回合回蓝、
-        冷却 -1、削弱/DoT 结算都挂在这里，而不是挂在某次行动上。
+        所有**有时长的效果**（技能冷却、削弱、DoT）都记「剩余帧数」并在每帧 -1，
+        而不是挂在「回合末」统一结算。原因：挂在回合末会让实际时长取决于
+        释放时刻——回合快结束时放技能，下一帧就跨过边界白送一次 -1，
+        等于可以极短时间连放；削弱同理，刚施加就掉一层。
+
+        计时条（每帧 +``timer_gain``、满 100）现在只负责两件事：
+        「回合」的对外计数，以及回蓝（我方 ``per_turn_pct`` + 敌方 ``regen``）。
         """
+        # —— 冷却：每个技能**各自**从释放那一刻起累积帧数 ——
+        # 旧写法在「回合末」统一 -1，导致「回合快结束时释放 → 下一帧计时条满
+        # → 立刻 -1」，可以在极短时间内连放。现在冷却记的是**剩余帧数**，
+        # 每帧 -1，与计时条、与其它技能的释放时机都无关。
+        if self.cooldowns:
+            for skill_id in self.cooldowns:
+                if self.cooldowns[skill_id] > 0:
+                    self.cooldowns[skill_id] -= 1
+        for rec in self._live_units():
+            for skill_id in rec["cd"]:
+                if rec["cd"][skill_id] > 0:
+                    rec["cd"][skill_id] -= 1
+
+        # —— 计时条：满 100 = 一个回合结束（只做回蓝）——
         self.battle_timer += self.timer_gain
         if self.battle_timer >= 100.0:
             self.battle_timer -= 100.0
             # 回合结束：我方回蓝（每回合一次，开局那回合不计）。
             self._regen_turn_mp()
-            # 冷却 -1
-            for skill_id in self.cooldowns:
-                if self.cooldowns[skill_id] > 0:
-                    self.cooldowns[skill_id] -= 1
             for rec in self._live_units():
-                for skill_id in rec["cd"]:
-                    if rec["cd"][skill_id] > 0:
-                        rec["cd"][skill_id] -= 1
                 rec["mp"] = min(rec["mp_cap"], rec["mp"] + self.mp_regen)
-            # 削弱消退
+
+        # —— 削弱消退：每个 debuff **各自**从施加时起累积帧 ——
+        # 与冷却同样的理由：旧写法挂在「回合末」，施加减益后一跨过回合边界
+        # 就立刻掉一层，实际持续时间取决于释放时机而非配置值。
+        if self.pet_debuffs:
             expired = []
             for entry in self.pet_debuffs:
-                entry["rounds"] -= 1
-                if entry["rounds"] <= 0:
+                entry["frames"] = int(entry.get("frames", 0)) - 1
+                if entry["frames"] <= 0:
                     expired.append(entry)
             if expired:
                 for entry in expired:
@@ -1358,8 +1391,11 @@ class BattleSession:
                     "log_debuff_end",
                     "回合{round} 你身上的削弱效果消退。",
                 )
-            # 持续伤害
-            for entry in list(self.dots):
+
+        # —— 持续伤害：同样各自累积帧，按「每满一个回合」结算一次 ——
+        for entry in list(self.dots):
+            entry["frames"] = int(entry.get("frames", 0)) - 1
+            if entry["frames"] <= 0:
                 tick = max(0, round(int(entry["atk"]) * float(entry["frac"])))
                 self.pet_hp = max(1, self.pet_hp - tick)
                 if tick > 0:
@@ -1369,14 +1405,13 @@ class BattleSession:
                         dmg=tick,
                         hp=self.pet_hp,
                     )
-                entry["rounds"] -= 1
-                if entry["rounds"] <= 0:
+                entry["ticks"] = int(entry.get("ticks", 0)) - 1
+                if entry["ticks"] <= 0:
                     self.dots.remove(entry)
                     self._blog("log_dot_end", "回合{round} 持续伤害结束。")
-            self._blog(
-                "log_timer",
-                "回合{round} ⏱ 计时条满：双方技能冷却 -1。",
-            )
+                else:
+                    entry["frames"] = self.frames_per_turn
+
         # 形态判定
         for rec in self._live_units():
             self._unit_phases(rec)

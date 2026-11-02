@@ -412,7 +412,8 @@ battle:
 #   interrupt     打断阈值：判定依据是蓄力期间的**累积伤害**，而非单次伤害 —— 某单位蓄力中时，
 #                 我方对它造成的每一次伤害都会累加，累计达到 自身生命上限 × interrupt 即被打断
 #   summon        召唤 { name, desc, count, hp_mult, atk_mult, def_mult, spd_mult, skills }
-#   cooldown      冷却（单位 = 计时条周期数，与宠物技能同口径）
+#   cooldown      冷却（单位 = 回合，与宠物技能同口径）。内部换算成帧记「剩余帧数」，
+#                 每帧 -1——所以冷却只取决于释放时刻，不会因为刚跨过回合边界就白减 1。
 #   mp_cost       消耗敌方 MP：从敌方自身蓝池（battle.enemy_mp）扣除，越贵的技能越受蓝量自然制约
 #   priority      行动优先级（数值越大越优先；同优先级比 power）
 enemy_skills:

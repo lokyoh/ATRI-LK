@@ -56,10 +56,10 @@ tower:
       rewards: { coins: 2, coins_per_floor: 1, exp: 20, exp_per_floor: 2 }
       shop: { heal_mult: 1 }
       elites:  # 每区域 7 个精英备选（战斗路线按区域 seed 抽，遭遇次数受 elite.max_per_region 限制）
-        - { name: 铁角原牛, traits: [strong], desc: 低头犁地的巨牛，一对铁角能掀翻货车。, archetype: brute, stats: { hp: 1.2, atk: 1.25, spd: 0.85 }, skills: ["e_charge_horn"], phase: ph_awaken }
+        - { name: 铁角原牛, desc: 低头犁地的巨牛，一对铁角能掀翻货车。, archetype: brute, preset: charger }
         - { name: 疾风隼王, traits: [swift], desc: 循风而猎的巨隼，俯冲时像一支白羽箭。, archetype: swift, stats: { atk: 1.15, spd: 1.35, hp: 0.85 }, skills: ["e_dive", "e_haste"] }
-        - { name: 毒刺巨蜂, traits: [crit], desc: 尾针有小指长，振翅声像锯木头。, archetype: swift, stats: { atk: 1.2, spd: 1.3, hp: 0.8 }, skills: ["e_venom_sting", "e_mirror_edge"] }
-        - { name: 老田鼠王, traits: [thick], desc: 肥得像一袋谷子，牙齿却能咬穿铁锹。, archetype: tank, stats: { hp: 1.35, def: 1.35, spd: 0.6 }, skills: ["e_web", "e_devour"], phase: ph_regen }
+        - { name: 毒刺巨蜂, desc: 尾针有小指长，振翅声像锯木头。, archetype: swift, preset: selfdestruct }
+        - { name: 老田鼠王, desc: 肥得像一袋谷子，牙齿却能咬穿铁锹。, archetype: tank, preset: undying }
         - { name: 走失的战马, traits: [strong, swift], desc: 鞍上没人，蹄铁却还是新的。, archetype: brute, stats: { hp: 1.2, atk: 1.3, spd: 1.2 }, skills: ["e_roll", "e_mirror_edge"] }
         - { name: 断牙头狼, traits: [swarm], desc: 狼群的王，左犬齿断了一半，从不落单。, archetype: brute, stats: { hp: 1.15, atk: 1.25 }, skills: ["e_summon_wolf", "e_blood_whirl"], phase: ph_frenzy }
         - { name: 禾田稻魔, traits: [thick], desc: 稻草束成的人形，夜里在田里自己走路。, archetype: tank, stats: { hp: 1.4, def: 1.3, spd: 0.35 }, skills: ["e_root", "e_plague"], phase: ph_plague }
@@ -105,13 +105,13 @@ tower:
       rewards: { coins: 5, coins_per_floor: 1, exp: 60, exp_per_floor: 4 }
       shop: { heal_mult: 2.5 }
       elites:
-        - { name: 苔皮巨熊, traits: [tough], desc: 背上生满青苔，一掌能拍断百年树干。, archetype: brute, stats: { hp: 1.4, atk: 1.35, spd: 0.5 }, skills: ["e_maul", "e_reknit"], phase: ph_bulwark }
-        - { name: 织网女巫蛛, traits: [crit], desc: 腹部的纹路像一张皱眉的人脸。, archetype: caster, stats: { atk: 1.35, hp: 0.85 }, skills: ["e_web", "e_summon_spider"], phase: ph_swarmlord }
+        - { name: 苔皮巨熊, desc: 背上生满青苔，一掌能拍断百年树干。, archetype: brute, preset: guardian }
+        - { name: 织网女巫蛛, desc: 腹部的纹路像一张皱眉的人脸。, archetype: caster, preset: summoner }
         - { name: 腐沼鳄, traits: [thick], desc: 潜在浮萍之下，背脊看去只是一截烂木。, archetype: brute, stats: { hp: 1.35, atk: 1.3, spd: 0.6 }, skills: ["e_roll", "e_devour"] }
-        - { name: 巨钳螳螂, traits: [swift], desc: 双臂镰刃磨得发亮，专剪经过的脖子。, archetype: swift, stats: { atk: 1.3, spd: 1.3, hp: 0.8 }, skills: ["e_double", "e_storm_rake"], phase: ph_frenzy }
-        - { name: 雾隐枭人, traits: [leech], desc: 半人半枭，雾越浓越难被看见。, archetype: caster, stats: { hp: 0.9, atk: 1.3, spd: 1.15 }, skills: ["e_siphon", "e_shadow_brand"], phase: ph_swift }
-        - { name: 苍苔石像鬼, traits: [tough, slow], desc: 在雨里泡了几十年，忽然想起自己是有翅膀的。, archetype: tank, stats: { hp: 1.4, def: 1.55, spd: 0.4 }, skills: ["e_harden", "e_mirror_edge"], phase: ph_bulwark }
-        - { name: 瘴气鹿母, traits: [leech], desc: 呼吸带着甜腥，走近的草木都低着头。, archetype: caster, stats: { hp: 1.1, atk: 1.3, spd: 0.95 }, skills: ["e_venom_sting", "e_corrode"], phase: ph_plague }
+        - { name: 巨钳螳螂, desc: 双臂镰刃磨得发亮，专剪经过的脖子。, archetype: swift, preset: duelist }
+        - { name: 雾隐枭人, desc: 半人半枭，雾越浓越难被看见。, archetype: caster, preset: reaper }
+        - { name: 苍苔石像鬼, desc: 在雨里泡了几十年，忽然想起自己是有翅膀的。, archetype: tank, preset: guardian }
+        - { name: 瘴气鹿母, desc: 呼吸带着甜腥，走近的草木都低着头。, archetype: caster, preset: plaguebearer }
     - id: lava
       name: 熔岩洞窟
       desc: 地面滚烫、岩浆在暗处发亮，呼吸都带着硫磺味的灼热迷宫。
@@ -155,12 +155,12 @@ tower:
       shop: { heal_mult: 5 }
       elites:
         - { name: 赤甲火蝎, traits: [tough], desc: 尾钩滴落的毒液在石头上烧出小洞。, archetype: tank, stats: { hp: 1.15, def: 1.5, spd: 0.7 }, skills: ["e_crit_stab", "e_inferno_mark"] }
-        - { name: 熔岩蟒, traits: [leech], desc: 体内流动着岩浆，爬过的地方留下火痕。, archetype: brute, stats: { hp: 1.35, atk: 1.35, spd: 0.75 }, skills: ["e_maul", "e_devour"], phase: ph_regen }
+        - { name: 熔岩蟒, desc: 体内流动着岩浆，爬过的地方留下火痕。, archetype: brute, preset: undying }
         - { name: 灰烬骑士, traits: [thick], desc: 甲胄里空无一人，灰烬从缝隙不断漏出。, archetype: tank, stats: { hp: 1.45, def: 1.4, spd: 0.55 }, skills: ["e_quake", "e_harden"], phase: ph_awaken }
         - { name: 火山凶豚, traits: [strong], desc: 拱起的背像一块烧红的铁砧。, archetype: brute, stats: { hp: 1.25, atk: 1.4, spd: 0.9 }, skills: ["e_slam", "e_charge_horn", "e_phoenix"], phase: ph_berserk }
         - { name: 焰翅蝠王, traits: [swarm], desc: 翅膜上跳动着细小的火苗。, archetype: swift, stats: { atk: 1.3, spd: 1.35, hp: 0.85 }, skills: ["e_summon_bat", "e_blood_whirl"], phase: ph_swift }
-        - { name: 熔核守卫, traits: [tough, slow], desc: 守着一扇早就烧化的门，姿势还没变过。, archetype: tank, stats: { hp: 1.5, def: 1.5, spd: 0.4 }, skills: ["e_harden", "e_reknit"], phase: ph_bulwark }
-        - { name: 硫火妖僧, traits: [leech], desc: 念的是经文，吐出来的是火。, archetype: caster, stats: { hp: 0.9, atk: 1.35, spd: 1.05 }, skills: ["e_siphon", "e_soul_burn"], phase: ph_plague }
+        - { name: 熔核守卫, desc: 守着一扇早就烧化的门，姿势还没变过。, archetype: tank, preset: juggernaut }
+        - { name: 硫火妖僧, desc: 念的是经文，吐出来的是火。, archetype: caster, preset: plaguebearer }
     - id: frost
       name: 冰封王座
       desc: 永冻的宫殿与断裂的冰桥，呼出的白霜会立刻在睫毛上结冰。
@@ -204,11 +204,11 @@ tower:
       shop: { heal_mult: 9 }
       elites:
         - { name: 冰棘猛犸, traits: [thorns], desc: 象牙结满冰棱，吼一声能冻住呼吸。, archetype: tank, stats: { hp: 1.5, def: 1.45, spd: 0.45 }, skills: ["e_quake", "e_frost_bind"], phase: ph_bulwark }
-        - { name: 霜翼巨鹰, traits: [swift], desc: 爪下抓着整块浮冰在空中巡弋。, archetype: swift, stats: { atk: 1.25, spd: 1.35, hp: 0.85 }, skills: ["e_ice_lance", "e_storm_rake"], phase: ph_swift }
+        - { name: 霜翼巨鹰, desc: 爪下抓着整块浮冰在空中巡弋。, archetype: swift, preset: duelist }
         - { name: 冻原食人魔, traits: [strong], desc: 肩上扛着半截结冰的路牌。, archetype: brute, stats: { hp: 1.45, atk: 1.4, spd: 0.6 }, skills: ["e_maul", "e_blood_whirl"], phase: ph_berserk }
-        - { name: 雪腹巨蛛, traits: [swarm], desc: 白色绒毛与雪地融为一体。, archetype: brute, stats: { hp: 1.25, atk: 1.25, spd: 0.9 }, skills: ["e_summon_spider", "e_frost_bind"], phase: ph_swarmlord }
-        - { name: 冰镜魅影, traits: [leech], desc: 从冰面里坐起来的另一个"你"。, archetype: caster, stats: { hp: 0.9, atk: 1.3, def: 1.3 }, skills: ["e_frost_nova", "e_mirror_edge"], phase: ph_undying }
-        - { name: 极寒守夜人, traits: [tough], desc: 提着一盏早就冻灭的灯，还在按时巡夜。, archetype: tank, stats: { hp: 1.35, def: 1.45, spd: 0.55 }, skills: ["e_harden", "e_reknit"], phase: ph_regen }
+        - { name: 雪腹巨蛛, traits: [swarm], desc: 白色绒毛与雪地融为一体。, archetype: brute, preset: summoner }
+        - { name: 冰镜魅影, desc: 从冰面里坐起来的另一个"你"。, archetype: caster, preset: evasive }
+        - { name: 极寒守夜人, desc: 提着一盏早就冻灭的灯，还在按时巡夜。, archetype: tank, preset: undying }
         - { name: 霜语女巫, traits: [crit], desc: 说出的每个字都在半空结成冰锥。, archetype: caster, stats: { hp: 0.85, atk: 1.4, spd: 1.05 }, skills: ["e_ice_lance", "e_frost_bind"], phase: ph_awaken }
     - id: abyss
       name: 深渊之巅
@@ -253,12 +253,12 @@ tower:
       shop: { heal_mult: 15 }
       elites:
         - { name: 虚空之眼, traits: [crit], desc: 悬浮的巨眼，瞳孔里倒转着星光。, archetype: caster, stats: { hp: 0.9, atk: 1.4 }, skills: ["e_void_gaze", "e_mana_burn"], phase: ph_awaken }
-        - { name: 星坠猎犬, traits: [swift], desc: 由陨屑拼成的猎犬，奔跑时拖出火尾。, archetype: swift, stats: { atk: 1.3, spd: 1.35, hp: 0.85 }, skills: ["e_meteor", "e_storm_rake"], phase: ph_frenzy }
-        - { name: 裂魂双子, traits: [swarm], desc: 共享一具身体的两个影子，各朝一方拉扯。, archetype: swift, stats: { atk: 1.25, spd: 1.3, hp: 0.85 }, skills: ["e_summon_shade", "e_shadow_brand"], phase: ph_necro }
-        - { name: 深渊灯水母, traits: [leech], desc: 伞盖下的光是诱饵，触须垂进虚无。, archetype: caster, stats: { hp: 1.1, atk: 1.35 }, skills: ["e_drain", "e_corrode"], phase: ph_plague }
+        - { name: 星坠猎犬, desc: 由陨屑拼成的猎犬，奔跑时拖出火尾。, archetype: swift, preset: evasive }
+        - { name: 裂魂双子, desc: 共享一具身体的两个影子，各朝一方拉扯。, archetype: swift, preset: necromancer }
+        - { name: 深渊灯水母, desc: 伞盖下的光是诱饵，触须垂进虚无。, archetype: caster, preset: plaguebearer }
         - { name: 影噬巨口, traits: [thick], desc: 没有身体，只有一张缓缓张开的嘴。, archetype: brute, stats: { hp: 1.55, atk: 1.4, def: 1.2, spd: 0.5 }, skills: ["e_annihilate", "e_devour"], phase: ph_berserk }
         - { name: 万籁执笔人, traits: [crit], desc: 记录每个登塔者的结局，写到你时停了笔。, archetype: caster, stats: { hp: 0.85, atk: 1.35 }, skills: ["e_void_gaze", "e_oblivion"], phase: ph_last }
-        - { name: 逆时巨像, traits: [tough, slow], desc: 每挡住一次攻击，它就年轻一分。, archetype: tank, stats: { hp: 1.55, def: 1.5, spd: 0.35 }, skills: ["e_harden", "e_cataclysm"], phase: ph_bulwark }
+        - { name: 逆时巨像, desc: 每挡住一次攻击，它就年轻一分。, archetype: tank, preset: juggernaut }
 
 # ===========================================================================
 # 怪物模板：**1 级基准 + 每级成长**，怪物等级 = 层号。
@@ -283,6 +283,105 @@ tower:
 # 怪物实例 = 1级模板 × archetype 成长方向 × **stats 个体特色**
 #          × 区域 power_mult × tier 倍率 × 特点 traits × ±variance
 # ===========================================================================
+
+# ===========================================================================
+# 精英预设：把「traits + skills + phase + stats」打包成一套可复用的模板。
+#
+# 精英条目现在动辄四五个字段，同一类战斗定位（狂暴型、守护型、召唤型…）
+# 反复出现。预设让精英写成：
+#
+#   - { name: 狂暴野猪, preset: berserker, desc: "...", archetype: brute }
+#
+# **合并规则**（后者覆盖前者）：
+#   1. 先取 preset 里的 traits / skills / phase / stats；
+#   2. 再用条目自己写的同名字段**整体覆盖**（不是追加，避免「预设 2 技能 +
+#      条目 2 技能」变成 4 技能这种意外）；
+#   3. archetype / name / desc 不受预设影响，永远以条目为准。
+# ===========================================================================
+monster_presets:
+  # —— 输出型 ——
+  berserker:    # 狂暴：攻高皮薄，越打越凶
+    name: 狂暴
+    traits: [strong, fragile]
+    skills: [e_rage, e_blood_whirl]
+    phase: ph_frenzy
+    stats: { atk: 1.35, def: 0.8, hp: 0.95 }
+  duelist:      # 决斗者：高暴击多段，靠连续命中压制
+    name: 决斗
+    traits: [crit, swift]
+    skills: [e_mirror_edge, e_haste]
+    phase: ph_swift
+    stats: { atk: 1.2, spd: 1.2, hp: 0.9 }
+  reaper:       # 收割者：吸血 + 裂魂，越拖回得越多
+    name: 收割
+    traits: [leech, crit]
+    skills: [e_soul_reap, e_shadow_brand]
+    phase: ph_frenzy
+    stats: { atk: 1.25, hp: 1.05 }
+  # —— 防守型 ——
+  guardian:     # 守护者：血厚防高，转阶段自我修复
+    name: 守护
+    traits: [tough, thick]
+    skills: [e_harden, e_reknit]
+    phase: ph_bulwark
+    stats: { hp: 1.4, def: 1.5, spd: 0.6 }
+  juggernaut:   # 重装：极慢极硬，一记蓄力
+    name: 重装
+    traits: [thick, slow]
+    skills: [e_cataclysm, e_harden]
+    phase: ph_bulwark
+    stats: { hp: 1.5, def: 1.4, atk: 1.15, spd: 0.4 }
+  undying:      # 不死：持续自愈，必须速杀
+    name: 不死
+    traits: [regen, tough]
+    skills: [e_reknit, e_devour]
+    phase: ph_regen
+    stats: { hp: 1.35, def: 1.2, spd: 0.75 }
+  # —— 机制型 ——
+  summoner:     # 召唤者：靠援军拖时间
+    name: 召唤
+    traits: [thick]
+    skills: [e_summon_spider, e_summon_bat]
+    phase: ph_swarmlord
+    stats: { hp: 1.2, atk: 0.9, spd: 0.85 }
+  necromancer:  # 招魂者：召分身 + 影袭
+    name: 招魂
+    traits: [leech]
+    skills: [e_summon_shade, e_shadow_raid]
+    phase: ph_necro
+    stats: { hp: 1.1, atk: 1.15 }
+  plaguebearer: # 瘟疫携带者：DoT 叠满
+    name: 瘟疫
+    traits: [leech, thin]
+    skills: [e_plague, e_corrode]
+    phase: ph_plague
+    stats: { hp: 1.15, atk: 1.1, spd: 0.95 }
+  # —— 特殊型 ——
+  evasive:      # 飘忽：高闪避 + 多段
+    name: 飘忽
+    traits: [evasive, swift]
+    skills: [e_storm_rake, e_haste]
+    phase: ph_swift
+    stats: { hp: 0.85, spd: 1.35, def: 0.8 }
+  selfdestruct: # 自爆：死后炸一下，血薄
+    name: 自爆
+    traits: [unstable, fragile]
+    skills: [e_inferno_mark, e_mirror_edge]
+    phase: ph_last
+    stats: { hp: 0.75, atk: 1.3, spd: 1.1 }
+  frostbinder:  # 缚霜者：减速控场
+    name: 缚霜
+    traits: [tough, slow]
+    skills: [e_frost_bind, e_frost_nova]
+    phase: ph_bulwark
+    stats: { hp: 1.25, def: 1.3, atk: 1.05 }
+  charger:      # 冲锋者：蓄力撞击
+    name: 冲锋
+    traits: [strong]
+    skills: [e_charge_horn, e_slam]
+    phase: ph_awaken
+    stats: { hp: 1.2, atk: 1.3, def: 1.1 }
+
 monster_templates:
   # 1 级基准：略低于 1 级宠物（hp101/atk13/def11/spd12），因为小怪常成群出现。
   base: { hp: 44, atk: 7, def: 4, spd: 9 }

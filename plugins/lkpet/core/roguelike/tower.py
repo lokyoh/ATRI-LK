@@ -593,6 +593,43 @@ def _apply_elite_fight(
     return monster
 
 
+def _apply_preset(spec: dict[str, Any], cfg: dict[str, Any]) -> dict[str, Any]:
+    """把条目里的 ``preset`` 展开成实际字段，返回合并后的新 dict。
+
+    合并规则（后者覆盖前者，覆盖是**整体替换**而非追加）：
+
+    1. 先取 ``monster_presets[preset]`` 的 ``traits / skills / phase / stats``；
+    2. 再用条目自己写的同名字段覆盖——所以「预设自带 2 个技能、条目又写
+       ``skills: [x]``」的结果是只有 ``[x]``，不会变成 3 个技能；
+    3. ``name / desc / archetype`` 永远以条目为准（预设只是战斗定位模板）。
+
+    没有 ``preset`` 字段时原样返回（浅拷贝，避免调用方误改配置）。
+    """
+    preset_id = spec.get("preset")
+    if not preset_id:
+        return dict(spec)
+
+    presets = cfg.get("monster_presets") or {}
+    preset = presets.get(str(preset_id))
+    if not isinstance(preset, dict):
+        # 预设 id 写错时不要让整场战斗失败：退化为按条目本身生成。
+        return dict(spec)
+
+    merged: dict[str, Any] = {
+        key: value
+        for key, value in preset.items()
+        if key in ("traits", "skills", "phase", "stats")
+    }
+    for key, value in spec.items():
+        if key in ("traits", "skills", "phase", "stats"):
+            merged[key] = value  # 条目覆盖预设
+    # 非战斗字段（name/desc/archetype/preset 等）直接带到结果里。
+    for key, value in spec.items():
+        if key not in ("traits", "skills", "phase", "stats"):
+            merged[key] = value
+    return merged
+
+
 def _gen_monster(
     floor: int,
     region: dict[str, Any],
@@ -639,6 +676,8 @@ def _gen_monster(
         picked = pool[pool_index % len(pool)]
     if isinstance(picked, str):
         picked = {"name": picked}
+    # 预设展开：把 `preset` 打包的 traits/skills/phase/stats 摊平成普通字段。
+    picked = _apply_preset(picked, cfg)
     name = picked.get("name", "敌人")
     desc = picked.get("desc", "")
     traits = list(picked.get("traits") or [])
@@ -657,6 +696,8 @@ def _gen_monster(
         if chosen is not None:
             if isinstance(chosen, str):
                 chosen = {"name": chosen}
+            # 精英同样支持 preset（预期这是主要用法）。
+            chosen = _apply_preset(chosen, cfg)
             name = chosen.get("name", name)
             desc = chosen.get("desc", "")
             traits = list(chosen.get("traits") or [])

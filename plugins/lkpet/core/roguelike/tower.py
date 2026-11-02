@@ -508,6 +508,74 @@ def _template_panel(
     return panel
 
 
+def elite_fight_cfg(cfg: dict[str, Any], spec: dict[str, Any] | None = None) -> dict:
+    """合并 ``elite_fight.defaults`` 与事件给出的 override，返回本次强化的参数。
+
+    事件里写 ``effect: { elite_fight: {...} }``，其中每项都可省略；
+    省略的项取 ``roguelike.yaml`` 的 ``elite_fight.defaults``。
+    """
+    node = cfg.get("elite_fight") or {}
+    merged = dict(node.get("defaults") or {})
+    if spec:
+        merged.update({k: v for k, v in spec.items() if v is not None})
+    return merged
+
+
+def _apply_elite_fight(
+    monster: dict[str, Any],
+    cfg: dict[str, Any],
+    spec: dict[str, Any],
+    region: dict[str, Any],
+    rng,
+) -> dict[str, Any]:
+    """把一只**已生成的精英**改造成「强化精英」（就地修改并返回）。
+
+    与普通精英的差别（``roguelike.yaml`` 的 ``elite_fight``）：
+
+    * ``stat_bonus``：再乘一层属性倍率；
+    * ``relic``：胜利后掉落一件遗物（``auto`` = 从本局未持有的普通遗物里抽）；
+    * ``phases``：追加形态（事件没指定时按区域的 ``phase_pool`` 抽一个）——
+      形态会在生命跌破阈值时触发，等于多一段战斗节奏；
+    * ``skills``：追加敌方技能（从 ``enemy_skills`` 取）；
+    * 标记 ``elite_fight = True`` 与 ``elite_fight_title``，供战报标题使用。
+
+    **不做金币/经验翻倍**：强化精英的回报是那件遗物，不是数值堆叠。
+    这些强化**只在事件触发的那一场**生效，不写回区域配置。
+    """
+    opts = elite_fight_cfg(cfg, spec)
+    if not (cfg.get("elite_fight") or {}).get("enabled", True):
+        return monster
+
+    stat_bonus = float(opts.get("stat_bonus", 1.0) or 1.0)
+    if stat_bonus != 1.0:
+        for key in ("hp", "atk", "def", "spd"):
+            monster[key] = max(1, round(monster[key] * stat_bonus))
+
+    # 形态：事件显式给的优先，否则按区域池抽一个。
+    extra_phases = [str(p) for p in (opts.get("phases") or [])]
+    if not extra_phases:
+        pool = (cfg.get("elite_fight") or {}).get("phase_pool") or {}
+        candidates = pool.get(str(region.get("id") or "")) or []
+        if candidates:
+            extra_phases = [str(candidates[rng.randrange(len(candidates))])]
+    phase_cfg = cfg.get("enemy_phases") or {}
+    for phase_id in extra_phases:
+        if phase_id in phase_cfg and phase_id not in monster["phases"]:
+            monster["phases"].append(phase_id)
+
+    # 技能：追加到既有技能表尾部（priority 决定实际使用顺序）。
+    skill_cfg = cfg.get("enemy_skills") or {}
+    for skill_id in [str(s) for s in (opts.get("skills") or [])]:
+        if skill_id in skill_cfg and skill_id not in monster["skills"]:
+            monster["skills"].append(skill_id)
+
+    monster["elite_fight"] = True
+    monster["elite_fight_title"] = str(opts.get("title") or "强化形态")
+    # 胜利后掉落的遗物：具体 id 留给战斗结束处理（需要 rogue 才能查本局已持有）。
+    monster["elite_fight_relic"] = str(opts.get("relic") or "")
+    return monster
+
+
 def _gen_monster(
     floor: int,
     region: dict[str, Any],
@@ -517,6 +585,7 @@ def _gen_monster(
     elite: bool = False,
     pool_index: int | None = None,
     elite_index: int | None = None,
+    elite_fight: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     """生成敌人；``elite`` 生成精英，``boss_index`` 生成候选首领。
 
@@ -533,12 +602,18 @@ def _gen_monster(
 
     ``pool_index`` / ``elite_index`` 指定敌人在 ``monsters`` / ``elites`` 池里的下标
     （普通层三选一按选项预先抽好、互不相同）；省略时仍按 rng 随机抽取。
+
+    ``elite_fight`` 非空时把结果改造成**强化精英**（见 :func:`_apply_elite_fight`）：
+    事件选项 ``effect: { elite_fight: {...} }`` 走这条路。
     """
     level = max(1, int(floor))
     scale = floor - int(region["start"])
     rewards = region.get("rewards", {})
     tpl = cfg.get("monster_templates") or {}
     tiers = tpl.get("tiers") or {}
+    # 事件触发的强化精英一律按精英生成（即使调用方没传 elite）。
+    if elite_fight and not elite and boss_index is None:
+        elite = True
 
     pool = region.get("monsters") or [{"name": "敌人"}]
     if pool_index is None:
@@ -648,4 +723,8 @@ def _gen_monster(
 
     # 群怪拆分放在所有倍率之后：先把「一整群」的体质算完，再平摊成每只的面板。
     _split_pack(monster, cfg)
+
+    # 事件触发的强化精英：在群怪拆分之后再加成，因为强化针对的是**单只精英**本体。
+    if elite_fight and boss_index is None:
+        _apply_elite_fight(monster, cfg, elite_fight, region, rng)
     return monster

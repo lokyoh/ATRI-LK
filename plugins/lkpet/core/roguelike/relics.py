@@ -156,6 +156,29 @@ def relic_offer(rogue, floor: int, seed: int, count: int = 3) -> list[str]:
     return pool[: min(count, len(pool))]
 
 
+def elite_fight_relic(rogue, floor: int, seed: int, spec: str = "auto") -> str | None:
+    """强化精英胜利后掉落的遗物 id；没有可掉落的返回 ``None``。
+
+    ``spec`` 为具体 relic id 时直接用它（若本局已持有则放弃）；
+    为 ``auto`` 时从「本局未持有的普通遗物」里按 ``(seed, floor, "elite_fight_relic")``
+    抽一件——与遗物奖励层**共用同一个池**，但随机源独立，
+    避免同层的三选一与精英掉落总是给出同一件。
+    """
+    owned = set(_run_relics(rogue))
+    if spec and spec != "auto":
+        return None if spec in owned else spec
+
+    pool = sorted(
+        relic_id
+        for relic_id, item in relic_specs().items()
+        if item.get("rarity") == "normal" and relic_id not in owned
+    )
+    if not pool:
+        return None
+    rng = floor_rng(seed, floor, "elite_fight_relic")
+    return pool[rng.randrange(len(pool))]
+
+
 def _grant_relic(rogue, relic_id: str) -> dict[str, Any] | None:
     """获得一件遗物：写入**本局** run.relics（立即生效）并登记到图鉴 RELICS。
 

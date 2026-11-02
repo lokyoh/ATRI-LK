@@ -319,17 +319,6 @@ rogue:
     leech: 吸血
     thorns: 棘刺
   event_prompt: "🎲 {text}\n回复编号选择行动："
-  # 事件分类标签：显示在事件正文前，让玩家一眼看出性质（福缘/抉择/灾厄/赌局/诱饵/险境/机遇/见闻）。
-  event_kind_tag: "{icon} {name}"
-  event_kinds:
-    blessing: { icon: 🌟, name: 福缘 }
-    trade: { icon: ⚖️, name: 抉择 }
-    disaster: { icon: 💀, name: 灾厄 }
-    gamble: { icon: 🎰, name: 赌局 }
-    trap: { icon: 🕳, name: 诱饵 }
-    peril: { icon: ⚡, name: 险境 }
-    boon: { icon: 🎁, name: 机遇 }
-    flavor: { icon: 🍃, name: 见闻 }
   event_result: "→ {choice}"
   event_missing: "事件丢失，继续前进。"
   ev_coins: "局内金币 {delta:+d}（现有 {coins}）"
@@ -337,6 +326,7 @@ rogue:
   ev_exp: "本局经验 {delta:+d}（累计 {exp}）"
   ev_no_effect: "没有效果"
   ev_roll_note: "结果不定"
+  ev_elite_fight_note: "随即遭遇强化精英"
   shop_header: "🛒 商店（金币 {coins}）"
   shop_empty: "空空如也"
   shop_reply: "回复编号购买，回复 0 离开。"
@@ -353,6 +343,12 @@ rogue:
   unknown: "状态异常，发送「/宠物.肉鸽 进度」查看。"
   battle_header: "⚔️ 第 {floor} 层 · {region}：{name} VS {monster}"
   elite_header: "⚠️ 精英战 · 第 {floor} 层 · {region}：{name} VS {monster}"
+  # 事件触发的强化精英（elite_fight）
+  elite_fight_header: "🔥 强化精英战 · {title} · 第 {floor} 层 · {region}：{name} VS {monster}"
+  elite_fight_prompt: "⚠️ 强化精英 · {title}：{monster}\n回复「1」迎战。"
+  elite_fight_note: "🔥 强化精英：{title}"
+  elite_fight_relic_gained: "🔥 强化精英掉落（本局生效）：{name}（{stat}） — {desc}"
+  elite_fight_relic_none: "🔥 强化精英已无新的遗物可掉（本局普通遗物已集齐）。"
   battle_pack_line: "🐝 一群 {count} 只（各自生命 {hp_each}，需逐只击倒）"
   # 战斗标题里的怪物等级标注（战报/预告共用这一条格式）
   monster_level_tag: "{name} Lv.{level}"

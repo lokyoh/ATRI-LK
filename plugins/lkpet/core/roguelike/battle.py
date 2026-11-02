@@ -1434,6 +1434,10 @@ async def _do_battle(
     pending = run.get("pending") or {}
     is_elite = bool(pending.get("elite")) if elite is None else elite
     boss_index = pending.get("boss_index")
+    # 事件触发的强化精英：pending 里带 elite_fight 参数（见 floor._resolve_event）。
+    elite_fight = pending.get("elite_fight")
+    if elite_fight:
+        is_elite = True
     monster = _gen_monster(
         floor,
         region,
@@ -1443,6 +1447,7 @@ async def _do_battle(
         elite=is_elite,
         pool_index=None if is_elite else enemy_index,
         elite_index=enemy_index if is_elite else None,
+        elite_fight=elite_fight,
     )
 
     mults = relic_multipliers(rogue)
@@ -1461,6 +1466,11 @@ async def _do_battle(
             "battle_header",
             "⚔️ 第 {floor} 层 · {region}：{name} VS {monster}",
         )
+    elif monster.get("elite_fight"):
+        header_key, header_default = (
+            "elite_fight_header",
+            "🔥 强化精英战 · {title} · 第 {floor} 层 · {region}：{name} VS {monster}",
+        )
     elif is_elite:
         header_key, header_default = (
             "elite_header",
@@ -1478,6 +1488,7 @@ async def _do_battle(
             floor=floor,
             region=region.get("name", ""),
             name=pet.name,
+            title=str(monster.get("elite_fight_title") or "强化形态"),
             monster=_monster_name(monster),
         )
     ]
@@ -1572,6 +1583,38 @@ async def _do_battle(
             exp=exp_gain,
         )
     )
+
+    # 强化精英胜利：掉落一件遗物（不做金币/经验翻倍）。
+    if monster.get("elite_fight"):
+        from .relics import elite_fight_relic
+
+        dropped = elite_fight_relic(
+            rogue,
+            floor,
+            int(run.get("seed", 0)),
+            str(monster.get("elite_fight_relic") or "auto"),
+        )
+        if dropped:
+            # 同 Boss 遗物：_grant_relic 改写的是 rogue.run_state，
+            # 必须先落 run 再发，否则会被随后的 to_dict 覆盖。
+            spec = _grant_relic(rogue, dropped) or {}
+            await _persist(rogue)
+            lines.append(
+                _text(
+                    "elite_fight_relic_gained",
+                    "🔥 强化精英掉落（本局生效）：{name}（{stat}） — {desc}",
+                    name=spec.get("name", dropped),
+                    stat=relic_effect_note(spec.get("effect") or {}),
+                    desc=spec.get("desc", ""),
+                )
+            )
+        else:
+            lines.append(
+                _text(
+                    "elite_fight_relic_none",
+                    "🔥 强化精英已无新的遗物可掉（本局普通遗物已集齐）。",
+                )
+            )
 
     # 首通记录：精英 / 首领都按「区域」记一次（键见 roguelike.yaml 的
     # stage_skill_rewards）。只在尚未解锁时记入 run，避免每次战斗都刷提示。

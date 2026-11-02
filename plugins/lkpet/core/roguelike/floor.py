@@ -103,6 +103,8 @@ def _choice_effect_note(effect: dict[str, Any]) -> str:
         parts.append(f"获得遗物（{name}：{note}）" if note else f"获得遗物（{name}）")
     if effect.get("roll"):
         parts.append(_text("ev_roll_note", "结果不定"))
+    if effect.get("elite_fight") is not None:
+        parts.append(_text("ev_elite_fight_note", "随即遭遇强化精英"))
     return "，".join(parts) or _text("ev_no_effect", "没有效果")
 
 
@@ -290,6 +292,66 @@ async def _resolve_event(pet, rogue, cfg: dict[str, Any], number: int) -> str:
                 desc=spec.get("desc", ""),
             )
         )
+
+    # 强化精英战斗：切换成 BattleState（**不推进楼层**，胜利后才继续前进）。
+    # 事件里的 elite_fight 参数原样带进 pending，由 _gen_monster 应用。
+    fight_spec = effect.get("elite_fight")
+    if fight_spec is not None:
+        from .tower import elite_fight_cfg
+
+        opts = elite_fight_cfg(cfg, fight_spec if isinstance(fight_spec, dict) else {})
+        # 开战前的小幅回复（给玩家一点缓冲，强化精英通常比普通精英更硬）。
+        hp_pct = float(opts.get("hp_pct", 0) or 0)
+        if hp_pct > 0:
+            heal = max(1, round(run.hp_max * hp_pct))
+            before = run.hp
+            run.hp = min(run.hp_max, run.hp + heal)
+            if run.hp > before:
+                lines.append(
+                    _text(
+                        "ev_hp",
+                        "局内生命 {delta:+d}（现有 {hp}/{hp_max}）",
+                        delta=run.hp - before,
+                        hp=run.hp,
+                        hp_max=run.hp_max,
+                    )
+                )
+        mp_pct = float(opts.get("mp_pct", 0) or 0)
+        if mp_pct > 0 and run.mp_max > 0:
+            before_mp = run.mp
+            run.mp = min(run.mp_max, run.mp + max(1, round(run.mp_max * mp_pct)))
+            if run.mp > before_mp:
+                lines.append(
+                    _text(
+                        "mp_event",
+                        "🔵 魔力 {delta:+d}（现有 {mp}/{mp_max}）",
+                        delta=run.mp - before_mp,
+                        mp=run.mp,
+                        mp_max=run.mp_max,
+                    )
+                )
+
+        from .run_state import BattleState
+
+        # 敌人下标按「本层 + 事件」派生，保证同 seed 同层重放时遇到同一只精英。
+        event_id = str(event.get("id") or pending.get("event_id") or "")
+        elites = region_of(run.floor, cfg).get("elites") or []
+        pick_rng = floor_rng(run.seed, run.floor, f"elite_fight:{event_id}")
+        enemy_index = pick_rng.randrange(len(elites)) if elites else None
+        state = BattleState(
+            elite=True,
+            enemy_index=enemy_index,
+            elite_fight=(
+                dict(fight_spec)
+                if isinstance(fight_spec, dict)
+                else {"title": "强化形态"}
+            ),
+        )
+        run.pending = state.to_pending()
+        rogue.run_state = run.to_dict()
+        await _persist(rogue)
+        lines.append(state.render(run, cfg, _chosen_set(rogue)))
+        return "\n".join(lines)
 
     rogue.run_state = run.to_dict()
     advance_text = await advance(pet, rogue)

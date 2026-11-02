@@ -184,11 +184,14 @@ class BattleState(FloorState):
         boss_index: int = 0,
         elite: bool = False,
         enemy_index: int | None = None,
+        elite_fight: dict[str, Any] | None = None,
     ):
         self.boss = boss
         self.boss_index = boss_index
         self.elite = elite
         self.enemy_index = enemy_index
+        # 事件触发的强化精英参数（elite_fight.defaults 的 override）。
+        self.elite_fight = dict(elite_fight or {})
 
     def to_pending(self) -> dict[str, Any]:
         d: dict[str, Any] = {
@@ -200,6 +203,8 @@ class BattleState(FloorState):
             d["elite"] = True
         if self.enemy_index is not None:
             d["enemy_index"] = int(self.enemy_index)
+        if self.elite_fight:
+            d["elite_fight"] = dict(self.elite_fight)
         return d
 
     @classmethod
@@ -210,6 +215,7 @@ class BattleState(FloorState):
             boss_index=pending.get("boss_index", 0),
             elite=pending.get("elite", False),
             enemy_index=None if enemy_index is None else int(enemy_index),
+            elite_fight=pending.get("elite_fight") or None,
         )
 
     def render(self, run: RogueRun, cfg: dict[str, Any], chosen: set[str]) -> str:
@@ -227,6 +233,7 @@ class BattleState(FloorState):
             elite=self.elite,
             pool_index=None if self.elite else self.enemy_index,
             elite_index=self.enemy_index if self.elite else None,
+            elite_fight=self.elite_fight or None,
         )
         if self.boss:
             return _text(
@@ -235,6 +242,13 @@ class BattleState(FloorState):
                 floor=floor,
                 monster=_monster_label(monster),
                 region=region.get("name", ""),
+            )
+        if self.elite_fight:
+            return _text(
+                "elite_fight_prompt",
+                "⚠️ 强化精英 · {title}：{monster}\n回复「1」迎战。",
+                title=str(monster.get("elite_fight_title") or "强化形态"),
+                monster=_monster_label(monster),
             )
         return _text(
             "battle_prompt", "回复「1」迎战。", monster=_monster_label(monster)
@@ -419,15 +433,11 @@ class EventState(FloorState):
         event = _find_event(self.event_id, region, cfg)
         if event is None:
             return _text("event_missing", "事件丢失，继续前进。")
-        lines: list[str] = []
-        # 分类标签（福缘/抉择/灾厄/赌局/诱饵/险境/机遇/见闻）：让玩家先看清性质，
-        # 再决定要不要细读文案。没有 kind 的旧事件不显示标签。
-        tag = _event_kind_tag(str(event.get("kind") or ""))
-        if tag:
-            lines.append(tag)
-        lines.append(
+        # 不显示事件分类标签：``kind`` 只作内部归类（配比统计/校验用），
+        # 玩家应从文案本身判断这是福缘还是陷阱。
+        lines: list[str] = [
             _text("event_prompt", "🎲 {text}\n回复编号选择行动：", text=event["text"])
-        )
+        ]
         event_id = str(event.get("id", ""))
         heal_mult = 1.0
         if self.supply:
@@ -658,25 +668,6 @@ def _has_run(rogue) -> bool:
 def _chosen_set(rogue) -> set[str]:
     """该玩家历史选过的事件选项集合（"事件id:编号"）。"""
     return set(getattr(rogue, "choices", None) or [])
-
-
-def _event_kind_tag(kind: str) -> str:
-    """事件分类标签（``🌟 福缘``）；未知或空 kind 返回空串。
-
-    分类见 ``rogue_events.yaml`` 的 ``kind`` 字段与 ``texts.yaml`` 的
-    ``rogue.event_kinds``：blessing 福缘 / trade 抉择 / disaster 灾厄 /
-    gamble 赌局 / trap 诱饵 / peril 险境 / boon 机遇 / flavor 见闻。
-    """
-    if not kind:
-        return ""
-    from ...utils.texts import text as _raw_text
-    from ._common import _text as _t
-
-    icon = _raw_text(f"rogue.event_kinds.{kind}.icon", "")
-    name = _raw_text(f"rogue.event_kinds.{kind}.name", "")
-    if not name:
-        return ""
-    return _t("event_kind_tag", "{icon} {name}", icon=icon, name=name).strip()
 
 
 async def start(pet, rogue) -> str:

@@ -212,6 +212,35 @@ elite:
   stats_mult: 1.6          # 精英 = 当层普通公式 × 1.6（介于小怪与首领之间）
   reward_mult: { coins: 2, exp: 2 }   # 精英掉落倍率（金币/经验）
 
+# 强化精英战斗（事件触发）：事件选项可以写 effect: { elite_fight: {...} }，
+# 选中即**立刻进入**一场强化精英战，胜利才继续前进，失败照常结束本局。
+#   stat_bonus    在普通精英基础上再乘的属性倍率（1.3 = 再强化 30%）
+#   relic         胜利后额外掉落的遗物（固定 id）；写 auto 时从「本局未持有的
+#                 普通遗物」里按 seed 抽一件。留空 = 不掉遗物。
+#   phases        额外追加的形态 id（取自 enemy_phases），追加在精英自带形态之后
+#   skills        额外追加的技能 id（取自 enemy_skills）
+#   hp_pct/mp_pct 开战前先回复的当前生命/魔力百分比（给玩家一点缓冲）
+#   title         战报标题里显示的强化名（如「狂暴形态」）
+#
+# 注意：强化精英**不做金币/经验翻倍**——它的回报就是那件遗物。
+elite_fight:
+  enabled: true
+  defaults:
+    stat_bonus: 1.3
+    relic: auto
+    phases: []
+    skills: []
+    hp_pct: 0.15
+    mp_pct: 0.15
+    title: 强化形态
+  # 可选形态池：事件不指定 phases 时，按区域从本区域的池里抽一个追加形态。
+  phase_pool:
+    plains: [ph_enrage]
+    forest: [ph_swift, ph_guard]
+    lava: [ph_enrage, ph_berserk]
+    frost: [ph_guard, ph_undying]
+    abyss: [ph_berserk, ph_desperate]
+
 # 怪物特点：数值乘区/行为参数全部外置在这里（展示用中文标签在 texts.yaml 的 rogue.traits）。
 # region.monsters[].traits 列 0-2 个特点 id；没有特点的怪不显示标注。
 #   *_mult        该属性乘区（特点在精英/首领倍率**之前**作用）

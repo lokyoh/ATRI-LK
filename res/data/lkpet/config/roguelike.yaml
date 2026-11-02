@@ -56,13 +56,13 @@ tower:
       rewards: { coins: 2, coins_per_floor: 1, exp: 20, exp_per_floor: 2 }
       shop: { heal_mult: 1 }
       elites:  # 每区域 7 个精英备选（战斗路线按区域 seed 抽，遭遇次数受 elite.max_per_region 限制）
-        - { name: 铁角原牛, traits: [strong], skills: [e_charge_horn], desc: 低头犁地的巨牛，一对铁角能掀翻货车。, archetype: brute, stats: { hp: 1.2, atk: 1.25, spd: 0.85 } }
-        - { name: 疾风隼王, traits: [swift], skills: [e_dive], desc: 循风而猎的巨隼，俯冲时像一支白羽箭。, archetype: swift, stats: { atk: 1.15, spd: 1.35, hp: 0.85 } }
-        - { name: 毒刺巨蜂, traits: [crit], skills: [e_venom_sting], desc: 尾针有小指长，振翅声像锯木头。, archetype: swift, stats: { atk: 1.2, spd: 1.3, hp: 0.8 } }
-        - { name: 老田鼠王, traits: [thick], skills: [e_web], desc: 肥得像一袋谷子，牙齿却能咬穿铁锹。, archetype: tank, stats: { hp: 1.35, def: 1.35, spd: 0.6 } }
-        - { name: 走失的战马, traits: [strong, swift], skills: [e_roll], desc: 鞍上没人，蹄铁却还是新的。, archetype: brute, stats: { hp: 1.2, atk: 1.3, spd: 1.2 } }
-        - { name: 断牙头狼, traits: [swarm], skills: [e_summon_wolf], desc: 狼群的王，左犬齿断了一半，从不落单。, archetype: brute, stats: { hp: 1.15, atk: 1.25 } }
-        - { name: 禾田稻魔, traits: [thick], skills: [e_root], desc: 稻草束成的人形，夜里在田里自己走路。, archetype: tank, stats: { hp: 1.4, def: 1.3, spd: 0.35 } }
+        - { name: 铁角原牛, traits: [strong], desc: 低头犁地的巨牛，一对铁角能掀翻货车。, archetype: brute, stats: { hp: 1.2, atk: 1.25, spd: 0.85 }, skills: ["e_charge_horn"], phase: ph_awaken }
+        - { name: 疾风隼王, traits: [swift], desc: 循风而猎的巨隼，俯冲时像一支白羽箭。, archetype: swift, stats: { atk: 1.15, spd: 1.35, hp: 0.85 }, skills: ["e_dive", "e_haste"] }
+        - { name: 毒刺巨蜂, traits: [crit], desc: 尾针有小指长，振翅声像锯木头。, archetype: swift, stats: { atk: 1.2, spd: 1.3, hp: 0.8 }, skills: ["e_venom_sting", "e_mirror_edge"] }
+        - { name: 老田鼠王, traits: [thick], desc: 肥得像一袋谷子，牙齿却能咬穿铁锹。, archetype: tank, stats: { hp: 1.35, def: 1.35, spd: 0.6 }, skills: ["e_web", "e_devour"], phase: ph_regen }
+        - { name: 走失的战马, traits: [strong, swift], desc: 鞍上没人，蹄铁却还是新的。, archetype: brute, stats: { hp: 1.2, atk: 1.3, spd: 1.2 }, skills: ["e_roll", "e_mirror_edge"] }
+        - { name: 断牙头狼, traits: [swarm], desc: 狼群的王，左犬齿断了一半，从不落单。, archetype: brute, stats: { hp: 1.15, atk: 1.25 }, skills: ["e_summon_wolf", "e_blood_whirl"], phase: ph_frenzy }
+        - { name: 禾田稻魔, traits: [thick], desc: 稻草束成的人形，夜里在田里自己走路。, archetype: tank, stats: { hp: 1.4, def: 1.3, spd: 0.35 }, skills: ["e_root", "e_plague"], phase: ph_plague }
     - id: forest
       name: 迷雾森林
       desc: 终年不散的浓雾吞掉路径与声音，树影里藏着不属于林地的眼睛。
@@ -105,13 +105,13 @@ tower:
       rewards: { coins: 5, coins_per_floor: 1, exp: 60, exp_per_floor: 4 }
       shop: { heal_mult: 2.5 }
       elites:
-        - { name: 苔皮巨熊, traits: [tough], skills: [e_maul], desc: 背上生满青苔，一掌能拍断百年树干。, archetype: brute, stats: { hp: 1.4, atk: 1.35, spd: 0.5 } }
-        - { name: 织网女巫蛛, traits: [crit], skills: [e_web], desc: 腹部的纹路像一张皱眉的人脸。, archetype: caster, stats: { atk: 1.35, hp: 0.85 } }
-        - { name: 腐沼鳄, traits: [thick], skills: [e_roll], desc: 潜在浮萍之下，背脊看去只是一截烂木。, archetype: brute, stats: { hp: 1.35, atk: 1.3, spd: 0.6 } }
-        - { name: 巨钳螳螂, traits: [swift], skills: [e_double], desc: 双臂镰刃磨得发亮，专剪经过的脖子。, archetype: swift, stats: { atk: 1.3, spd: 1.3, hp: 0.8 } }
-        - { name: 雾隐枭人, traits: [leech], skills: [e_siphon], phase: ph_swift, desc: 半人半枭，雾越浓越难被看见。, archetype: caster, stats: { hp: 0.9, atk: 1.3, spd: 1.15 } }
-        - { name: 苍苔石像鬼, traits: [tough, slow], skills: [e_harden], desc: 在雨里泡了几十年，忽然想起自己是有翅膀的。, archetype: tank, stats: { hp: 1.4, def: 1.55, spd: 0.4 } }
-        - { name: 瘴气鹿母, traits: [leech], skills: [e_venom_sting], desc: 呼吸带着甜腥，走近的草木都低着头。, archetype: caster, stats: { hp: 1.1, atk: 1.3, spd: 0.95 } }
+        - { name: 苔皮巨熊, traits: [tough], desc: 背上生满青苔，一掌能拍断百年树干。, archetype: brute, stats: { hp: 1.4, atk: 1.35, spd: 0.5 }, skills: ["e_maul", "e_reknit"], phase: ph_bulwark }
+        - { name: 织网女巫蛛, traits: [crit], desc: 腹部的纹路像一张皱眉的人脸。, archetype: caster, stats: { atk: 1.35, hp: 0.85 }, skills: ["e_web", "e_summon_spider"], phase: ph_swarmlord }
+        - { name: 腐沼鳄, traits: [thick], desc: 潜在浮萍之下，背脊看去只是一截烂木。, archetype: brute, stats: { hp: 1.35, atk: 1.3, spd: 0.6 }, skills: ["e_roll", "e_devour"] }
+        - { name: 巨钳螳螂, traits: [swift], desc: 双臂镰刃磨得发亮，专剪经过的脖子。, archetype: swift, stats: { atk: 1.3, spd: 1.3, hp: 0.8 }, skills: ["e_double", "e_storm_rake"], phase: ph_frenzy }
+        - { name: 雾隐枭人, traits: [leech], desc: 半人半枭，雾越浓越难被看见。, archetype: caster, stats: { hp: 0.9, atk: 1.3, spd: 1.15 }, skills: ["e_siphon", "e_shadow_brand"], phase: ph_swift }
+        - { name: 苍苔石像鬼, traits: [tough, slow], desc: 在雨里泡了几十年，忽然想起自己是有翅膀的。, archetype: tank, stats: { hp: 1.4, def: 1.55, spd: 0.4 }, skills: ["e_harden", "e_mirror_edge"], phase: ph_bulwark }
+        - { name: 瘴气鹿母, traits: [leech], desc: 呼吸带着甜腥，走近的草木都低着头。, archetype: caster, stats: { hp: 1.1, atk: 1.3, spd: 0.95 }, skills: ["e_venom_sting", "e_corrode"], phase: ph_plague }
     - id: lava
       name: 熔岩洞窟
       desc: 地面滚烫、岩浆在暗处发亮，呼吸都带着硫磺味的灼热迷宫。
@@ -154,13 +154,13 @@ tower:
       rewards: { coins: 10, coins_per_floor: 2, exp: 140, exp_per_floor: 7 }
       shop: { heal_mult: 5 }
       elites:
-        - { name: 赤甲火蝎, traits: [tough], skills: [e_crit_stab], desc: 尾钩滴落的毒液在石头上烧出小洞。, archetype: tank, stats: { hp: 1.15, def: 1.5, spd: 0.7 } }
-        - { name: 熔岩蟒, traits: [leech], skills: [e_maul], desc: 体内流动着岩浆，爬过的地方留下火痕。, archetype: brute, stats: { hp: 1.35, atk: 1.35, spd: 0.75 } }
-        - { name: 灰烬骑士, traits: [thick], skills: [e_quake], desc: 甲胄里空无一人，灰烬从缝隙不断漏出。, archetype: tank, stats: { hp: 1.45, def: 1.4, spd: 0.55 } }
-        - { name: 火山凶豚, traits: [strong], skills: [e_slam], desc: 拱起的背像一块烧红的铁砧。, archetype: brute, stats: { hp: 1.25, atk: 1.4, spd: 0.9 } }
-        - { name: 焰翅蝠王, traits: [swarm], skills: [e_summon_bat], phase: ph_swift, desc: 翅膜上跳动着细小的火苗。, archetype: swift, stats: { atk: 1.3, spd: 1.35, hp: 0.85 } }
-        - { name: 熔核守卫, traits: [tough, slow], skills: [e_harden], desc: 守着一扇早就烧化的门，姿势还没变过。, archetype: tank, stats: { hp: 1.5, def: 1.5, spd: 0.4 } }
-        - { name: 硫火妖僧, traits: [leech], skills: [e_siphon], desc: 念的是经文，吐出来的是火。, archetype: caster, stats: { hp: 0.9, atk: 1.35, spd: 1.05 } }
+        - { name: 赤甲火蝎, traits: [tough], desc: 尾钩滴落的毒液在石头上烧出小洞。, archetype: tank, stats: { hp: 1.15, def: 1.5, spd: 0.7 }, skills: ["e_crit_stab", "e_inferno_mark"] }
+        - { name: 熔岩蟒, traits: [leech], desc: 体内流动着岩浆，爬过的地方留下火痕。, archetype: brute, stats: { hp: 1.35, atk: 1.35, spd: 0.75 }, skills: ["e_maul", "e_devour"], phase: ph_regen }
+        - { name: 灰烬骑士, traits: [thick], desc: 甲胄里空无一人，灰烬从缝隙不断漏出。, archetype: tank, stats: { hp: 1.45, def: 1.4, spd: 0.55 }, skills: ["e_quake", "e_harden"], phase: ph_awaken }
+        - { name: 火山凶豚, traits: [strong], desc: 拱起的背像一块烧红的铁砧。, archetype: brute, stats: { hp: 1.25, atk: 1.4, spd: 0.9 }, skills: ["e_slam", "e_charge_horn", "e_phoenix"], phase: ph_berserk }
+        - { name: 焰翅蝠王, traits: [swarm], desc: 翅膜上跳动着细小的火苗。, archetype: swift, stats: { atk: 1.3, spd: 1.35, hp: 0.85 }, skills: ["e_summon_bat", "e_blood_whirl"], phase: ph_swift }
+        - { name: 熔核守卫, traits: [tough, slow], desc: 守着一扇早就烧化的门，姿势还没变过。, archetype: tank, stats: { hp: 1.5, def: 1.5, spd: 0.4 }, skills: ["e_harden", "e_reknit"], phase: ph_bulwark }
+        - { name: 硫火妖僧, traits: [leech], desc: 念的是经文，吐出来的是火。, archetype: caster, stats: { hp: 0.9, atk: 1.35, spd: 1.05 }, skills: ["e_siphon", "e_soul_burn"], phase: ph_plague }
     - id: frost
       name: 冰封王座
       desc: 永冻的宫殿与断裂的冰桥，呼出的白霜会立刻在睫毛上结冰。
@@ -203,13 +203,13 @@ tower:
       rewards: { coins: 18, coins_per_floor: 3, exp: 300, exp_per_floor: 12 }
       shop: { heal_mult: 9 }
       elites:
-        - { name: 冰棘猛犸, traits: [thorns], skills: [e_quake], desc: 象牙结满冰棱，吼一声能冻住呼吸。, archetype: tank, stats: { hp: 1.5, def: 1.45, spd: 0.45 } }
-        - { name: 霜翼巨鹰, traits: [swift], skills: [e_ice_lance], desc: 爪下抓着整块浮冰在空中巡弋。, archetype: swift, stats: { atk: 1.25, spd: 1.35, hp: 0.85 } }
-        - { name: 冻原食人魔, traits: [strong], skills: [e_maul], desc: 肩上扛着半截结冰的路牌。, archetype: brute, stats: { hp: 1.45, atk: 1.4, spd: 0.6 } }
-        - { name: 雪腹巨蛛, traits: [swarm], skills: [e_summon_spider], desc: 白色绒毛与雪地融为一体。, archetype: brute, stats: { hp: 1.25, atk: 1.25, spd: 0.9 } }
-        - { name: 冰镜魅影, traits: [leech], skills: [e_frost_nova], phase: ph_undying, desc: 从冰面里坐起来的另一个"你"。, archetype: caster, stats: { hp: 0.9, atk: 1.3, def: 1.3 } }
-        - { name: 极寒守夜人, traits: [tough], skills: [e_harden], desc: 提着一盏早就冻灭的灯，还在按时巡夜。, archetype: tank, stats: { hp: 1.35, def: 1.45, spd: 0.55 } }
-        - { name: 霜语女巫, traits: [crit], skills: [e_ice_lance], desc: 说出的每个字都在半空结成冰锥。, archetype: caster, stats: { hp: 0.85, atk: 1.4, spd: 1.05 } }
+        - { name: 冰棘猛犸, traits: [thorns], desc: 象牙结满冰棱，吼一声能冻住呼吸。, archetype: tank, stats: { hp: 1.5, def: 1.45, spd: 0.45 }, skills: ["e_quake", "e_frost_bind"], phase: ph_bulwark }
+        - { name: 霜翼巨鹰, traits: [swift], desc: 爪下抓着整块浮冰在空中巡弋。, archetype: swift, stats: { atk: 1.25, spd: 1.35, hp: 0.85 }, skills: ["e_ice_lance", "e_storm_rake"], phase: ph_swift }
+        - { name: 冻原食人魔, traits: [strong], desc: 肩上扛着半截结冰的路牌。, archetype: brute, stats: { hp: 1.45, atk: 1.4, spd: 0.6 }, skills: ["e_maul", "e_blood_whirl"], phase: ph_berserk }
+        - { name: 雪腹巨蛛, traits: [swarm], desc: 白色绒毛与雪地融为一体。, archetype: brute, stats: { hp: 1.25, atk: 1.25, spd: 0.9 }, skills: ["e_summon_spider", "e_frost_bind"], phase: ph_swarmlord }
+        - { name: 冰镜魅影, traits: [leech], desc: 从冰面里坐起来的另一个"你"。, archetype: caster, stats: { hp: 0.9, atk: 1.3, def: 1.3 }, skills: ["e_frost_nova", "e_mirror_edge"], phase: ph_undying }
+        - { name: 极寒守夜人, traits: [tough], desc: 提着一盏早就冻灭的灯，还在按时巡夜。, archetype: tank, stats: { hp: 1.35, def: 1.45, spd: 0.55 }, skills: ["e_harden", "e_reknit"], phase: ph_regen }
+        - { name: 霜语女巫, traits: [crit], desc: 说出的每个字都在半空结成冰锥。, archetype: caster, stats: { hp: 0.85, atk: 1.4, spd: 1.05 }, skills: ["e_ice_lance", "e_frost_bind"], phase: ph_awaken }
     - id: abyss
       name: 深渊之巅
       desc: 塔顶之上的倒悬深渊，星光从脚下坠落，连影子都会背叛你。
@@ -252,13 +252,13 @@ tower:
       rewards: { coins: 30, coins_per_floor: 4, exp: 560, exp_per_floor: 20 }
       shop: { heal_mult: 15 }
       elites:
-        - { name: 虚空之眼, traits: [crit], skills: [e_void_gaze], desc: 悬浮的巨眼，瞳孔里倒转着星光。, archetype: caster, stats: { hp: 0.9, atk: 1.4 } }
-        - { name: 星坠猎犬, traits: [swift], skills: [e_meteor], desc: 由陨屑拼成的猎犬，奔跑时拖出火尾。, archetype: swift, stats: { atk: 1.3, spd: 1.35, hp: 0.85 } }
-        - { name: 裂魂双子, traits: [swarm], skills: [e_summon_shade], desc: 共享一具身体的两个影子，各朝一方拉扯。, archetype: swift, stats: { atk: 1.25, spd: 1.3, hp: 0.85 } }
-        - { name: 深渊灯水母, traits: [leech], skills: [e_drain], desc: 伞盖下的光是诱饵，触须垂进虚无。, archetype: caster, stats: { hp: 1.1, atk: 1.35 } }
-        - { name: 影噬巨口, traits: [thick], skills: [e_annihilate], phase: ph_berserk, desc: 没有身体，只有一张缓缓张开的嘴。, archetype: brute, stats: { hp: 1.55, atk: 1.4, def: 1.2, spd: 0.5 } }
-        - { name: 万籁执笔人, traits: [crit], skills: [e_void_gaze], desc: 记录每个登塔者的结局，写到你时停了笔。, archetype: caster, stats: { hp: 0.85, atk: 1.35 } }
-        - { name: 逆时巨像, traits: [tough, slow], skills: [e_harden], desc: 每挡住一次攻击，它就年轻一分。, archetype: tank, stats: { hp: 1.55, def: 1.5, spd: 0.35 } }
+        - { name: 虚空之眼, traits: [crit], desc: 悬浮的巨眼，瞳孔里倒转着星光。, archetype: caster, stats: { hp: 0.9, atk: 1.4 }, skills: ["e_void_gaze", "e_mana_burn"], phase: ph_awaken }
+        - { name: 星坠猎犬, traits: [swift], desc: 由陨屑拼成的猎犬，奔跑时拖出火尾。, archetype: swift, stats: { atk: 1.3, spd: 1.35, hp: 0.85 }, skills: ["e_meteor", "e_storm_rake"], phase: ph_frenzy }
+        - { name: 裂魂双子, traits: [swarm], desc: 共享一具身体的两个影子，各朝一方拉扯。, archetype: swift, stats: { atk: 1.25, spd: 1.3, hp: 0.85 }, skills: ["e_summon_shade", "e_shadow_brand"], phase: ph_necro }
+        - { name: 深渊灯水母, traits: [leech], desc: 伞盖下的光是诱饵，触须垂进虚无。, archetype: caster, stats: { hp: 1.1, atk: 1.35 }, skills: ["e_drain", "e_corrode"], phase: ph_plague }
+        - { name: 影噬巨口, traits: [thick], desc: 没有身体，只有一张缓缓张开的嘴。, archetype: brute, stats: { hp: 1.55, atk: 1.4, def: 1.2, spd: 0.5 }, skills: ["e_annihilate", "e_devour"], phase: ph_berserk }
+        - { name: 万籁执笔人, traits: [crit], desc: 记录每个登塔者的结局，写到你时停了笔。, archetype: caster, stats: { hp: 0.85, atk: 1.35 }, skills: ["e_void_gaze", "e_oblivion"], phase: ph_last }
+        - { name: 逆时巨像, traits: [tough, slow], desc: 每挡住一次攻击，它就年轻一分。, archetype: tank, stats: { hp: 1.55, def: 1.5, spd: 0.35 }, skills: ["e_harden", "e_cataclysm"], phase: ph_bulwark }
 
 # ===========================================================================
 # 怪物模板：**1 级基准 + 每级成长**，怪物等级 = 层号。
@@ -595,6 +595,38 @@ enemy_skills:
                      summon: { name: 窥视之眼, desc: 只为注视而生的碎片。, count: 3, hp_mult: 0.04, atk_mult: 0.5, def_mult: 0.3, spd_mult: 1.0 } }
   e_summon_shade:  { name: 召唤影分身, desc: 影子从脚下剥离，站成了另一个你。, power: 0, mp_cost: 36, cooldown: 5, priority: 6,
                      summon: { name: 影分身, desc: 与你同形，只是眼神更冷。, count: 1, hp_mult: 0.14, atk_mult: 0.8, def_mult: 0.8, spd_mult: 1.1, skills: [e_shadow_raid] } }
+  # —— 追加技能组：补足 dot / heal / 组合机制 / 更长蓄力 ——
+  # 设计口径同前：power 30 = 一次普攻，蓄力终极技 2.4-3.0×；mp_cost 越贵的越受蓝量制约。
+  # 【持续伤害系】原来只有 e_venom_sting 一个，这里补齐不同强度与叠加方式
+  e_corrode:      { name: 蚀骨雾, desc: 雾贴着皮肤渗进去，骨头开始发酸。, power: 24, mp_cost: 14, cooldown: 3, priority: 2,
+                    dot: { frac: 0.08, rounds: 4 } }
+  e_inferno_mark: { name: 焚印, desc: 掌心按在胸口，印痕持续烧着。, power: 30, mp_cost: 20, cooldown: 3, priority: 3,
+                    dot: { frac: 0.12, rounds: 3 } }
+  e_plague:       { name: 瘟疫喷吐, desc: 喷出的东西落在哪里，哪里就开始腐烂。, power: 21, mp_cost: 22, cooldown: 4, priority: 4,
+                    dot: { frac: 0.15, rounds: 5 }, debuff: { def_mult: 0.85, rounds: 3 } }
+  # 【治疗系】原来只有 e_mend 一个
+  e_devour:       { name: 吞噬复原, desc: 咽下去的东西正在替它补上缺口。, power: 30, mp_cost: 18, cooldown: 3, priority: 3,
+                    heal: 0.1, leech: 0.4 }
+  e_reknit:       { name: 血肉重织, desc: 断口处的肉自己找了回去。, power: 0, mp_cost: 26, cooldown: 4, priority: 5,
+                    heal: 0.15, self_buff: { def_mult: 1.15 } }
+  e_phoenix:      { name: 焚身重生, desc: 烧掉旧壳，从灰里重新长出来。, power: 0, mp_cost: 40, cooldown: 5, priority: 6,
+                    heal: 0.25, self_buff: { atk_mult: 1.2 } }
+  # 【组合机制】多效果同时命中，单看每一项都不强，叠起来很难受
+  e_frost_bind:   { name: 霜缚, desc: 冰从脚底爬上来，动作和呼吸一起变慢。, power: 27, mp_cost: 18, cooldown: 3, priority: 3,
+                    debuff: { spd_mult: 0.7, atk_mult: 0.9, rounds: 3 } }
+  e_shadow_brand: { name: 影烙印, desc: 伤口不流血，只留下一个不会消退的印。, power: 33, mp_cost: 22, cooldown: 3, priority: 4,
+                    crit_rate: 0.25, dot: { frac: 0.06, rounds: 3 } }
+  e_soul_burn:    { name: 燃魂, desc: 烧的不是身体，是撑着身体的那点东西。, power: 42, mp_cost: 30, cooldown: 4, priority: 4,
+                    dot: { frac: 0.1, rounds: 3 }, debuff: { atk_mult: 0.85, rounds: 2 } }
+  e_mana_burn:    { name: 焚魔, desc: 触到的魔力先沸腾再消失。, power: 36, mp_cost: 24, cooldown: 3, priority: 4,
+                    debuff: { atk_mult: 0.8, spd_mult: 0.9, rounds: 3 } }
+  # 【更强蓄力】比现有 4 个更长的蓄力窗（charge 4），interrupt 相应更低（窗口更长但更容易被打断）
+  e_cataclysm:    { name: 天倾, desc: 头顶的东西开始往下压，压力先到，声音后到。, power: 96, mp_cost: 54, charge: 4, interrupt: 0.14, cooldown: 5, priority: 7, unactionable: 2.0 }
+  e_oblivion:     { name: 归于虚无, desc: 它抬手时，那一小片空间先消失了。, power: 100, mp_cost: 60, charge: 4, interrupt: 0.16, cooldown: 5, priority: 7, unactionable: 2.0 }
+  # 【群攻型技能】strikes 更多，配合 crit/leech 打爆发
+  e_storm_rake:   { name: 风暴撕裂, desc: 四道爪影几乎同时落下。, power: 18, mp_cost: 26, strikes: 4, cooldown: 3, priority: 4, crit_rate: 0.15 }
+  e_blood_whirl:  { name: 血旋, desc: 转起来的时候，四周的东西都在往外甩。, power: 16, mp_cost: 30, strikes: 5, cooldown: 4, priority: 4, leech: 0.25 }
+  e_mirror_edge:  { name: 镜刃, desc: 每一道反光都可能是一刀。, power: 22, mp_cost: 24, strikes: 3, cooldown: 3, priority: 4, crit_rate: 0.3 }
 
 # 敌方形态（阶段）：首领/精英生命跌破 at_hp 比例时触发一次，按顺序检查、各自只触发一次。
 #   name       形态名（战报展示）
@@ -609,6 +641,16 @@ enemy_phases:
   ph_swift:      { name: 疾走, at_hp: 0.5, spd_mult: 1.25, add_skills: [e_haste] }
   ph_undying:    { name: 不灭, at_hp: 0.25, heal: 0.08, def_mult: 1.2, add_skills: [e_mend] }
   ph_desperate:  { name: 垂死挣扎, at_hp: 0.2, atk_mult: 1.5, heal: 0.05 }
+  # —— 追加形态组 ——
+  # 三个方向：更早的预警形态（高阈值）、带召唤的转阶段、以及专门给三阶段首领用的中段形态。
+  ph_awaken:     { name: 苏醒, at_hp: 0.75, atk_mult: 1.1, spd_mult: 1.05 }              # 早段预警，只小幅强化
+  ph_frenzy:     { name: 沸腾, at_hp: 0.45, atk_mult: 1.2, spd_mult: 1.15, add_skills: [e_mirror_edge] }
+  ph_bulwark:    { name: 铁壁, at_hp: 0.65, def_mult: 1.4, spd_mult: 0.9, add_skills: [e_harden] }
+  ph_regen:      { name: 增生, at_hp: 0.5, heal: 0.1, def_mult: 1.15, add_skills: [e_reknit] }
+  ph_swarmlord:  { name: 巢母, at_hp: 0.55, heal: 0.06, add_skills: [e_summon_spider] }   # 转阶段叫援军
+  ph_necro:      { name: 招魂, at_hp: 0.4, def_mult: 1.1, add_skills: [e_summon_shade] }
+  ph_plague:     { name: 疫变, at_hp: 0.5, atk_mult: 1.15, add_skills: [e_plague] }       # 转阶段上 DoT
+  ph_last:       { name: 终末, at_hp: 0.12, atk_mult: 1.6, spd_mult: 1.2, heal: 0.05 }    # 残血爆发
 
 # 区域首领：每个区域 3 个候选，进入首领层时**三选一**挑战。
 # mult 作用在该区域普通敌人的当层公式结果上；coins/exp 为绝对值。
@@ -616,39 +658,39 @@ enemy_phases:
 bosses:
   plains:
     - { name: 守塔傀儡, desc: 铁锈斑驳的傀儡，关节里漏出蒸汽，横在第一块界碑前。, relic: rel_b01, hp_mult: 3.0, atk_mult: 1.6, def_mult: 1.5, spd_mult: 1.0, coins: [25, 35], exp: 150,
-        skills: [e_slam, e_harden], phases: [ph_enrage] }
+        skills: [e_slam, e_harden], skills: ["e_slam", "e_harden", "e_mirror_edge"], phases: ["ph_awaken", "ph_enrage"] }
     - { name: 暴走野猪王, desc: 獠牙犁开草地，红着眼睛只会做一件事：冲撞。, relic: rel_b02, hp_mult: 2.7, atk_mult: 2.0, def_mult: 1.0, spd_mult: 1.3, coins: [20, 45], exp: 160,
-        skills: [e_charge_horn, e_roll], phases: [ph_berserk] }
+        skills: [e_charge_horn, e_roll], skills: ["e_charge_horn", "e_roll", "e_blood_whirl"], phases: ["ph_frenzy", "ph_berserk"] }
     - { name: 采花巨蛛, desc: 腿像枯枝，腹部的花纹在阳光下像一朵盛开的花。, relic: rel_b03, hp_mult: 2.0, atk_mult: 1.5, def_mult: 1.2, spd_mult: 1.6, coins: [30, 40], exp: 140,
-        skills: [e_web, e_summon_spider], phases: [ph_swift] }
+        skills: [e_web, e_summon_spider], skills: ["e_web", "e_summon_spider", "e_corrode"], phases: ["ph_swarmlord", "ph_swift"] }
   forest:
     - { name: 雾隐豹王, desc: 只在雾最浓时现身，爪痕先于它的形体出现。, relic: rel_b04, hp_mult: 3.2, atk_mult: 1.8, def_mult: 1.3, spd_mult: 1.5, coins: [55, 75], exp: 340,
-        skills: [e_shadow_raid, e_haste], phases: [ph_swift, ph_berserk] }
+        skills: [e_shadow_raid, e_haste], skills: ["e_shadow_raid", "e_haste", "e_mirror_edge"], phases: ["ph_swift", "ph_frenzy"] }
     - { name: 古树长老, desc: 树皮皲裂成脸的形状，根须在泥土下缓缓收拢。, relic: rel_b05, hp_mult: 4.0, atk_mult: 1.5, def_mult: 1.8, spd_mult: 0.8, coins: [50, 85], exp: 360,
-        skills: [e_root, e_mend], phases: [ph_guard, ph_undying] }
+        skills: [e_root, e_mend], skills: ["e_root", "e_reknit", "e_plague"], phases: ["ph_bulwark", "ph_regen", "ph_undying"] }
     - { name: 毒沼蟾皇, desc: 鼓胀的喉囊里晃着荧绿毒液，蛙鸣像钝刀刮铁。, relic: rel_b06, hp_mult: 3.0, atk_mult: 2.0, def_mult: 1.4, spd_mult: 1.0, coins: [60, 80], exp: 330,
-        skills: [e_venom_sting, e_siphon], phases: [ph_enrage] }
+        skills: [e_venom_sting, e_siphon], skills: ["e_venom_sting", "e_siphon", "e_plague"], phases: ["ph_plague", "ph_enrage"] }
   lava:
     - { name: 熔岩巨人, desc: 碎石拼成的躯体里裹着赤红岩浆，一步一震。, relic: rel_b07, hp_mult: 4.7, atk_mult: 1.7, def_mult: 1.9, spd_mult: 0.8, coins: [110, 150], exp: 760,
-        skills: [e_quake, e_harden], phases: [ph_guard, ph_enrage] }
+        skills: [e_quake, e_harden], skills: ["e_quake", "e_harden", "e_cataclysm"], phases: ["ph_bulwark", "ph_enrage"] }
     - { name: 火蜥领主, desc: 鳞片下流淌着熔火，吐息能把铁器烧成汁。, relic: rel_b08, hp_mult: 3.5, atk_mult: 2.2, def_mult: 1.3, spd_mult: 1.4, coins: [120, 160], exp: 740,
-        skills: [e_meteor, e_crit_stab], phases: [ph_berserk] }
+        skills: [e_meteor, e_crit_stab], skills: ["e_meteor", "e_crit_stab", "e_inferno_mark"], phases: ["ph_frenzy", "ph_berserk"] }
     - { name: 灰烬魔蝠后, desc: 翼膜遮住洞顶的光，粉尘落处寸草不生。, relic: rel_b09, hp_mult: 2.6, atk_mult: 2.0, def_mult: 1.2, spd_mult: 1.7, coins: [100, 170], exp: 780,
-        skills: [e_summon_bat, e_drain], phases: [ph_swift, ph_desperate] }
+        skills: [e_summon_bat, e_drain], skills: ["e_summon_bat", "e_drain", "e_mana_burn"], phases: ["ph_swarmlord", "ph_desperate"] }
   frost:
     - { name: 霜牙狼皇, desc: 狼群在它身后排成一列白影，霜从它的呼吸里长出来。, relic: rel_b10, hp_mult: 3.4, atk_mult: 2.0, def_mult: 1.4, spd_mult: 1.5, coins: [210, 280], exp: 1500,
-        skills: [e_summon_wolf, e_ice_lance], phases: [ph_swift, ph_berserk] }
+        skills: [e_summon_wolf, e_ice_lance], skills: ["e_summon_wolf", "e_ice_lance", "e_frost_bind"], phases: ["ph_swift", "ph_berserk"] }
     - { name: 冰封骑士, desc: 铠甲里没有人，只有一团不肯散去的寒雾。, relic: rel_b11, hp_mult: 4.0, atk_mult: 1.8, def_mult: 2.0, spd_mult: 1.1, coins: [220, 300], exp: 1550,
-        skills: [e_ice_lance, e_frost_nova], phases: [ph_guard, ph_undying] }
+        skills: [e_ice_lance, e_frost_nova], skills: ["e_ice_lance", "e_frost_nova", "e_reknit"], phases: ["ph_bulwark", "ph_undying", "ph_last"] }
     - { name: 极光巫妖, desc: 法袍上的极光缓缓流动，指尖悬着不化的冰晶。, relic: rel_b12, hp_mult: 3.5, atk_mult: 2.4, def_mult: 1.3, spd_mult: 1.3, coins: [230, 290], exp: 1520,
-        skills: [e_annihilate, e_siphon], phases: [ph_guard, ph_berserk] }
+        skills: [e_annihilate, e_siphon], skills: ["e_annihilate", "e_siphon", "e_oblivion"], phases: ["ph_awaken", "ph_guard", "ph_berserk"] }
   abyss:
     - { name: 深渊守望者, desc: 无数只眼睛在黑暗里依次睁开，每一只都倒映着你。, relic: rel_b13, hp_mult: 4.5, atk_mult: 2.0, def_mult: 1.8, spd_mult: 1.2, coins: [420, 520], exp: 3000,
-        skills: [e_void_gaze, e_summon_eye], phases: [ph_guard, ph_enrage] }
+        skills: [e_void_gaze, e_summon_eye], skills: ["e_void_gaze", "e_summon_eye", "e_mana_burn"], phases: ["ph_awaken", "ph_bulwark", "ph_enrage"] }
     - { name: 虚空吞噬者, desc: 它没有形体，只有不断塌陷的轮廓在啃食光线。, relic: rel_b14, hp_mult: 4.2, atk_mult: 2.6, def_mult: 1.4, spd_mult: 1.4, coins: [440, 560], exp: 3100,
-        skills: [e_annihilate, e_drain], phases: [ph_enrage, ph_desperate] }
+        skills: [e_annihilate, e_drain], skills: ["e_annihilate", "e_drain", "e_cataclysm"], phases: ["ph_frenzy", "ph_berserk", "ph_last"] }
     - { name: 无名之影, desc: 与你的影子一模一样，只是先一步抬起了手。, relic: rel_b15, hp_mult: 3.2, atk_mult: 2.4, def_mult: 1.6, spd_mult: 1.8, coins: [460, 540], exp: 3200,
-        skills: [e_summon_shade, e_soul_reap, e_shadow_raid], phases: [ph_swift, ph_berserk] }
+        skills: [e_summon_shade, e_soul_reap, e_shadow_raid], skills: ["e_summon_shade", "e_soul_reap", "e_shadow_brand"], phases: ["ph_swift", "ph_necro", "ph_berserk"] }
 
 # 商店 = 遗物商店（原道具下架）：
 #   · 每层货架 3 件遗物 = 普通 1 + 稀有 1 + 商店专属 1（本区域/全局池按 seed 抽、排除本局已持有）

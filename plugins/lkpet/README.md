@@ -404,11 +404,23 @@ skills:        # 列表，每条带 **稳定 id**
   精英身上的 `swarm` 只保留标注。五个区域各至少有一只普通群怪：
   野蛮蜂群 / 磷光蝶群、腐叶虫群、火星蚁群、冰晶螨群、裂隙爬虫 / 虚无信徒。
 - **敌方专属技能（只有精英与首领有）**：小怪永远只有普攻；技能表**单独放在 `roguelike.yaml` 的
-  `enemy_skills`**（共 30 个，分 物理猛击系 / 蓄力终极技 / 状态与削弱系 / 自我强化系 / 召唤系 五组；
-  **故意不写进 `skills.yaml`**，那是宠物自己的技能表），精英在 `elites[].skills` 引用、首领在
-  `bosses[].skills` 引用。字段与宠物技能同口径：`power`（伤害 = atk × power / 30，与小怪普攻同一基准）、
-  `strikes`、`crit_rate`、`leech`、`heal`、`self_buff`、`debuff`、`dot`、`charge`、`interrupt`、`summon`、
-  `cooldown`（单位 = 计时条周期）、`mp_cost`、`priority`（越大越优先，同级比 `power`）。
+  `enemy_skills`**（共 **45** 个，分 物理猛击系 / 蓄力终极技 / 状态与削弱系 / 自我强化系 / 召唤系
+  / 持续伤害系 / 治疗系 / 组合机制 等组；**故意不写进 `skills.yaml`**，那是宠物自己的技能表），
+  精英在 `elites[].skills` 引用、首领在 `bosses[].skills` 引用。字段与宠物技能同口径：
+  `power`（伤害 = atk × power / 30，与小怪普攻同一基准）、`strikes`、`crit_rate`、`leech`、`heal`、
+  `self_buff`、`debuff`、`dot`、`charge`、`interrupt`、`summon`、`cooldown`、`mp_cost`、
+  `priority`（越大越优先，同级比 `power`）。
+  45 个技能全部被引用（无死配置）；机制覆盖：`dot` 6 个、`heal` 4 个、`self_buff` 5 个、
+  `debuff` 9 个、`charge` 6 个（最长 `charge: 4`）、`summon` 5 个、`strikes` 7 个（最多 5 段）。
+- **敌方形态（`enemy_phases`，共 14 个）**：生命跌破 `at_hp` 触发一次，按顺序检查。
+  除原有的 6 个（暴怒/狂乱/坚壁/疾走/不灭/垂死挣扎），新增 8 个覆盖三种用途：
+  - **早段预警**：`ph_awaken` 苏醒（0.75，小幅强化，让玩家提前感到压力）；
+  - **转阶段机制**：`ph_swarmlord` 巢母 / `ph_necro` 招魂（叫援军）、`ph_plague` 疫变（转阶段上 DoT）、
+    `ph_regen` 增生（转阶段开始自愈）；
+  - **残血爆发**：`ph_last` 终末（0.12，攻击 ×1.6 + 速度 ×1.2）。
+  **6 个高难首领已是三阶段**（古树长老、冰封骑士、极光巫妖、深渊守望者、虚空吞噬者、无名之影），
+  预告会完整列出全部阈值，例如
+  `🌀 形态：铁壁（生命 ≤65%），不灭（生命 ≤25%），终末（生命 ≤12%）`。
 - **敌方 MP**：独立资源池，入场即满（`battle.enemy_mp`：基础 50，精英 ×1.6 / 首领 ×2.4 / 召唤物 ×0.6），
   之后**计时条每满一次回复 `regen`（8 点）**——与技能冷却同一节奏。
 - **我方 MP（局内跨层资源）**：`battle.mp`。**不再每场战斗重置**，规则三条：

@@ -285,7 +285,12 @@ def register_function_calling():
 
     class StopThinkingFunctionCalling(FunctionCalling):
         function_name = "stop_thinking"
-        description = "在不需要接收调用反馈时调用,调用后结束本次思考"
+        description = (
+            "【不说话时的唯一方式】结束本次思考，什么也不发。\n"
+            "没什么想说的、不想接这个话、或不知道该说什么时调用。\n"
+            "注意：不调用 send_message、也不调用本功能，"
+            "只是把想说的话写在正文里 —— 那段文字不会发出去，等于白说。"
+        )
         essential = True
         args: ClassVar[list[FunctionCallingArg]] = []
 
@@ -300,12 +305,14 @@ def register_function_calling():
     class SendMessageFunctionCalling(FunctionCalling):
         function_name = "send_message"
         description = (
-            "在聊天里说话。只有本功能会真的把消息发到群里——"
-            "正文里写的字不会被人看到。"
-            "msg 参数就是你直接发出去的那句话，"
-            "不是对别人的解释、不是总结、不是报告。"
-            "像在手机上打字:口语、短、可以有语气词。"
-            "想分几条发就多次调用本功能，一次一条。"
+            "【说话的唯一方式】在聊天里说话。\n"
+            "只有本功能会真的把消息发到群里；你写的正文、思考、解释，"
+            "任何不经过本功能的文字都不会被任何人看到。\n"
+            "想说什么，就必须调用本功能，把要说的话放进 msg 参数。\n"
+            "msg 就是你直接发出去的那句话：口语、短，可以带语气词，"
+            "不是对别人的解释、不是总结、不是报告。\n"
+            "想分几条发就多次调用，一次一条。\n"
+            "如果此刻不想说话，调用 stop_thinking，不要用正文代替。"
         )
         essential = True
         args: ClassVar = [

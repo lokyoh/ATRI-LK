@@ -96,7 +96,23 @@ class ThinkingModel:
         history_prompt = "#历史聊天记录,以下记录仅供参考\n" + (
             "\n".join(messages) if messages else "无历史聊天记录"
         )
-        return f"{image_history}\n\n{history_prompt}\n#历史聊天记录结束\n\n"
+        # 提示词**最后**一句必须是输出约束。
+        # 模型对上下文末尾最敏感；之前把「输出铁律」放在中段的功能列表后，
+        # 后面还跟着上千字角色设定与聊天记录，等于把它冲掉了。
+        # 真实案例：模型读完「消息内容:你烧了多少」就直接用正文接话，
+        # 完全没有调用 send_message，回复因此丢失。
+        return (
+            f"{image_history}\n\n{history_prompt}\n#历史聊天记录结束\n\n"
+            "#现在轮到你行动\n"
+            "上面是背景资料，不要把它们当成对话来回复。\n"
+            "你要说的每一句话都必须放进 send_message 的 msg 参数；"
+            "不想说就调用 stop_thinking。\n"
+            "直接写正文＝什么都不会发出去。\n\n"
+            "输出格式（先一句思考，再跟调用）：\n"
+            'send_message(msg="要说的那句")\n'
+            "或\n"
+            "stop_thinking()\n"
+        )
 
     @classmethod
     async def get_prompt(
@@ -199,13 +215,6 @@ class ThinkingModel:
 
 功能调用格式：
 功能名(参数名=参数值, ...)
-
-【输出铁律】
-你输出的每个字，只有两种去处，没有第三种：
-  1. 想让她在群里说话 → 写 send_message(msg="那句话")
-  2. 什么都不想发 → 写 stop_thinking()
-直接写正文（哪怕是完美的回复）不会被任何人看到，视为没有输出。
-每条回复至少包含上面两个调用之一。
 """
 
     @staticmethod
@@ -230,7 +239,7 @@ class ThinkingModel:
 
 # 怎么说话才发得出去
 想让她在群里说话，只有 send_message 这一条路；不想说就 stop_thinking。
-直接写正文不会发出去。具体规范见下方功能列表末尾的「输出铁律」。
+直接写正文不会发出去。详细要求见本次输入的最后一段。
 
 要求：
 - 调用之前可以写一两句"为什么这样调用"，但不要写情绪描写、不要写最终回复、不要写无关解释

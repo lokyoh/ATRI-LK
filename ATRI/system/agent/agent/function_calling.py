@@ -300,7 +300,9 @@ def register_function_calling():
     class SendMessageFunctionCalling(FunctionCalling):
         function_name = "send_message"
         description = (
-            "在聊天里说话。写出来的就是你直接发出去的那句话，"
+            "在聊天里说话。只有本功能会真的把消息发到群里——"
+            "正文里写的字不会被人看到。"
+            "msg 参数就是你直接发出去的那句话，"
             "不是对别人的解释、不是总结、不是报告。"
             "像在手机上打字:口语、短、可以有语气词。"
             "想分几条发就多次调用本功能，一次一条。"

@@ -30,6 +30,45 @@ USER_MEMORY_LIMIT = 11
 #: 亚托莉自我记忆的条数上限。
 SELF_MEMORY_LIMIT = 8
 
+#: 单条回复的字数上限。超出会在句子边界截断。
+#:
+#: 为什么需要这个：提示词里写了「短」，但那是**要求**不是**约束**——
+#: 模型照样能发三百字，而且发出去就收不回来了。
+#: 300 字留给「确实需要解释一句」的情况，再长一定是把整段思考倒出来了。
+REPLY_MAX_CHARS = 300
+
+#: 截断时优先在最近的这些标点处断开，尽量不截断在半句话中间。
+_SENTENCE_ENDS = ("。", "！", "？", "…", "\n", "；", "，", ".", "!", "?")
+
+
+def _trim_reply(text: str) -> tuple[str, str]:
+    """把过长的回复截短。返回 (新文本, 提示语)。
+
+    提示语会作为 `send_message` 的返回值回填给模型，让它知道被截了、
+    下次主动拆成几条发。**不抛错**：已经想好的内容丢掉更可惜，
+    截断比失败好。
+
+    截断点优先取最近的句子边界，实在找不到才硬切——半句话比长句更难看。
+    """
+    body = (text or "").strip()
+    if len(body) <= REPLY_MAX_CHARS:
+        return body, ""
+
+    head = body[:REPLY_MAX_CHARS]
+    # 从后往前找最近的句子边界，至少保留一半长度（否则截得太碎）
+    cut = -1
+    for i in range(len(head) - 1, len(head) // 2, -1):
+        if head[i] in _SENTENCE_ENDS:
+            cut = i + 1
+            break
+    trimmed = (head[:cut] if cut > 0 else head).rstrip()
+
+    note = (
+        f"已发送，但内容过长被截断（原 {len(body)} 字，只发了 {len(trimmed)} 字）。"
+        "下次想说的多，就分几次调用 send_message，每条一句。"
+    )
+    return trimmed, note
+
 
 class FunctionCallingArg:
     def __init__(self, name: str, _type: str, description: str):
@@ -260,10 +299,30 @@ def register_function_calling():
 
     class SendMessageFunctionCalling(FunctionCalling):
         function_name = "send_message"
-        description = "发送消息,消息符合及时聊天软件的简短聊天风格"
+        description = (
+            "在聊天里说话。写出来的就是你直接发出去的那句话，"
+            "不是对别人的解释、不是总结、不是报告。"
+            "像在手机上打字:口语、短、可以有语气词。"
+            "想分几条发就多次调用本功能，一次一条。"
+        )
         essential = True
         args: ClassVar = [
-            FunctionCallingArg(name="msg", _type="str", description="要发送的消息内容")
+            FunctionCallingArg(
+                name="msg",
+                _type="str",
+                description=(
+                    "你要发出的那句话。要求:\n"
+                    "  1. 口语,不是书面语。不用「此外」「因此」「总而言之」这类连接词\n"
+                    "  2. 短。通常 5-20 字,长回答也拆成几条发\n"
+                    "  3. 可以带语气:哈哈、诶、唔、嘛、啦、欸、啊\n"
+                    "  4. 不写动作描写(如「(笑)」「*点头*」)、不写括号里的心理活动\n"
+                    "  5. 不列 1234、不用 markdown、不用 emoji 以外的装饰\n"
+                    "  6. 不要复述对方刚说的话\n"
+                    "反例:「好的,我了解您的意思了。关于这个问题,我认为可以从以下"
+                    "几个方面来看:第一……」\n"
+                    "正例:「诶，是这样吗」「唔…我想想」「哈哈那也太惨了吧」"
+                ),
+            )
         ]
 
         @staticmethod
@@ -272,19 +331,25 @@ def register_function_calling():
             current_history = data.current_history
             if current_history is None:
                 raise RuntimeError("发送消息时缺少关联的聊天历史")
+            # 提示词要求「短」，但没有任何机制兜底——模型照样能发一大段。
+            # 这里做**软截断**：超长时在最近的句子边界断开，并回填一句提示，
+            # 让模型知道被截了、下次自己拆成几条。不直接报错（会丢内容）。
+            shortened, cut_note = _trim_reply(msg)
+            if cut_note:
+                log.debug(f"回复过长被截断，原长 {len(msg)}")
             try:
-                await data.sender.send(msg)
+                await data.sender.send(shortened)
                 if llm_manager.has_type(ModelType.TTS) and isinstance(
                     data.sender, OneBotChatSender
                 ):
                     file = await llm_manager.call_model_by_type(
-                        ModelType.TTS, msg, "Agent-语音"
+                        ModelType.TTS, shortened, "Agent-语音"
                     )
                     await data.sender.send(rec_msg_from_path(file.content))
             except Exception:
                 return "发送失败,请勿再次尝试"
-            current_history.add_response(msg)
-            return "发送成功"
+            current_history.add_response(shortened)
+            return cut_note or "发送成功"
 
     FunctionCallingManager.register(SendMessageFunctionCalling)
 
@@ -434,7 +499,7 @@ def register_function_calling():
         function_name = "love_change"
         description = (
             "更改你对用户的好感度（长期关系评价）。"
-            "注意：好感度**不会**改变你当下的心情——心情用 feel 记录。"
+            "注意：好感度不会改变你当下的心情——心情用 feel 记录。"
         )
         args: ClassVar = [
             FunctionCallingArg(
@@ -459,10 +524,10 @@ def register_function_calling():
     class RelationSetFunctionCalling(FunctionCalling):
         function_name = "relation_set"
         description = (
-            "设置你对某个人的**关系态度**（不是心情，也不是好感度）。"
+            "设置你对某个人的关系态度（不是心情，也不是好感度）。"
             "用于记录「刚吵完架」「在闹别扭」「最近很黏人」这类针对某个人的状态。"
             "与 feel 的区别：feel 是你此刻的情绪（会自然消退、对所有人一样），"
-            "这个只对当前对话人生效，且**不会自动消退**——和好需要你主动清空。"
+            "这个只对当前对话人生效，且不会自动消退——和好需要你主动清空。"
         )
         args: ClassVar = [
             FunctionCallingArg(

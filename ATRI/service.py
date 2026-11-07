@@ -86,6 +86,14 @@ class Service:
         CLOSED = "已关闭的服务"
         HIDDEN = "隐藏服务"
 
+        @property
+        def key(self) -> str:
+            """稳定键（枚举名小写），供 WebUI 等前端作为数量字典的键使用。
+
+            新增服务类型时无需改动前端：``SYSTEM`` -> ``system``，以此类推。
+            """
+            return self.name.lower()
+
     def __init__(
         self,
         service: str,
@@ -708,7 +716,7 @@ class ServiceTools:
             s_d[s_t.value] = []
         for s in cls.service_list.values():
             info = s.get_info()
-            s_d[info.type].append(info.service)
+            s_d.setdefault(info.type, []).append(info.service)
         return s_d
 
 

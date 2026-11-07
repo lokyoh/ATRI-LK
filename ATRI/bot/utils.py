@@ -1,6 +1,6 @@
 from nonebot.adapters import Bot
 from nonebot.adapters.onebot.v11 import Bot as OneBot
-from nonebot.adapters.onebot.v11 import Message
+from nonebot.adapters.onebot.v11 import Message, MessageSegment
 from nonebot.adapters.qq import Bot as QQBot
 from nonebot.drivers import Request
 
@@ -62,7 +62,7 @@ class BotUtils:
         cls,
         bot: Bot,
         service: str,
-        message: str | Message,
+        message: str | Message | MessageSegment,
         user_id: str | None = None,
         group_id: str | None = None,
     ):

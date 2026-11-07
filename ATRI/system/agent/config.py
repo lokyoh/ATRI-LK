@@ -4,9 +4,9 @@ import yaml
 
 from ATRI.configs import Field, PluginConfig
 from ATRI.dir import SYS_CONFIG_DIR
+from ATRI.exceptions import str_traceback
 from ATRI.log import log
 
-from ...exceptions import str_traceback
 from .llm.provider import LLMProvider, ProviderManager, default_provider
 from .service import plugin
 
@@ -99,6 +99,17 @@ class AgentConfig(PluginConfig):
         "最大思考轮数",
         "允许Agent最高思考次数,当遇到需要大量思考情况可提高此值,默认值20",
         min=5,
+    )
+    agent_chat_whitelist = Field(
+        list,
+        [],
+        "聊天白名单",
+        "允许 Agent 聊天、并记录聊天历史的群号列表。"
+        "实际生效范围是本列表与「聊天」插件白名单的**并集**："
+        "聊天插件的「聊天白名单」在 chat_switch 打开时计入，"
+        "「主动聊天白名单」在 proactively_chat 打开时计入。"
+        "留空 = 不额外开启，仅依赖聊天插件的名单",
+        item_type=str,
     )
     # ---- 主动行为（她主动插话的频率）----
     proactive_max_per_hour = Field(

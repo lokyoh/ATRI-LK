@@ -112,7 +112,11 @@ class InnerState:
         elif self.mood >= 0.35:
             parts.append("你心情不错")
         if self.attention:
-            parts.append(f"你此刻正在{self.attention}")
+            detail = self.attention.strip().rstrip("。.；;，, ")
+            if detail.startswith(("在", "正在")):
+                parts.append(f"你此刻{detail}")
+            else:
+                parts.append(f"你此刻正在{detail}")
         if not parts:
             return ""
         return "；".join(parts) + "。"

@@ -1,3 +1,4 @@
+import contextlib
 import hashlib
 import io
 import json
@@ -607,3 +608,121 @@ class ChatHistoryManager:
 
 
 history_logger = HistoryLogger()
+
+
+# `group_id` 缺失时的占位值。签到等服务的写法是
+# `str(getattr(event, "group_id", None))`，私聊会得到字符串 "None"——
+# 直接当键会在 `data/plugins/agent/chat/None/` 下落一个假目录。
+_INVALID_CHAT_IDS = frozenset({"", "none", "null", "undefined"})
+
+
+def _normalize_chat_id(chat_id) -> str:
+    """把各种来源的 chat_id 归一成合法字符串。非法时返回空串。"""
+    text = str(chat_id).strip() if chat_id is not None else ""
+    return "" if text.lower() in _INVALID_CHAT_IDS else text
+
+
+def _as_name_set(values) -> set[str]:
+    """把配置里的名单转成字符串集合，跳过空项。"""
+    if not values:
+        return set()
+    try:
+        return {str(v).strip() for v in values if str(v).strip()}
+    except Exception:
+        return set()
+
+
+def effective_chat_whitelist() -> set[str]:
+    """当前**实际生效**的聊天白名单（三份取并集，受开关控制）。
+
+    三份来源：
+
+    1. Agent 自己的 `agent_chat_whitelist`——总是生效；
+    2. `聊天` 插件的 `whit_list`——仅当 `chat_switch` 打开时计入；
+    3. `聊天` 插件的 `proactively_chat_whit_list`——仅当 `proactively_chat`
+       打开时计入。
+
+    **为什么要看开关**：开关关掉时那份名单本来就不会触发 Agent 聊天，
+    若仍按名单记录，就会出现「开关关了、历史还在长」——用户以为关干净了，
+    实际磁盘和 Token 都在消耗。
+
+    读不到外部插件配置时按空集处理：白名单读失败最多少记一条，
+    抛异常会让调用方（签到等服务）失败，代价不对等。
+    """
+    allowed: set[str] = set()
+    with contextlib.suppress(Exception):
+        allowed |= _as_name_set(config.get("agent_chat_whitelist"))
+    try:
+        from ATRI.configs.plugin_config import PluginConfig
+
+        lk_cfg = PluginConfig.get_config("聊天")
+        if lk_cfg is not None:
+            if lk_cfg.get("chat_switch"):
+                allowed |= _as_name_set(lk_cfg.get("whit_list"))
+            if lk_cfg.get("proactively_chat"):
+                allowed |= _as_name_set(lk_cfg.get("proactively_chat_whit_list"))
+    except Exception as exc:
+        log.debug(f"读取聊天插件白名单失败（按空处理）：{exc}")
+    return allowed
+
+
+def in_chat_whitelist(chat_id) -> bool:
+    """这个会话是否允许记录聊天历史。"""
+    normalized = _normalize_chat_id(chat_id)
+    if not normalized:
+        return False
+    return normalized in effective_chat_whitelist()
+
+
+def log_bot_message(chat_id, text) -> bool:
+    """把一条**机器人自己发出**的消息记进聊天历史。
+
+    服务（签到/投喂等）在发送成功后调用。返回是否真的记录了。
+
+    四个步骤，任一不过就返回 False：
+
+    1. chat_id 归一化（挡掉 None / "None" / 空串）；
+    2. 白名单检查——不在名单里就不记，避免为没人读的群白烧 Token；
+    3. 提取纯文本——带图片/@ 的消息直接 str() 会留下 CQ 码；
+    4. 走 `add_agent_message`，同时落盘与进内存队列
+       （只写盘的话，正在对话时读的是内存队列，本次看不到）。
+
+    **失败只记 debug**：记录是旁路，不能因为它让服务本身报错。
+    """
+    normalized = _normalize_chat_id(chat_id)
+    if not normalized:
+        return False
+    body = str(text or "").strip()
+    if not body:
+        return False
+
+    try:
+        if not in_chat_whitelist(normalized):
+            return False
+    except Exception:
+        return False
+
+    try:
+        reply = History(None, normalized)
+        reply.message = LLMMessage(normalized, [MessageSegment(body)])
+        ChatHistoryManager.get_history(normalized).add_agent_message(reply, body)
+        return True
+    except Exception as exc:
+        log.debug(f"服务消息写入历史失败（忽略）：{exc}")
+        return False
+
+
+def extract_plain_text(message) -> str:
+    """从消息里取出纯文本，用于写历史。
+
+    历史是给模型读的，`[CQ:image,file=xxx.jpg]` 这类段对它没有意义，
+    还会浪费 Token。取不到文本（纯图片/纯表情）时返回空串。
+    """
+    if message is None:
+        return ""
+    try:
+        if hasattr(message, "extract_plain_text"):
+            return str(message.extract_plain_text() or "").strip()
+    except Exception:
+        pass
+    return str(message or "").strip()

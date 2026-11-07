@@ -12,6 +12,75 @@ from .role import ATRI
 #: 「昨日记忆」注入日程生成的字数预算。日程只需要气质与近况，不需要全部记忆。
 SCHEDULE_MEMORY_BUDGET = 600
 
+#: 「她认识的人」注入日程生成的字数预算。
+#: 日程是给「她自己的一天」用的，只需要知道有谁值得出现在这一天里。
+SCHEDULE_PEOPLE_BUDGET = 400
+
+
+def _describe_people() -> str | None:
+    """把认识的几个人整理成日程生成的参考素材。
+
+    为什么需要：原来的日程只参考「昨日记忆」，于是生成的永远是
+    「和朋友约在咖啡馆见面」这种泛称——她明明有具体的主人、常聊的人，
+    日程里却一个都不出现，整天像是悬浮在没人际关系的真空里。
+
+    排序按**熟络度**，主人优先。只给昵称与关系，不给 QQ 号：
+    日程是叙事文本，塞满数字会让她把 ID 念出来。
+
+    :return: 可直接拼进提示词的段落；没人可写时返回 None。
+    """
+    from .user import list_known_users
+
+    try:
+        users = list_known_users()
+    except Exception:
+        return None
+    if not users:
+        return None
+
+    from .util import get_user_group
+
+    master_id = ""
+    lines: list[str] = []
+    used = 0
+    unknown_seq = 0
+    for u in users:
+        uid = u["user_id"]
+        try:
+            is_master = get_user_group(uid) == "主人"
+        except Exception:
+            is_master = False
+        if is_master and not master_id:
+            master_id = uid
+        try:
+            from ATRI.system.lkapi.bot import util as lk_util
+
+            label = lk_util.get_name(uid) if lk_util.is_valid_user(uid) else ""
+        except Exception:
+            label = ""
+        if not label:
+            if is_master:
+                label = "主人"
+            else:
+                unknown_seq += 1
+                label = f"某位熟人{unknown_seq}"
+        role = "主人" if is_master else "熟人"
+        detail = f"- {label}（{role}）：{u['relation']}"
+        if u["profile"]:
+            detail += f"；你对TA的印象：{u['profile']}"
+        if used + len(detail) > SCHEDULE_PEOPLE_BUDGET:
+            break
+        lines.append(detail)
+        used += len(detail)
+    if not lines:
+        return None
+    head = "### 她生活里真实存在的人\n"
+    if master_id:
+        head += "主人是她最重要的人，日程里应当自然出现，而不是用「朋友」泛指。\n"
+    head += "生成日程时请围绕这些人展开（可以一起吃饭、聊天、被叫走），"
+    head += "不要凭空造一群泛泛的「朋友」。\n"
+    return head + "\n".join(lines) + "\n\n"
+
 
 def extract_json_from_markdown(text):
     """
@@ -147,6 +216,7 @@ class ATRISchedule:
         prompt = (
             self.before_prompt
             + f"\n\n### 人物简介\n{ATRI.get_role_prompt()}\n\n"
+            + (_describe_people() or "")
             + f"{f'### 昨日记忆\n{memory}\n\n' if memory else ''}"
             + self.after_prompt
         )

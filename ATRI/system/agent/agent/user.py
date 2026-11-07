@@ -74,6 +74,72 @@ _FAMILIARITY_BANDS = (
 )
 
 
+#: 认识的人最多列出几个。太多会挤占提示词，且大部分她根本不在意。
+KNOWN_USERS_LIMIT = 20
+
+
+def list_known_users(limit: int = KNOWN_USERS_LIMIT) -> list[dict]:
+    """列出她记录过的用户（按熟络度从高到低）。
+
+    供「你主人是谁」「你和某某关系怎样」这类问题使用：
+    提示词里只有**当前对话人**的关系，别人问起第三者时她没有依据。
+    """
+    try:
+        rows = user_table.select_all()
+    except Exception:
+        return []
+
+    users = []
+    for row in rows:
+        uid = str(row[0])
+        if uid.startswith("__"):
+            continue
+        try:
+            info = User.model_validate_json(row[1])
+        except Exception:
+            continue
+        users.append(
+            {
+                "user_id": uid,
+                "familiarity": float(info.familiarity or 0.0),
+                "love": int(info.love or 0),
+                "mood_tag": (info.mood_tag or "").strip(),
+                "profile": (info.profile or "").strip(),
+                "relation": describe_relation(info),
+            }
+        )
+    users.sort(key=lambda u: u["familiarity"], reverse=True)
+    return users[:limit]
+
+
+def find_user_by_name(name: str) -> dict | None:
+    """按名字或 ID 找一个人。
+
+    匹配顺序：完全等于 ID → ID 包含 → 画像/记忆里提到这个名字。
+    找不到返回 None（调用方应如实说「不太记得这个人」，
+    而不是编一个关系出来）。
+    """
+    keyword = str(name or "").strip()
+    if not keyword:
+        return None
+
+    users = list_known_users(limit=200)
+
+    # 1. 直接是 user_id
+    for u in users:
+        if u["user_id"] == keyword:
+            return u
+    # 2. user_id 包含（部分 QQ 号）
+    for u in users:
+        if keyword in u["user_id"]:
+            return u
+    # 3. 画像里提到
+    for u in users:
+        if keyword in u["profile"]:
+            return u
+    return None
+
+
 def describe_relation(info: User) -> str:
     """把好感度 + 熟络度 + 态度标签渲染成一段关系描述。"""
     band = "还不太熟"

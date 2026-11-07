@@ -161,27 +161,21 @@ def _save_spoken(spoken: list[str], keep: int = 40) -> None:
         log.warning(f"保存主动发起标记失败（忽略）：{exc}")
 
 
-def pick_opening(chat_id: str | None = None) -> Opening | None:
+def pick_opening() -> Opening | None:
     """挑一条「值得说」的经历。没有就返回 None。
 
-    素材有两个来源，按优先级：
+    素材**只**来自自我记忆（`self_memory`）——她自己的经历，有前因、有上下文。
 
-    1. **自我记忆**（`self_memory`）——她自己的经历。共 8 条上限，
-       讲完就没了，但那是「有前因」的事，最像人。
-    2. **记忆表里关于**该群**的高情绪条目**——从 `memories` 挑。
-       它们本来用于检索，这里复用为「可以主动提起的事」。
+    曾经还从 `memories` 表里挑本群的高情绪条目当素材，但那批记忆是**过去某天**
+    的总结，日期一久，冷不丁提起来就是「突然说起八百年前的事」，比不说话更怪。
+    检索场景里「用户问起才想起来」是合理的，主动说出来是另一回事。
 
-    加第二个来源是因为：只有 8 条自我记忆时，讲完一轮就永久沉默。
-    而记忆表随日常对话持续增长，能让她长期有话可说。
-
-    :param chat_id: 限定从该群的记忆里挑（避免把 A 群的事说到 B 群）。
+    代价是素材有限（默认 8 条）：讲完就暂时没有可说的，`try_speak` 会安静跳过。
+    这比硬凑一句突兀的话好。
     """
     spoken = _load_spoken()
     spoken_set = set(spoken)
-    picked = _pick_from_self(spoken_set)
-    if picked is not None:
-        return picked
-    return _pick_from_memory_table(chat_id, spoken_set)
+    return _pick_from_self(spoken_set)
 
 
 def _pick_from_self(spoken_set: set[str]) -> Opening | None:
@@ -215,78 +209,6 @@ def _pick_from_self(spoken_set: set[str]) -> Opening | None:
     candidates.sort(key=lambda c: c[0])
     charge, text = candidates[-1]
     return Opening(text=text, reason=f"自我记忆情绪强度 {charge:.2f}")
-
-
-def _row_chat_id(meta: dict, content: str) -> str:
-    """判断一条记忆属于哪个聊天，解析不出来时返回空串。
-
-    规则本身住在 `memory.database.chat_scope`——检索链路用的是同一条，
-    这里不另写一份，免得两处口径慢慢漂开。
-
-    返回空串表示没有会话归属，调用方必须视为「来源不明」而**拒绝**使用。
-    """
-    from .memory.database import chat_scope
-
-    return chat_scope(meta, content)
-
-
-def _pick_from_memory_table(
-    chat_id: str | None, spoken_set: set[str]
-) -> Opening | None:
-    """从 `memories` 表挑一条高情绪、未说过的记忆。
-
-    两道**安全约束**，缺一不可：
-
-    1. **必须限定 chat_id**：记忆表里有各群的内容，不限定就会把 A 群的事
-       拿去 B 群说。传 None 时不做补充。
-    2. **只挑群级内容**（`subject` 为空）：带具体 `subject` 的条目是
-       「某人告诉我的事」，主动当众说出来就是背叛信任。
-       比如「userA 私聊告诉我的秘密」，在群里主动提起是绝对不能发生的。
-
-    这也是为什么不做「跨用户记忆的主动开口」：检索场景下「用户问起才想起来」
-    是合理的，但**主动说出来**是完全不同的事。
-    """
-    if not chat_id:
-        return None
-
-    from .memory.database import EMOTION_KEY
-
-    try:
-        from .memory.manage import memory_manager
-
-        rows = memory_manager.database.all_memories()
-    except Exception:
-        return None
-
-    scope = str(chat_id)
-    candidates: list[tuple[float, str]] = []
-    for row in rows:
-        meta = row.get("metadata") or {}
-        # 安全约束 2：带 subject 的一律跳过（那是关于某个人的私事）
-        if str(meta.get("subject") or ""):
-            continue
-        content = str(row.get("content") or "").strip()
-        # 安全约束 1：必须是**本群**的记忆。
-        # 解析不出来源的一律跳过——「不知道是哪儿的」不能当「大家都适用」，
-        # 否则旧数据（元数据缺 chat_id）会把别群的事说给这个群听。
-        if _row_chat_id(meta, content) != scope:
-            continue
-        if not content or _key_of(content) in spoken_set:
-            continue
-        try:
-            charge = abs(float(meta.get(EMOTION_KEY) or 0.0))
-        except (TypeError, ValueError):
-            charge = 0.0
-        if charge < EMOTION_THRESHOLD:
-            continue
-        candidates.append((charge, content))
-
-    if not candidates:
-        return None
-
-    candidates.sort(key=lambda c: c[0])
-    charge, text = candidates[-1]
-    return Opening(text=text, reason=f"群记忆情绪强度 {charge:.2f}")
 
 
 def should_speak_now(chat_id: str, *, now: float | None = None) -> tuple[bool, str]:
@@ -699,7 +621,7 @@ async def try_speak(chat_id: str, bot) -> str | None:
             log.debug(f"群 {chat_id} 不主动开口：{reason}")
             return None
 
-        opening = pick_opening(chat_id)
+        opening = pick_opening()
         if opening is None:
             telemetry.initiative(
                 chat_id=chat_id,

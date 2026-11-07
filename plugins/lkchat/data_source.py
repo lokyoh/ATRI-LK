@@ -175,6 +175,21 @@ def match_atri_img(text):
     return None
 
 
+def _mentions_bot_name(text: str) -> bool:
+    """消息里是否提到了她的名字。"""
+    body = (text or "").strip()
+    if not body:
+        return False
+    try:
+        names = [str(n).strip() for n in (lk_util.bot_names or []) if str(n).strip()]
+    except Exception:
+        return False
+    if not names:
+        return False
+    lowered = body.lower()
+    return any(name.lower() in lowered for name in names)
+
+
 async def call_agent(event: GroupMessageEvent, matcher: Matcher, bot: Bot):
     group_id = str(event.group_id)
     sender_id = event.get_user_id()
@@ -184,7 +199,7 @@ async def call_agent(event: GroupMessageEvent, matcher: Matcher, bot: Bot):
     )
     skip_chat = not p_c
     skip_judgment = not p_c
-    if event.to_me:
+    if event.to_me or _mentions_bot_name(message.extract_plain_text()):
         skip_chat = False
         skip_judgment = True
     try:
@@ -208,9 +223,14 @@ async def qq_call_agent(event: GroupAtMessageCreateEvent, matcher: Matcher, bot:
     message = event.get_plaintext()
     if not message:
         return
-    # 仅支持@类型消息
-    skip_chat = False
-    skip_judgment = True
+    p_c = config.get("proactively_chat") and group_id in config.get(
+        "proactively_chat_whit_list"
+    )
+    skip_chat = not p_c
+    skip_judgment = not p_c
+    if event.to_me or _mentions_bot_name(message):
+        skip_chat = False
+        skip_judgment = True
     try:
         sender = QQChatSender(matcher)
         args = ChatArgs(bot, group_id, sender_id, skip_chat, skip_judgment)

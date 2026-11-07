@@ -9,7 +9,7 @@ from nonebot.adapters.onebot.v11.event import (
     PokeNotifyEvent,
 )
 from nonebot.adapters.qq import Bot as QQBot
-from nonebot.adapters.qq import GroupAtMessageCreateEvent
+from nonebot.adapters.qq import GroupMessageCreateEvent
 from nonebot.adapters.qq import MessageEvent as QQMessageEvent
 from nonebot.matcher import Matcher
 
@@ -29,7 +29,7 @@ from ATRI.system.htmlrender import md_to_pic
 from .config import LKChatConfig
 
 plugin = Service(
-    "聊天", "ATRI进行聊天处理的插件", "0.9.0", Service.ServiceType.ENTERTAINMENT
+    "聊天", "ATRI进行聊天处理的插件", "0.10.0", Service.ServiceType.ENTERTAINMENT
 ).main_cmd("聊天")
 config: LKChatConfig = plugin.add_plugin_config(LKChatConfig)
 
@@ -70,7 +70,7 @@ async def _(event: GroupMessageEvent, matcher: Matcher, bot: Bot):
 
 
 @on_talk.handle()
-async def _(event: GroupAtMessageCreateEvent, matcher: Matcher, bot: QQBot):
+async def _(event: GroupMessageCreateEvent, matcher: Matcher, bot: QQBot):
     group_id = str(event.group_id)
     if config.get("chat_switch") and group_id in config.get("whit_list", []):
         await qq_call_agent(event, matcher, bot)

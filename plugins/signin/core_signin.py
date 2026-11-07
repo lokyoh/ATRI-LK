@@ -6,6 +6,7 @@ from nonebot.exception import FinishedException
 from ATRI.exceptions import str_traceback
 from ATRI.log import log
 from ATRI.message import MessageBuilder
+from ATRI.system.agent.agent.history import extract_plain_text, log_bot_message
 from ATRI.system.lkapi.bot import PLUGIN_DIR
 from ATRI.system.lkapi.entity.user import get_user_data, sign
 from ATRI.system.lkapi.utils.picture import get_pic_from, has_source
@@ -64,6 +65,7 @@ class CoreSignin(Signin):
     async def signin(event, matcher):
         user_id = event.get_user_id()
         group_id = str(getattr(event, "group_id", None))
+        pending: list[str] = []
         try:
             message = MessageBuilder().text("")
             _, msg = sign(user_id)
@@ -72,8 +74,11 @@ class CoreSignin(Signin):
             log.info(f"{user_id}签到")
             img_path = await get_pic(user_id, group_id)
             message.image(get_image_bytes(img_path))
+            pending.append(extract_plain_text(message))
             await matcher.finish(message, at_sender=True)
         except FinishedException:
+            for text in pending:
+                log_bot_message(group_id, text)
             raise
         except Exception as e:
             path = os.path.join(PLUGIN_DIR, "sign_in", f"{user_id}.jpg")
@@ -83,7 +88,13 @@ class CoreSignin(Signin):
             message = MessageBuilder()
             user_data = get_user_data(user_id)
             message.text(f"签到成功,你已签到{user_data.signdays}天")
-            await matcher.finish(message, at_sender=True)
+            pending.clear()
+            pending.append(extract_plain_text(message))
+            try:
+                await matcher.finish(message, at_sender=True)
+            finally:
+                for text in pending:
+                    log_bot_message(group_id, text)
 
 
 signin.change_signin(CoreSignin)

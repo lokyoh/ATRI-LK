@@ -12,74 +12,86 @@ from .role import ATRI
 #: 「昨日记忆」注入日程生成的字数预算。日程只需要气质与近况，不需要全部记忆。
 SCHEDULE_MEMORY_BUDGET = 600
 
-#: 「她认识的人」注入日程生成的字数预算。
-#: 日程是给「她自己的一天」用的，只需要知道有谁值得出现在这一天里。
+#: 「主人信息」注入日程生成的字数预算。
+#: 日程是给「她自己的一天」用的，只需要知道主人是谁、关系怎样。
 SCHEDULE_PEOPLE_BUDGET = 400
 
 
+def _master_label(user_id: str) -> str:
+    """主人的称呼。取不到名字时退化成「主人」，不要编名字。"""
+    try:
+        from ATRI.system.lkapi.bot import util as lk_util
+
+        if lk_util.is_valid_user(user_id):
+            label = (lk_util.get_name(user_id) or "").strip()
+            if label:
+                return label
+    except Exception:
+        pass
+    return "主人"
+
+
 def _describe_people() -> str | None:
-    """把认识的几个人整理成日程生成的参考素材。
+    """把**主人**整理成日程生成的参考素材。
 
     为什么需要：原来的日程只参考「昨日记忆」，于是生成的永远是
-    「和朋友约在咖啡馆见面」这种泛称——她明明有具体的主人、常聊的人，
+    「和朋友约在咖啡馆见面」这种泛称——她明明有具体的主人，
     日程里却一个都不出现，整天像是悬浮在没人际关系的真空里。
 
-    排序按**熟络度**，主人优先。只给昵称与关系，不给 QQ 号：
-    日程是叙事文本，塞满数字会让她把 ID 念出来。
+    **只写主人，不写其他熟人**：日程文本每天都会进提示词，把别人的昵称、
+    画像、关系写进去，等于让别人的私事跟着她的日程走一遍；日程只需要
+    围绕主人展开。只给昵称与关系，不给 QQ 号：日程是叙事文本，
+    塞满数字会让她把 ID 念出来。
 
-    :return: 可直接拼进提示词的段落；没人可写时返回 None。
+    :return: 可直接拼进提示词的段落；连主人都没有记录时返回 None。
     """
     from .user import list_known_users
+    from .util import get_user_group
 
     try:
         users = list_known_users()
     except Exception:
-        return None
-    if not users:
-        return None
+        users = []
 
-    from .util import get_user_group
-
+    # 主人可能没进「最熟的前 N 个」——先按用户表找，找不到再从主账号列表兜底。
     master_id = ""
-    lines: list[str] = []
-    used = 0
-    unknown_seq = 0
+    master_relation = ""
+    master_profile = ""
     for u in users:
-        uid = u["user_id"]
+        uid = str(u["user_id"])
         try:
-            is_master = get_user_group(uid) == "主人"
+            if get_user_group(uid) != "主人":
+                continue
         except Exception:
-            is_master = False
-        if is_master and not master_id:
-            master_id = uid
-        try:
-            from ATRI.system.lkapi.bot import util as lk_util
+            continue
+        master_id = uid
+        master_relation = str(u["relation"] or "")
+        master_profile = str(u["profile"] or "")
+        break
 
-            label = lk_util.get_name(uid) if lk_util.is_valid_user(uid) else ""
+    if not master_id:
+        try:
+            from ATRI.permission import MASTER_LIST
+
+            master_id = next(iter(sorted(MASTER_LIST)), "")
         except Exception:
-            label = ""
-        if not label:
-            if is_master:
-                label = "主人"
-            else:
-                unknown_seq += 1
-                label = f"某位熟人{unknown_seq}"
-        role = "主人" if is_master else "熟人"
-        detail = f"- {label}（{role}）：{u['relation']}"
-        if u["profile"]:
-            detail += f"；你对TA的印象：{u['profile']}"
-        if used + len(detail) > SCHEDULE_PEOPLE_BUDGET:
-            break
-        lines.append(detail)
-        used += len(detail)
-    if not lines:
+            master_id = ""
+    if not master_id:
         return None
-    head = "### 她生活里真实存在的人\n"
-    if master_id:
-        head += "主人是她最重要的人，日程里应当自然出现，而不是用「朋友」泛指。\n"
-    head += "生成日程时请围绕这些人展开（可以一起吃饭、聊天、被叫走），"
-    head += "不要凭空造一群泛泛的「朋友」。\n"
-    return head + "\n".join(lines) + "\n\n"
+
+    detail = f"- {_master_label(master_id)}（主人）"
+    if master_relation:
+        detail += f"：{master_relation}"
+    if master_profile:
+        detail += f"；你对TA的印象：{master_profile}"
+    if len(detail) > SCHEDULE_PEOPLE_BUDGET:
+        detail = detail[:SCHEDULE_PEOPLE_BUDGET]
+
+    head = "### 关于主人\n"
+    head += "主人是她最重要的人，日程里应当自然出现，而不是用「朋友」泛指。\n"
+    head += "日程请围绕她和主人展开（可以一起吃饭、聊天、被叫走）；"
+    head += "不要再引入其他具体的人，也不要凭空造一群泛泛的「朋友」。\n"
+    return head + detail + "\n\n"
 
 
 def extract_json_from_markdown(text):

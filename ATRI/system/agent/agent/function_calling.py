@@ -669,13 +669,13 @@ def register_function_calling():
             FunctionCallingArg(
                 name="name",
                 _type="str",
-                description="要查的人（QQ 号或名字）。留空则列出你认识的所有人",
+                description="要查的人（QQ 号、名字或别名）。留空则列出你认识的所有人",
             ),
         ]
 
         @staticmethod
         async def call(data: FunctionCallingData):
-            from .user import find_user_by_name, list_known_users
+            from .user import find_user, list_known_users
 
             keyword = str(data.data.get("name") or "").strip()
 
@@ -685,15 +685,17 @@ def register_function_calling():
                     return "你还没记住任何人。"
                 lines = ["你认识的人（按熟悉程度）："]
                 for u in users:
-                    marker = (
-                        "（就是正在跟你说话的这位）"
-                        if u["user_id"] == str(data.sender_id)
-                        else ""
-                    )
-                    lines.append(f"- {u['user_id']}{marker}：{u['relation']}")
+                    label = u["user_id"]
+                    if u["nickname"]:
+                        label += f"（{u['nickname']}）"
+                    if u["alias"]:
+                        label += "别名：" + "、".join(u["alias"])
+                    if u["user_id"] == str(data.sender_id):
+                        label += "（就是正在跟你说话的这位）"
+                    lines.append(f"- {label}：{u['relation']}")
                 return "\n".join(lines)
 
-            found = find_user_by_name(keyword)
+            found = find_user(keyword)
             if found is None:
                 return f"你不太记得「{keyword}」这个人。可以如实说不认识，不要编。"
             name = (
@@ -707,6 +709,103 @@ def register_function_calling():
             return text
 
     FunctionCallingManager.register(RelationQueryFunctionCalling)
+
+    class GetUserInfoFunctionCalling(FunctionCalling):
+        function_name = "get_user_info"
+        description = (
+            "查一个人的完整资料：QQ 号、昵称、别名、关系、好感度、熟络度、你对他的印象。\n"
+            "什么时候用：想知道「这个人是谁」「他叫什么」「我对他了解多少」，"
+            "或者对话里出现了一个你不太确定的称呼时。\n"
+            "查询串可以是 **QQ 号、名字或别名**，三者都认；"
+            "查不到就如实说不记得，不要编。"
+        )
+        args: ClassVar[list[FunctionCallingArg]] = [
+            FunctionCallingArg(
+                name="query",
+                _type="str",
+                description="QQ 号 / 名字 / 别名任选其一",
+            ),
+        ]
+
+        @staticmethod
+        async def call(data: FunctionCallingData):
+            from .user import find_user
+
+            keyword = str(data.data.get("query") or "").strip()
+            if not keyword:
+                return "要给个 QQ 号、名字或别名才能查。"
+
+            found = find_user(keyword)
+            if found is None:
+                return f"你不太记得「{keyword}」这个人。可以如实说不认识，不要编。"
+
+            lines = [f"QQ {found['user_id']}"]
+            if found["nickname"]:
+                lines[0] += f"（{found['nickname']}）"
+            if found["is_master"]:
+                lines[0] += "——这是你主人"
+            if found["alias"]:
+                lines.append("别名：" + "、".join(found["alias"]))
+            lines.append(f"关系：{found['relation']}")
+            lines.append(f"好感度 {found['love']}，熟络度 {found['familiarity']:.2f}")
+            if found["profile"]:
+                lines.append(f"你对他的印象：{found['profile']}")
+            return "\n".join(lines)
+
+    FunctionCallingManager.register(GetUserInfoFunctionCalling)
+
+    class UserAliasFunctionCalling(FunctionCalling):
+        function_name = "user_alias"
+        description = (
+            "记下或忘掉一个人的**别名**（外号、习惯称呼）。\n"
+            "什么时候用：有人说「叫我小 A」「他外号是 A 酱」，"
+            "或者你发现大家老用另一个名字称呼某人时。\n"
+            "先用 get_user_info 确认是哪个人，再记下来；记错了用 opt=remove 去掉。"
+        )
+        args: ClassVar[list[FunctionCallingArg]] = [
+            FunctionCallingArg(
+                name="query",
+                _type="str",
+                description="QQ 号 / 名字 / 已有别名，用来定位是哪个人",
+            ),
+            FunctionCallingArg(
+                name="alias",
+                _type="str",
+                description="要记下或去掉的别名（不超过 20 字）",
+            ),
+            FunctionCallingArg(
+                name="opt",
+                _type="str",
+                description="'add' 记下（默认），'remove' 去掉",
+            ),
+        ]
+
+        @staticmethod
+        async def call(data: FunctionCallingData):
+            from .user import add_alias, find_user, remove_alias
+
+            query = str(data.data.get("query") or "").strip()
+            alias = str(data.data.get("alias") or "").strip()
+            opt = str(data.data.get("opt") or "add").strip().lower()
+            if not alias:
+                return "要说明记哪个别名。"
+
+            found = find_user(query)
+            if found is None and query.isdigit():
+                # 还没聊过的人也该能记别名：直接用 QQ 号定位，不要求先有档案。
+                target = query
+            elif found is None:
+                return f"你不太记得「{query}」这个人，先确认是哪位再说。"
+            else:
+                target = found["user_id"]
+
+            if opt == "remove":
+                ok, message = remove_alias(target, alias)
+            else:
+                ok, message = add_alias(target, alias)
+            return f"（{target}）{message}" if ok else message
+
+    FunctionCallingManager.register(UserAliasFunctionCalling)
 
     class UserProfileGetFunctionCalling(FunctionCalling):
         function_name = "user_profile"

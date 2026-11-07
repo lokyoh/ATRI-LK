@@ -27,6 +27,9 @@ class User(BaseModel):
     """关于**这个对话人**的记忆（他/她告诉过我什么）。"""
     profile: str = ""
 
+    alias: list = Field(default_factory=list)
+    """别名：外号、习惯称呼。按 id / 名字找人时一起匹配。"""
+
     @model_validator(mode="before")
     @classmethod
     def _migrate_legacy_memery(cls, data):
@@ -77,12 +80,104 @@ _FAMILIARITY_BANDS = (
 #: 认识的人最多列出几个。太多会挤占提示词，且大部分她根本不在意。
 KNOWN_USERS_LIMIT = 20
 
+#: 一个人最多记几个别名。别名的用途是「听得懂别人怎么称呼他」，几个就够，
+#: 多了只会让找人的匹配变模糊。
+ALIAS_LIMIT = 8
+
+#: 单个别名的最大长度。
+ALIAS_MAX_LEN = 20
+
+
+def normalize_alias(text: str) -> str:
+    """把别名收拾成可比较的形式：去首尾空白、压缩内部空白、按长度截断。"""
+    return " ".join(str(text or "").split())[:ALIAS_MAX_LEN]
+
+
+def get_aliases(user_id: str) -> list[str]:
+    """取某个用户已经记下的别名。"""
+    try:
+        info = get_user_info(user_id)
+    except Exception:
+        return []
+    return [normalize_alias(a) for a in (info.alias or []) if normalize_alias(a)]
+
+
+def add_alias(user_id: str, alias: str) -> tuple[bool, str]:
+    """给某个用户记一个别名，返回 ``(是否成功, 说明)``。
+
+    大小写不敏感去重（``Kiana`` 和 ``kiana`` 是同一个称呼）；满了直接失败，
+    不静默丢弃——调用方需要能告诉用户「记不下更多了」。
+    """
+    name = normalize_alias(alias)
+    if not name:
+        return False, "别名是空的"
+    try:
+        info = get_user_info(user_id)
+    except Exception as exc:
+        return False, f"读取用户信息失败：{exc}"
+    aliases = [normalize_alias(a) for a in (info.alias or []) if normalize_alias(a)]
+    if any(a.casefold() == name.casefold() for a in aliases):
+        return False, f"「{name}」已经记过了"
+    if len(aliases) >= ALIAS_LIMIT:
+        return False, f"别名最多记 {ALIAS_LIMIT} 个，先删掉几个再记"
+    aliases.append(name)
+    info.alias = aliases
+    try:
+        save_user_info(user_id, info)
+    except Exception as exc:
+        return False, f"保存失败：{exc}"
+    return True, f"已记下「{name}」"
+
+
+def remove_alias(user_id: str, alias: str) -> tuple[bool, str]:
+    """去掉一个别名（大小写不敏感），返回 ``(是否成功, 说明)``。"""
+    name = normalize_alias(alias)
+    if not name:
+        return False, "别名是空的"
+    try:
+        info = get_user_info(user_id)
+    except Exception as exc:
+        return False, f"读取用户信息失败：{exc}"
+    aliases = [normalize_alias(a) for a in (info.alias or []) if normalize_alias(a)]
+    kept = [a for a in aliases if a.casefold() != name.casefold()]
+    if len(kept) == len(aliases):
+        return False, f"没有记过「{name}」这个别名"
+    info.alias = kept
+    try:
+        save_user_info(user_id, info)
+    except Exception as exc:
+        return False, f"保存失败：{exc}"
+    return True, f"已忘掉「{name}」"
+
+
+def _nickname(user_id: str) -> str:
+    """lkbot 里登记的昵称；没有就空串。"""
+    try:
+        from ATRI.system.lkapi.bot import util as lk_util
+
+        if lk_util.is_valid_user(user_id):
+            return (lk_util.get_name(user_id) or "").strip()
+    except Exception:
+        pass
+    return ""
+
+
+def _is_master(user_id: str) -> bool:
+    try:
+        from .util import get_user_group
+
+        return get_user_group(user_id) == "主人"
+    except Exception:
+        return False
+
 
 def list_known_users(limit: int = KNOWN_USERS_LIMIT) -> list[dict]:
     """列出她记录过的用户（按熟络度从高到低）。
 
     供「你主人是谁」「你和某某关系怎样」这类问题使用：
     提示词里只有**当前对话人**的关系，别人问起第三者时她没有依据。
+
+    每条带上 ``nickname`` 与 ``alias``：找人时名字、别名都认，不用再查一遍库。
     """
     try:
         rows = user_table.select_all()
@@ -101,39 +196,59 @@ def list_known_users(limit: int = KNOWN_USERS_LIMIT) -> list[dict]:
         users.append(
             {
                 "user_id": uid,
+                "nickname": _nickname(uid),
+                "alias": [
+                    normalize_alias(a) for a in (info.alias or []) if normalize_alias(a)
+                ],
                 "familiarity": float(info.familiarity or 0.0),
                 "love": int(info.love or 0),
                 "mood_tag": (info.mood_tag or "").strip(),
                 "profile": (info.profile or "").strip(),
                 "relation": describe_relation(info),
+                "is_master": _is_master(uid),
             }
         )
     users.sort(key=lambda u: u["familiarity"], reverse=True)
     return users[:limit]
 
 
-def find_user_by_name(name: str) -> dict | None:
-    """按名字或 ID 找一个人。
+def find_user(query: str) -> dict | None:
+    """按 **QQ 号 / 别名 / 名字** 找一个人。
 
-    匹配顺序：完全等于 ID → ID 包含 → 画像/记忆里提到这个名字。
-    找不到返回 None（调用方应如实说「不太记得这个人」，
-    而不是编一个关系出来）。
+    匹配顺序从确定到模糊：
+
+    1. 完全等于 ``user_id``；
+    2. 完全等于某个别名（大小写不敏感）；
+    3. 完全等于 lkbot 里登记的昵称；
+    4. ``user_id`` 包含查询串（记得半个 QQ 号也找不到？这里兜一下）；
+    5. 昵称、别名或画像里包含查询串。
+
+    找不到返回 None——调用方应如实说「不太记得这个人」，而不是编一个出来。
     """
-    keyword = str(name or "").strip()
+    keyword = str(query or "").strip()
     if not keyword:
         return None
-
+    folded = keyword.casefold()
     users = list_known_users(limit=200)
 
-    # 1. 直接是 user_id
     for u in users:
         if u["user_id"] == keyword:
             return u
-    # 2. user_id 包含（部分 QQ 号）
+    for u in users:
+        if any(a.casefold() == folded for a in u["alias"]):
+            return u
+    for u in users:
+        if u["nickname"] and u["nickname"].casefold() == folded:
+            return u
     for u in users:
         if keyword in u["user_id"]:
             return u
-    # 3. 画像里提到
+    for u in users:
+        if any(folded in a.casefold() for a in u["alias"]):
+            return u
+    for u in users:
+        if u["nickname"] and folded in u["nickname"].casefold():
+            return u
     for u in users:
         if keyword in u["profile"]:
             return u

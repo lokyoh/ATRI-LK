@@ -9,6 +9,7 @@ from ATRI.utils import git
 from ATRI.utils.check_update import CheckUpdate, is_newer_version
 
 from .config import BETA_BRANCH, OFFICIAL_BRANCH
+from .deployment import code_mounted, entrypoint_path, in_container, update_hint
 
 SERVICE_NAME = "更新"
 """插件服务名，用于取插件配置。"""
@@ -181,15 +182,26 @@ class Updater:
                 f"远程版本: {latest_info.version} 更新时间: {latest_info.update_time}"
             )
             message.text(f"更新信息: {latest_info.info}")
+            if in_container():
+                message.text("当前是容器部署：/更新 后发送 /重启 即可，依赖会自动对齐")
             return message
         else:
             return message.text("最新版本获取失败")
 
     @classmethod
-    async def update(cls, branch: str | None = None):
-        """更新到指定分支的最新提交（默认取配置里的通道）。"""
+    async def update(cls, branch: str | None = None) -> str:
+        """更新到指定分支的最新提交（默认取配置里的通道）。
+
+        容器部署也走这条路径：代码挂在宿主机仓库上，容器内 ``git reset`` 改的
+        就是那份代码。区别只在**依赖不在这里装**——重启时由启动脚本按
+        ``poetry.lock`` 对齐，避免在运行中的容器里临时装包。
+        """
         if not await git.is_git_repo(REPO_DIR):
             return "当前不是 git 仓库，无法自动更新（请手动替换文件）"
+        if in_container() and entrypoint_path() is None:
+            # 没有启动脚本，重启时没人对齐依赖；硬更新只会留下半吊子状态。
+            log.warning("容器部署但缺少 ATRI_ENTRYPOINT，无法在重启时对齐依赖")
+            return update_hint()
         target = branch or current_branch_setting()
         return await cls._switch_to(target, target)
 
@@ -254,15 +266,26 @@ class Updater:
             )
 
         current = await git.head_commit(REPO_DIR)
-        deps = await _ensure_dependencies(previous, current)
-        if deps.changed and deps.ok:
-            notes.append("依赖已更新")
-        elif not deps.ok:
-            notes.append(deps.message)
-            log.warning("更新已完成，但依赖未就绪")
+        if in_container():
+            # 容器里不装依赖：重启时启动脚本按 poetry.lock 对齐，那才是正路。
+            notes.append("容器部署：依赖会在下次启动时按 poetry.lock 自动对齐")
+            result = "更新完成，请手动重启（发送 /重启 即可）"
+        else:
+            deps = await _ensure_dependencies(previous, current)
+            if deps.changed and deps.ok:
+                notes.append("依赖已更新")
+            elif not deps.ok:
+                notes.append(deps.message)
+                log.warning("更新已完成，但依赖未就绪")
+            result = "更新完成，请手动重新启动"
+
+        if in_container() and not code_mounted():
+            notes.append(
+                "注意：代码不在挂载卷上，重建容器后这次更新会丢失"
+                "（用 docker compose build 固化到镜像）"
+            )
 
         log.info(f"已更新到 {label}")
-        result = "更新完成，请手动重新启动"
         if notes:
             result += "\n" + "\n".join(notes)
         return result

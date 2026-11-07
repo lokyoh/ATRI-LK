@@ -6,7 +6,7 @@ from ATRI.service import Service
 from .config import BETA_BRANCH, OFFICIAL_BRANCH
 
 plugin = (
-    Service("更新", "ATRI-LK的更新服务", "0.5.0", Service.ServiceType.SYSTEM)
+    Service("更新", "ATRI-LK的更新服务", "0.6.0", Service.ServiceType.SYSTEM)
     .allow_switch(False)
     .permission(MASTER)
 )
@@ -27,7 +27,7 @@ async def _():
 
 update = plugin.on_command(
     cmd="更新",
-    docs="更新到当前通道的最新提交（仅适用于 git clone 部署）",
+    docs="更新到当前通道的最新提交；容器部署的依赖在下次启动时自动对齐",
     permission=MASTER,
 )
 

@@ -1,0 +1,6 @@
+# 镜像只装运行环境：构建上下文只需要依赖清单和启动脚本。
+# 代码、数据、插件都不进镜像——它们在运行时由 docker-compose 挂进 /app。
+*
+!pyproject.toml
+!poetry.lock
+!scripts/docker_entrypoint.py

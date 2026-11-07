@@ -1,18 +1,22 @@
+# 这套 compose 只维护「运行环境」：镜像里有依赖、浏览器和启动脚本（都在 /opt），
+# 宿主机仓库整个挂到 /app。不用任何命名卷——容器重建后依赖由启动脚本自动补齐。
+#
+#   更新代码：/更新 后 /重启（或宿主机 git pull + docker compose restart）
+#   依赖变化：/重启 时启动脚本按 poetry.lock 自动安装
+#   只有系统层变了（系统包、Python 版本、Playwright、启动脚本）才 docker compose build
 services:
   app:
     build:
       context: .  # 使用当前目录作为构建上下文
+    image: atri-lk:runtime  # 运行环境镜像；代码不在里面
     container_name: ATRI-LK  # 自定义容器名称
     working_dir: /app  # 容器内工作目录
     ports:
       - "20000:20000"  # 映射端口
     volumes:
-      - ./data:/app/data
-      - ./plugins:/app/plugins
-      - ./res:/app/res
-      - ./.env.prod:/app/.env.prod
-      - ./config.yml:/app/config.yml
-      - ./nonebot_plugins.json:/app/nonebot_plugins.json
+      # 唯一的挂载：宿主机仓库（代码、data/、plugins/、config.yml 都在里面）。
+      # 依赖与浏览器在镜像的 /opt 下，不受这次挂载影响，也不需要额外卷。
+      - ./:/app
     environment:
       - TZ=Asia/Shanghai  # 设置时区
     restart: unless-stopped  # 自动重启策略

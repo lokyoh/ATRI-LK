@@ -1,6 +1,6 @@
 import os
-import sys
 from pathlib import Path
+from threading import Lock
 
 from nonebot.adapters.onebot.v11 import (
     Bot,
@@ -12,7 +12,6 @@ from nonebot.adapters.onebot.v11 import (
 from ATRI import driver as atri_driver
 from ATRI.permission import MASTER
 from ATRI.service import Service
-from threading import Lock
 
 plugin = Service(
     "重启", "重新启动ATRI", "0.3.0", Service.ServiceType.SYSTEM
@@ -31,7 +30,12 @@ driver = atri_driver()
 async def restart_bot(bot_id: str, target_id):
     with open(RESTART_TEMP, "w", encoding="utf8") as f:
         f.write(f"{bot_id} {target_id}")
-    os.execv(sys.executable, [sys.executable] + sys.argv)
+    # 容器部署里进程是启动脚本 exec 出来的：直接重跑 main.py 会跳过依赖对齐，
+    # 所以这里统一问 deployment 要「该怎么重启」。
+    from ATRI.system.update.deployment import restart_argv
+
+    argv = restart_argv()
+    os.execv(argv[0], argv)
 
 
 restart = plugin.on_command("重启", "重新启动ATRI", permission=MASTER)
@@ -54,7 +58,7 @@ async def _(bot: Bot):
     restart_lock.acquire()
     try:
         if RESTART_TEMP.exists():
-            with open(RESTART_TEMP, "r", encoding="utf8") as f:
+            with open(RESTART_TEMP, encoding="utf8") as f:
                 content = f.read().strip()
             bot_id, target_id = content.split()
             if bot.self_id == bot_id:

@@ -54,7 +54,11 @@ class DependencyResult:
 
 
 async def _stash_local_changes() -> tuple[bool, str]:
-    """更新前备份本地改动，返回 ``(是否创建, stash 标记)``。"""
+    """更新前备份本地改动，返回 ``(是否创建, stash 标记)``。
+
+    只备份**已跟踪文件**的改动：``reset --hard`` 不会删未跟踪文件，而把它们
+    一起 stash 会把插件商店装出来的大目录整份拷进 ``.git``，更新就卡在备份上。
+    """
     mark = f"atri-auto-{_timestamp()}"
     created, _ = await git.stash_local_changes(REPO_DIR, message=mark)
     if created:
@@ -236,7 +240,7 @@ class Updater:
         stash_created, stash_mark = await _stash_local_changes()
         notes: list[str] = []
 
-        fetched = await git.fetch_all(REPO_DIR)
+        fetched = await git.fetch_branch(branch, REPO_DIR)
         if not fetched.ok:
             log.error(f"git fetch 失败：{fetched.detail}")
             return f"更新失败:\n{fetched.detail}"

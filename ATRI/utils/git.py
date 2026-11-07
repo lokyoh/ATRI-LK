@@ -84,6 +84,16 @@ async def fetch_all(cwd: str | Path | None = None, tags: bool = True):
     return await run_git(*args, cwd=cwd)
 
 
+async def fetch_branch(branch: str, cwd: str | Path | None = None):
+    """只取目标分支。
+
+    更新流程只用到 ``origin/<branch>``，``fetch --all --tags`` 会把所有分支和
+    标签都拉一遍；仓库大、分支多时这一步很显眼。分支不存在时退出码非 0，
+    由调用方按失败处理。
+    """
+    return await run_git("fetch", "--no-tags", "origin", branch, cwd=cwd)
+
+
 async def reset_hard(target: str, cwd: str | Path | None = None):
     return await run_git("reset", "--hard", target, cwd=cwd)
 
@@ -107,22 +117,44 @@ async def reset_branch_to(branch: str, upstream: str, cwd: str | Path | None = N
     return await run_git("reset", "--hard", upstream, cwd=cwd)
 
 
-async def has_local_changes(cwd: str | Path | None = None) -> bool:
-    result = await run_git("status", "--porcelain", cwd=cwd)
+async def has_local_changes(
+    cwd: str | Path | None = None, *, untracked: bool = False
+) -> bool:
+    """工作区里有没有本地改动。
+
+    :param untracked: 是否把**未跟踪文件**也算作改动。默认不算：``git reset
+        --hard`` 只覆盖已跟踪的文件，未跟踪文件本来就不会丢；而为了它们去跑
+        ``stash --include-untracked`` 会把整个目录拷进 ``.git``——插件商店装出来
+        的目录动辄上百 MB，更新就会卡在备份这一步。
+    """
+    args = ["status", "--porcelain"]
+    if not untracked:
+        args.append("--untracked-files=no")
+    result = await run_git(*args, cwd=cwd)
     return bool(result.stdout.strip()) if result.ok else False
 
 
 async def stash_local_changes(
-    cwd: str | Path | None = None, message: str = ""
+    cwd: str | Path | None = None,
+    message: str = "",
+    *,
+    include_untracked: bool = False,
 ) -> tuple[bool, str]:
     """把未提交改动收进 stash，避免 reset --hard 丢掉。
 
+    默认只备份**已跟踪文件**的改动。未跟踪文件不备份，一是 ``reset --hard``
+    不会删它们，二是备份成本极高（大目录逐个拷贝）。
+
     返回 ``(是否创建了 stash, stash 标记)``；没有改动时不创建空 stash。
     """
-    if not await has_local_changes(cwd):
+    if not await has_local_changes(cwd, untracked=include_untracked):
         return False, ""
     mark = message or "atri-auto"
-    result = await run_git("stash", "push", "--include-untracked", "-m", mark, cwd=cwd)
+    args = ["stash", "push"]
+    if include_untracked:
+        args.append("--include-untracked")
+    args += ["-m", mark]
+    result = await run_git(*args, cwd=cwd)
     if not result.ok:
         log.warning(f"git stash 失败：{result.detail}")
         return False, ""

@@ -1,6 +1,6 @@
 from typing import Any, Literal
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, RootModel
 
 from ATRI.service import ServiceConfig
 
@@ -54,27 +54,32 @@ class PluginInfo(BaseModel):
     """是否允许设置"""
 
 
-class PluginCount(BaseModel):
+class ServiceTypeInfo(BaseModel):
     """
-    插件数量
+    服务类型元信息（由 ``Service.ServiceType`` 动态生成）
     """
 
-    system: int = 0
-    """系统服务"""
-    lkplugin: int = 0
-    """LK扩展服务"""
-    function: int = 0
-    """功能性服务"""
-    entertainment: int = 0
-    """娱乐服务"""
-    game: int = 0
-    """游戏服务"""
-    subscribe: int = 0
-    """订阅服务"""
-    other: int = 0
-    """其他服务"""
-    hidden: int = 0
-    """隐藏服务"""
+    key: str
+    """稳定键，如 system / lkplugin"""
+    name: str
+    """枚举名，如 SYSTEM"""
+    value: str
+    """展示名，如 系统服务"""
+
+
+class PluginCount(RootModel[dict[str, int]]):
+    """
+    各服务类型的插件数量
+
+    键为 ``ServiceType.key``（枚举名小写）。新增服务类型时自动出现新键，
+    不再需要改动本模型或前端。
+    """
+
+
+class PluginTypeList(RootModel[list[ServiceTypeInfo]]):
+    """
+    服务类型列表（顺序与 ``Service.ServiceType`` 定义顺序一致）
+    """
 
 
 class PluginDetail(PluginInfo):
@@ -88,6 +93,8 @@ class PluginDetail(PluginInfo):
 class PluginRequest(BaseModel):
     service: str
     """插件服务名"""
+    force: bool = False
+    """强制更新：忽略「已是最新」的判断重新下载"""
 
 
 class InstallDependenciesPayload(BaseModel):

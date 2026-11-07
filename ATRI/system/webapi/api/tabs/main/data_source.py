@@ -17,7 +17,9 @@ from ATRI.log import log
 from ATRI.scheduler import SchedulerController
 from ATRI.service import ServiceTools
 from ATRI.system.manage import BotManager
+from ATRI.utils.check_update import CheckUpdate, is_newer_version
 from ATRI.utils.datetime import fromtimestamp, now
+from ATRI.version import framework_version
 
 from ....config import GROUP_AVA_URL, QueryDateType
 from .model import (
@@ -27,6 +29,7 @@ from .model import (
     HotPlugin,
     QueryCount,
     TemplateBaseInfo,
+    VersionInfo,
 )
 
 driver: Driver = nonebot.get_driver()
@@ -93,6 +96,35 @@ class ApiDataSource:
             nickname=nickname,
             ava_url=ava_url,
         )
+
+    @classmethod
+    def get_current_version(cls) -> str:
+        return f"{__version__} {__sub_version__}"
+
+    @classmethod
+    async def get_version_info(cls) -> VersionInfo:
+        """页首版本信息：当前版本 + 是否有新版。
+
+        发布信息走 ``CheckUpdate`` 的缓存，页首刷新不会每次都打 GitHub。
+        """
+        info = VersionInfo(
+            current=cls.get_current_version(),
+            current_name=framework_version(),
+        )
+        try:
+            latest = await CheckUpdate.get_latest_info()
+        except Exception as e:
+            info.error = f"检查更新失败：{type(e).__name__}"
+            log.warning(f"页首检查更新失败：{str_traceback(e)}")
+            return info
+        if latest is None:
+            info.error = "无法获取远程版本"
+            return info
+        info.latest = latest.version
+        info.update_time = latest.update_time
+        info.notes = latest.info
+        info.has_update = is_newer_version(latest.version, __version__, __sub_version__)
+        return info
 
     @classmethod
     def __get_bot_version(cls) -> str:

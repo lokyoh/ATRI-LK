@@ -18,6 +18,7 @@ from .model import (
     PluginDetail,
     PluginInfo,
     PluginSwitch,
+    PluginTypeList,
     UpdatePlugin,
 )
 
@@ -29,7 +30,7 @@ router = APIRouter(prefix="/plugin")
     dependencies=[authentication()],
     response_model=Result[list[PluginInfo]],
     response_class=JSONResponse,
-    description="获取插件列表",  # type: ignore
+    description="获取插件列表",
 )
 async def _(plugin_type: list = Query(None)) -> Result[list[PluginInfo]]:
     try:
@@ -45,7 +46,7 @@ async def _(plugin_type: list = Query(None)) -> Result[list[PluginInfo]]:
     dependencies=[authentication()],
     response_model=Result[PluginCount],
     response_class=JSONResponse,
-    description="获取插件数量",  # type: ignore
+    description="获取插件数量",
 )
 async def _() -> Result[PluginCount]:
     try:
@@ -53,6 +54,22 @@ async def _() -> Result[PluginCount]:
         return Result.ok(plugin_count, "拿到信息啦!")
     except Exception as e:
         log.error(f"{router.prefix}/get_plugin_count 调用错误:{str_traceback(e)}")
+        return Result.fail(f"发生了一点错误捏 {type(e)}: {e}")
+
+
+@router.get(
+    "/get_plugin_types",
+    dependencies=[authentication()],
+    response_model=Result[PluginTypeList],
+    response_class=JSONResponse,
+    description="获取插件类型列表",
+)
+async def _() -> Result[PluginTypeList]:
+    try:
+        plugin_types = await ApiDataSource.get_plugin_types()
+        return Result.ok(plugin_types, "拿到信息啦!")
+    except Exception as e:
+        log.error(f"{router.prefix}/get_plugin_types 调用错误:{str_traceback(e)}")
         return Result.fail(f"发生了一点错误捏 {type(e)}: {e}")
 
 

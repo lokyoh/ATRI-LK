@@ -6,6 +6,8 @@ from .model import (
     PluginCount,
     PluginDetail,
     PluginInfo,
+    PluginTypeList,
+    ServiceTypeInfo,
     UpdatePlugin,
 )
 
@@ -45,17 +47,29 @@ class ApiDataSource:
 
     @classmethod
     async def get_plugin_count(cls) -> PluginCount:
+        """按 ``Service.ServiceType`` 动态统计各类型插件数量。
+
+        键取 ``ServiceType.key``（枚举名小写），新增服务类型时自动出现新键。
+        ``CLOSED`` 是“已关闭”的展示态而非注册类型，不参与统计（与
+        ``ServiceTools.get_typed_service_dict`` 的口径一致）。
+        """
         s_d = ServiceTools.get_typed_service_dict()
-        return PluginCount(
-            system=len(s_d[Service.ServiceType.SYSTEM.value]),
-            lkplugin=len(s_d[Service.ServiceType.LKPLUGIN.value]),
-            function=len(s_d[Service.ServiceType.FUNCTION.value]),
-            entertainment=len(s_d[Service.ServiceType.ENTERTAINMENT.value]),
-            game=len(s_d[Service.ServiceType.GAME.value]),
-            subscribe=len(s_d[Service.ServiceType.SUBSCRIBE.value]),
-            other=len(s_d[Service.ServiceType.OTHER.value]),
-            hidden=len(s_d[Service.ServiceType.HIDDEN.value]),
-        )
+        counts = {
+            s_t.key: len(s_d.get(s_t.value, []))
+            for s_t in Service.ServiceType
+            if s_t != Service.ServiceType.CLOSED
+        }
+        return PluginCount.model_validate(counts)
+
+    @classmethod
+    async def get_plugin_types(cls) -> PluginTypeList:
+        """返回服务类型列表，供 WebUI 动态生成类型标签页。"""
+        types = [
+            ServiceTypeInfo(key=s_t.key, name=s_t.name, value=s_t.value)
+            for s_t in Service.ServiceType
+            if s_t != Service.ServiceType.CLOSED
+        ]
+        return PluginTypeList.model_validate(types)
 
     @classmethod
     async def update_plugin(cls, param: UpdatePlugin):

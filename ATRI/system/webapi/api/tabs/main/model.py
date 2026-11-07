@@ -56,6 +56,27 @@ class SystemStatus(BaseModel):
     disk: float
 
 
+class VersionInfo(BaseModel):
+    """
+    版本信息（页首展示用）
+    """
+
+    current: str
+    """当前版本"""
+    current_name: str
+    """当前版本号"""
+    latest: str | None = None
+    """远程最新版本"""
+    has_update: bool = False
+    """是否有新版本"""
+    update_time: str | None = None
+    """新版本发布时间"""
+    notes: str | None = None
+    """更新说明"""
+    error: str | None = None
+    """检查失败原因"""
+
+
 class BaseInfo(BaseModel):
     """
     基础信息

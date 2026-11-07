@@ -30,6 +30,7 @@ from .model import (
     HotPlugin,
     NonebotData,
     QueryCount,
+    VersionInfo,
 )
 
 driver = nonebot.get_driver()
@@ -62,6 +63,22 @@ async def _(bot_id: str | None = None) -> Result[list[BaseInfo]]:
         return Result.ok(result, "拿到信息啦!")
     except Exception as e:
         log.error(f"{router.prefix}/get_base_info 调用错误:{str_traceback(e)}")
+        return Result.fail(f"发生了一点错误捏 {type(e)}: {e}")
+
+
+@router.get(
+    "/get_version_info",
+    dependencies=[authentication()],
+    response_model=Result[VersionInfo],
+    response_class=JSONResponse,
+    description="获取版本信息与可更新版本",
+)
+async def _() -> Result[VersionInfo]:
+    try:
+        info = await ApiDataSource.get_version_info()
+        return Result.ok(info, "拿到信息啦!")
+    except Exception as e:
+        log.error(f"{router.prefix}/get_version_info 调用错误:{str_traceback(e)}")
         return Result.fail(f"发生了一点错误捏 {type(e)}: {e}")
 
 

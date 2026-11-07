@@ -1,4 +1,5 @@
-from datetime import datetime, timezone
+import time
+from datetime import UTC, datetime
 
 import pytz
 
@@ -8,6 +9,12 @@ from . import request
 
 REPO_RELEASE_URL = "https://api.github.com/repos/lokyoh/ATRI-LK/releases"
 
+CACHE_TTL = 600
+"""发布信息缓存秒数。
+
+GitHub API 未认证时限流较紧，页首每次刷新页面都查会很快耗尽配额。
+"""
+
 
 class ReleaseInfo:
     def __init__(self, release_data):
@@ -15,31 +22,49 @@ class ReleaseInfo:
         self.tag_name = release_data.get("tag_name") or self.version
         update_time = release_data["updated_at"]
         update_time = update_time.replace("Z", "")
-        utc_datetime = datetime.fromisoformat(update_time).replace(tzinfo=timezone.utc)
+        utc_datetime = datetime.fromisoformat(update_time).replace(tzinfo=UTC)
         shanghai_datetime = utc_datetime.astimezone(pytz.timezone("Asia/Shanghai"))
         self.update_time = shanghai_datetime.strftime("%Y-%m-%d %H:%M")
         self.info = release_data["body"]
 
 
 class CheckUpdate:
+    _cached: ReleaseInfo | None = None
+    _cached_at: float = 0.0
+
     @staticmethod
     async def _get_release_info() -> dict:
         req = await request.get(REPO_RELEASE_URL)
         return req.json()
 
     @classmethod
-    async def get_latest_info(cls) -> ReleaseInfo | None:
+    async def get_latest_info(cls, force: bool = False) -> ReleaseInfo | None:
+        """取最新发布信息，默认走缓存。
+
+        拉取失败时沿用上一次成功的结果：网络抖动不该让页首的提示突然消失。
+        """
+        now = time.time()
+        if not force and cls._cached is not None and now - cls._cached_at < CACHE_TTL:
+            return cls._cached
         try:
             data = await cls._get_release_info()
         except Exception:
             log.error("获取发布列表失败...")
-            return None
+            return cls._cached
         try:
             release_data: dict = data[0]
         except Exception:
             log.error("GitHub 数据结构已更改, 请前往仓库提交 Issue.")
-            return None
-        return ReleaseInfo(release_data)
+            return cls._cached
+        info = ReleaseInfo(release_data)
+        cls._cached = info
+        cls._cached_at = now
+        return info
+
+    @classmethod
+    def clear_cache(cls):
+        cls._cached = None
+        cls._cached_at = 0.0
 
 
 def get_version_num(v: str) -> int:

@@ -4,7 +4,7 @@ from ATRI.service import Service
 from .data_source import Updater
 
 plugin = Service(
-    "更新", "ATRI-LK的更新服务", "0.3.1", Service.ServiceType.SYSTEM
+    "更新", "ATRI-LK的更新服务", "0.4.0", Service.ServiceType.SYSTEM
 ).permission(MASTER)
 
 check_update = plugin.on_command(cmd="检查更新", docs="检查最新版本", permission=MASTER)
@@ -26,7 +26,9 @@ async def _():
 
 
 update_to_beta = plugin.on_command(
-    cmd="更新至测试版", docs="目前处于测试阶段且只适用于从git上clone的项目", permission=MASTER
+    cmd="更新至测试版",
+    docs="目前处于测试阶段且只适用于从git上clone的项目",
+    permission=MASTER,
 )
 
 

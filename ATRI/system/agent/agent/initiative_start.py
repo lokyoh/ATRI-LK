@@ -185,7 +185,10 @@ def pick_opening(chat_id: str | None = None) -> Opening | None:
 
 
 def _pick_from_self(spoken_set: set[str]) -> Opening | None:
-    """从自我记忆里挑一条没说过的、情绪够强的。"""
+    """从自我记忆里挑一条没说过的、情绪够强的。
+
+    自我记忆是**她自己的经历**，本来就不分群——不按 chat_id 过滤。
+    """
     from .memory.persona import read_emotion, strip_timestamp
     from .user import get_self_memories
 
@@ -212,6 +215,19 @@ def _pick_from_self(spoken_set: set[str]) -> Opening | None:
     candidates.sort(key=lambda c: c[0])
     charge, text = candidates[-1]
     return Opening(text=text, reason=f"自我记忆情绪强度 {charge:.2f}")
+
+
+def _row_chat_id(meta: dict, content: str) -> str:
+    """判断一条记忆属于哪个聊天，解析不出来时返回空串。
+
+    规则本身住在 `memory.database.chat_scope`——检索链路用的是同一条，
+    这里不另写一份，免得两处口径慢慢漂开。
+
+    返回空串表示没有会话归属，调用方必须视为「来源不明」而**拒绝**使用。
+    """
+    from .memory.database import chat_scope
+
+    return chat_scope(meta, content)
 
 
 def _pick_from_memory_table(
@@ -249,11 +265,12 @@ def _pick_from_memory_table(
         # 安全约束 2：带 subject 的一律跳过（那是关于某个人的私事）
         if str(meta.get("subject") or ""):
             continue
-        # 安全约束 1：只挑本群或群级（无 chat_id）的内容
-        row_chat = str(meta.get("chat_id") or "")
-        if row_chat and row_chat != scope:
-            continue
         content = str(row.get("content") or "").strip()
+        # 安全约束 1：必须是**本群**的记忆。
+        # 解析不出来源的一律跳过——「不知道是哪儿的」不能当「大家都适用」，
+        # 否则旧数据（元数据缺 chat_id）会把别群的事说给这个群听。
+        if _row_chat_id(meta, content) != scope:
+            continue
         if not content or _key_of(content) in spoken_set:
             continue
         try:

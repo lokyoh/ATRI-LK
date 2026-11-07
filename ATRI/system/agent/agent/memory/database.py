@@ -1,5 +1,6 @@
 import json
 import math
+import re
 import threading
 import time
 from typing import Any
@@ -45,6 +46,32 @@ PUBLIC_FIELDS = (
 )
 
 _lock = threading.RLock()
+
+#: 内容里的聊天来源标记。当前版本写 ``[聊天ID:...]``，更早的版本写 ``[群ID:...]``。
+_CHAT_TAG = re.compile(r"\[(?:聊天|群)ID\s*:\s*([^\]]+)\]")
+
+
+def chat_scope(metadata: dict[str, Any] | None, content: str = "") -> str:
+    """一条记忆属于哪个会话，解析不出来时返回空串。
+
+    三个来源，按可信度：
+
+    1. ``metadata["chat_id"]``（当前版本写入）
+    2. ``metadata["group_id"]``（更早版本写入——键名改过，旧数据仍在库里）
+    3. 内容里的 ``[聊天ID:x]`` / ``[群ID:x]``（与 1、2 同时写入，兜底用）
+
+    返回空串表示**没有会话归属**（真正的全局记忆，比如她自己的经历）。
+    调用方若在会话内取用，必须按 ``chat_scope(...) == 会话ID`` 判断是否越界：
+    读不出归属的旧数据不能当成「哪儿都能用」，那正是跨群泄漏的来源。
+    """
+    for key in ("chat_id", "group_id"):
+        value = str((metadata or {}).get(key) or "").strip()
+        if value:
+            return value
+    match = _CHAT_TAG.search(content or "")
+    if match:
+        return match.group(1).strip()
+    return ""
 
 
 def public_view(memory: dict[str, Any]) -> dict[str, Any]:
@@ -310,7 +337,9 @@ class MemoryDB:
             mem = self._row_to_dict(row)
             meta = mem["metadata"] or {}
             if scope is not None:
-                row_chat = str(meta.get("chat_id") or "")
+                # 旧数据用 group_id（键名改过），也有只带内容标记的，
+                # 一律按 chat_scope 解析；解析不出来才算真正的全局记忆。
+                row_chat = chat_scope(meta, mem["content"])
                 if row_chat and row_chat != scope:
                     continue
             if who is not None:

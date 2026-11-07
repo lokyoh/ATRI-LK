@@ -102,6 +102,7 @@ class Telemetry:
         hit_limit: bool,
         failed: bool = False,
         proactive: bool = False,
+        mode: str = "chat",
     ) -> None:
         self.record(
             "turn",
@@ -111,6 +112,7 @@ class Telemetry:
             hit_limit=hit_limit,
             failed=failed,
             proactive=proactive,
+            mode=mode,
         )
 
     def tool(

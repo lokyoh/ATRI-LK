@@ -35,10 +35,13 @@ async def _():
     await summarize_memory.finish("总结记忆完成")
 
 
-def init():
-    from .agent.daily_task import init
+async def init():
+    from ATRI.log import log
+
+    from .agent.daily_task import init as init_daily_task
     from .agent.function_calling import register_function_calling
     from .agent.initiative_start import register_patrol
+    from .agent.task import restore_agent_tasks
     from .config import apply_runtime_config
     from .llm import load_models_from_config
     from .llm.log import init_llm_log
@@ -47,8 +50,12 @@ def init():
     load_models_from_config()
     register_function_calling()
     apply_runtime_config()
-    init()
+    init_daily_task()
     register_patrol(plugin)
+    try:
+        await restore_agent_tasks()
+    except Exception as exc:
+        log.warning(f"恢复 Agent 定时任务失败：{exc}")
 
 
 plugin.on_startup(init)

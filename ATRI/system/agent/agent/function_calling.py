@@ -17,7 +17,7 @@ from .history import History
 from .memes import FaceManager
 from .memory.manage import memory_manager
 from .memory.persona import tag_emotion
-from .sender import ChatSender, OneBotChatSender, QQChatSender
+from .sender import ChatSender, OneBotChatSender
 from .state import feel
 from .telemetry import telemetry
 from .user import add_self_memory, get_user_info, save_user_info
@@ -91,6 +91,21 @@ class FunctionCallingData:
         self.sender = sender
         self.data = data
         self.current_history = current_history
+
+    @property
+    def bot(self):
+        """当前这次对话用的 bot。
+
+        `data` 实际是 `ChatArgs`，里面带着 bot。定时任务必须记住
+        **创建它的那个 bot**——多实例部署下，到点用另一个身份发言是错的。
+        """
+        return getattr(self.data, "bot", None)
+
+    @property
+    def bot_id(self) -> str:
+        """bot 的标识，用于存进定时任务并精确匹配。"""
+        bot = self.bot
+        return str(getattr(bot, "self_id", "") or "") if bot is not None else ""
 
 
 class EnableCheck(BaseModel):
@@ -320,16 +335,19 @@ def register_function_calling():
                 name="msg",
                 _type="str",
                 description=(
-                    "你要发出的那句话。要求:\n"
-                    "  1. 口语,不是书面语。不用「此外」「因此」「总而言之」这类连接词\n"
-                    "  2. 短。通常 5-20 字,长回答也拆成几条发\n"
-                    "  3. 可以带语气:哈哈、诶、唔、嘛、啦、欸、啊\n"
-                    "  4. 不写动作描写(如「(笑)」「*点头*」)、不写括号里的心理活动\n"
-                    "  5. 不列 1234、不用 markdown、不用 emoji 以外的装饰\n"
-                    "  6. 不要复述对方刚说的话\n"
-                    "反例:「好的,我了解您的意思了。关于这个问题,我认为可以从以下"
-                    "几个方面来看:第一……」\n"
-                    "正例:「诶，是这样吗」「唔…我想想」「哈哈那也太惨了吧」"
+                    "你要发出去的那句话。像在群里打字，不是在写文章：\n"
+                    "  1. 短。一句通常 5-20 字；想说的多就分几条发，别一口气写一大段\n"
+                    "  2. 口语。用「诶」「唔」「啊」「嘛」「啦」「哈哈」这类语气词；"
+                    "不用「此外」「因此」「总而言之」这类书面连接词\n"
+                    "  3. 可以不完整。「啊这」「真的假的」「笑死」都是完整的一句话\n"
+                    "  4. 有反应先于有内容。别人说「今天好累」，回「怎么了」"
+                    "比「建议您注意休息」像人\n"
+                    "  5. 不写动作描写（如「(笑)」「*点头*」）、不写括号里的心理活动\n"
+                    "  6. 不列 1234、不用 markdown 记号\n"
+                    "  7. 不要复述对方刚说的话\n"
+                    "反例:「你好！很高兴为你解答这个问题。关于你提到的情况，"
+                    "我建议你可以……」\n"
+                    "正例:「诶，怎么了」「啊这…」「哈哈哈哈哈真的假的」「唔，那你自己怎么想的」"
                 ),
             )
         ]
@@ -466,12 +484,14 @@ def register_function_calling():
                 md_path.parent.mkdir(parents=True, exist_ok=True)
                 async with await anyio.open_file(md_path, "w", encoding="utf-8") as f:
                     await f.write(msg)
-                if isinstance(data.sender, OneBotChatSender):
-                    await data.sender.send(img_msg(await md_to_pic(msg)))
-                elif isinstance(data.sender, QQChatSender):
+                mtype = getattr(data.sender, "mtype", 0)
+                if mtype == 1:
                     await data.sender.send(QQMessage.md_msg(msg))
                 else:
-                    await data.sender.send(msg)
+                    await data.sender.send(img_msg(await md_to_pic(msg)))
+                md_ref = getattr(data.sender, "md_refs", None)
+                if isinstance(md_ref, list):
+                    md_ref.append((md_file, msg))
             except Exception as e:
                 log.warning(f"MD发送发生错误:{str_traceback(e)}")
                 return "发送失败,请勿再次尝试"
@@ -617,25 +637,76 @@ def register_function_calling():
 
         @classmethod
         def is_available_for(cls, sender: ChatSender | None, user_id: str) -> bool:
-            return isinstance(sender, OneBotChatSender)
+            return sender is not None and getattr(sender, "mtype", 0) == 0
 
         @staticmethod
         async def call(data: FunctionCallingData):
             # 兜底判断：防止绕过 FCM 直接调用
-            if isinstance(data.sender, OneBotChatSender):
-                meme = data.data.get("meme", "")
-                try:
-                    face = FaceManager.get_face(meme)
-                    if not face:
-                        return "表情不存在"
-                    await data.sender.send(face)
-                except Exception:
-                    return "发送失败,请勿再次尝试"
-                return "发送成功"
-            else:
+            if getattr(data.sender, "mtype", 0) != 0:
                 return "发送失败,不支持发送表情"
+            meme = data.data.get("meme", "")
+            try:
+                face = FaceManager.get_face(meme)
+                if not face:
+                    return "表情不存在"
+                await data.sender.send(face)
+            except Exception:
+                return "发送失败,请勿再次尝试"
+            return "发送成功"
 
     FunctionCallingManager.register(SendFaceFunctionCalling)
+
+    class RelationQueryFunctionCalling(FunctionCalling):
+        function_name = "relation_query"
+        description = (
+            "查询你与某个人的关系，或列出你认识的人。\n"
+            "什么时候用：别人问「你主人是谁」「你跟某某关系怎么样」"
+            "「你记得我吗」这类涉及**关系**的问题时。\n"
+            "提示词里只会给出**当前对话人**的关系，其他人都要在这里查。\n"
+            "查不到就如实说不太记得，不要凭印象编一个关系出来。"
+        )
+        args: ClassVar[list[FunctionCallingArg]] = [
+            FunctionCallingArg(
+                name="name",
+                _type="str",
+                description="要查的人（QQ 号或名字）。留空则列出你认识的所有人",
+            ),
+        ]
+
+        @staticmethod
+        async def call(data: FunctionCallingData):
+            from .user import find_user_by_name, list_known_users
+
+            keyword = str(data.data.get("name") or "").strip()
+
+            if not keyword:
+                users = list_known_users()
+                if not users:
+                    return "你还没记住任何人。"
+                lines = ["你认识的人（按熟悉程度）："]
+                for u in users:
+                    marker = (
+                        "（就是正在跟你说话的这位）"
+                        if u["user_id"] == str(data.sender_id)
+                        else ""
+                    )
+                    lines.append(f"- {u['user_id']}{marker}：{u['relation']}")
+                return "\n".join(lines)
+
+            found = find_user_by_name(keyword)
+            if found is None:
+                return f"你不太记得「{keyword}」这个人。可以如实说不认识，不要编。"
+            name = (
+                "（就是正在跟你说话的这位）"
+                if found["user_id"] == str(data.sender_id)
+                else ""
+            )
+            text = f"{found['user_id']}{name}：{found['relation']}"
+            if found["profile"]:
+                text += f"\n你对他的印象：{found['profile']}"
+            return text
+
+    FunctionCallingManager.register(RelationQueryFunctionCalling)
 
     class UserProfileGetFunctionCalling(FunctionCalling):
         function_name = "user_profile"
@@ -675,6 +746,131 @@ def register_function_calling():
                 return f"用户 {user_id} 画像更改成功: {now_user_profile}"
 
     FunctionCallingManager.register(UserProfileGetFunctionCalling)
+
+    class ScheduleTaskFunctionCalling(FunctionCalling):
+        function_name = "schedule_task"
+        description = (
+            "给自己安排一个定时任务：到点时会**重新唤起你自己的思考**，"
+            "由那一刻的你来决定说什么。\n"
+            "适用场景：答应别人「十分钟后提醒你」、约定「明早八点叫我」、"
+            "或你想在某个时间点做点什么。\n"
+            "message 写的是**提醒内容**（到点时会看到的提示），不是提前写死的台词——"
+            "比如「提醒主人喝水」，而不是「主人该喝水了哦」。"
+            "这样到点说话时你能结合当时的心情与上下文。\n"
+            "任务会在机器人重启后自动恢复，所以答应了就不会丢。\n"
+            "提醒：不要凭空给自己定一堆任务，只在确实答应或确实需要时用。"
+        )
+        args: ClassVar[list[FunctionCallingArg]] = [
+            FunctionCallingArg(
+                name="message",
+                _type="str",
+                description="到点时给**你自己**看的提醒内容，如「提醒主人喝水」"
+                "「该说早安了」。不要写成要直接发出去的台词",
+            ),
+            FunctionCallingArg(
+                name="minutes",
+                _type="float",
+                description="多少分钟后触发（用于一次性提醒，如 10 表示十分钟后）。"
+                "与 hour 二选一",
+            ),
+            FunctionCallingArg(
+                name="hour",
+                _type="int",
+                description="每天几点触发（24 小时制，0-23）。用于「每天早上八点」"
+                "这类周期性约定。与 minutes 二选一",
+            ),
+            FunctionCallingArg(
+                name="minute",
+                _type="int",
+                description="配合 hour 使用，几点几分，默认 0",
+            ),
+        ]
+
+        @staticmethod
+        async def call(data: FunctionCallingData):
+            from . import task as task_mod
+
+            message = str(data.data.get("message") or "").strip()
+            if not message:
+                return "缺少 message：要说的话不能为空"
+
+            minutes = data.data.get("minutes")
+            hour = data.data.get("hour")
+            minute = data.data.get("minute")
+
+            try:
+                if hour is not None:
+                    h = int(hour)
+                    m = int(minute or 0)
+                    if not (0 <= h <= 23 and 0 <= m <= 59):
+                        return "hour 需要在 0-23，minute 需要在 0-59"
+                    task_id = await task_mod.create_recurring(
+                        data.chat_id,
+                        message,
+                        kind="cron",
+                        spec={"hour": h, "minute": m},
+                        bot_id=data.bot_id,
+                        user_id=data.sender_id,
+                    )
+                    return f"已安排：每天 {h:02d}:{m:02d} 提醒你「{message}」（id: {task_id}）"
+
+                if minutes is None:
+                    return "需要给出 minutes（多少分钟后）或 hour（每天几点）"
+
+                delay = float(minutes) * 60
+                task_id = await task_mod.create_once(
+                    data.chat_id,
+                    message,
+                    delay,
+                    bot_id=data.bot_id,
+                    user_id=data.sender_id,
+                )
+                return f"已安排：{float(minutes):.0f} 分钟后提醒你「{message}」（id: {task_id}）"
+            except ValueError as exc:
+                return f"安排失败：{exc}"
+            except Exception as exc:
+                log.warning(f"安排定时任务失败：{exc}")
+                return "安排失败，请稍后再试"
+
+    FunctionCallingManager.register(ScheduleTaskFunctionCalling)
+
+    class ListTasksFunctionCalling(FunctionCalling):
+        function_name = "list_tasks"
+        description = "查看当前会话里你已经安排、但还没执行完的定时任务。"
+        args: ClassVar[list[FunctionCallingArg]] = []
+
+        @staticmethod
+        async def call(data: FunctionCallingData):
+            from . import task as task_mod
+
+            tasks = await task_mod.list_tasks(data.chat_id)
+            if not tasks:
+                return "这个会话目前没有定时任务"
+            return "当前任务：\n" + "\n".join(task_mod.describe(t) for t in tasks)
+
+    FunctionCallingManager.register(ListTasksFunctionCalling)
+
+    class CancelTaskFunctionCalling(FunctionCalling):
+        function_name = "cancel_task"
+        description = "取消一个自己安排的定时任务。任务 id 可先用 list_tasks 查看。"
+        args: ClassVar[list[FunctionCallingArg]] = [
+            FunctionCallingArg(
+                name="task_id", _type="str", description="要取消的任务 id"
+            )
+        ]
+
+        @staticmethod
+        async def call(data: FunctionCallingData):
+            from . import task as task_mod
+
+            task_id = str(data.data.get("task_id") or "").strip()
+            if not task_id:
+                return "缺少 task_id"
+            if await task_mod.cancel(task_id, data.chat_id):
+                return f"已取消任务 {task_id}"
+            return f"没找到任务 {task_id}（可能已执行完或不属于这个会话）"
+
+    FunctionCallingManager.register(CancelTaskFunctionCalling)
 
     class GetServiceListFunctionCalling(FunctionCalling):
         function_name = "get_service_list"

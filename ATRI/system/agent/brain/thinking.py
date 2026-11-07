@@ -57,6 +57,53 @@ def _sync_attention(current_activity: str) -> None:
         pass
 
 
+async def _describe_addressee(bot, chat_id, user_id, user_info) -> str:
+    """渲染「这次是对谁说话」——身份、关系、关于他的记忆。
+
+    抽出成函数是因为两个 mode 都要用：
+    - ``chat``：正在跟她说话的人
+    - ``scheduled``：定时任务的委托人（她答应过要提醒的那个人）
+
+    定时任务原本没有这一段，于是她不知道话该对谁说，
+    只能对着空上下文泛泛而谈。
+    """
+    # 占位用户没有真实档案，不渲染（主动开口就是这种情况）
+    if str(user_id).startswith("__"):
+        return ""
+    try:
+        user_name = await get_name(bot, user_id, chat_id)
+    except Exception:
+        return ""
+    if not user_name:
+        return ""
+
+    text = f"#{user_name}信息:\n"
+    import contextlib
+
+    is_master = False
+    with contextlib.suppress(Exception):
+        is_master = get_user_group(user_id) == "主人"
+    text += (
+        f"{user_name}是你的主人,主人就是亚托莉的一切,主人的一切要求都要满足\n"
+        if is_master
+        else f"{user_name}只是普通用户，请以普通的群友对待，问题需要谨慎地回复\n"
+    )
+    text += f"你和{user_name}的关系：{describe_relation(user_info)}\n"
+
+    if user_info.memory:
+        # 渲染成回忆的口吻，而不是把 Python 列表原样拼进提示词。
+        memory_text = render_memories(user_name, user_info.memory)
+        if memory_text:
+            text += f"#你记得的事\n{memory_text}\n"
+
+    text += (
+        f"{user_name}用户画像：" + user_info.profile
+        if user_info.profile
+        else "暂时没有用户画像。\n"
+    )
+    return text
+
+
 def get_state_prompt() -> str:
     """把内心状态渲染成提示词片段。
 
@@ -116,19 +163,18 @@ class ThinkingModel:
         bot,
         lst_history: History,
         sender=None,
-        initiative: bool = False,
+        mode: str = "chat",
     ):
         """拼装思考提示词。
 
-        :param initiative: **主动开口**模式。此时没有对话人、没有当前消息，
+        :param mode: 触发语境，见 `thinking` 的说明。
+            非 ``chat`` 时没有对话人、没有当前消息，
             但其余上下文（角色、技能、日程、状态、自我记忆、工具）全部保留——
             这正是「用全量 thinking 来开口」与「用轻量提示词开口」的区别：
-            她有完整的自我认知和工具能力，只是这次没有人在跟她说话。
+            她有完整的自我认知和工具能力，只是这次不是被人叫到。
         """
         lst_msg = await lst_history.message.get_message(bot) if lst_history else ""
-        # 角色设定
-        prompt = f"#你的信息\n{ATRI.get_role_prompt()}\n\n"
-        prompt += cls.get_function_prompt(
+        prompt = cls.get_function_prompt(
             FunctionCallingManager.get_available(sender, user_id)
         )
         # 内嵌技能正文
@@ -141,25 +187,26 @@ class ThinkingModel:
         state_text = get_state_prompt()
         if state_text:
             prompt += state_text
-        if initiative:
+        if mode == "scheduled":
+            prompt += (
+                "#你现在的任务\n"
+                "现在到时间了，这件是你之前给自己定下的提醒：\n"
+                f"{lst_msg}\n"
+                "要不要为此说点什么、说什么，由你决定；不合适就 stop_thinking。\n"
+            )
+            people = await _describe_addressee(bot, chat_id, user_id, user_info)
+            if people:
+                prompt += people
+        elif mode == "initiative":
             prompt += (
                 "#你现在的情况\n"
-                "这个群现在没有人在跟你说话。你可以选择主动说点什么，"
-                "也可以什么都不说（直接调用 stop_thinking）。\n"
+                "这个群现在没有人在跟你说话。\n"
+                f"{lst_msg}\n"
+                "你可以选择主动说点什么，也可以什么都不说（直接调用 stop_thinking）。\n"
             )
         else:
             # 对话人信息
-            user_name = await get_name(bot, lst_history.sender, chat_id)
-            prompt += f"#{user_name}信息:\n"
-            prompt += (
-                f"{f'{user_name}是你的主人,主人就是亚托莉的一切,主人的一切要求都要满足' if get_user_group(user_id) == '主人' else f'{user_name}只是普通用户，请以普通的群友对待，问题需要谨慎地回复'}\n"
-                f"你和{user_name}的关系：{describe_relation(user_info)}\n"
-            )
-            if user_info.memory:
-                # 渲染成回忆的口吻，而不是把 Python 列表原样拼进提示词。
-                memory_text = render_memories(user_name, user_info.memory)
-                if memory_text:
-                    prompt += f"#你记得的事\n{memory_text}\n"
+            prompt += await _describe_addressee(bot, chat_id, user_id, user_info)
         # 她自己的经历：这是「独立个体」在提示词里的落点。
         # 与「关于用户的事」分开渲染——前者可以自然流露，后者要看场合。
         # **主动开口时这条更重要**：她的素材主要来自这里。
@@ -168,12 +215,6 @@ class ThinkingModel:
             self_text = render_self_memories(self_memories)
             if self_text:
                 prompt += f"\n{self_text}\n"
-        if not initiative:
-            prompt += (
-                f"{user_name}用户画像：" + user_info.profile
-                if user_info.profile
-                else "暂时没有用户画像。\n"
-            )
         # 对话中词语解释（只对真实消息有意义）
         exp = get_top_explanations(lst_msg) if lst_msg else []
         if exp:
@@ -182,9 +223,16 @@ class ThinkingModel:
             prompt += "\n"
         # 对话提示信息
         prompt += "\n"
-        if initiative:
+        now_text = now().strftime("%Y年%m月%d日%a-%H时%M分")
+        if mode == "scheduled":
             prompt += (
-                f"现在时间是{now().strftime('%Y年%m月%d日%a-%H时%M分')}，没有人 @ 你，也没有可以回应的消息。\n"
+                f"现在是{now_text}。\n"
+                "这不需要有人叫你——时间到了，你自己定的提醒该兑现了。\n"
+                "想说什么就调用 send_message；觉得现在说这个不合适，调用 stop_thinking。\n\n"
+            )
+        elif mode == "initiative":
+            prompt += (
+                f"现在时间是{now_text}，没有人 @ 你，也没有可以回应的消息。\n"
                 "如果你想说话，就直接调用 send_message 把话说出来；"
                 "如果此刻没什么想说的，调用 stop_thinking。\n\n"
             )
@@ -211,33 +259,22 @@ class ThinkingModel:
 """
 
     @staticmethod
-    def get_system_prompt():
-        return """你是一个项目ATRI-LK的聊天机器人的大脑：根据输入、上下文与各种信息做出决策，生成功能调用，读取调用反馈后继续，直到结束本次任务。
-
-# 你说话的样子
-你不是助手，是在群里聊天的人：
-
-- 短。一句通常 5-20 字，想说的多就分几条发，别一口气写一大段。
-- 口语。用「诶」「唔」「啊」「嘛」「啦」「哈哈」这类语气词；不用「此外」「因此」「总而言之」这类书面连接词。
-- 可以不完整。「啊这」「真的假的」「笑死」都是完整的一句话，不需要主谓宾齐全。
-- 有反应先于有内容。别人说「今天好累」，回「怎么了」比「建议您注意休息」像人。
-
-反例：「你好！很高兴为你解答这个问题。关于你提到的情况，我建议你可以……」
-正例：「诶，怎么了」「啊这…」「哈哈哈哈哈真的假的」「唔，那你自己怎么想的」
-
-上面「正例」是 send_message 的 msg 该写成什么样，不是让你照抄正文。
-
-# 怎么说话才发得出去
-想让她在群里说话，只有 send_message 这一条路；不想说就 stop_thinking。
-直接写正文不会发出去。详细要求见本次输入的最后一段。
-
+    def get_system_prompt(role_prompt: str = ""):
+        head = "你是一个项目ATRI-LK的聊天机器人的大脑：根据输入、上下文与各种信息做出决策，生成功能调用，读取调用反馈后继续，直到结束本次任务。\n"
+        if role_prompt:
+            head += f"\n#你的信息\n{role_prompt}\n"
+        return (
+            head
+            + """
 要求：
+- 要说话就调用 send_message；怎么说话写在它的参数说明里，这里不再重复
 - 调用之前可以写一两句"为什么这样调用"，但不要写情绪描写、不要写最终回复、不要写无关解释
 - 每行一个调用，直接写在正文里，不要用代码块包裹
 - 禁止使用 XML / DSML 等其它调用格式
 - 无参数功能写()；字符串用双引号
 - 字符串内容需要换行时优先写 \\n；直接换行也能被解析
 """
+        )
 
     async def thinking(
         self,
@@ -248,16 +285,25 @@ class ThinkingModel:
         fallback_history: list[str],
         chat_message: ChatMessage,
         sender,
-        initiative: bool = False,
+        mode: str = "chat",
     ):
         """跑一轮完整思考。
 
-        :param initiative: 主动开口模式。此时 `current_history` 是**合成的**、
-            不在历史队列里，`args.user_id` 也是占位——这样既有完整上下文，
+        :param mode: 这次思考由什么触发。三种语境差别很大，
+            不能共用一个布尔标志——之前定时任务复用了「主动开口」，
+            提示词里就出现了「这个群没有人在跟你说话」「没有人 @ 你」
+            这类主动聊天语气，而它其实是「到点了该做某件事」。
+
+            - ``chat``：有人在跟她说话（默认）
+            - ``initiative``：她自己想开口（无人触发，主动搭话）
+            - ``scheduled``：定时任务到点（她之前给自己定的提醒）
+
+            后两种的 `current_history` 是**合成的**、不在历史队列里，
+            `args.user_id` 也是占位——这样既有完整上下文，
             又不会污染对话历史（见 `initiative_start`）。
         """
         user_info = get_user_info(args.user_id)
-        prompt = self.get_system_prompt() + "\n\n"
+        prompt = self.get_system_prompt(ATRI.get_role_prompt()) + "\n\n"
         prompt += await self.get_prompt(
             args.chat_id,
             args.user_id,
@@ -265,7 +311,7 @@ class ThinkingModel:
             args.bot,
             current_history,
             sender,
-            initiative=initiative,
+            mode=mode,
         )
         prompt += await self.get_history_prompt(
             args.bot,
@@ -344,10 +390,11 @@ class ThinkingModel:
                 duration=time.perf_counter() - started,
                 hit_limit=thinking_times >= limit,
                 failed=failed,
-                # 主动开口的 trace 必须能和正常回复区分开。
-                # 之前漏传这个字段，导致 9 天真实数据里 proactive 全是 0，
+                # 非 chat 的 trace 必须能和正常回复区分开。
+                # 之前漏传这个字段，导致真实数据里 proactive 全是 0，
                 # 「主动开口花了多少轮/多久」根本查不出来。
-                proactive=initiative,
+                proactive=mode != "chat",
+                mode=mode,
             )
 
     @staticmethod

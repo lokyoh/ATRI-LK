@@ -403,7 +403,7 @@ _SPEAKER_PREFIX = re.compile(r"^\s*(亚托莉|ATRI|atri)\s*[:：]\s*")
 _MD_MARKS = re.compile(r"(\*\*|__|~~|`)")
 
 
-def _clean_opening_text(content: str) -> str | None:
+def clean_opening_text(content: str) -> str | None:
     """把模型输出清洗成可以直接发的一句话。清洗不掉就返回 None（不发）。
 
     这一步是必要的防御：主动开口是**无人触发**的发言，说错话代价极高。
@@ -432,48 +432,59 @@ def _clean_opening_text(content: str) -> str | None:
 _PLACEHOLDER_USER = "__initiative__"
 
 
-class _CaptureSender:
-    """捕获 `send_message` 发出的内容，而不是真的发出去。
+def _ensure_fallback_history(chat_id: str, chat_history) -> None:
+    """确保兜底历史已经加载（与 `TempHisManager.add_message` 同口径）。
 
-    为什么需要它：走完整 thinking 后，输出是通过 `send_message` 工具产生的。
-    但我们不能在思考阶段真的发消息——还要过一遍长度/格式校验，
-    并且要和 `mark_spoken`、telemetry 一起构成一个原子操作。
+    为什么要补：`fallback_history` 只在**用户发消息**时加载。
+    主动开口 / 定时任务不经过那条路径，直接读会拿到空列表，
+    提示词里就成了「无历史聊天记录」——她不知道群里最近在聊什么，
+    于是在空上下文里硬找话说。
 
-    实现上 duck-typing 对齐 `ChatSender` 的接口即可（`send` / `sent_count`），
-    不必继承——继承会带入真实的 matcher 依赖。
+    只在内存里没有历史时才从磁盘读，避免覆盖已有的实时消息；
+    读失败不影响主流程（返回空历史而已）。
     """
+    if getattr(chat_history, "fallback_history_loaded", False):
+        return
+    try:
+        if not chat_history.get_history():
+            from ..config import config
+            from .history import history_logger
 
-    def __init__(self) -> None:
-        self.sent: list[str] = []
-        self.sent_count = 0
-
-    async def send(self, message):
-        text = str(message or "").strip()
-        if text:
-            self.sent.append(text)
-            self.sent_count += 1
-
-    async def finish(self, message=None):
-        if message is not None:
-            await self.send(message)
+            chat_history.fallback_history = history_logger.get_recent_messages(
+                chat_id, config.get("max_history")
+            )
+    except Exception as exc:
+        log.debug(f"加载兜底历史失败（按空处理）：{exc}")
+    chat_history.fallback_history_loaded = True
 
 
-def _build_initiative_context(chat_id: str, bot, opening: Opening):
-    """构造「没有对话人」的思考上下文。
+def build_agent_context(chat_id: str, bot, cue: str, user_id: str = ""):
+    """构造「没有人当场发言」的思考上下文。
 
-    - `ChatArgs`：user_id 用占位符，这样 `get_user_info` 读到空档案；
-    - `History`：一条代表「她刚想起了这件事」的虚拟消息；
+    供**非用户消息触发**的链路共用：主动开口、定时任务到点。
+
+    - `ChatArgs`：给了 ``user_id`` 就用它（定时任务的委托人），
+      否则用占位符——主动开口确实没有对话人；
+    - `History`：一条代表触发语境的虚拟消息；
     - `ChatMessage`：空队列，避免误读真实待处理消息。
+
+    合成对象**不进历史队列**，也不写盘——它只是一次性上下文。
+
+    :param cue: 放进虚拟消息里的那句话，用来告诉模型「现在是什么情形」。
+    :param user_id: 这次思考的对话人。定时任务是「谁委托的提醒」，
+        主动开口留空。有对话人时提示词里才会带上
+        「和这个人的关系 / 关于他的记忆 / 用户画像」——
+        否则她只能在一个没有对象的空上下文里说话。
     """
     from .history import ChatHistoryManager, History, LLMMessage, MessageSegment
     from .model import ChatArgs
     from .temp_his import ChatMessage
 
-    args = ChatArgs(bot, chat_id, _PLACEHOLDER_USER, False, True)
+    args = ChatArgs(bot, chat_id, user_id or _PLACEHOLDER_USER, False, True)
 
     synthetic = History(None, chat_id)
     synthetic.sender = None
-    synthetic.message = LLMMessage(chat_id, [MessageSegment(opening.text)])
+    synthetic.message = LLMMessage(chat_id, [MessageSegment(cue)])
     # 标记为合成：`add_response` 见到它会跳过回写，避免往真实队列塞
     # 「你在回复 mid:<合成id>」这种指向不存在消息的记录。
     synthetic.synthetic = True
@@ -482,49 +493,102 @@ def _build_initiative_context(chat_id: str, bot, opening: Opening):
 
     chat_history = ChatHistoryManager.get_history(chat_id)
     history_list = chat_history.get_history()
+    _ensure_fallback_history(chat_id, chat_history)
     fallback = chat_history.fallback_history
 
     return args, synthetic, history_list, fallback, chat_msg
 
 
-async def compose_opening(chat_id: str, bot, opening: Opening) -> str | None:
-    """用**完整的 thinking 链路**生成一句话。
+def _build_initiative_context(chat_id: str, bot, opening: Opening):
+    """主动开口用的上下文：虚拟消息是「她想起了这件事」。"""
+    return build_agent_context(chat_id, bot, opening.text)
 
-    :return: 要说的话；模型选择不说、或输出不合规时返回 None。
+
+def has_dialog_model() -> bool:
+    """是否有可用于思考链路的对话模型。
+
+    优先 ATRI 专用模型，退化到通用 CHAT——与 `ThinkingModel.thinking`
+    内部的选择顺序一致。只检查 CHAT 会让「只配了 atri 类型」的部署
+    永远不触发（而那正是推荐配置，专用模型能提高缓存命中率）。
+
+    主动开口与定时任务共用这一判断，避免两处各写一遍、慢慢发散。
     """
-    from ..brain import ThinkingModel
     from ..llm import ModelType, llm_manager
 
-    # 与 `ThinkingModel.thinking` 的选择顺序保持一致：
-    # 优先 ATRI 专用模型，退化到通用 CHAT。只检查 CHAT 会让
-    # 「只配了 atri 类型」的部署永远不主动开口——而那种配置恰恰是推荐配置
-    # （专用模型能提高缓存命中率）。
-    if not (
-        llm_manager.has_type(ModelType.ATRI) or llm_manager.has_type(ModelType.CHAT)
-    ):
-        return None
-
-    sender = _CaptureSender()
     try:
-        args, synthetic, history_list, fallback, chat_msg = _build_initiative_context(
-            chat_id, bot, opening
+        return bool(
+            llm_manager.has_type(ModelType.ATRI) or llm_manager.has_type(ModelType.CHAT)
         )
-        await ThinkingModel().thinking(
-            args,
-            synthetic,
-            history_list,
-            "",
-            fallback,
-            chat_msg,
-            sender,
-            initiative=True,
-        )
+    except Exception:
+        return False
+
+
+async def run_agent_once(
+    chat_id: str,
+    bot,
+    cue: str,
+    sender,
+    *,
+    mode: str = "initiative",
+    user_id: str = "",
+) -> None:
+    """用一次完整思考回应「非用户消息触发」的语境。
+
+    主动开口与定时任务共用这条链路，但**语境不同**，必须用 ``mode`` 区分：
+
+    - ``initiative``：她自己想开口（无人触发，主动搭话）
+    - ``scheduled``：定时任务到点（她之前给自己定的提醒）
+
+    之前两者都传「主动开口」，于是定时任务的提示词里出现了
+    「这个群没有人在跟你说话」「没有人 @ 你」——那是搭话的语气，
+    而定时任务要表达的是「时间到了，该做某件事」。
+    模型因此跑偏，去接历史里的旧话题。
+
+    :param cue: 给模型看的触发语（「你想起了一件事」/「定时提醒：xxx」）
+    :param sender: 怎么把话发出去（先捕获后校验 / 直接发）
+    :param user_id: 这次思考的对话人；定时任务是委托人，主动开口留空
+    """
+    from ..brain import ThinkingModel
+
+    args, synthetic, history_list, fallback, chat_msg = build_agent_context(
+        chat_id, bot, cue, user_id
+    )
+    await ThinkingModel().thinking(
+        args,
+        synthetic,
+        history_list,
+        "",
+        fallback,
+        chat_msg,
+        sender,
+        mode=mode,
+    )
+
+
+async def compose_opening(chat_id: str, bot, opening: Opening):
+    """用**完整的 thinking 链路**说一句话——**边说边发**，不先攒着。
+
+    返回 ``(sender, spoke)``：``sender`` 上带着已发送内容与 md 引用，
+    供调用方记账；``spoke`` 表示她是否真的说了话。
+
+    为什么改成直接发送：捕获模式看起来能「先校验再发」，
+    但校验（`clean_opening_text`）现在由 `BotChatSender` 逐条做，
+    效果一样，却能省掉「原始消息 / 纯文本」两套列表、
+    元组返回、富媒体特判这一整层。定时任务本来就是直接发的，
+    两条链路现在真正一致了。
+    """
+    from .sender import BotChatSender
+
+    sender = BotChatSender(bot, chat_id, cleaner=clean_opening_text)
+    if not has_dialog_model():
+        return sender, False
+
+    try:
+        await run_agent_once(chat_id, bot, opening.text, sender)
     except Exception as exc:
         log.warning(f"主动开口生成失败：{exc}")
-        return None
-    if not sender.sent:
-        return None
-    return _clean_opening_text(sender.sent[0])
+        return sender, False
+    return sender, bool(sender.sent_count)
 
 
 def _group_id(chat_id: str):
@@ -540,7 +604,28 @@ def _group_id(chat_id: str):
     return int(text) if text.isdigit() else text
 
 
-def _record_to_history(chat_id: str, text: str) -> None:
+def readable_history_text(text: str) -> str:
+    """把可能含 CQ 码的文本转成历史里能读的样子。
+
+    她调用 `send_md_message` 时发出去的是图片段，`str()` 之后是
+    `[CQ:image,file=xxx.png]` 或一长串 base64。这种内容进历史毫无意义，
+    模型读不懂，还占掉大量上下文。
+    """
+    body = str(text or "").strip()
+    if not body:
+        return ""
+    if body.startswith("[CQ:") or body.startswith("base64://"):
+        if "image" in body[:20]:
+            return "[发了一张图]"
+        if "record" in body[:20]:
+            return "[发了一条语音]"
+        return "[发了一条富媒体消息]"
+    import re
+
+    return re.sub(r"\[CQ:[^\]]*\]", "[富媒体]", body)
+
+
+def _record_to_history(chat_id: str, texts: str | list[str]) -> None:
     """把主动说出的话写进对话历史。
 
     为什么必须做：不记录的话，她下一轮对话时**不知道自己刚说过什么**，
@@ -551,18 +636,31 @@ def _record_to_history(chat_id: str, text: str) -> None:
     - 用 `add_agent_message`，它同时写盘（`user_id=None` = 机器人）和进内存队列，
       与正常回复走同一条路径；
     - **不设 `reply_to_mid`**：主动开口不是在回复某条消息，设了会让历史里
-      出现「你在回复 mid:x」这种不存在的关联。
+      出现「你在回复 mid:x」这种不存在的关联；
+    - 多条时**逐条记录**，与逐条发送保持一致——历史里应能看到
+      「诶」「你回来啦」分别是两条，而不是被拼成一句。
 
     失败不影响已发出的消息——记录是旁路，不能因为写盘失败就报发送失败。
     """
-    try:
-        from .history import ChatHistoryManager, History, LLMMessage, MessageSegment
+    if isinstance(texts, str):
+        texts = [texts]
+    for raw in texts:
+        text = readable_history_text(raw)
+        if not text:
+            continue
+        try:
+            from .history import (
+                ChatHistoryManager,
+                History,
+                LLMMessage,
+                MessageSegment,
+            )
 
-        reply = History(None, chat_id)
-        reply.message = LLMMessage(chat_id, [MessageSegment(text)])
-        ChatHistoryManager.get_history(chat_id).add_agent_message(reply, text)
-    except Exception as exc:
-        log.warning(f"主动发言写入历史失败（消息已发出，忽略）：{exc}")
+            reply = History(None, chat_id)
+            reply.message = LLMMessage(chat_id, [MessageSegment(text)])
+            ChatHistoryManager.get_history(chat_id).add_agent_message(reply, text)
+        except Exception as exc:
+            log.warning(f"主动发言写入历史失败（消息已发出，忽略）：{exc}")
 
 
 async def try_speak(chat_id: str, bot) -> str | None:
@@ -594,22 +692,25 @@ async def try_speak(chat_id: str, bot) -> str | None:
             )
             return None
 
-        text = await compose_opening(chat_id, bot, opening)
-        if not text:
+        sender, spoke = await compose_opening(chat_id, bot, opening)
+        if not spoke:
             log.info(f"群 {chat_id} 的主动发言被模型判断为不合适，跳过")
             return None
 
-        await bot.send_group_msg(group_id=_group_id(chat_id), message=text)
-        _record_to_history(chat_id, text)
+        sent = list(sender.sent)
+        _record_to_history(chat_id, sent)
+        for md_file, _ in sender.md_refs:
+            _record_to_history(chat_id, f"[md:{md_file}]")
         mark_spoken(chat_id, opening)
         telemetry.record(
             "initiative_start",
             chat_id=chat_id,
             reason=opening.reason,
-            text_len=len(text),
+            text_len=sum(len(t) for t in sent),
+            count=len(sent),
         )
-        log.info(f"主动开口（群 {chat_id}）：{text}")
-        return text
+        log.info(f"主动开口（群 {chat_id}，{len(sent)} 条）：{' / '.join(sent)}")
+        return "\n".join(sent)
     except Exception as exc:
         log.warning(f"群 {chat_id} 主动发起失败：{exc}")
         return None
@@ -638,7 +739,6 @@ async def patrol_once() -> int:
     然后几乎同时发两条——冷却检查形同虚设。
     """
     import nonebot
-    from nonebot.adapters.onebot.v11 import Bot as OneBot
 
     global _patrol_running
     if _patrol_running:
@@ -646,7 +746,7 @@ async def patrol_once() -> int:
         return 0
     _patrol_running = True
     try:
-        return await _patrol_body(nonebot, OneBot)
+        return await _patrol_body(nonebot)
     finally:
         _patrol_running = False
 
@@ -654,8 +754,34 @@ async def patrol_once() -> int:
 _patrol_running = False
 
 
+def _available_bots() -> list:
+    """当前已连接、可用于主动发言的 bot。
+
+    **同时支持 OneBot 与 QQ 官方适配器**：两条链路都走
+    `send_to_chat`，它会按 bot 类型分派 API。
+    之前只取 OneBot，导致纯 QQ 部署下主动开口与定时任务永远不工作。
+    """
+    import nonebot
+
+    from .sender import bot_mtype
+
+    bots = []
+    for b in nonebot.get_bots().values():
+        try:
+            from nonebot.adapters.onebot.v11 import Bot as OneBot
+
+            if isinstance(b, OneBot):
+                bots.append(b)
+                continue
+        except Exception:
+            pass
+        if bot_mtype(b) == 1:
+            bots.append(b)
+    return bots
+
+
 def _pick_bot(bots: list):
-    """从已连接的 OneBot 实例里选一个用来发送。
+    """按配置挑一个 bot 用来发送。
 
     :return: (选中的 bot, 说明)。没得选时 bot 为 None。
     """
@@ -675,12 +801,12 @@ def _pick_bot(bots: list):
     return None, f"配置的 bot {wanted} 未连接（当前已连接 {len(bots)} 个实例）"
 
 
-async def _patrol_body(nonebot_module, bot_type) -> int:
+async def _patrol_body(nonebot_module) -> int:
     groups = whitelisted_groups()
     if not groups:
         return 0
 
-    bots = [b for b in nonebot_module.get_bots().values() if isinstance(b, bot_type)]
+    bots = _available_bots()
     if not bots:
         return 0
     bot, why = _pick_bot(bots)

@@ -88,6 +88,25 @@ async def reset_hard(target: str, cwd: str | Path | None = None):
     return await run_git("reset", "--hard", target, cwd=cwd)
 
 
+async def checkout_branch(branch: str, cwd: str | Path | None = None):
+    """切到指定分支。
+
+    ``-B`` 会在分支不存在时新建并指向目标起点，避免「本地无此分支」时报错。
+    已有同名分支则直接切换（不强制重建，保留其跟踪关系）。
+    """
+    return await run_git("checkout", branch, cwd=cwd)
+
+
+async def checkout_or_create(branch: str, start: str, cwd: str | Path | None = None):
+    """切到分支；本地不存在时以 ``start`` 为起点创建并跟踪它。"""
+    return await run_git("checkout", "-B", branch, start, cwd=cwd)
+
+
+async def reset_branch_to(branch: str, upstream: str, cwd: str | Path | None = None):
+    """把本地分支硬重置到 ``upstream``（通常是一个远程跟踪分支）。"""
+    return await run_git("reset", "--hard", upstream, cwd=cwd)
+
+
 async def has_local_changes(cwd: str | Path | None = None) -> bool:
     result = await run_git("status", "--porcelain", cwd=cwd)
     return bool(result.stdout.strip()) if result.ok else False

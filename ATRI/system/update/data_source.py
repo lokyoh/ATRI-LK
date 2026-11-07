@@ -8,6 +8,11 @@ from ATRI.message import MessageBuilder
 from ATRI.utils import git
 from ATRI.utils.check_update import CheckUpdate, is_newer_version
 
+from .config import BETA_BRANCH, OFFICIAL_BRANCH
+
+SERVICE_NAME = "更新"
+"""插件服务名，用于取插件配置。"""
+
 REPO_DIR = "."
 """系统仓库所在目录（进程 cwd 即仓库根）。"""
 
@@ -23,6 +28,21 @@ POETRY_INSTALL_ARGS = (
     "main",
 )
 """与 Dockerfile 保持一致的安装参数：只装主依赖，不装项目自身。"""
+
+
+def config():
+    """当前更新插件配置；配置对象由 ``__init__`` 注册。"""
+    from ATRI.configs import PluginConfig
+
+    setting = PluginConfig.get_config(SERVICE_NAME)
+    if setting is None:
+        raise RuntimeError("更新插件配置未初始化")
+    return setting
+
+
+def current_branch_setting() -> str:
+    """配置里选定的更新通道所对应的分支。"""
+    return config().branch
 
 
 @dataclass
@@ -166,28 +186,40 @@ class Updater:
             return message.text("最新版本获取失败")
 
     @classmethod
-    async def update(cls):
-        """更新到最新正式版。"""
+    async def update(cls, branch: str | None = None):
+        """更新到指定分支的最新提交（默认取配置里的通道）。"""
         if not await git.is_git_repo(REPO_DIR):
             return "当前不是 git 仓库，无法自动更新（请手动替换文件）"
-        latest_info = await CheckUpdate.get_latest_info()
-        if latest_info is None or not latest_info.tag_name:
-            return "获取最新发布信息失败"
-        return await cls._switch_to(
-            latest_info.tag_name, f"正式版 {latest_info.version}"
-        )
+        target = branch or current_branch_setting()
+        return await cls._switch_to(target, target)
 
     @classmethod
-    async def update_to_beta(cls):
-        """更新到 main 分支最新提交。"""
-        if not await git.is_git_repo(REPO_DIR):
-            return "当前不是 git 仓库，无法自动更新（请手动替换文件）"
-        return await cls._switch_to("origin/main", "测试版 origin/main")
+    async def switch_channel(cls, channel: str) -> str:
+        """切换更新通道（main / dev），并立即同步到该分支。"""
+        branch = channel if channel in (OFFICIAL_BRANCH, BETA_BRANCH) else None
+        if branch is None:
+            return f"未知通道：{channel}（可用：{OFFICIAL_BRANCH} / {BETA_BRANCH}）"
+        setting = config()
+        setting.set("channel", branch)
+        return await cls.update(branch)
 
     @classmethod
-    async def _switch_to(cls, target: str, label: str) -> str:
-        """切到指定 ref；失败回滚，成功后按需补装依赖。"""
+    async def _restore(cls, commit: str, branch: str) -> bool:
+        """把仓库恢复到更新前的「分支 + commit」。
+
+        只回滚 commit 不切分支的话，用户会莫名停在一个不是他原本所在的分支上。
+        """
+        if branch:
+            back = await git.checkout_branch(branch, cwd=REPO_DIR)
+            if not back.ok:
+                log.error(f"切回分支 {branch} 失败：{back.detail}")
+        return await git.rollback_to(commit, cwd=REPO_DIR)
+
+    @classmethod
+    async def _switch_to(cls, branch: str, label: str) -> str:
+        """切到指定分支并重置到其最新提交；失败回滚，成功后按需补装依赖。"""
         previous = await git.head_commit(REPO_DIR)
+        previous_branch = await git.current_branch(REPO_DIR)
 
         stash_created, stash_mark = await _stash_local_changes()
         notes: list[str] = []
@@ -197,10 +229,19 @@ class Updater:
             log.error(f"git fetch 失败：{fetched.detail}")
             return f"更新失败:\n{fetched.detail}"
 
-        reset = await git.reset_hard(target, cwd=REPO_DIR)
+        upstream = f"origin/{branch}"
+        # 先切分支（本地没有就以远程分支为起点建），再把本地分支对齐到远程最新
+        checked_out = await git.checkout_or_create(branch, upstream, cwd=REPO_DIR)
+        if not checked_out.ok:
+            log.error(f"切换分支 {branch} 失败：{checked_out.detail}")
+            if await cls._restore(previous, previous_branch):
+                return f"更新失败:\n{checked_out.detail}\n已回到更新前的分支与版本"
+            return f"更新失败:\n{checked_out.detail}"
+
+        reset = await git.reset_branch_to(branch, upstream, cwd=REPO_DIR)
         if not reset.ok:
             log.error(f"git reset 失败：{reset.detail}")
-            if await git.rollback_to(previous, cwd=REPO_DIR):
+            if await cls._restore(previous, previous_branch):
                 return f"更新失败:\n{reset.detail}\n已回滚到更新前的版本"
             if stash_created:
                 notes.append(f"本地改动仍在 stash：{stash_mark}")

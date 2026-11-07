@@ -7,13 +7,56 @@ from ATRI.message import MessageBuilder
 from ATRI.permission import MASTER
 from ATRI.service import Service, ServiceTools
 
-from .data_source import PluginManager, PluginRuntimeManager
+from .compat import PluginRequirement, lkapi_note
+from .compat import check as check_compat
+from .data_source import PluginEntry, PluginManager, PluginRuntimeManager
 
 plugin = Service(
-    "插件商店", "插件商店", "0.4.5", Service.ServiceType.SYSTEM
+    "插件商店", "插件商店", "0.5.0", Service.ServiceType.SYSTEM
 ).permission(MASTER)
 
 plugins = plugin.on_command("插件列表", "查看插件列表")
+
+
+def _requirement_text(requirement: PluginRequirement) -> str:
+    """把插件要求拼成一行可读文本，未声明时返回空串。"""
+    parts = []
+    if requirement.type:
+        parts.append(f"种类:{requirement.type}")
+    if requirement.framework:
+        parts.append(f"框架:{requirement.framework}")
+    if requirement.lkapi is not None:
+        parts.append(f"lkapi:{requirement.lkapi}")
+    return " ".join(parts)
+
+
+def _compat_text(entry: PluginEntry) -> str:
+    r = check_compat(entry.requirement)
+    if r.status == "supported":
+        return ""
+    if r.status == "unknown":
+        return "未知兼容性"
+    return f"⚠{r.label}"
+
+
+async def _install_state(plugin_name: str, version: str, repo: str = ""):
+    """返回 (安装状态, 展示用版本号)，仓库型插件按 meta.yml 比对。"""
+    if plugin_name not in ServiceTools.service_list:
+        return "未安装", version
+    try:
+        if repo:
+            r = await PluginManager.check_github_plugin_update(repo)
+            if r["has_update"]:
+                return "需更新", f"{r['local_version']}->{r['remote_version']}"
+            return "已安装", version
+        now_version = ServiceTools(plugin_name).load_service().version
+        if now_version != version:
+            return "需更新", f"{now_version}->{version}"
+        return "已安装", version
+    except PluginError:
+        raise
+    except Exception:
+        return "已安装", version
 
 
 @plugins.handle()
@@ -29,29 +72,33 @@ async def _():
             await plugins.send(info)
             j += 1
             info = ""
-        install = "未安装"
-        version = plugin_list[_plugin]["version"]
-        if _plugin in ServiceTools.service_list:
-            if version == "github":
-                r = await PluginManager.check_github_plugin_update(
-                    plugin_list[_plugin]["repo"]
-                )
-                if r["has_update"]:
-                    install = "需更新"
-                    version = f"{r['local_version']}->" + r["remote_version"]
-                else:
-                    install = "已安装"
-            else:
-                now_version = ServiceTools(_plugin).load_service().version
-                if now_version != version:
-                    install = "需更新"
-                    version = f"{now_version}->" + version
-                else:
-                    install = "已安装"
-        info += f"{i}.[{install}]{_plugin} {version}\n"
+        entry = PluginEntry.from_mapping(_plugin, plugin_list[_plugin])
+        install, version = await _install_state(_plugin, entry.version, entry.repo)
+        line = f"{i}.[{install}]{_plugin} {version}"
+        extra = _requirement_text(entry.requirement)
+        if extra:
+            line += f" | {extra}"
+        warning = _compat_text(entry)
+        if warning:
+            line += f" {warning}"
+        info += line + "\n"
         i += 1
     info += f"第{j + 1}页 共{i - 1}/{num}个"
     await plugins.send(info)
+
+
+refresh = plugin.on_command("刷新插件列表", "从商店索引重新拉取插件列表")
+
+
+@refresh.handle()
+async def _():
+    try:
+        plugin_list = await PluginManager.refresh_list()
+    except PluginError as e:
+        await refresh.finish(f"刷新失败：{e.prompt}")
+    except Exception as e:
+        await refresh.finish(f"刷新失败：{type(e).__name__}: {e}")
+    await refresh.finish(f"插件列表已刷新，共 {len(plugin_list)} 个插件")
 
 
 plugin_info = plugin.on_command("插件详情", "查看指定插件详情")
@@ -60,33 +107,48 @@ plugin_info = plugin.on_command("插件详情", "查看指定插件详情")
 @plugin_info.handle()
 async def _(args: Message = CommandArg()):
     try:
-        plugin_list = await PluginManager.get_plugin_list()
+        await PluginManager.get_plugin_list()
         await PluginManager.check_list()
     except PluginError:
         await plugin_info.finish("获取插件信息失败")
     plugin_name = args.extract_plain_text().replace(" ", "")
     if not plugin_name:
         await plugin_info.finish("请输入插件名")
-    if plugin_name not in plugin_list:
+    if plugin_name not in PluginManager.plugin_list:
         await plugin_info.finish(f"找不到插件 {plugin_name}")
-    _plugin = plugin_list[plugin_name]
-    install = "×未安装"
-    version = _plugin["version"]
-    if plugin_name in ServiceTools.service_list:
-        if version == "github":
-            r = await PluginManager.check_github_plugin_update(_plugin["repo"])
-            install = "×需更新" if r["has_update"] else "√已安装"
-            version = r["local_version"]
-        else:
-            now_version = ServiceTools(plugin_name).load_service().version
-            install = "×需更新" if now_version != version else "√已安装"
+    try:
+        entry = await PluginManager.get_entry(plugin_name)
+    except PluginError as e:
+        await plugin_info.finish(e.prompt)
+    install, version = await _install_state(plugin_name, entry.version, entry.repo)
+    install = "√" + install if install != "未安装" else "×" + install
     message = (
         MessageBuilder()
         .text(f"{plugin_name} [{install}]")
         .text(f"版本:{version}")
-        .text(f"作者:{_plugin['author']}")
-        .text(f"介绍:{_plugin['docs']}")
+        .text(f"作者:{entry.author}")
+        .text(f"介绍:{entry.docs}")
     )
+    compat = PluginManager.compat(entry)
+    if entry.requirement.type:
+        message.text(f"种类:{entry.requirement.type}")
+    if entry.requirement.framework:
+        message.text(f"基于框架:{entry.requirement.framework}")
+    else:
+        message.text("基于框架:未声明")
+    if entry.requirement.lkapi is not None:
+        message.text(f"基于lkapi:{entry.requirement.lkapi}")
+    detail = (
+        f"(当前框架{compat.framework or '未知'} "
+        f"兼容范围{compat.supported} "
+        f"lkapi{compat.lkapi if compat.lkapi is not None else '未知'})"
+    )
+    message.text(f"兼容性:{compat.label}{detail}")
+    if compat.reason and compat.status not in ("unknown",):
+        message.text(f"说明:{compat.reason}")
+    note = lkapi_note(entry.requirement)
+    if note:
+        message.text(note)
     await plugin_info.finish(message)
 
 
@@ -98,7 +160,7 @@ async def _(args: Message = CommandArg()):
     try:
         await PluginManager.check_list()
     except PluginError:
-        await plugin_info.finish("获取插件信息失败")
+        await add.finish("获取插件信息失败")
     plugin_name = args.extract_plain_text().replace(" ", "")
     if not plugin_name:
         await add.finish("请输入插件名")
@@ -121,7 +183,7 @@ async def _(args: Message = CommandArg()):
     try:
         await PluginManager.check_list()
     except PluginError:
-        await plugin_info.finish("获取插件信息失败")
+        await remove.finish("获取插件信息失败")
     plugin_name = args.extract_plain_text().replace(" ", "")
     if not plugin_name:
         await remove.finish("请输入插件名")
@@ -142,11 +204,15 @@ async def _(args: Message = CommandArg()):
     try:
         await PluginManager.check_list()
     except PluginError:
-        await plugin_info.finish("获取插件信息失败")
-    plugin_name = args.extract_plain_text().replace(" ", "")
+        await update.finish("获取插件信息失败")
+    raw = args.extract_plain_text().replace(" ", "")
+    if not raw:
+        await update.finish("请输入插件名")
+    force = raw.endswith("-f")
+    plugin_name = raw[:-2] if force else raw
     if not plugin_name:
         await update.finish("请输入插件名")
-    _, msg = await PluginManager.update_plugin(plugin_name)
+    _, msg = await PluginManager.update_plugin(plugin_name, force=force)
     await update.finish(msg)
 
 
@@ -156,17 +222,18 @@ check_update = plugin.on_command("检查插件更新", "检查所有的插件的
 @check_update.handle()
 async def _():
     try:
-        plugin_list = await PluginManager.get_plugin_list()
-        await PluginManager.check_list()
-    except PluginError:
-        await plugin_info.finish("获取插件信息失败")
+        plugin_list = await PluginManager.refresh_list()
+    except PluginError as e:
+        await check_update.finish(f"获取插件信息失败：{e.prompt}")
+    except Exception as e:
+        await check_update.finish(f"获取插件信息失败：{type(e).__name__}: {e}")
     message = MessageBuilder().text("需要更新的插件:")
     for plugin_name in ServiceTools.service_list:
         if plugin_name in plugin_list:
             r = await PluginManager.check_update(plugin_name)
             if r:
                 message.text(f"{plugin_name} {r[0]}->{r[1]}")
-    await update_all.finish(message)
+    await check_update.finish(message)
 
 
 update_all = plugin.on_command("更新所有插件", "更新所有的插件")
@@ -175,10 +242,11 @@ update_all = plugin.on_command("更新所有插件", "更新所有的插件")
 @update_all.handle()
 async def _():
     try:
-        plugin_list = await PluginManager.get_plugin_list()
-        await PluginManager.check_list()
-    except PluginError:
-        await plugin_info.finish("获取插件信息失败")
+        plugin_list = await PluginManager.refresh_list()
+    except PluginError as e:
+        await update_all.finish(f"获取插件信息失败：{e.prompt}")
+    except Exception as e:
+        await update_all.finish(f"获取插件信息失败：{type(e).__name__}: {e}")
     message = MessageBuilder().text("更新情况(更新完成后请重启):")
     for plugin_name in ServiceTools.service_list:
         if plugin_name in plugin_list:
@@ -194,14 +262,14 @@ async def _():
     await update_all.finish(message)
 
 
-reload = plugin.on_command("重载插件", "重新加载所有插件")
+reload = plugin.on_command("重载插件", "重新加载指定插件")
 
 
 @reload.handle()
 async def _(args: Message = CommandArg()):
     plugin_name = args.extract_plain_text().replace(" ", "")
     if not plugin_name:
-        await update.finish("请输入插件名")
+        await reload.finish("请输入插件名")
     try:
         await PluginRuntimeManager.reload_plugin(plugin_name)
         await reload.finish(f"已重载插件{plugin_name}")

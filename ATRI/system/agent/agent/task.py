@@ -27,6 +27,17 @@ def _new_id() -> str:
     return uuid.uuid4().hex[:12]
 
 
+def _prune(task: dict) -> dict:
+    """删掉空值字段，**不留 `""`**。
+
+    空串和「这个字段不存在」在语义上是一回事，但存下来会骗人：任务 JSON 里
+    明明白白写着 `"bot_id": ""`，看的人会以为是「记录了但是空」，进而去猜
+    「为什么记了个空 bot」，而真相只是「没有这个信息」。存的时候就没有这一
+    项，读的时候用 `.get()` 兜底，两边都干净。
+    """
+    return {k: v for k, v in task.items() if v is not None and v != ""}
+
+
 async def _load_rows() -> list:
     """读出库里所有 **agent** 的任务行。"""
     try:
@@ -58,8 +69,9 @@ def _row_to_task(row) -> dict:
     task.setdefault("chat_id", "")
     task.setdefault("message", "")
     task.setdefault("created_at", float(row.created_at or 0))
-    task.setdefault("bot_id", "")
-    return task
+    #: 老任务可能没有 bot_id（创建时还没记这个字段），此时**不补空串**，
+    #: 让「没记」和「记了个空」在数据上是同一件事。
+    return _prune(task)
 
 
 async def list_tasks(chat_id: str | None = None) -> list[dict]:
@@ -76,8 +88,8 @@ async def list_tasks(chat_id: str | None = None) -> list[dict]:
             continue
         tasks.append(_row_to_task(row))
     if chat_id is not None:
-        tasks = [t for t in tasks if t["chat_id"] == str(chat_id)]
-    return sorted(tasks, key=lambda t: t["created_at"])
+        tasks = [t for t in tasks if t.get("chat_id", "") == str(chat_id)]
+    return sorted(tasks, key=lambda t: t.get("created_at", 0))
 
 
 async def get_task(task_id: str) -> dict | None:
@@ -104,14 +116,14 @@ async def _register(task: dict) -> bool:
     """
     name = f"{_JOB_PREFIX}{task['id']}"
     try:
-        if task["kind"] == "once":
+        if task.get("kind") == "once":
             from datetime import datetime
 
             from apscheduler.triggers.date import DateTrigger
 
-            run_at = float(task["run_at"] or 0)
+            run_at = float(task.get("run_at") or 0)
             if run_at - _now() <= 0:
-                log.debug(f"任务 {task['name']} 已过期，跳过注册")
+                log.debug(f"任务 {task.get('name')} 已过期，跳过注册")
                 return False
             await ATRIScheduler.add_job_async(
                 _send,
@@ -125,11 +137,11 @@ async def _register(task: dict) -> bool:
         await ATRIScheduler.add_job_async(
             _send,
             name,
-            task["kind"],
+            task.get("kind"),
             kwargs={"task": task},
             misfire_grace_time=300,
             persist=True,
-            **task["spec"],
+            **(task.get("spec") or {}),
         )
         return True
     except Exception as exc:
@@ -204,6 +216,34 @@ async def _wait_for_bots() -> list:
     return []
 
 
+async def _pick_bot_with_chat(bots: list, chat_id: str):
+    """在没有记录 `bot_id` 的老任务上，挑一个**确实在这个群里**的 bot。
+
+    群号只对创建任务的那个 bot 有意义：换一个 bot 去发同一个群号，平台会回
+    「请求的资源不存在(用户/群已注销)」——而群其实好好的。所以这里的判断依据
+    是「它的群列表里有没有这个群」，不是「随便挑一个」。
+
+    :return: 可用的 bot；无法确定时返回 `None`（宁可不发，也不发错地方）。
+    """
+    from .sender import verify_chat_alive
+
+    confirmed = []
+    unknown = []
+    for b in bots:
+        alive = await verify_chat_alive(b, chat_id)
+        if alive is True:
+            confirmed.append(b)
+        elif alive is None:
+            unknown.append(b)
+    if confirmed:
+        return confirmed[0]
+    # 查不了（适配器没有群列表、或调用失败）：只有「全场只有一个候选」时
+    # 才不可能发错地方。
+    if len(bots) == 1 and unknown:
+        return unknown[0]
+    return None
+
+
 async def _send(task: dict) -> None:
     """到点执行：**唤起 Agent 思考**，由她自己决定说什么。
 
@@ -217,6 +257,14 @@ async def _send(task: dict) -> None:
     chat_id = str(task.get("chat_id") or "")
     cue = str(task.get("message") or "")
     if not chat_id or not cue:
+        return
+
+    from .sender import is_chat_gone
+
+    if is_chat_gone(chat_id):
+        # 这个群已经确认发不进去了（注销/被踢）。再唤起一次 Agent 只会重复
+        # 生成内容、重复失败，还会让用户以为「她一直在说话」。
+        log.warning(f"定时任务「{task.get('name')}」的会话 {chat_id} 已不可用，跳过")
         return
 
     bots = await _wait_for_bots()
@@ -245,9 +293,17 @@ async def _send(task: dict) -> None:
             )
             return
     if bot is None:
-        # 老任务可能没记 bot_id。这里只能挑一个候选，属兼容路径；
-        # 发送失败会被 send_to_chat 记下来，不会静默。
-        bot = bots[0]
+        # 老任务没有记 bot_id（字段不存在，不是空串）。不能在 `bots[0]` 上
+        # 盲发：群只对「创建它的那个 bot」有意义，换一个 bot 去发，平台会
+        # 回「请求的资源不存在(用户/群已注销)」——而群其实好好的。
+        # 这里挨个核实「这个 bot 的群列表里有没有这个群」，找到能发的才发。
+        bot = await _pick_bot_with_chat(bots, chat_id)
+        if bot is None:
+            log.warning(
+                f"定时任务「{task.get('name')}」没记 bot，且没有哪个在线 bot "
+                f"的群列表里有会话 {chat_id}，放弃本次"
+            )
+            return
     try:
         await _run_agent(
             chat_id,
@@ -259,9 +315,20 @@ async def _send(task: dict) -> None:
     except Exception as exc:
         log.warning(f"定时任务「{task.get('name')}」唤起 Agent 失败：{exc}")
         return
-    log.info(f"定时任务「{task.get('name')}」已唤起 Agent（会话 {chat_id}）")
+    from .sender import is_chat_gone as _gone
+
+    if _gone(chat_id):
+        # 思考过程中发送失败，且平台明确表示这个会话没了。日志要如实说
+        # 「没发出去」，而不是只报「已唤起 Agent」——后者会让排查的人以为
+        # 消息发出去了，只是没看到内容。
+        log.warning(
+            f"定时任务「{task.get('name')}」已唤起 Agent，但会话 {chat_id} "
+            "已不可用，本次内容没有发出"
+        )
+    else:
+        log.info(f"定时任务「{task.get('name')}」已唤起 Agent（会话 {chat_id}）")
     if task.get("kind") == "once":
-        _unregister(task["id"])
+        _unregister(task.get("id") or "")
 
 
 async def _run_agent(
@@ -318,18 +385,20 @@ async def create_once(
     if await count_tasks(chat_id) >= MAX_TASKS_PER_CHAT:
         raise ValueError(f"这个会话已经有 {MAX_TASKS_PER_CHAT} 个任务了，先取消一些")
 
-    task = {
-        "id": _new_id(),
-        "name": (name or message)[:30],
-        "kind": "once",
-        "spec": {},
-        "run_at": _now() + float(delay_seconds),
-        "chat_id": str(chat_id),
-        "message": message.strip(),
-        "created_at": _now(),
-        "bot_id": str(bot_id or ""),
-        "user_id": str(user_id or ""),
-    }
+    task = _prune(
+        {
+            "id": _new_id(),
+            "name": (name or message)[:30],
+            "kind": "once",
+            "spec": {},
+            "run_at": _now() + float(delay_seconds),
+            "chat_id": str(chat_id),
+            "message": message.strip(),
+            "created_at": _now(),
+            "bot_id": str(bot_id or ""),
+            "user_id": str(user_id or ""),
+        }
+    )
     if not await _register(task):
         raise ValueError("任务注册失败，请稍后再试")
     return task["id"]
@@ -359,18 +428,20 @@ async def create_recurring(
     if await count_tasks(chat_id) >= MAX_TASKS_PER_CHAT:
         raise ValueError(f"这个会话已经有 {MAX_TASKS_PER_CHAT} 个任务了，先取消一些")
 
-    task = {
-        "id": _new_id(),
-        "name": (name or message)[:30],
-        "kind": kind,
-        "spec": spec,
-        "run_at": 0,
-        "chat_id": str(chat_id),
-        "message": message.strip(),
-        "created_at": _now(),
-        "bot_id": str(bot_id or ""),
-        "user_id": str(user_id or ""),
-    }
+    task = _prune(
+        {
+            "id": _new_id(),
+            "name": (name or message)[:30],
+            "kind": kind,
+            "spec": spec,
+            "run_at": 0,
+            "chat_id": str(chat_id),
+            "message": message.strip(),
+            "created_at": _now(),
+            "bot_id": str(bot_id or ""),
+            "user_id": str(user_id or ""),
+        }
+    )
     if not await _register(task):
         raise ValueError("任务注册失败，请检查时间参数是否合法")
     return task["id"]
@@ -381,7 +452,7 @@ async def cancel(task_id: str, chat_id: str | None = None) -> bool:
     task = await get_task(task_id)
     if task is None:
         return False
-    if chat_id is not None and task["chat_id"] != str(chat_id):
+    if chat_id is not None and task.get("chat_id", "") != str(chat_id):
         return False
     _unregister(task_id)
     return True
@@ -420,7 +491,47 @@ def describe(task: dict) -> str:
         except (TypeError, ValueError):
             secs = 0
         when = f"每 {int(secs)} 秒" if secs else "按间隔规则"
-    return f"[{task['id']}] {when}「{task.get('message', '')}」"
+    return f"[{task.get('id', '')}] {when}「{task.get('message', '')}」"
+
+
+async def _clean_stored_tasks() -> int:
+    """清掉库里旧任务 JSON 里的空值，返回改了几条。
+
+    旧版本把「没记 bot」写成 ``"bot_id": ""``，读起来像「记了但是空」，
+    看 JSON 的人自然会去查「为什么记了个空 bot」。现在这个字段在写入时
+    就不存在了，但库里的旧行还留着它——开机顺手抹掉，让数据和语义一致。
+    """
+    try:
+        from ATRI.scheduler.model import SchedulerTask
+    except Exception as exc:
+        log.debug(f"读不到任务表，跳过空值清理：{exc}")
+        return 0
+    changed = 0
+    for row in await _load_rows():
+        if not str(getattr(row, "name", "")).startswith(_JOB_PREFIX):
+            continue
+        try:
+            payload = json.loads(row.job_kwargs or "{}")
+        except (TypeError, ValueError):
+            continue
+        task = payload.get("task") if isinstance(payload, dict) else None
+        if not isinstance(task, dict):
+            continue
+        cleaned = _prune(task)
+        if cleaned == task:
+            continue
+        payload["task"] = cleaned
+        try:
+            await SchedulerTask.filter(key=row.key).update(
+                job_kwargs=json.dumps(payload, ensure_ascii=False)
+            )
+        except Exception as exc:
+            log.debug(f"清理任务 {row.key} 的空值字段失败：{exc}")
+            continue
+        changed += 1
+    if changed:
+        log.info(f"已清掉 {changed} 个旧任务里的空值字段")
+    return changed
 
 
 async def restore_agent_tasks() -> int:
@@ -435,6 +546,10 @@ async def restore_agent_tasks() -> int:
     之前这里自己遍历库、自己 `_register`，与核心调度器的持久化逻辑重复，
     而且 `load_persisted()` 从未被调用——「会存不会读」。
     """
+    try:
+        await _clean_stored_tasks()
+    except Exception as exc:
+        log.debug(f"清理旧任务空值失败（不影响恢复）：{exc}")
     try:
         from ATRI.scheduler import restore
     except Exception as exc:

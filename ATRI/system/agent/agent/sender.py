@@ -70,8 +70,104 @@ async def send_to_chat(bot, chat_id, message) -> bool:
     except Exception as exc:
         from ATRI.log import log
 
-        log.warning(f"发送到会话 {chat_id} 失败：{exc}")
+        # 错误码只是线索，**不是判决**：同一个码在不同平台/版本下含义可能不同，
+        # 拿它当「群没了」的证据，会把好好的群永久拉黑。所以再查一次群列表，
+        # 只有平台自己都说「没这个群」时才标记失效。
+        if not looks_like_gone(exc):
+            log.warning(f"发送到会话 {chat_id} 失败：{exc}")
+            return False
+        alive = await verify_chat_alive(bot, chat_id)
+        if alive is False:
+            mark_chat_gone(chat_id)
+            log.warning(f"发送到会话 {chat_id} 失败，群列表里也确实没有它：{exc}")
+        elif alive is True:
+            # 正是「群明明在，却发不进去」：这个 bot 不在那个群里（或已被踢），
+            # 而会话是「bot + 群」的组合，换 bot 发等于乱发。
+            log.warning(
+                f"发送到会话 {chat_id} 失败，但群列表里还有它 —— "
+                f"群没问题，是这个 bot 发不进这个群：{exc}"
+            )
+        else:
+            log.warning(f"发送到会话 {chat_id} 失败（目标状态无法核实）：{exc}")
         return False
+
+
+#: 已确认**确实**发不进去的会话。仅进程内记录，重启后重新核实。
+#:
+#: 依据必须来自「平台群列表里查不到这个群」，而**不是**某个错误码。错误码的
+#: 语义由平台定义，拿它当「群没了」的证据会把正常的群永久拉黑——那比多发几条
+#: 失败日志严重得多。
+_GONE_CHATS: set[str] = set()
+
+
+def _error_code(exc: BaseException) -> int | None:
+    code = getattr(exc, "code", None)
+    if code is None:
+        info = getattr(exc, "info", None)
+        if isinstance(info, dict):
+            code = info.get("code")
+    try:
+        return int(code) if code is not None else None
+    except (TypeError, ValueError):
+        return None
+
+
+def looks_like_gone(exc: BaseException) -> bool:
+    """**仅作提示**：这个错误看起来像「目标不可达」。
+
+    只用来决定日志措辞、以及是否值得再核实一次，**不能**单独据此判定会话
+    失效——请用 :func:`verify_chat_alive` 确认。
+    """
+    if _error_code(exc) == 11255:
+        return True
+    message = str(exc)
+    return any(
+        hint in message
+        for hint in (
+            "用户/群已注销",
+            "群不存在",
+            "机器人已被移出",
+            "群已解散",
+            "not in group",
+        )
+    )
+
+
+async def verify_chat_alive(bot, chat_id: str) -> bool | None:
+    """查这个群是否还在当前 bot 的群列表里。
+
+    :return: ``True`` 在群里、``False`` 确实不在、``None`` 查不了（无法判断）。
+    """
+    try:
+        from nonebot.adapters.onebot.v11 import Bot as OneBot
+
+        if not isinstance(bot, OneBot):
+            return None
+        groups = await bot.get_group_list()
+    except Exception as exc:
+        from ATRI.log import log
+
+        log.debug(f"核实会话 {chat_id} 失败（无法判断，返回 None）：{exc}")
+        return None
+    return any(str(group.get("group_id", "")) == str(chat_id) for group in groups or [])
+
+
+def mark_chat_gone(chat_id: str) -> None:
+    """记下这个会话已不可用。"""
+    _GONE_CHATS.add(str(chat_id))
+
+
+def is_chat_gone(chat_id: str) -> bool:
+    """这个会话是否已被判定为不可用。"""
+    return str(chat_id) in _GONE_CHATS
+
+
+def clear_chat_gone(chat_id: str | None = None) -> None:
+    """清掉标记（会话恢复时调用；不传就全清）。"""
+    if chat_id is None:
+        _GONE_CHATS.clear()
+        return
+    _GONE_CHATS.discard(str(chat_id))
 
 
 class OneBotChatSender(ChatSender):

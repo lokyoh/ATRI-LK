@@ -85,21 +85,28 @@ class FunctionCallingData:
         sender: ChatSender,
         data: dict,
         current_history: History | None = None,
+        bot=None,
     ):
         self.sender_id = sender_id
         self.chat_id = chat_id
         self.sender = sender
         self.data = data
         self.current_history = current_history
+        self._bot = bot
 
     @property
     def bot(self):
         """当前这次对话用的 bot。
 
-        `data` 实际是 `ChatArgs`，里面带着 bot。定时任务必须记住
-        **创建它的那个 bot**——多实例部署下，到点用另一个身份发言是错的。
+        **必须显式传进来**：`data` 只是本次调用的参数 (`dict`)，里面没有
+        bot。之前误以为它是 `ChatArgs`、用 `getattr(self.data, "bot")` 去取，
+        结果永远是 `None`，定时任务存下来的 `bot_id` 一直是空串——到点只能
+        随便挑一个 bot 发，发到不相关的群上就是「群不存在」。
+
+        定时任务必须记住**创建它的那个 bot**：多实例部署下，
+        到点换另一个身份发言是错的。
         """
-        return getattr(self.data, "bot", None)
+        return self._bot if self._bot is not None else getattr(self.data, "bot", None)
 
     @property
     def bot_id(self) -> str:
@@ -456,6 +463,7 @@ def register_function_calling():
                     data.sender,
                     args,
                     data.current_history,
+                    bot=data.bot,
                 ),
             )
 

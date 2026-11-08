@@ -419,6 +419,7 @@ class ThinkingModel:
                     sender,
                     current_history,
                     issues,
+                    bot=args.bot,
                 )
                 self.messages.add_message(
                     LLMMessage("assistant", LLMContents().text(resp.content))
@@ -480,6 +481,7 @@ class ThinkingModel:
         sender,
         current_history: History,
         issues: list[str] | None = None,
+        bot=None,
     ) -> list:
         calling_back = []
         if issues:
@@ -528,7 +530,7 @@ class ThinkingModel:
             try:
                 # 使用 FunctionCallingManager 统一处理功能调用
                 calling_data = FunctionCallingData(
-                    user_id, chat_id, sender, args, current_history
+                    user_id, chat_id, sender, args, current_history, bot=bot
                 )
                 log.debug(f"调用功能 {func_name}")
                 result = await FunctionCallingManager.call(func_name, calling_data)

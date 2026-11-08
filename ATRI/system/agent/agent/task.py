@@ -157,14 +157,26 @@ async def _register(task: dict) -> bool:
         return False
 
 
-def _unregister(task_id: str) -> None:
-    """从核心调度器撤下作业；失败不抛（可能尚未注册）。"""
+async def _unregister(task_id: str) -> None:
+    """撤下作业并删掉库里的定义；失败不抛。
+
+    **不能只靠调度器**：补发路径（`restore` → `_run_expired`）从没把任务注册
+    进调度器，`has_job` 为假，只摘内存的话库里那一行会一直留着——下次启动又
+    被当成过期任务补发一遍。所以兜底直接删表里那一行（键就是 `ATRI:agent:<id>`）。
+    """
     name = f"{_JOB_PREFIX}{task_id}"
     try:
         if ATRIScheduler.has_job(name):
             ATRIScheduler.remove_job(name)
+            return
     except Exception as exc:
         log.debug(f"撤下定时任务失败：{exc}")
+    try:
+        from ATRI.scheduler.model import SchedulerTask
+
+        await SchedulerTask.filter(key=f"ATRI:{name}").delete()
+    except Exception as exc:
+        log.debug(f"删除任务记录 {name} 失败：{exc}")
 
 
 #: 等 bot 上线的上限（秒）。机器人刚启动时 WebSocket 反向连接还没建立，
@@ -224,36 +236,12 @@ async def _wait_for_bots() -> list:
     return []
 
 
-async def _pick_bot_with_chat(bots: list, chat_id: str):
-    """在没有记录 `bot_id` 的老任务上，挑一个**确实在这个群里**的 bot。
-
-    群号只对创建任务的那个 bot 有意义：换一个 bot 去发同一个群号，平台会回
-    「请求的资源不存在(用户/群已注销)」——而群其实好好的。所以这里的判断依据
-    是「它的群列表里有没有这个群」，不是「随便挑一个」。
-
-    :return: 可用的 bot；无法确定时返回 `None`（宁可不发，也不发错地方）。
-    """
-    from .sender import verify_chat_alive
-
-    confirmed = []
-    unknown = []
-    for b in bots:
-        alive = await verify_chat_alive(b, chat_id)
-        if alive is True:
-            confirmed.append(b)
-        elif alive is None:
-            unknown.append(b)
-    if confirmed:
-        return confirmed[0]
-    # 查不了（适配器没有群列表、或调用失败）：只有「全场只有一个候选」时
-    # 才不可能发错地方。
-    if len(bots) == 1 and unknown:
-        return unknown[0]
-    return None
-
-
 async def _send(task: dict) -> None:
     """到点执行：**唤起 Agent 思考**，由她自己决定说什么。
+
+    **没有去向的任务一律不调用**：`bot_id` 缺失意味着这条任务无法归属到
+    任何一个 bot，发出去就是「不知道谁在哪个群说话」。这种任务不猜、不试，
+    直接作废并删掉。
 
     为什么不是直接发一句固定文本：定时任务的价值在于「到点提醒她该做这件事」，
     而不是「到点念一句录音」。让她重新思考一次，能结合当下的心情、日程、
@@ -265,6 +253,15 @@ async def _send(task: dict) -> None:
     chat_id = str(task.get("chat_id") or "")
     cue = str(task.get("message") or "")
     if not chat_id or not cue:
+        return
+
+    wanted = str(task.get("bot_id") or "")
+    if not wanted:
+        # 没有去向就不准调用：这条任务无法归属到任何一个 bot，发出去就是
+        # 「不知道谁在哪个群说话」。不猜、不试，直接作废并删掉——
+        # 留着它只会在每次启动时被当成「过期任务」补发一遍。
+        log.warning(f"定时任务「{task.get('name')}」没有去向（无 bot_id），已作废")
+        await _unregister(task.get("id") or "")
         return
 
     from .sender import is_chat_gone
@@ -282,36 +279,22 @@ async def _send(task: dict) -> None:
             "仍没有可用的 bot，放弃本次"
         )
         return
-    wanted = str(task.get("bot_id") or "")
     bot = None
-    if wanted:
-        for b in bots:
-            if str(getattr(b, "self_id", "")) == wanted:
-                bot = b
-                break
-        if bot is None:
-            # **不换 bot**。会话是「某个 bot + 某个群」的组合：群号只对创建
-            # 这个任务的那个 bot 有意义——别的 bot 未必在那个群，甚至群标识
-            # 的形态都不同（QQ 官方是 group_openid，OneBot 是数字群号）。
-            # 换一个 bot 去发，轻则「请求的资源不存在(用户/群已注销)」，
-            # 重则把话说进不相关的群。到点没发出去，也比发错地方好。
-            log.warning(
-                f"定时任务「{task.get('name')}」原定 bot {wanted} 不在线，"
-                "放弃本次（换 bot 发往同一个群不安全）"
-            )
-            return
+    for b in bots:
+        if str(getattr(b, "self_id", "")) == wanted:
+            bot = b
+            break
     if bot is None:
-        # 老任务没有记 bot_id（字段不存在，不是空串）。不能在 `bots[0]` 上
-        # 盲发：群只对「创建它的那个 bot」有意义，换一个 bot 去发，平台会
-        # 回「请求的资源不存在(用户/群已注销)」——而群其实好好的。
-        # 这里挨个核实「这个 bot 的群列表里有没有这个群」，找到能发的才发。
-        bot = await _pick_bot_with_chat(bots, chat_id)
-        if bot is None:
-            log.warning(
-                f"定时任务「{task.get('name')}」没记 bot，且没有哪个在线 bot "
-                f"的群列表里有会话 {chat_id}，放弃本次"
-            )
-            return
+        # **不换 bot**。会话是「某个 bot + 某个群」的组合：群号只对创建
+        # 这个任务的那个 bot 有意义——别的 bot 未必在那个群，甚至群标识
+        # 的形态都不同（QQ 官方是 group_openid，OneBot 是数字群号）。
+        # 换一个 bot 去发，轻则「请求的资源不存在(用户/群已注销)」，
+        # 重则把话说进不相关的群。到点没发出去，也比发错地方好。
+        log.warning(
+            f"定时任务「{task.get('name')}」原定 bot {wanted} 不在线，"
+            "放弃本次（换 bot 发往同一个群不安全）"
+        )
+        return
     try:
         await _run_agent(
             chat_id,
@@ -336,7 +319,7 @@ async def _send(task: dict) -> None:
     else:
         log.info(f"定时任务「{task.get('name')}」已唤起 Agent（会话 {chat_id}）")
     if task.get("kind") == "once":
-        _unregister(task.get("id") or "")
+        await _unregister(task.get("id") or "")
 
 
 async def _run_agent(
@@ -381,11 +364,16 @@ async def create_once(
 ) -> str:
     """创建一个「N 秒后说这句话」的任务。返回任务 id。
 
+    :param bot_id: 任务的**去向**：到点时用哪个 bot 发、发到哪个会话。
+        必填——不知道去向的任务到点只会乱猜 bot，不如当场拒绝。
     :param user_id: 委托这条提醒的人。到点时把它当作对话人，
         这样她能带着「和这个人的关系、关于他的记忆」来说话，
         而不是在一个没有对象的空上下文里硬找话。
     :raises ValueError: 参数不合法或超出数量上限。
     """
+    bot_id = str(bot_id or "").strip()
+    if not bot_id:
+        raise ValueError("任务必须指定去向（哪个 bot 发），没有去向不能创建")
     if delay_seconds < MIN_DELAY:
         raise ValueError(f"至少要 {MIN_DELAY:.0f} 秒之后")
     if not (message or "").strip():
@@ -403,7 +391,7 @@ async def create_once(
             "chat_id": str(chat_id),
             "message": message.strip(),
             "created_at": _now(),
-            "bot_id": str(bot_id or ""),
+            "bot_id": bot_id,
             "user_id": str(user_id or ""),
         }
     )
@@ -426,7 +414,11 @@ async def create_recurring(
 
     :param kind: ``cron`` 或 ``interval``
     :param spec: 触发器参数，如 ``{"hour": 8, "minute": 0}``
+    :param bot_id: 任务的**去向**，必填（同 `create_once`）。
     """
+    bot_id = str(bot_id or "").strip()
+    if not bot_id:
+        raise ValueError("任务必须指定去向（哪个 bot 发），没有去向不能创建")
     if kind not in ("cron", "interval"):
         raise ValueError("kind 只能是 cron 或 interval")
     if not (message or "").strip():
@@ -446,7 +438,7 @@ async def create_recurring(
             "chat_id": str(chat_id),
             "message": message.strip(),
             "created_at": _now(),
-            "bot_id": str(bot_id or ""),
+            "bot_id": bot_id,
             "user_id": str(user_id or ""),
         }
     )
@@ -469,7 +461,7 @@ async def cancel(
         return False
     if chat_id is not None and task.get("chat_id", "") != str(chat_id):
         return False
-    _unregister(task_id)
+    await _unregister(task_id)
     return True
 
 
@@ -535,18 +527,19 @@ def describe_line(task: dict) -> str:
 
 
 async def _clean_stored_tasks() -> int:
-    """清掉库里旧任务 JSON 里的空值，返回改了几条。
+    """整理库里的任务：**删掉没有去向的一律作废**，并抹掉其余任务里的空值。
 
-    旧版本把「没记 bot」写成 ``"bot_id": ""``，读起来像「记了但是空」，
-    看 JSON 的人自然会去查「为什么记了个空 bot」。现在这个字段在写入时
-    就不存在了，但库里的旧行还留着它——开机顺手抹掉，让数据和语义一致。
+    旧版本把「没记 bot」写成 ``"bot_id": ""``。这种任务到了也没有可归属的
+    bot，不该执行，也不该留在库里等下一次启动再被补发一遍——所以直接删。
+    剩下带去向的，顺手把空值字段抹掉，让数据和语义一致。
     """
     try:
         from ATRI.scheduler.model import SchedulerTask
     except Exception as exc:
-        log.debug(f"读不到任务表，跳过空值清理：{exc}")
+        log.debug(f"读不到任务表，跳过任务整理：{exc}")
         return 0
     changed = 0
+    dropped = 0
     for row in await _load_rows():
         if not str(getattr(row, "name", "")).startswith(_JOB_PREFIX):
             continue
@@ -556,6 +549,14 @@ async def _clean_stored_tasks() -> int:
             continue
         task = payload.get("task") if isinstance(payload, dict) else None
         if not isinstance(task, dict):
+            continue
+        if not str(task.get("bot_id") or "").strip():
+            try:
+                await SchedulerTask.filter(key=row.key).delete()
+            except Exception as exc:
+                log.debug(f"删除无去向任务 {row.key} 失败：{exc}")
+                continue
+            dropped += 1
             continue
         cleaned = _prune(task)
         if cleaned == task:
@@ -569,9 +570,11 @@ async def _clean_stored_tasks() -> int:
             log.debug(f"清理任务 {row.key} 的空值字段失败：{exc}")
             continue
         changed += 1
+    if dropped:
+        log.info(f"已删除 {dropped} 个没有去向的旧任务（无 bot_id，不会执行）")
     if changed:
         log.info(f"已清掉 {changed} 个旧任务里的空值字段")
-    return changed
+    return changed + dropped
 
 
 async def restore_agent_tasks() -> int:

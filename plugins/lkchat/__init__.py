@@ -57,7 +57,7 @@ async def _(event: GroupMessageEvent, matcher: Matcher, bot: Bot):
         await call_agent(event, matcher, bot)
         return
     await pre_chat_event.notify(PreChatEvent(matcher, event))
-    text = event.get_message().extract_plain_text()
+    text = event.original_message.extract_plain_text()
     if event.to_me:
         voice = match_atri_voice(text)
         if voice:

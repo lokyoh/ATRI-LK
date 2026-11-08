@@ -5,7 +5,7 @@ from random import choice
 
 from nonebot.adapters.onebot.v11 import Bot, GroupMessageEvent, MessageSegment
 from nonebot.adapters.qq import Bot as QQBot
-from nonebot.adapters.qq import GroupAtMessageCreateEvent
+from nonebot.adapters.qq import GroupMessageCreateEvent
 from nonebot.exception import FinishedException
 from nonebot.matcher import Matcher
 
@@ -193,7 +193,7 @@ def _mentions_bot_name(text: str) -> bool:
 async def call_agent(event: GroupMessageEvent, matcher: Matcher, bot: Bot):
     group_id = str(event.group_id)
     sender_id = event.get_user_id()
-    message = event.get_message()
+    message = event.original_message
     p_c = config.get("proactively_chat") and group_id in config.get(
         "proactively_chat_whit_list"
     )
@@ -217,10 +217,10 @@ async def call_agent(event: GroupMessageEvent, matcher: Matcher, bot: Bot):
             await matcher.finish(f"真是的，{lk_util.bot_name}被玩坏了，呜呜呜...")
 
 
-async def qq_call_agent(event: GroupAtMessageCreateEvent, matcher: Matcher, bot: QQBot):
+async def qq_call_agent(event: GroupMessageCreateEvent, matcher: Matcher, bot: QQBot):
     group_id = str(event.group_id)
     sender_id = event.get_user_id()
-    message = event.get_plaintext()
+    message = event.original_message.extract_plain_text()
     if not message:
         return
     p_c = config.get("proactively_chat") and group_id in config.get(

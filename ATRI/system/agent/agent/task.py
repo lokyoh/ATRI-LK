@@ -74,13 +74,19 @@ def _row_to_task(row) -> dict:
     return _prune(task)
 
 
-async def list_tasks(chat_id: str | None = None) -> list[dict]:
-    """列出任务。给了 chat_id 就只列这个会话的。
+async def list_tasks(
+    chat_id: str | None = None, bot_id: str | None = None
+) -> list[dict]:
+    """列出任务。给了 chat_id 就只列这个会话的，给了 bot_id 就只列这个 bot 的。
 
     **归属判断看 `row.name`（数据库列），不看 task 字典里的 `name`**：
     后者是给用户看的描述（「提醒我喝水」），与「哪个服务的任务」无关。
     之前用 `task["name"].startswith("agent:")` 过滤，导致所有任务都被丢弃——
     `create_once` 构造的 task 里 `name` 就是用户内容，永远不以 `agent:` 开头。
+
+    :param bot_id: 同一个群里可能同时有好几个 bot（同一份库），任务只属于
+        **创建它的那个 bot**。传了才按 bot 过滤；不传是「全都要」，
+        只有排障场景才该这么用。
     """
     tasks = []
     for row in await _load_rows():
@@ -89,18 +95,20 @@ async def list_tasks(chat_id: str | None = None) -> list[dict]:
         tasks.append(_row_to_task(row))
     if chat_id is not None:
         tasks = [t for t in tasks if t.get("chat_id", "") == str(chat_id)]
+    if bot_id is not None:
+        tasks = [t for t in tasks if t.get("bot_id", "") == str(bot_id)]
     return sorted(tasks, key=lambda t: t.get("created_at", 0))
 
 
-async def get_task(task_id: str) -> dict | None:
-    for t in await list_tasks():
-        if t["id"] == task_id:
+async def get_task(task_id: str, bot_id: str | None = None) -> dict | None:
+    for t in await list_tasks(bot_id=bot_id):
+        if t.get("id") == task_id:
             return t
     return None
 
 
-async def count_tasks(chat_id: str) -> int:
-    return len(await list_tasks(chat_id))
+async def count_tasks(chat_id: str, bot_id: str | None = None) -> int:
+    return len(await list_tasks(chat_id, bot_id))
 
 
 async def _register(task: dict) -> bool:
@@ -382,7 +390,7 @@ async def create_once(
         raise ValueError(f"至少要 {MIN_DELAY:.0f} 秒之后")
     if not (message or "").strip():
         raise ValueError("要说的内容不能为空")
-    if await count_tasks(chat_id) >= MAX_TASKS_PER_CHAT:
+    if await count_tasks(chat_id, bot_id) >= MAX_TASKS_PER_CHAT:
         raise ValueError(f"这个会话已经有 {MAX_TASKS_PER_CHAT} 个任务了，先取消一些")
 
     task = _prune(
@@ -425,7 +433,7 @@ async def create_recurring(
         raise ValueError("要说的内容不能为空")
     if not spec:
         raise ValueError("缺少触发时间参数")
-    if await count_tasks(chat_id) >= MAX_TASKS_PER_CHAT:
+    if await count_tasks(chat_id, bot_id) >= MAX_TASKS_PER_CHAT:
         raise ValueError(f"这个会话已经有 {MAX_TASKS_PER_CHAT} 个任务了，先取消一些")
 
     task = _prune(
@@ -447,9 +455,16 @@ async def create_recurring(
     return task["id"]
 
 
-async def cancel(task_id: str, chat_id: str | None = None) -> bool:
-    """取消任务。给了 chat_id 时只允许取消该会话自己的任务。"""
-    task = await get_task(task_id)
+async def cancel(
+    task_id: str, chat_id: str | None = None, bot_id: str | None = None
+) -> bool:
+    """取消任务。
+
+    给了 chat_id 就只允许取消该会话自己的任务；给了 bot_id 就只允许取消
+    **本机器人**的任务——同一个群里可能有好几个 bot，任务是谁安排的，
+    就只有谁有权动它。
+    """
+    task = await get_task(task_id, bot_id)
     if task is None:
         return False
     if chat_id is not None and task.get("chat_id", "") != str(chat_id):
@@ -458,40 +473,65 @@ async def cancel(task_id: str, chat_id: str | None = None) -> bool:
     return True
 
 
-def describe(task: dict) -> str:
-    """把任务渲染成一句人能看懂的话，供模型回复用户。"""
+def _when_text(task: dict) -> str:
+    """把触发时间渲染成人话。"""
     kind = task.get("kind")
     if kind == "once":
         left = max(0, int(float(task.get("run_at") or 0) - _now()))
         if left >= 3600:
-            when = f"{left // 3600} 小时后"
-        elif left >= 60:
-            when = f"{left // 60} 分钟后"
-        else:
-            when = f"{left} 秒后"
-    elif kind == "cron":
+            return f"{left // 3600} 小时后"
+        if left >= 60:
+            return f"{left // 60} 分钟后"
+        return f"{left} 秒后"
+    if kind == "cron":
         spec = task.get("spec") or {}
         hour = spec.get("hour")
         minute = spec.get("minute", 0)
         if hour is not None:
             try:
-                when = f"每天 {int(hour):02d}:{int(minute):02d}"
+                return f"每天 {int(hour):02d}:{int(minute):02d}"
             except (TypeError, ValueError):
-                when = "按 cron 规则"
-        else:
-            when = "按 cron 规则"
-    else:
-        spec = task.get("spec") or {}
-        try:
-            secs = (
-                float(spec.get("seconds") or 0)
-                or float(spec.get("minutes") or 0) * 60
-                or float(spec.get("hours") or 0) * 3600
-            )
-        except (TypeError, ValueError):
-            secs = 0
-        when = f"每 {int(secs)} 秒" if secs else "按间隔规则"
-    return f"[{task.get('id', '')}] {when}「{task.get('message', '')}」"
+                return "按 cron 规则"
+        return "按 cron 规则"
+    spec = task.get("spec") or {}
+    try:
+        secs = (
+            float(spec.get("seconds") or 0)
+            or float(spec.get("minutes") or 0) * 60
+            or float(spec.get("hours") or 0) * 3600
+        )
+    except (TypeError, ValueError):
+        secs = 0
+    return f"每 {int(secs)} 秒" if secs else "按间隔规则"
+
+
+#: 任务类型的中文说法，给管理指令看
+_KIND_LABEL = {"once": "一次性", "cron": "每天", "interval": "周期"}
+
+
+def describe(task: dict) -> str:
+    """把任务渲染成一句人能看懂的话，供模型回复用户。"""
+    return f"[{task.get('id', '')}] {_when_text(task)}「{task.get('message', '')}」"
+
+
+def describe_line(task: dict) -> str:
+    """管理指令用的单行摘要：`[id] 时间 · 类型 · 委托人「内容」`。
+
+    比 `describe` 多了「是哪种任务」「谁委托的」——在群里看列表时，
+    这两条决定了「这条要不要留」。
+    """
+    parts = [f"[{task.get('id', '')}]", _when_text(task)]
+    label = _KIND_LABEL.get(str(task.get("kind") or ""))
+    if label:
+        parts.append(label)
+    user_id = str(task.get("user_id") or "")
+    if user_id:
+        # QQ 官方适配器的 user_id 是几十个字符的 openid，整条列出来会把
+        # 一行撑爆。截断不影响辨认——同一个人的前缀是稳定的。
+        if len(user_id) > 16:
+            user_id = f"{user_id[:8]}…"
+        parts.append(f"委托人 {user_id}")
+    return " · ".join(parts) + f"「{task.get('message', '')}」"
 
 
 async def _clean_stored_tasks() -> int:

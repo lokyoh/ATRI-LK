@@ -950,7 +950,7 @@ def register_function_calling():
         async def call(data: FunctionCallingData):
             from . import task as task_mod
 
-            tasks = await task_mod.list_tasks(data.chat_id)
+            tasks = await task_mod.list_tasks(data.chat_id, data.bot_id)
             if not tasks:
                 return "这个会话目前没有定时任务"
             return "当前任务：\n" + "\n".join(task_mod.describe(t) for t in tasks)
@@ -973,7 +973,7 @@ def register_function_calling():
             task_id = str(data.data.get("task_id") or "").strip()
             if not task_id:
                 return "缺少 task_id"
-            if await task_mod.cancel(task_id, data.chat_id):
+            if await task_mod.cancel(task_id, data.chat_id, data.bot_id):
                 return f"已取消任务 {task_id}"
             return f"没找到任务 {task_id}（可能已执行完或不属于这个会话）"
 

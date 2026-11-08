@@ -99,6 +99,18 @@ _ROGUE_USAGE_HINT = (
 )
 
 
+def _player_id(event) -> str:
+    """取玩家 ID。
+
+    **不能用 int()**：OneBot 的 QQ 号是数字，但 QQ 官方适配器的
+    ``get_user_id()`` 返回 ``user_openid``（``ROBOT1.0_Xb5...``），转 int 直接
+    ValueError——那正是「宠物.状态 在 QQ 端报错」的原因。
+
+    落库的 ``player_id`` 本来就是字符串，统一按字符串走即可。
+    """
+    return str(event.get_user_id())
+
+
 def _text_of(args) -> str:
     """把命令参数取成纯文本，跨适配器安全。
 
@@ -145,7 +157,7 @@ async def _guard(matcher) -> None:
         await reply.finish(matcher, text("status.disabled", "养成系统当前已关闭。"))
 
 
-async def _load_pet(matcher, player_id: int):
+async def _load_pet(matcher, player_id: str):
     """Return the caller's pet, or finish with a hint when they have none."""
     pet = await pet_core.get_pet(player_id)
     if pet is None:
@@ -155,7 +167,7 @@ async def _load_pet(matcher, player_id: int):
     return pet
 
 
-async def _settle(matcher, pet, player_id: int) -> dict:
+async def _settle(matcher, pet, player_id: str) -> dict:
     """Run the day settlement with biography and reincarnation wired in."""
     result = await daily.check_daily_reset(
         pet,
@@ -167,7 +179,7 @@ async def _settle(matcher, pet, player_id: int) -> dict:
     return result
 
 
-async def _settle_before_action(matcher, pet, player_id: int) -> None:
+async def _settle_before_action(matcher, pet, player_id: str) -> None:
     """行动类指令的统一前置：**先结算过期天数**，再判断行动点。
 
     没有这一步时，跨天后的第一个行动指令读到的仍是昨天的 ``action_points``
@@ -201,7 +213,7 @@ def _compose(*parts: str | None) -> str:
 @pet_create_matcher.handle()
 async def handle_create(event: Event, args: BaseMessage = CommandArg()):
     await _guard(pet_create_matcher)
-    player_id = int(event.get_user_id())
+    player_id = _player_id(event)
 
     parts = args.extract_plain_text().strip().split()
     if len(parts) < 2:
@@ -257,7 +269,7 @@ async def handle_create(event: Event, args: BaseMessage = CommandArg()):
 @pet_status_matcher.handle()
 async def handle_status(event: Event):
     await _guard(pet_status_matcher)
-    player_id = int(event.get_user_id())
+    player_id = _player_id(event)
     pet = await _load_pet(pet_status_matcher, player_id)
 
     settle = await _settle(pet_status_matcher, pet, player_id)
@@ -275,7 +287,7 @@ async def handle_status(event: Event):
 @pet_feed_matcher.handle()
 async def handle_feed(event: Event):
     await _guard(pet_feed_matcher)
-    player_id = int(event.get_user_id())
+    player_id = _player_id(event)
     pet = await _load_pet(pet_feed_matcher, player_id)
     await _settle_before_action(pet_feed_matcher, pet, player_id)
 
@@ -297,7 +309,7 @@ async def handle_feed(event: Event):
 @pet_play_matcher.handle()
 async def handle_play(event: Event):
     await _guard(pet_play_matcher)
-    player_id = int(event.get_user_id())
+    player_id = _player_id(event)
     pet = await _load_pet(pet_play_matcher, player_id)
     await _settle_before_action(pet_play_matcher, pet, player_id)
 
@@ -318,7 +330,7 @@ async def handle_play(event: Event):
 @pet_bathe_matcher.handle()
 async def handle_bathe(event: Event):
     await _guard(pet_bathe_matcher)
-    player_id = int(event.get_user_id())
+    player_id = _player_id(event)
     pet = await _load_pet(pet_bathe_matcher, player_id)
     await _settle_before_action(pet_bathe_matcher, pet, player_id)
 
@@ -338,7 +350,7 @@ async def handle_bathe(event: Event):
 @pet_rest_matcher.handle()
 async def handle_rest(event: Event):
     await _guard(pet_rest_matcher)
-    player_id = int(event.get_user_id())
+    player_id = _player_id(event)
     pet = await _load_pet(pet_rest_matcher, player_id)
     await _settle_before_action(pet_rest_matcher, pet, player_id)
 
@@ -359,7 +371,7 @@ async def handle_rest(event: Event):
 async def handle_skill(event: Event, args: BaseMessage = CommandArg()):
     """``/宠物.技能`` 列表；``装备|卸下 <技能名或ID>`` 调整装备槽。"""
     await _guard(pet_skill_matcher)
-    player_id = int(event.get_user_id())
+    player_id = _player_id(event)
     pet = await _load_pet(pet_skill_matcher, player_id)
 
     raw = _text_of(args)
@@ -409,7 +421,7 @@ async def handle_skill(event: Event, args: BaseMessage = CommandArg()):
 @pet_talent_matcher.handle()
 async def handle_talent(event: Event, args: BaseMessage = CommandArg()):
     await _guard(pet_talent_matcher)
-    player_id = int(event.get_user_id())
+    player_id = _player_id(event)
     pet = await _load_pet(pet_talent_matcher, player_id)
 
     talent_id = args.extract_plain_text().strip()
@@ -452,7 +464,7 @@ async def handle_talent(event: Event, args: BaseMessage = CommandArg()):
 @pet_bio_matcher.handle()
 async def handle_bio(event: Event):
     await _guard(pet_bio_matcher)
-    player_id = int(event.get_user_id())
+    player_id = _player_id(event)
     pet = await _load_pet(pet_bio_matcher, player_id)
 
     bio = await biography.get_or_create_biography(player_id)
@@ -464,7 +476,7 @@ async def handle_bio(event: Event):
 @pet_log_matcher.handle()
 async def handle_log(event: Event):
     await _guard(pet_log_matcher)
-    player_id = int(event.get_user_id())
+    player_id = _player_id(event)
     await _load_pet(pet_log_matcher, player_id)
 
     bio = await biography.get_or_create_biography(player_id)
@@ -474,7 +486,7 @@ async def handle_log(event: Event):
 @pet_reincarnate_matcher.handle()
 async def handle_reincarnate(event: Event, args: BaseMessage = CommandArg()):
     await _guard(pet_reincarnate_matcher)
-    player_id = int(event.get_user_id())
+    player_id = _player_id(event)
     pet = await _load_pet(pet_reincarnate_matcher, player_id)
 
     check = await reincarnation.check_reincarnation_available(pet)
@@ -531,7 +543,7 @@ async def _shop_dispatch(matcher, event: Event, args: BaseMessage) -> None:
     """
     from ..core import shop
 
-    player_id = int(event.get_user_id())
+    player_id = _player_id(event)
     reinc = await reincarnation.get_or_create_reincarnation(player_id)
     raw = args.extract_plain_text().strip()
 
@@ -676,7 +688,7 @@ async def _save_reinc(reinc) -> None:
     save_reincarnation(reinc)
 
 
-async def _shop_buy(matcher, player_id: int, reinc, token: str) -> None:
+async def _shop_buy(matcher, player_id: str, reinc, token: str) -> None:
     """购买一件商品并立即把加成落到宠物属性上。"""
     from ..core import shop
 
@@ -732,7 +744,7 @@ async def handle_perks(event: Event, args: BaseMessage = CommandArg()):
 async def handle_chat(event: Event, args: BaseMessage = CommandArg()):
     """``/宠物.聊天 <内容>`` — talk to the pet through the LLM."""
     await _guard(pet_chat_matcher)
-    player_id = int(event.get_user_id())
+    player_id = _player_id(event)
     pet = await _load_pet(pet_chat_matcher, player_id)
 
     message = _text_of(args)
@@ -768,7 +780,7 @@ async def handle_chat(event: Event, args: BaseMessage = CommandArg()):
 async def handle_love(event: Event):
     """``/宠物.好感度`` — merged from the legacy 好感度查询, now reading ``affection``."""
     await _guard(pet_love_matcher)
-    player_id = int(event.get_user_id())
+    player_id = _player_id(event)
     pet = await _load_pet(pet_love_matcher, player_id)
 
     # 好感同时加成经验与战斗输出（最多 +10%），这里把当前档位一并说明，
@@ -794,7 +806,7 @@ async def handle_love(event: Event):
 async def handle_rename(event: Event, args: BaseMessage = CommandArg()):
     """``/宠物.改名`` — merged from the legacy 改名."""
     await _guard(pet_rename_matcher)
-    player_id = int(event.get_user_id())
+    player_id = _player_id(event)
     pet = await _load_pet(pet_rename_matcher, player_id)
 
     raw = args.extract_plain_text().strip()
@@ -818,7 +830,7 @@ async def handle_rename(event: Event, args: BaseMessage = CommandArg()):
 async def handle_instruction(event: Event, args: BaseMessage = CommandArg()):
     """``/宠物.设定`` — merged from the legacy 更改设定; feeds the chat persona."""
     await _guard(pet_instruction_matcher)
-    player_id = int(event.get_user_id())
+    player_id = _player_id(event)
     pet = await _load_pet(pet_instruction_matcher, player_id)
 
     instruction = pet_core.clean_instruction(args.extract_plain_text())
@@ -942,7 +954,7 @@ async def handle_all_list(bot: Bot):
 async def handle_rogue(event: Event, args: BaseMessage = CommandArg()):
     """``/宠物.肉鸽 开始|继续|进度|撤退``；局内回复编号推进。"""
     await _guard(pet_rogue_matcher)
-    player_id = int(event.get_user_id())
+    player_id = _player_id(event)
     pet = await _load_pet(pet_rogue_matcher, player_id)
     # 跨日进入时先结算，行动点重置后入场/前进才判得准。
     await _settle(pet_rogue_matcher, pet, player_id)
@@ -982,7 +994,7 @@ async def handle_rogue(event: Event, args: BaseMessage = CommandArg()):
 @pet_train_matcher.handle()
 async def handle_train(event: Event):
     await _guard(pet_train_matcher)
-    player_id = int(event.get_user_id())
+    player_id = _player_id(event)
     pet = await _load_pet(pet_train_matcher, player_id)
     await _settle(pet_train_matcher, pet, player_id)
 

@@ -36,6 +36,6 @@ def get_config_path(name: str) -> Path:
     return CONFIG_DIR / f"{name}.yaml"
 
 
-def get_user_path(player_id: int) -> Path:
+def get_user_path(player_id: str | int) -> Path:
     """Return the optional runtime cache path for ``player_id``."""
     return USERS_DIR / f"{player_id}.json"

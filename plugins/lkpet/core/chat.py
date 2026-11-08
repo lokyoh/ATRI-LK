@@ -34,7 +34,7 @@ class PetChat:
 
     def __init__(
         self,
-        player_id: int,
+        player_id: str | int,
         user_name: str,
         pet_name: str,
         instruction: str,
@@ -106,19 +106,34 @@ class PetChat:
         self.history.clear()
 
 
+def _display_name(player_id: str) -> str:
+    """取用户名字；没注册（如 QQ 的 openid）就退回 ID 本身。
+
+    ``user_manager.get_user_name`` 对未注册 ID 会 KeyError——QQ 官方适配器的
+    openid 永远不在 LK 用户表里，直接调用会让聊天功能整体崩掉。
+    """
+    try:
+        return user_manager.get_user_name(player_id)
+    except Exception:
+        return str(player_id)
+
+
 class ChatManager:
     """Keeps one :class:`PetChat` per player, created on first use."""
 
     def __init__(self):
-        self._chats: dict[int, PetChat] = {}
+        # key 统一用 str：QQ 官方适配器的 user_id 是 openid（ROBOT1.0_...），
+        # 转 int 会 ValueError；而 key 类型混用会让「写入用 int、读取用 str」
+        # 永远查不到，且不报错——那种 bug 比崩溃更难查。
+        self._chats: dict[str, PetChat] = {}
 
     def get(self, pet, user_name: str | None = None) -> PetChat:
-        player_id = int(pet.player_id)
+        player_id = str(pet.player_id)
         chat = self._chats.get(player_id)
         if chat is None:
             chat = PetChat(
                 player_id,
-                user_name or user_manager.get_user_name(str(player_id)),
+                user_name or _display_name(player_id),
                 pet.name,
                 pet.instruction or "",
             )
@@ -127,19 +142,19 @@ class ChatManager:
             chat.refresh(pet, user_name)
         return chat
 
-    def peek(self, player_id: int) -> PetChat | None:
-        return self._chats.get(int(player_id))
+    def peek(self, player_id: str | int) -> PetChat | None:
+        return self._chats.get(str(player_id))
 
-    def drop(self, player_id: int) -> None:
-        self._chats.pop(int(player_id), None)
+    def drop(self, player_id: str | int) -> None:
+        self._chats.pop(str(player_id), None)
 
     def rename_user(self, user_id, new_name: str) -> None:
-        chat = self._chats.get(int(user_id))
+        chat = self._chats.get(str(user_id))
         if chat is not None:
             chat.user_name = new_name
 
-    def clear(self, player_id: int) -> None:
-        chat = self._chats.get(int(player_id))
+    def clear(self, player_id: str | int) -> None:
+        chat = self._chats.get(str(player_id))
         if chat is not None:
             chat.clear()
 

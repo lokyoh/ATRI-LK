@@ -675,11 +675,16 @@ def save_model(table: DBTable, model: BaseModel, key_column: str) -> None:
 def load_reincarnation(player_id: str | int) -> Reincarnation | None:
     """Read a player's reincarnation row, or ``None`` when never created.
 
-    ``player_id`` 收 ``str`` 也收 ``int``：调用方从事件拿到的通常是 ``int``，
-    而 ``Pet.player_id`` 落库是 ``str``。两者都按 ``int`` 归一后查库。
+    ``player_id`` 用 ``str`` 归一，**不能** ``int()``：OneBot 的 QQ 号是数字，
+    但 QQ 官方适配器的 ``get_user_id()`` 返回的是 ``user_openid``，形如
+    ``ROBOT1.0_Xb5LGP...``，转 int 直接 ValueError。落库的本来就是字符串，
+    统一按字符串比较即可。
     """
     return load_model(
-        reincarnation_table, Reincarnation, REINCARNATION_KEY_COLUMN, int(player_id)
+        reincarnation_table,
+        Reincarnation,
+        REINCARNATION_KEY_COLUMN,
+        str(player_id),
     )
 
 

@@ -234,11 +234,19 @@ async def _send(task: dict) -> None:
                 bot = b
                 break
         if bot is None:
+            # **不换 bot**。会话是「某个 bot + 某个群」的组合：群号只对创建
+            # 这个任务的那个 bot 有意义——别的 bot 未必在那个群，甚至群标识
+            # 的形态都不同（QQ 官方是 group_openid，OneBot 是数字群号）。
+            # 换一个 bot 去发，轻则「请求的资源不存在(用户/群已注销)」，
+            # 重则把话说进不相关的群。到点没发出去，也比发错地方好。
             log.warning(
                 f"定时任务「{task.get('name')}」原定 bot {wanted} 不在线，"
-                f"改用 {getattr(bots[0], 'self_id', '?')} 发送"
+                "放弃本次（换 bot 发往同一个群不安全）"
             )
+            return
     if bot is None:
+        # 老任务可能没记 bot_id。这里只能挑一个候选，属兼容路径；
+        # 发送失败会被 send_to_chat 记下来，不会静默。
         bot = bots[0]
     try:
         await _run_agent(

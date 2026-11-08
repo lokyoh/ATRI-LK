@@ -13,7 +13,9 @@ Wiring notes:
 
 from random import choice
 
-from nonebot.adapters.onebot.v11 import Bot, Event, Message
+from nonebot.adapters import Bot, Event
+from nonebot.adapters import Message as BaseMessage
+from nonebot.adapters.onebot.v11 import Bot as OneBot11
 from nonebot.adapters.onebot.v11.helpers import Cooldown
 from nonebot.params import CommandArg, Depends
 
@@ -97,6 +99,33 @@ _ROGUE_USAGE_HINT = (
 )
 
 
+def _text_of(args) -> str:
+    """把命令参数取成纯文本，跨适配器安全。
+
+    ``lk_util.get_trans_text`` 是按 OneBot 的段结构写的——它在 ``at`` 段上直接
+    取 ``data["qq"]``，而 QQ 官方适配器的 at 段没有这个键，会 KeyError。
+    所以 QQ 端一律走 ``extract_plain_text``，OneBot 端才用原来的富文本转换
+    （它能把 @、表情、图片摘要一并转成文字）。
+    """
+    if isinstance(args, str):
+        return args.strip()
+    try:
+        from nonebot.adapters.qq import Message as QQMsg
+
+        if isinstance(args, QQMsg):
+            return args.extract_plain_text().strip()
+    except Exception:
+        pass
+    try:
+        return lk_util.get_trans_text(args).strip()
+    except (KeyError, AttributeError, TypeError):
+        # 段结构和 OneBot 不一样时的兜底：能取多少算多少
+        try:
+            return args.extract_plain_text().strip()
+        except Exception:
+            return ""
+
+
 def _never_empty(message: str, fallback: str) -> str:
     """防空回复：texts.yaml 缺键（部署未同步 res/ 配置）时 ``text(key, "")`` 会得到
     空串，QQ 端把空消息显示为「该消息类型暂不支持查看」。空串一律降级为带当前
@@ -170,7 +199,7 @@ def _compose(*parts: str | None) -> str:
 
 
 @pet_create_matcher.handle()
-async def handle_create(bot: Bot, event: Event, args: Message = CommandArg()):
+async def handle_create(event: Event, args: BaseMessage = CommandArg()):
     await _guard(pet_create_matcher)
     player_id = int(event.get_user_id())
 
@@ -226,7 +255,7 @@ async def handle_create(bot: Bot, event: Event, args: Message = CommandArg()):
 
 
 @pet_status_matcher.handle()
-async def handle_status(bot: Bot, event: Event):
+async def handle_status(event: Event):
     await _guard(pet_status_matcher)
     player_id = int(event.get_user_id())
     pet = await _load_pet(pet_status_matcher, player_id)
@@ -244,7 +273,7 @@ async def handle_status(bot: Bot, event: Event):
 
 
 @pet_feed_matcher.handle()
-async def handle_feed(bot: Bot, event: Event):
+async def handle_feed(event: Event):
     await _guard(pet_feed_matcher)
     player_id = int(event.get_user_id())
     pet = await _load_pet(pet_feed_matcher, player_id)
@@ -266,7 +295,7 @@ async def handle_feed(bot: Bot, event: Event):
 
 
 @pet_play_matcher.handle()
-async def handle_play(bot: Bot, event: Event):
+async def handle_play(event: Event):
     await _guard(pet_play_matcher)
     player_id = int(event.get_user_id())
     pet = await _load_pet(pet_play_matcher, player_id)
@@ -287,7 +316,7 @@ async def handle_play(bot: Bot, event: Event):
 
 
 @pet_bathe_matcher.handle()
-async def handle_bathe(bot: Bot, event: Event):
+async def handle_bathe(event: Event):
     await _guard(pet_bathe_matcher)
     player_id = int(event.get_user_id())
     pet = await _load_pet(pet_bathe_matcher, player_id)
@@ -307,7 +336,7 @@ async def handle_bathe(bot: Bot, event: Event):
 
 
 @pet_rest_matcher.handle()
-async def handle_rest(bot: Bot, event: Event):
+async def handle_rest(event: Event):
     await _guard(pet_rest_matcher)
     player_id = int(event.get_user_id())
     pet = await _load_pet(pet_rest_matcher, player_id)
@@ -327,13 +356,13 @@ async def handle_rest(bot: Bot, event: Event):
 
 
 @pet_skill_matcher.handle()
-async def handle_skill(bot: Bot, event: Event, args: Message = CommandArg()):
+async def handle_skill(event: Event, args: BaseMessage = CommandArg()):
     """``/宠物.技能`` 列表；``装备|卸下 <技能名或ID>`` 调整装备槽。"""
     await _guard(pet_skill_matcher)
     player_id = int(event.get_user_id())
     pet = await _load_pet(pet_skill_matcher, player_id)
 
-    raw = lk_util.get_trans_text(args).strip()
+    raw = _text_of(args)
     if not raw:
         await reply.finish(
             pet_skill_matcher, format_skill_list(pet), menus.skill_menu()
@@ -378,7 +407,7 @@ async def handle_skill(bot: Bot, event: Event, args: Message = CommandArg()):
 
 
 @pet_talent_matcher.handle()
-async def handle_talent(bot: Bot, event: Event, args: Message = CommandArg()):
+async def handle_talent(event: Event, args: BaseMessage = CommandArg()):
     await _guard(pet_talent_matcher)
     player_id = int(event.get_user_id())
     pet = await _load_pet(pet_talent_matcher, player_id)
@@ -421,7 +450,7 @@ async def handle_talent(bot: Bot, event: Event, args: Message = CommandArg()):
 
 
 @pet_bio_matcher.handle()
-async def handle_bio(bot: Bot, event: Event):
+async def handle_bio(event: Event):
     await _guard(pet_bio_matcher)
     player_id = int(event.get_user_id())
     pet = await _load_pet(pet_bio_matcher, player_id)
@@ -433,7 +462,7 @@ async def handle_bio(bot: Bot, event: Event):
 
 
 @pet_log_matcher.handle()
-async def handle_log(bot: Bot, event: Event):
+async def handle_log(event: Event):
     await _guard(pet_log_matcher)
     player_id = int(event.get_user_id())
     await _load_pet(pet_log_matcher, player_id)
@@ -443,7 +472,7 @@ async def handle_log(bot: Bot, event: Event):
 
 
 @pet_reincarnate_matcher.handle()
-async def handle_reincarnate(bot: Bot, event: Event, args: Message = CommandArg()):
+async def handle_reincarnate(event: Event, args: BaseMessage = CommandArg()):
     await _guard(pet_reincarnate_matcher)
     player_id = int(event.get_user_id())
     pet = await _load_pet(pet_reincarnate_matcher, player_id)
@@ -495,7 +524,7 @@ async def handle_reincarnate(bot: Bot, event: Event, args: Message = CommandArg(
 # ---------------------------------------------------------------------------
 
 
-async def _shop_dispatch(matcher, event: Event, args: Message) -> None:
+async def _shop_dispatch(matcher, event: Event, args: BaseMessage) -> None:
     """``/宠物.商店`` 与 ``/宠物.特权`` 共用的实现。
 
     所有分支都以 ``matcher.finish`` 结束，因此本函数不会正常返回。
@@ -673,14 +702,14 @@ async def _shop_buy(matcher, player_id: int, reinc, token: str) -> None:
 
 
 @pet_shop_matcher.handle()
-async def handle_shop(bot: Bot, event: Event, args: Message = CommandArg()):
+async def handle_shop(event: Event, args: BaseMessage = CommandArg()):
     """``/宠物.商店`` —— 概览 / 分类 / 详情 / 购买 / 洗点。"""
     await _guard(pet_shop_matcher)
     await _shop_dispatch(pet_shop_matcher, event, args)
 
 
 @pet_perks_matcher.handle()
-async def handle_perks(bot: Bot, event: Event, args: Message = CommandArg()):
+async def handle_perks(event: Event, args: BaseMessage = CommandArg()):
     """``/宠物.特权`` —— 旧指令，转发到商店（行为完全一致）。"""
     await _guard(pet_perks_matcher)
     await _shop_dispatch(pet_perks_matcher, event, args)
@@ -700,13 +729,13 @@ async def handle_perks(bot: Bot, event: Event, args: Message = CommandArg()):
         Depends(is_lk_user),
     ]
 )
-async def handle_chat(event: Event, args: Message = CommandArg()):
+async def handle_chat(event: Event, args: BaseMessage = CommandArg()):
     """``/宠物.聊天 <内容>`` — talk to the pet through the LLM."""
     await _guard(pet_chat_matcher)
     player_id = int(event.get_user_id())
     pet = await _load_pet(pet_chat_matcher, player_id)
 
-    message = lk_util.get_trans_text(args).strip()
+    message = _text_of(args)
     if not message:
         await reply.finish(
             pet_chat_matcher, text("chat.empty_message", "想对宠物说点什么呢？")
@@ -762,7 +791,7 @@ async def handle_love(event: Event):
 
 
 @pet_rename_matcher.handle([Cooldown(300, prompt=_cooldown_notice())])
-async def handle_rename(event: Event, args: Message = CommandArg()):
+async def handle_rename(event: Event, args: BaseMessage = CommandArg()):
     """``/宠物.改名`` — merged from the legacy 改名."""
     await _guard(pet_rename_matcher)
     player_id = int(event.get_user_id())
@@ -786,7 +815,7 @@ async def handle_rename(event: Event, args: Message = CommandArg()):
 
 
 @pet_instruction_matcher.handle([Cooldown(300, prompt=_cooldown_notice())])
-async def handle_instruction(event: Event, args: Message = CommandArg()):
+async def handle_instruction(event: Event, args: BaseMessage = CommandArg()):
     """``/宠物.设定`` — merged from the legacy 更改设定; feeds the chat persona."""
     await _guard(pet_instruction_matcher)
     player_id = int(event.get_user_id())
@@ -837,8 +866,22 @@ async def _send_paged(matcher, title: str, entries: list[tuple[str, str]]) -> No
 
 @pet_group_list_matcher.handle()
 async def handle_group_list(bot: Bot, event: Event):
-    """``/宠物.列表`` (ADMIN) — names come straight from the database."""
+    """``/宠物.列表`` (ADMIN) — names come straight from the database.
+
+    需要 ``get_group_member_list``（目前只有 OneBot 提供）。这里用适配器无关的
+    ``Bot`` 声明、运行时判断能力：QQ 端会回一句「该功能暂不支持」，而不是被
+    依赖注入**静默跳过**——后者用户看到的是「命令没反应」，很难查。
+    """
     await _guard(pet_group_list_matcher)
+    if not isinstance(bot, OneBot11):
+        await reply.finish(
+            pet_group_list_matcher,
+            text(
+                "petlist.unsupported",
+                "本群宠物列表需要 OneBot 适配器，当前平台暂不支持。",
+            ),
+        )
+
     group_id = getattr(event, "group_id", None)
     if group_id is None:
         await reply.finish(
@@ -861,8 +904,19 @@ async def handle_group_list(bot: Bot, event: Event):
 
 @pet_all_list_matcher.handle()
 async def handle_all_list(bot: Bot):
-    """``/宠物.全部`` (MASTER) — walks every group the bot is in."""
+    """``/宠物.全部`` (MASTER) — walks every group the bot is in.
+
+    同 ``handle_group_list``：需要 OneBot 的群列表接口，Runtime 判断后给出提示。
+    """
     await _guard(pet_all_list_matcher)
+    if not isinstance(bot, OneBot11):
+        await reply.finish(
+            pet_all_list_matcher,
+            text(
+                "petlist.unsupported",
+                "所有宠物列表需要 OneBot 适配器，当前平台暂不支持。",
+            ),
+        )
 
     names = load_pet_names()
     entries: dict[str, str] = {}
@@ -885,7 +939,7 @@ async def handle_all_list(bot: Bot):
 
 
 @pet_rogue_matcher.handle()
-async def handle_rogue(event: Event, args: Message = CommandArg()):
+async def handle_rogue(event: Event, args: BaseMessage = CommandArg()):
     """``/宠物.肉鸽 开始|继续|进度|撤退``；局内回复编号推进。"""
     await _guard(pet_rogue_matcher)
     player_id = int(event.get_user_id())
@@ -926,7 +980,7 @@ async def handle_rogue(event: Event, args: Message = CommandArg()):
 
 
 @pet_train_matcher.handle()
-async def handle_train(bot: Bot, event: Event):
+async def handle_train(event: Event):
     await _guard(pet_train_matcher)
     player_id = int(event.get_user_id())
     pet = await _load_pet(pet_train_matcher, player_id)

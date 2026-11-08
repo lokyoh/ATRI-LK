@@ -122,6 +122,9 @@ async def settle_and_notify() -> None:
         batches.append(current)
 
     for bot in get_bots().values():
+        # 只推 OneBot 群：QQ 官方适配器没有 ``send_group_msg``，群标识也是 openid
+        # 而非群号，配置里的 group 号对它无意义。QQ 端目前不主动推送日结算，
+        # 玩家发指令时仍能看到当天报告。
         if not isinstance(bot, Bot):
             continue
         for group_id in groups:

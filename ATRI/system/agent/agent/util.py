@@ -2,6 +2,7 @@ from nonebot.adapters import Bot
 from nonebot.adapters.onebot.v11 import Bot as OneBot
 from nonebot.adapters.qq import Bot as QQBot
 
+from ATRI.exceptions import str_traceback
 from ATRI.log import log
 from ATRI.system.lkapi.bot import util as lk_util
 from ATRI.system.lkapi.entity.user import user_manager
@@ -36,8 +37,9 @@ async def get_name(bot: Bot, user_id: str, chat_id: str):
                 )
                 members[chat_id][user_id] = member.username
             return members[chat_id][user_id]
-        except Exception:
+        except Exception as e:
             log.warning(f"获取官方QQ用户{user_id}在群{chat_id}昵称错误")
+            log.debug(str_traceback(e))
     return str(user_id)
 
 

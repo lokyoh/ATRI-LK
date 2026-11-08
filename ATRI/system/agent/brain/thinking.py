@@ -127,6 +127,44 @@ class StopThinkingError(Exception):
     pass
 
 
+#: 模型的正文被当成「想说但忘了发」时，回填给它的话。
+FORGOT_TO_SEND_HINT = (
+    "你刚才写的正文不会发送给任何人，只有调用 send_message 才会真的说出来。"
+    '如果那是想说的话，请调用 send_message(msg="...") 重新发一次；'
+    "如果只是思考，请调用 stop_thinking() 结束。"
+)
+
+#: 连续几次「只写正文不调用」就放弃。已提醒过仍不改，再循环只是白烧 token。
+MAX_FORGOT_SEND = 2
+
+
+def looks_like_reply(text: str) -> bool:
+    """正文像不像「本来想发出去的话」。"""
+    body = (text or "").strip()
+    if not body:
+        return False
+    if not any(ch.isalnum() for ch in body):
+        return False
+    for prefix in ("思考", "分析", "说明", "注：", "（", "(", "#"):
+        if body.startswith(prefix):
+            return False
+    return True
+
+
+def should_remind_forgot_send(
+    content: str,
+    functions_data: list,
+    issues: list,
+    reminded: int,
+) -> bool:
+    """这一轮要不要提醒模型「你忘了调用 send_message」。"""
+    if functions_data or issues:
+        return False
+    if reminded >= MAX_FORGOT_SEND:
+        return False
+    return looks_like_reply(content)
+
+
 class ThinkingModel:
     def __init__(self):
         self.messages = LLMMessages()
@@ -145,12 +183,12 @@ class ThinkingModel:
         )
         return (
             f"{image_history}\n\n{history_prompt}\n#历史聊天记录结束\n\n"
-            "# 现在轮到你行动\n"
+            "# 现在轮到你行动，你与外界交互只能通过功能调用实现\n"
             "输出格式：\n"
             "我该怎么做的思考内容。\n"
-            'function_name(arg="参数值", ...)\n'
+            'send_message(msg="想要说的话")\n'
             "...\n"
-            "#如果不需要调用的结果或不想说就在最后调用 stop_thinking 结束思考。\n"
+            "# 不需要调用的结果或不想说就在最后调用 stop_thinking 结束思考。\n"
             "stop_thinking()"
         )
 
@@ -260,7 +298,7 @@ class ThinkingModel:
 
     @staticmethod
     def get_system_prompt(role_prompt: str = ""):
-        head = "你是一个项目ATRI-LK的聊天机器人的大脑：根据输入、上下文与各种信息做出决策，生成功能调用，读取调用反馈后继续，直到结束本次任务。\n"
+        head = "你是项目ATRI-LK聊天机器人的大脑：根据输入、上下文与各种信息做出决策，生成功能调用，读取调用反馈后继续，直到结束本次任务。\n"
         if role_prompt:
             head += f"\n#你的信息\n{role_prompt}\n"
         return (
@@ -323,6 +361,7 @@ class ThinkingModel:
         self.messages.add_message(message)
         started = time.perf_counter()
         thinking_times = 0
+        forgot_send = 0
         limit = config.get("max_thinking_times")
         failed = False
         try:
@@ -346,6 +385,32 @@ class ThinkingModel:
                 )
                 _, functions_data, issues = await self.process_resp(resp.content)
                 if not functions_data and not issues:
+                    # 有正文、没调用：这句话发不出去。提醒模型补一次 send_message，
+                    # 否则聊天里就是「她突然不理人」，而且日志里看不出任何异常。
+                    content = str(getattr(resp, "content", "") or "").strip()
+                    if should_remind_forgot_send(
+                        content, functions_data, issues, forgot_send
+                    ):
+                        forgot_send += 1
+                        log.warning(
+                            f"第 {thinking_times + 1} 轮只有正文没有调用，"
+                            f"已提醒模型改用 send_message（{len(content)} 字）"
+                        )
+                        telemetry.record(
+                            "forgot_send",
+                            chat_id=str(args.chat_id),
+                            mode=mode,
+                            length=len(content),
+                            attempt=forgot_send,
+                        )
+                        self.messages.add_message(
+                            LLMMessage("assistant", LLMContents().text(content))
+                        )
+                        self.messages.add_message(
+                            LLMMessage("user", LLMContents().text(FORGOT_TO_SEND_HINT))
+                        )
+                        thinking_times += 1
+                        continue
                     break
                 back = await self.do_action(
                     functions_data,

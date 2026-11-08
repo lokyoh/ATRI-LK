@@ -95,9 +95,32 @@ PAGE_SIZE = 20
 _COOLDOWN_NOTICES = text_list("cooldown.notices", ["冷静一下"])
 """Prompts shown when a command is used faster than its cooldown allows."""
 
-_ROGUE_USAGE_HINT = (
-    "用法：/宠物.肉鸽 开始｜继续｜进度｜撤退\n进入层数后按提示回复编号应答。"
-)
+_ROGUE_USAGE_HINT = "用法：/宠物.肉鸽 开始｜继续｜进度｜撤退"
+
+
+def _rogue_usage() -> str:
+    """肉鸽的用法提示。
+
+    每个动作都做成**可点命令**（QQ 端）：这段文案出现的场合正是「用户不知道
+    下一步该输什么」，把指令写成纯文本等于让他照着抄一遍。
+
+    「回复编号应答」只在 OneBot 端成立——QQ 端每层都会直接给可点的选项，
+    用户不用记编号。
+    """
+
+    parts = [
+        menus.inline(label, f"宠物.肉鸽 {action}")
+        for label, action in (
+            ("开始", "开始"),
+            ("继续", "继续"),
+            ("进度", "进度"),
+            ("撤退", "撤退"),
+        )
+    ]
+    parts = [p for p in parts if p]
+    if parts:
+        return "用法（点一下即可）：\n> " + " ".join(parts)
+    return _ROGUE_USAGE_HINT + "\n进入层数后按提示回复编号应答。"
 
 
 def _player_id(event) -> str:
@@ -151,10 +174,17 @@ def _text_of(args) -> str:
 
 def _never_empty(message: str, fallback: str) -> str:
     """防空回复：texts.yaml 缺键（部署未同步 res/ 配置）时 ``text(key, "")`` 会得到
-    空串，QQ 端把空消息显示为「该消息类型暂不支持查看」。空串一律降级为带当前
-    指令前缀的兜底文案，绝不发空消息。"""
+    空串，QQ 端把空消息显示为「该消息类型暂不支持查看」。空串一律降级为兜底
+    文案，绝不发空消息。
+
+    兜底文案里可能有已经生成好的 ``<qqbot-cmd-input>`` 标记——那种走进来就
+    不要再 ``apply_command_start``：它按字面替换 ``/宠物``，会把标记里的
+    URL 编码内容一起改坏。
+    """
     if message and message.strip():
         return message
+    if "qqbot-cmd-input" in fallback:
+        return fallback
     return apply_command_start(fallback)
 
 
@@ -173,9 +203,25 @@ async def _load_pet(matcher, player_id: str):
     pet = await pet_core.get_pet(player_id)
     if pet is None:
         await reply.finish(
-            matcher, text("common.no_pet", "请先创建宠物：/宠物.创建 <性格> <名字>")
+            matcher,
+            text("common.no_pet", "请先创建宠物：/宠物.创建 <性格> <名字>")
+            + _create_shortcut(),
         )
     return pet
+
+
+def _create_shortcut() -> str:
+    """「创建宠物」的半成品命令（仅 QQ 端有内容）。
+
+    ``enter=False`` 让指令**填进输入框**而不是直接发出——创建需要性格和名字，
+    直接发一条缺参数的指令只会报用法错误。用户点一下补完再发，比整条手打省事。
+    """
+    from ..utils import reply
+
+    if not reply.is_qq():
+        return ""
+    command = menus.cmd("宠物.创建 ")
+    return "\n> " + reply.cmd_at("点这里填名字与性格", command)
 
 
 async def _settle(matcher, pet, player_id: str) -> dict:
@@ -954,9 +1000,12 @@ async def handle_rogue(event: Event, args: BaseMessage = CommandArg()):
     # OneBot 端没有按钮，编号必须留着。
     numbered = not reply.is_qq(event)
     try:
-        with rogue_actions.numbered_options(numbered):
+        with (
+            rogue_actions.numbered_options(numbered),
+            rogue_actions.line_links(),
+        ):
             if raw == "":
-                usage = _never_empty(text("rogue.usage", ""), _ROGUE_USAGE_HINT)
+                usage = _never_empty(text("rogue.usage", ""), _rogue_usage())
                 msg = roguelike.progress(rogue) + "\n" + usage
             elif raw == "开始":
                 msg = await roguelike.start(pet, rogue)
@@ -969,7 +1018,7 @@ async def handle_rogue(event: Event, args: BaseMessage = CommandArg()):
             elif raw.isdigit():
                 msg = await roguelike.handle_number(pet, rogue, int(raw))
             else:
-                msg = _never_empty(text("rogue.usage", ""), _ROGUE_USAGE_HINT)
+                msg = _never_empty(text("rogue.usage", ""), _rogue_usage())
     except ValueError as exc:
         await reply.finish(pet_rogue_matcher, f"❌ {exc}")
     except Exception as exc:  # 未知错误也要给用户回执，不静默吞掉对话
@@ -985,9 +1034,27 @@ async def handle_rogue(event: Event, args: BaseMessage = CommandArg()):
         choices = menus.rogue_menu(running=bool(getattr(rogue, "floor", 0)))
     await reply.finish(
         pet_rogue_matcher,
-        _never_empty(msg, _ROGUE_USAGE_HINT),
+        _never_empty(msg, _rogue_usage()),
         choices,
     )
+
+
+def _shortage_actions(exc) -> str:
+    """资源不足提示后面的可点命令（仅 QQ 端有内容）。"""
+    hints = getattr(exc, "hints", None) or []
+    if not hints:
+        return ""
+    parts = [
+        menus.inline(str(h.get("label") or "去做"), str(h["path"]))
+        for h in hints
+        # 没有 path 的条目生成不出有效指令，直接丢掉——空命令会让用户点到 "/"
+        if str(h.get("path") or "").strip()
+    ]
+    parts = [p for p in parts if p]
+    if not parts:
+        # OneBot 端：命令已经写在正文里了（core 层生成的文字），不必重复
+        return ""
+    return "\n> " + " ".join(parts)
 
 
 @pet_train_matcher.handle()
@@ -999,6 +1066,13 @@ async def handle_train(event: Event):
 
     try:
         result = await interaction.train(pet, player_id)
+    except interaction.ResourceShortageError as exc:
+        # 资源不足时提示里带着「先喂食 / 先玩耍」这类指令。把命令内嵌到那一行，
+        # 用户点一下就能去做，不必照着文字手打。
+        await reply.finish(
+            pet_train_matcher,
+            f"❌ {exc}" + _shortage_actions(exc),
+        )
     except ValueError as exc:
         await reply.finish(pet_train_matcher, f"❌ {exc}")
 

@@ -11,7 +11,12 @@ from dataclasses import dataclass, field
 from datetime import datetime
 from typing import Any
 
-from ._common import floor_rng, passive_effects, show_numbered_options
+from ._common import (
+    floor_rng,
+    line_link,
+    passive_effects,
+    show_numbered_options,
+)
 
 # ---------------------------------------------------------------------------
 # RogueRun — 替代裸 dict
@@ -161,9 +166,14 @@ class NeedAPState(FloorState):
     def render(self, run: RogueRun, cfg: dict[str, Any], chosen: set[str]) -> str:
         from ._common import _text
 
-        return _text(
-            "need_ap",
-            "行动点不足，原地待命；明天 00:00 重置后发送「/宠物.肉鸽 继续」。",
+        return _act_hint(
+            "行动点不足，原地待命；明天 00:00 重置后点下面继续。",
+            _text(
+                "need_ap",
+                "行动点不足，原地待命；明天 00:00 重置后发送「/宠物.肉鸽 继续」。",
+            ),
+            "继续",
+            "宠物.肉鸽 继续",
         )
 
     def handle(
@@ -224,6 +234,8 @@ class BattleState(FloorState):
 
         floor = run.floor
         region = region_of(floor, cfg)
+        # QQ 端有可点的「迎战」，不必再教用户回「1」
+        numbered = show_numbered_options()
         monster = _gen_monster(
             floor,
             region,
@@ -238,7 +250,8 @@ class BattleState(FloorState):
         if self.boss:
             return _text(
                 "boss_floor",
-                "🎲 本层首领随机选定：{monster}！回复「1」开战。",
+                "🎲 本层首领随机选定：{monster}！"
+                + ("回复「1」开战。" if numbered else "点下方迎战。"),
                 floor=floor,
                 monster=_monster_label(monster),
                 region=region.get("name", ""),
@@ -246,12 +259,15 @@ class BattleState(FloorState):
         if self.elite_fight:
             return _text(
                 "elite_fight_prompt",
-                "⚠️ 强化精英 · {title}：{monster}\n回复「1」迎战。",
+                "⚠️ 强化精英 · {title}：{monster}"
+                + ("\n回复「1」迎战。" if numbered else ""),
                 title=str(monster.get("elite_fight_title") or "强化形态"),
                 monster=_monster_label(monster),
             )
         return _text(
-            "battle_prompt", "回复「1」迎战。", monster=_monster_label(monster)
+            "battle_prompt",
+            "回复「1」迎战。" if numbered else "点下方迎战。",
+            monster=_monster_label(monster),
         )
 
     def handle(
@@ -360,26 +376,32 @@ class FloorChoiceState(FloorState):
         numbered = show_numbered_options()
         for idx, opt in enumerate(self.options, start=1):
             label = labels.get(opt, opt)
-            line = f"{idx}. {label}" if numbered else f"· {label}"
+            head = f"{idx}. {label}" if numbered else label
+            detail = ""
             if opt == "battle":
                 monster = self._option_monster(cfg, run, self.enemy_at(idx))
                 if self.elite:
-                    line += _text(
+                    detail = _text(
                         "elite_hint",
                         "：⚠️ {monster}",
                         monster=_monster_label(monster),
                     )
                 else:
-                    line += _text(
+                    detail = _text(
                         "battle_hint",
                         "：{monster}",
                         monster=_monster_label(monster),
                     )
             elif opt == "shop":
-                line += _text("shop_hint", "（{stock}）", stock=stock_text)
+                detail = _text("shop_hint", "（{stock}）", stock=stock_text)
             else:
-                line += _text("event_hint", "（未知遭遇）")
-            lines.append(line)
+                detail = _text("event_hint", "（未知遭遇）")
+            # 整行都是可点区域：用户看到「战斗：草原狼 Lv.1」就点这一行，
+            # 不必把「第 1 项」换算成底部第 1 个链接。
+            body = head + detail
+            if not numbered and body.startswith("："):
+                body = body[1:]
+            lines.append(line_link(body, f"宠物.肉鸽 {idx}"))
         if numbered:
             lines.append(_text("floor_reply", "回复编号选择路线。"))
         return "\n".join(lines)
@@ -448,13 +470,13 @@ class EventState(FloorState):
         if self.supply:
             heal_mult = float((region.get("shop") or {}).get("heal_mult", 1))
         for idx, choice in enumerate(event.get("choices", []), start=1):
-            line = f"{idx}. {choice['text']}" if numbered else f"· {choice['text']}"
+            line = f"{idx}. {choice['text']}" if numbered else choice["text"]
             if f"{event_id}:{idx}" in chosen:
                 effect = dict(choice.get("effect", {}) or {})
                 if heal_mult != 1.0 and effect.get("run_hp"):
                     effect["run_hp"] = round(effect["run_hp"] * heal_mult)
                 line += f" [{_choice_effect_note(effect)}]"
-            lines.append(line)
+            lines.append(line_link(line, f"宠物.肉鸽 {idx}"))
         return "\n".join(lines)
 
     def handle(
@@ -516,16 +538,15 @@ class RelicChoiceState(FloorState):
             lines.append(_text("relic_none", "遗物已集齐，直接前进。"))
         for idx, relic_id in enumerate(self.offer, start=1):
             spec = specs.get(relic_id, {})
-            lines.append(
-                _text(
-                    "relic_option",
-                    "{idx}{name}（{stat}） — {desc}",
-                    idx=f"{idx}. " if numbered else "· ",
-                    name=spec.get("name", relic_id),
-                    stat=relic_effect_note(spec.get("effect") or {}),
-                    desc=spec.get("desc", ""),
-                )
+            body = _text(
+                "relic_option",
+                "{idx}{name}（{stat}） — {desc}",
+                idx=f"{idx}. " if numbered else "",
+                name=spec.get("name", relic_id),
+                stat=relic_effect_note(spec.get("effect") or {}),
+                desc=spec.get("desc", ""),
             )
+            lines.append(line_link(body, f"宠物.肉鸽 {idx}"))
         return "\n".join(lines)
 
     def handle(
@@ -644,21 +665,21 @@ def _shop_text_from_run(run: RogueRun, stock: list[str], cfg: dict[str, Any]) ->
             extra = _text("shop_discount_tag", "（原价 {base} 金）", base=base)
         else:
             extra = ""
-        lines.append(
-            _text(
-                "relic_shop_line",
-                "{idx}{name}（{label}｜{stat}）— {price}金{extra}",
-                idx=f"{idx}. " if numbered else "· ",
-                name=spec.get("name", relic_id),
-                label=text(
-                    f"rogue.tiers.{spec.get('rarity', 'normal')}",
-                    spec.get("rarity", "normal"),
-                ),
-                stat=relic_effect_note(spec.get("effect") or {}),
-                price=_final_price(spec, cfg, discount),
-                extra=extra,
-            )
+        body = _text(
+            "relic_shop_line",
+            "{idx}{name}（{label}｜{stat}）— {price}金{extra}",
+            idx=f"{idx}. " if numbered else "",
+            name=spec.get("name", relic_id),
+            label=text(
+                f"rogue.tiers.{spec.get('rarity', 'normal')}",
+                spec.get("rarity", "normal"),
+            ),
+            stat=relic_effect_note(spec.get("effect") or {}),
+            price=_final_price(spec, cfg, discount),
+            extra=extra,
         )
+        lines.append(line_link(body, f"宠物.肉鸽 {idx}"))
+    lines.append(line_link("离开", "宠物.肉鸽 0"))
     if numbered:
         lines.append(_text("shop_reply", "回复编号购买，回复 0 离开。"))
     return "\n".join(lines)
@@ -782,10 +803,10 @@ def _refund_entry_ticket(pet) -> None:
 
 async def resume(pet, rogue) -> str:
     """继续/重发当前局的待应答提示。"""
-    from ._common import _load_rogue_config, _persist, _text
+    from ._common import _load_rogue_config, _persist
 
     if not _has_run(rogue):
-        return _text("no_run", "当前没有进行中的局。发送「/宠物.肉鸽 开始」入场。")
+        return no_run_hint()
     run = RogueRun.from_dict(rogue.run_state)
     cfg = _load_rogue_config()
     state = state_from_pending(run.pending)
@@ -836,19 +857,16 @@ def progress(rogue) -> str:
                 ),
             )
     else:
-        lines.insert(
-            0, _text("no_run", "当前没有进行中的局。发送「/宠物.肉鸽 开始」入场。")
-        )
+        lines.insert(0, no_run_hint())
     return "\n".join(lines)
 
 
 async def retreat(pet, rogue) -> str:
     """撤退：立即按到达层数结算并结束本局。"""
-    from ._common import _text
     from .settle import settle_run
 
     if not _has_run(rogue):
-        return _text("no_run", "当前没有进行中的局。发送「/宠物.肉鸽 开始」入场。")
+        return no_run_hint()
     return await settle_run(pet, rogue, reason="retreat")
 
 
@@ -874,9 +892,14 @@ async def advance(pet, rogue, *, first: bool = False) -> str:
             run.pending = {"type": "need_ap"}
             rogue.run_state = run.to_dict()
             await _persist(rogue)
-            return _text(
-                "step_no_ap",
-                "行动点不足，原地待命；明天 00:00 重置后发送「/宠物.肉鸽 继续」。",
+            return _act_hint(
+                "行动点不足，原地待命；明天 00:00 重置后点下面继续。",
+                _text(
+                    "step_no_ap",
+                    "行动点不足，原地待命；明天 00:00 重置后发送「/宠物.肉鸽 继续」。",
+                ),
+                "继续",
+                "宠物.肉鸽 继续",
             )
         consume_action_point(pet, STEP_COST_KEY)
 
@@ -1209,6 +1232,38 @@ def _shop_stock(run: RogueRun, cfg: dict[str, Any], rng: random.Random) -> list[
         if pool:
             stock.append(pool[rng.randrange(len(pool))])
     return stock
+
+
+def _act_hint(clickable_text: str, plain_text: str, label: str, command: str) -> str:
+    """给「下一步该做什么」的提示挂一个可点命令。
+
+    QQ 端返回 ``clickable_text`` + 行内链接；其他端原样返回 ``plain_text``
+    （那里没有 cmd-input，文字里的指令就是唯一的指引）。
+    """
+    from ._common import line_link, show_numbered_options
+
+    if show_numbered_options():
+        return plain_text
+    return f"{clickable_text}\n> {line_link(label, command)}"
+
+
+def no_run_hint() -> str:
+    """「还没有进行中的局」的提示。
+
+    QQ 端把「开始」做成可点命令——这句提示出现的时候，用户下一步正是开局。
+    OneBot 端保持原来的纯文本写法。
+    """
+    from ._common import _text, line_link, show_numbered_options
+
+    if show_numbered_options():
+        return _text("no_run", "当前没有进行中的局。发送「/宠物.肉鸽 开始」入场。")
+    body = _text("no_run_text", "当前没有进行中的局，点下面入场：")
+    label = _text("no_run_action", "开始一场")
+    link = line_link(label, "宠物.肉鸽 开始")
+    # 非 QQ 端 line_link 原样返回文字，此时给纯文本兜底更清楚
+    if link == label:
+        return _text("no_run", "当前没有进行中的局。发送「/宠物.肉鸽 开始」入场。")
+    return f"{body}\n> {link}"
 
 
 def _render_pending(run: RogueRun, cfg: dict[str, Any], chosen: set[str]) -> str:

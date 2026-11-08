@@ -21,6 +21,42 @@ def show_numbered_options() -> bool:
     return _SHOW_NUMBERED_OPTIONS.get()
 
 
+#: 把「一行内容 + 指令」变成可点链接的构造器。
+#:
+#: core 层不该知道 QQ 的 ``<qqbot-cmd-input>`` 长什么样，所以由上层注入：
+#: handler 渲染前放一个 ``(text, command) -> str`` 进来，core 只管调用。
+#: 没有注入时按纯文本返回（OneBot / 单测环境）。
+_LINE_LINK: ContextVar[Any] = ContextVar("lkpet_line_link", default=None)
+
+
+def line_link(text: str, command: str) -> str:
+    """把整行文本变成可点链接。
+
+    这正是 lkbot 商品列表的做法——整个商品名就是按钮，而不是「名字 + 行尾的
+    『购买』」。用户看到什么就点什么，不用把行号换算成底部的第几个链接。
+
+    :param text: 这一行要显示的内容（整行都会变成可点区域）
+    :param command: 点下去发出的完整指令
+    """
+    builder = _LINE_LINK.get()
+    if builder is None:
+        return text
+    try:
+        return builder(text, command)
+    except Exception:
+        return text
+
+
+@contextmanager
+def line_links(builder):
+    """在 ``with`` 范围内启用行内链接构造。"""
+    token = _LINE_LINK.set(builder)
+    try:
+        yield
+    finally:
+        _LINE_LINK.reset(token)
+
+
 @contextmanager
 def numbered_options(enabled: bool):
     """在 ``with`` 范围内控制编号选项的显示。"""

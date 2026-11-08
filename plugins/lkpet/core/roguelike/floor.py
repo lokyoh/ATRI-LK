@@ -23,6 +23,7 @@ from .run_state import (
     _render_pending,
     _run_discount,
     advance,
+    no_run_hint,
     state_from_pending,
 )
 from .tower import region_of
@@ -111,7 +112,7 @@ def _choice_effect_note(effect: dict[str, Any]) -> str:
 async def handle_number(pet, rogue, number: int) -> str:
     """处理局内的编号回复。"""
     if not _has_run(rogue):
-        return _text("no_run", "当前没有进行中的局。发送「/宠物.肉鸽 开始」入场。")
+        return no_run_hint()
 
     run = RogueRun.from_dict(rogue.run_state)
     cfg = _load_rogue_config()

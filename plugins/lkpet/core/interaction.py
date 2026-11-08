@@ -151,6 +151,19 @@ def _train_status_after(pet, effects: dict[str, Any]) -> dict[str, int]:
     }
 
 
+class ResourceShortageError(ValueError):
+    """训练前的资源不足。
+
+    除了给人看的文字，还带上**结构化的建议动作**（``hint`` / ``command``）：
+    QQ 端可以把命令内嵌成可点的一行，OneBot 端照旧显示纯文本指令。
+    core 层不碰渲染，只把「该做什么」说清楚。
+    """
+
+    def __init__(self, message: str, hints: list[dict[str, str]] | None = None):
+        super().__init__(message)
+        self.hints = hints or []
+
+
 def check_train_resources(
     pet,
     effects: dict[str, Any],
@@ -164,6 +177,7 @@ def check_train_resources(
     """
     after = _train_status_after(pet, effects)
     problems: list[str] = []
+    hints: list[dict[str, str]] = []
 
     if after["hunger"] < requirements["hunger_min"]:
         need = requirements["hunger_min"] - after["hunger"]
@@ -171,23 +185,29 @@ def check_train_resources(
             f"{_TRAIN_LABELS['hunger']}不足（训练后 {after['hunger']}，"
             f"至少要 {requirements['hunger_min']}），先 /宠物.喂食 +{need} 起步"
         )
+        hints.append({"label": f"喂食 +{need}", "path": "宠物.喂食"})
     if after["mood"] < requirements["mood_min"]:
         need = requirements["mood_min"] - after["mood"]
         problems.append(
             f"{_TRAIN_LABELS['mood']}不足（训练后 {after['mood']}，"
             f"至少要 {requirements['mood_min']}），先 /宠物.玩耍 +{need} 起步"
         )
+        hints.append({"label": "玩耍", "path": "宠物.玩耍"})
     if after["fatigue"] > requirements["fatigue_max"]:
         need = after["fatigue"] - requirements["fatigue_max"]
         problems.append(
             f"{_TRAIN_LABELS['fatigue']}过高（训练后 {after['fatigue']}，"
             f"至多 {requirements['fatigue_max']}），先 /宠物.休息 -{need} 起步"
         )
+        hints.append({"label": "休息", "path": "宠物.休息"})
     if problems:
         # 提示里带指令，必须走统一的前缀替换（command_start 可能是 ！ 等）。
         from ..utils.texts import apply_command_start
 
-        raise ValueError(apply_command_start("训练会把它累垮：" + "；".join(problems)))
+        raise ResourceShortageError(
+            apply_command_start("训练会把它累垮：" + "；".join(problems)),
+            hints,
+        )
 
 
 def _affection_roll(interactions_config: dict[str, Any] | None = None) -> int:

@@ -33,6 +33,32 @@ from ..utils.reply import Choice
 ROGUE_CMD = "宠物.肉鸽"
 
 
+def line_link_builder():
+    """给核心层用的「整行变可点链接」构造器；非 QQ 端返回 None。
+
+    core 只负责说「这一行对应哪条指令」，长什么样由这里决定——
+    和 lkbot 商品列表同样的思路：**整个商品名就是按钮**。
+    """
+    from . import reply
+
+    if not reply.is_qq():
+        return None
+
+    from .menus import cmd as _cmd
+
+    def build(text: str, command: str) -> str:
+        return reply.cmd_at(text, _cmd(command))
+
+    return build
+
+
+def line_links():
+    """``with`` 上下文：在 QQ 端启用行内链接。"""
+    from ..core.roguelike._common import line_links as _line_links
+
+    return _line_links(line_link_builder())
+
+
 def numbered_options(enabled: bool):
     """转发核心层的开关：正文要不要列「1. 战斗 / 2. 事件」。
 

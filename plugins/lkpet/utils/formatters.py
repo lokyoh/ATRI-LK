@@ -557,6 +557,43 @@ def _shop_level_text(info: dict[str, Any]) -> str:
     return text("shop.item_level_inf", "已买 {owned} 级", owned=info.get("owned", 0))
 
 
+def _shop_action_hint(label: str, path: str) -> str:
+    """商店里「继续浏览」这类提示：QQ 端可点，其他端保持纯文本。"""
+    from . import menus
+
+    if _shop_is_clickable():
+        return "> " + (menus.inline(label, path) or label)
+    return text("shop.bought_hint", "发送「/宠物.商店」继续浏览。")
+
+
+def _shop_respec_hint() -> str:
+    """洗点确认提示：QQ 端把「洗点 确认」做成可点命令。"""
+    from . import menus
+
+    if _shop_is_clickable():
+        return "> " + (menus.inline("确认洗点", "宠物.商店 洗点 确认") or "确认洗点")
+    return text("shop.respec_confirm", "发送「/宠物.商店 洗点 确认」执行。")
+
+
+def _shop_is_clickable() -> bool:
+    """当前端能不能用可点命令（QQ 才有）。"""
+    from . import reply
+
+    try:
+        return bool(reply.is_qq())
+    except Exception:
+        return False
+
+
+def _shop_category_link(line: str, name: str, order: str) -> str:
+    """分类行的可点命令（仅 QQ 端）。"""
+    from . import menus
+
+    if not _shop_is_clickable():
+        return line
+    return menus.inline(name, f"宠物.商店 {order}") or line
+
+
 def format_shop_overview(reinc) -> str:
     """``/宠物.商店`` —— 可用点数 + 分类列表。"""
     from ..core import shop
@@ -592,18 +629,20 @@ def format_shop_overview(reinc) -> str:
             "shop.overview_mode_infinite" if infinite else "shop.overview_mode_capped",
             "无限成长" if infinite else "有限等级",
         )
-        lines.append(
-            text(
-                "shop.overview_line",
-                "{order}. {name}",
-                order=order,
-                name=str(cat.get("name") or cat.get("id")),
-                count=len(members),
-                mode=mode,
-            )
+        cat_name = str(cat.get("name") or cat.get("id"))
+        body = text(
+            "shop.overview_line",
+            "{order}. {name}",
+            order=order,
+            name=cat_name,
+            count=len(members),
+            mode=mode,
         )
+        # 分类行本身可点：点名字就进这个分类，不必看末尾那句「发送 /宠物.商店 1」。
+        lines.append(_shop_category_link(body, cat_name, str(order)))
 
-    lines.append(text("shop.overview_hint", "发送「/宠物.商店 1」查看分类。"))
+    if not _shop_is_clickable():
+        lines.append(text("shop.overview_hint", "发送「/宠物.商店 1」查看分类。"))
 
     respec_cfg = (cfg.get("shop") or {}).get("respec") or {}
     tickets = int(getattr(reinc, "respec_tickets", 0) or 0)
@@ -822,7 +861,7 @@ def format_shop_purchase(result: dict[str, Any]) -> str:
                 "★ 这份起始等级会在下一次轮回时生效，用掉即清零。",
             )
         )
-    lines.append(text("shop.bought_hint", "发送「/宠物.商店」继续浏览。"))
+    lines.append(_shop_action_hint("继续浏览", "宠物.商店"))
     return "\n".join(line for line in lines if line)
 
 
@@ -846,6 +885,6 @@ def format_shop_respec(preview: dict[str, Any], *, done: bool = False) -> str:
             "现有洗点券 {tickets} 张。",
             tickets=preview.get("tickets", 0),
         ),
-        text("shop.respec_confirm", "发送「/宠物.商店 洗点 确认」执行。"),
+        _shop_respec_hint(),
     ]
     return "\n".join(line for line in lines if line)

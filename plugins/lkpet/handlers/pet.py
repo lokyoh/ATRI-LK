@@ -28,6 +28,7 @@ from ATRI.system.lkapi.bot.checker import (
     is_lk_user,
     not_safe_mode,
 )
+from ATRI.system.lkapi.entity.user import user_manager
 
 from .. import config as lkpet_config
 from ..core import (
@@ -100,15 +101,25 @@ _ROGUE_USAGE_HINT = (
 
 
 def _player_id(event) -> str:
-    """取玩家 ID。
+    """取玩家 ID：先按适配器取原始 ID，再交给 lkbot 解析绑定。
 
-    **不能用 int()**：OneBot 的 QQ 号是数字，但 QQ 官方适配器的
-    ``get_user_id()`` 返回 ``user_openid``（``ROBOT1.0_Xb5...``），转 int 直接
-    ValueError——那正是「宠物.状态 在 QQ 端报错」的原因。
+    两件事都必须做对：
 
-    落库的 ``player_id`` 本来就是字符串，统一按字符串走即可。
+    1. **不能 int()**：OneBot 的 QQ 号是数字，但 QQ 官方适配器的
+       ``get_user_id()`` 返回 ``user_openid``（``ROBOT1.0_Xb5...``），转 int
+       直接 ValueError——那正是「宠物.状态 在 QQ 端报错」的原因。
+    2. **要过 ``resolve_user_id``**：一个玩家可能同时用 QQ 与 OneBot 两个账号，
+       lkbot 会把它们绑定到同一个主账号。绕过解析意味着同一个人在两端的宠物
+       数据各存一份——用户看到的是「换了个平台宠物就没了」。
+
+    解析失败（绑定关系损坏等）时退回原始 ID：拿得到数据比拿不到好。
     """
-    return str(event.get_user_id())
+    raw = str(event.get_user_id())
+    try:
+        return user_manager.resolve_user_id(raw)
+    except Exception as exc:
+        log.warning(f"解析玩家 {raw} 的绑定账号失败，按原 ID 处理：{exc}")
+        return raw
 
 
 def _text_of(args) -> str:

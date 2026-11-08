@@ -401,8 +401,9 @@ def bonus_for(player_id: str | int) -> dict[str, int | float]:
     try:
         reinc = load_reincarnation(player_id)
     except (TypeError, ValueError):
-        # 历史数据里可能出现非数字的 player_id（非数字字符串无法 int()）。
-        # 一条脏数据不该让喂食 / 训练 / 肉鸽结算整条指令失败。
+        # player_id 现在按字符串归一（QQ 的 openid 不是数字），正常不会抛；
+        # 留这层是因为历史数据可能脏，而一条脏数据不该让喂食 / 训练 / 肉鸽
+        # 结算整条指令失败。
         return {}
     if reinc is None:
         return {}

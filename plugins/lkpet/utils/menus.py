@@ -1,21 +1,59 @@
-"""各指令的交互按钮。
+"""各指令的交互选项。
 
-集中在一个文件里，好处是**改一处就能看全**：按钮对应的指令必须是真实存在
-的，散落在各 handler 里很容易写了按钮却指向一条不存在的命令。
+集中在一个文件里，好处是**改一处就能看全**：选项对应的指令必须是真实存在
+的，散落在各 handler 里很容易写了却指向一条不存在的命令。
 
 所有 command 都经 :func:`cmd` 生成，自动带上当前 ``command_start``——
-部署把前缀配成 ``！`` 时，按钮发出去的内容也跟着变。
+部署把前缀配成 ``！`` 时，用户点下去的内容也跟着变。
+
+## 优先内嵌，不要堆在底部
+
+QQ 端的选项是 markdown 里的 ``<qqbot-cmd-input>``。如果统一追加到消息末尾，
+用户得自己把「第 3 项」和「末尾第 3 个链接」对上号，而且一长就占掉半屏。
+
+所以渲染正文时优先用 :func:`inline` 把命令贴在它描述的那一行上::
+
+    🐾 野狼  体力 80%  <命令>
+
+只有当正文确实没有可挂靠的行（纯提示语）时，才退回 :func:`tail`。
 """
 
 from __future__ import annotations
 
-from .reply import Choice, Menu
+from .reply import Choice, Menu, cmd_at
 from .texts import command_start
 
 
 def cmd(path: str) -> str:
     """把 ``宠物.状态`` 这类相对路径拼成完整指令。"""
     return f"{command_start()}{path}"
+
+
+def inline(label: str, path: str) -> str:
+    """内嵌到当前行的可点命令。
+
+    :param path: 相对路径（``宠物.喂食``），自动补上 ``command_start``。
+
+    **只在 QQ 端返回内容**：OneBot 没有 ``<qqbot-cmd-input>``，把转义后的标记
+    塞进正文只会变成一串看不懂的字符。所以渲染函数可以放心地在每一行都调用
+    它——非 QQ 端会自然退化成原本的纯文本。
+    """
+    from .reply import is_qq
+
+    if not is_qq():
+        return ""
+    return cmd_at(label, cmd(path))
+
+
+def tail(choices: list[Choice]) -> str:
+    """兜底：把选项拼成一行追加到末尾。
+
+    只在正文挂不上命令时用——正常应把 :func:`inline` 拼进对应那一行。
+    """
+    from .reply import inline_links
+
+    links = inline_links(choices)
+    return f"\n\n> {links}" if links else ""
 
 
 # ---------------------------------------------------------------- 常用
@@ -51,6 +89,16 @@ def create_menu() -> list[Choice]:
     )
 
 
+def train_menu() -> list[Choice]:
+    """训练之后：最可能接着再练一次，或看看成果。"""
+    return list(
+        Menu()
+        .add("再训练", cmd("宠物.训练"))
+        .add("状态", cmd("宠物.状态"), style=0)
+        .add("肉鸽", cmd("宠物.肉鸽"), style=0)
+    )
+
+
 def action_menu() -> list[Choice]:
     """喂食/玩耍/洗澡之后的「再来一次」。"""
     return list(
@@ -59,28 +107,6 @@ def action_menu() -> list[Choice]:
         .add("玩耍", cmd("宠物.玩耍"))
         .add("休息", cmd("宠物.休息"), style=0)
     )
-
-
-def skill_menu(
-    owned: list[str] | None = None, equipped: set[str] | None = None
-) -> list[Choice]:
-    """技能页：对未装备的技能给「装备」，对已装备的给「卸下」。"""
-    equipped = equipped or set()
-    result: list[Choice] = list(Menu().add("技能总览", cmd("宠物.技能")))
-    for name in (owned or [])[:4]:
-        if name in equipped:
-            result.append(
-                Choice(
-                    label=f"卸下{name}",
-                    command=cmd(f"宠物.技能 卸下 {name}"),
-                    style=0,
-                )
-            )
-        else:
-            result.append(
-                Choice(label=f"装备{name}", command=cmd(f"宠物.技能 装备 {name}"))
-            )
-    return result
 
 
 def talent_menu() -> list[Choice]:
@@ -104,23 +130,16 @@ def shop_overview_menu(categories: list[dict] | None = None) -> list[Choice]:
     return result
 
 
-def shop_category_menu(items: list[tuple[str, str]] | None = None) -> list[Choice]:
-    """分类页：每件商品一个「查看」，编号直接用下标。"""
-    result: list[Choice] = [Choice(label="返回", command=cmd("宠物.商店"), style=0)]
-    for index, (_, name) in enumerate((items or [])[:4], start=1):
-        result.insert(
-            index - 1,
-            Choice(label=str(name)[:6], command=cmd(f"宠物.商店 {index}"), style=0),
-        )
-    return result
+def shop_item_menu(number: str, *, affordable: bool = True) -> list[Choice]:
+    """商品详情页：买 / 返回。
 
-
-def shop_item_menu(index: int, *, affordable: bool = True) -> list[Choice]:
-    """商品详情页：买 / 返回。"""
+    :param number: 商品的**展示编号字符串**（形如 ``1-3``），不是 int——
+        编号带着分类前缀，转数字会指向别的商品。
+    """
     result: list[Choice] = []
     if affordable:
         result.append(
-            Choice(label="购买", command=cmd(f"宠物.商店 确认 {index}"), style=1)
+            Choice(label="购买", command=cmd(f"宠物.商店 确认 {number}"), style=1)
         )
     result.append(Choice(label="返回", command=cmd("宠物.商店"), style=0))
     return result

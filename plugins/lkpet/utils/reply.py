@@ -1,23 +1,27 @@
-"""统一的回复出口：QQ 端一律 markdown + 按钮，OneBot 端退回纯文本。
+"""统一的回复出口：QQ 端用 markdown + 内联命令，OneBot 端退回纯文本。
 
-## 为什么要单独一层
+## 为什么这么设计
 
-lkpet 的回复散在数十处 ``matcher.finish(...)`` 里。要同时满足三件事：
+lkpet 的回复散在数十处 ``matcher.finish(...)`` 里，要同时满足三件事：
 
 1. **QQ 适配器用 md**：QQ 官方机器人对纯文本很抠，长文本容易显示成
    「该消息类型暂不支持查看」；markdown 才是它的主场。
-2. **交互点用按钮**：QQ 的输入体验差，让用户手打 ``/宠物.商店 确认 1-3``
-   很容易打错。按钮点一下就是把整条指令发出去。
-3. **OneBot 端不能被拖坏**：QQ 官方的 ``markdown`` / ``keyboard`` 段在
-   OneBot 是非法的，发出去会报错。所以必须按适配器分流。
+2. **交互点要能点**：QQ 的输入体验差，让用户手打 ``/宠物.商店 确认 1-3``
+   很容易打错。这里用 markdown 里的 ``<qqbot-cmd-input>``——它在正文里就是
+   一个可点的小按钮，点了等于用户发出那条指令。
+3. **OneBot 端不能被拖坏**：``markdown`` 段在 OneBot 是非法的，发出去会报错。
+   所以必须按适配器分流。
 
-所以所有回复都从这里出：``finish()`` 负责渲染并结束 matcher。
+## 为什么不用键盘按钮，也不把命令堆在底部
 
-## 按钮怎么发
+QQ 的 ``keyboard`` 段（底部按钮）有**总量上限**（10 个），超了整条消息发不
+出去；而且它和正文里的 ``<qqbot-cmd-input>`` 会重复显示同一批选项。
 
-QQ 的按钮靠 markdown 里的 ``<qqbot-cmd-input>`` 触发，点一下等价于用户发出
-``text`` 那段内容。``ATRI.message.QQMessage.cmd`` 已经做了 URL 编码，这里只
-负责把按钮行拼到正文末尾，并给出 ``keyboard`` 段。
+把一批命令统一追加到正文末尾同样不好：既占地方，又要用户自己把「第 3 项」和
+「末尾第 3 个链接」对上号。所以主力做法是 :func:`cmd_at`——把命令**内嵌到它
+描述的那一行**上；只有正文确实挂不上命令（纯提示语）时才退回末尾追加。
+
+这里**不发 keyboard 段**。
 
 ## 事件从哪来
 
@@ -33,52 +37,31 @@ from dataclasses import dataclass, field
 from typing import Any
 
 from nonebot.adapters.qq import MessageEvent as QQMessageEvent
-from nonebot.adapters.qq.models import (
-    Action,
-    Button,
-    InlineKeyboard,
-    InlineKeyboardRow,
-    MessageKeyboard,
-    Permission,
-    RenderData,
-)
 
 from ATRI.log import log
 from ATRI.message import QQMessage
 
-#: QQ markdown 单条长度上限（官方限制 4000 字，留出按钮区的余量）。
+#: QQ markdown 单条长度上限（官方限制 4000 字，留出命令区的余量）。
 MD_MAX_CHARS = 3200
 
-#: 每行最多几个按钮（QQ 官方限制 3 个）。
-MAX_BUTTONS_PER_ROW = 3
+#: 一行里最多排几个内联命令——纯排版考虑，多了会挤成一片看不清。
+MAX_INLINE_PER_LINE = 4
 
 
 @dataclass
 class Choice:
     """一个交互选项。
 
-    :param label: 按钮上显示的字
+    :param label: 链接上显示的字
     :param command: 点下去实际发出的指令（完整、可执行）
     :param enter: 是否直接发送（True）还是填进输入框让用户改（False）
-    :param style: 0 灰、1 蓝（主操作）
+    :param style: 预留：内联命令没有样式，保留字段让调用方不必区分
     """
 
     label: str
     command: str
     enter: bool = True
     style: int = 1
-
-    def to_button(self, index: int) -> Button:
-        return Button(
-            id=f"btn_{index}",
-            render_data=RenderData(label=self.label, style=self.style),
-            action=Action(
-                type=2,
-                permission=Permission(type=2),
-                data=self.command,
-                enter=self.enter,
-            ),
-        )
 
 
 def current_event() -> Any:
@@ -108,24 +91,50 @@ def _clamp_markdown(text: str) -> str:
     return body[:MD_MAX_CHARS] + "\n\n> 内容过长，已省略后半部分"
 
 
-def md_with_choices(text: str, choices: Iterable[Choice]) -> str:
-    """把选项拼进 markdown。
+def inline_links(choices: Iterable[Choice]) -> str:
+    """把选项拼成一行可点的内联命令。
 
-    按钮本身由 ``keyboard`` 段承载，但 QQ 客户端并不保证渲染它——所以正文里
-    再写一行 ``<qqbot-cmd-input>``，两种渲染任一生效都能点。
+    用 ``<qqbot-cmd-input>``：QQ 客户端会把它渲染成一个小按钮，点一下就把
+    ``command`` 发出去。相比 ``keyboard`` 段，它没有数量上限，也不会和正文
+    重复。
+
+    **只在真没法内嵌时用**（例如正文只是一句提示、没有可挂靠的行），否则优先
+    用 :func:`cmd_at` 把命令贴到对应那一行上——底部堆一排同样占地方。
+    """
+    items = list(choices)
+    if not items:
+        return ""
+    return " ".join(QQMessage.cmd(c.command, c.label, reference=False) for c in items)
+
+
+def cmd_at(label: str, command: str) -> str:
+    """把一个选项做成**可内嵌**的行内命令。
+
+    用法是在渲染正文时直接把它拼进对应那一行::
+
+        1. 战斗：野狼 <cmd_at("打", "/宠物.肉鸽 1")>
+
+    这样命令就长在它描述的那一行上，而不是另起一段堆在底部——后者既占地方，
+    又需要用户自己把「第 3 项」和「底部第 3 个链接」对上号。
+    """
+    return QQMessage.cmd(command, label, reference=False)
+
+
+def md_with_choices(text: str, choices: Iterable[Choice]) -> str:
+    """markdown 正文；仅在正文本身挂不上命令时才把命令追加到末尾。
+
+    优先用 :func:`cmd_at` 把命令内嵌进对应的行。这个函数是给「正文只是一句
+    提示、没有可挂靠的行」的情形兜底，不要当成默认做法。
     """
     body = _clamp_markdown(text)
-    choices = list(choices)
-    if not choices:
+    links = inline_links(choices)
+    if not links:
         return body
-    links = " ".join(
-        QQMessage.cmd(c.command, c.label, reference=False) for c in choices
-    )
     return f"{body}\n\n> {links}"
 
 
 def plain_with_choices(text: str, choices: Iterable[Choice]) -> str:
-    """OneBot 端的降级：按钮变成「指令清单」，用户复制即可。"""
+    """OneBot 端的降级：把选项写成「指令清单」，用户复制即可。"""
     body = text or ""
     choices = list(choices)
     if not choices:
@@ -136,26 +145,13 @@ def plain_with_choices(text: str, choices: Iterable[Choice]) -> str:
     return "\n".join(lines)
 
 
-def keyboard_rows(
-    choices: Iterable[Choice], *, per_row: int = 2
-) -> InlineKeyboard | None:
-    """构造 QQ 的键盘结构；没有选项时返回 None（不附带键盘段）。"""
-    choices = list(choices)
-    if not choices:
-        return None
-    per_row = max(1, min(MAX_BUTTONS_PER_ROW, per_row))
-    buttons = [choice.to_button(index) for index, choice in enumerate(choices)]
-    rows = [
-        InlineKeyboardRow(buttons=buttons[i : i + per_row])
-        for i in range(0, len(buttons), per_row)
-    ]
-    return InlineKeyboard(rows=rows)
-
-
 def render(event: Any, text: str, choices: Iterable[Choice] | None = None):
     """渲染成该适配器能发的消息。
 
-    :return: QQ 端返回 ``Message``（含 keyboard 段）；其他端返回纯文本 ``str``。
+    QQ 端只发一条 markdown（内含内联命令），**不附带 keyboard 段**。
+    其他端返回纯文本。
+
+    :return: QQ 端返回 ``Message``；其他端返回 ``str``。
     """
     if event is None:
         event = current_event()
@@ -165,18 +161,13 @@ def render(event: Any, text: str, choices: Iterable[Choice] | None = None):
 
     from nonebot.adapters.qq import Message as QQMsg
 
-    message = QQMsg(QQMessage.md_msg(md_with_choices(text, choices)))
-    rows = keyboard_rows(choices)
-    if rows is not None:
-        message.append(QQMessage.keyboard(MessageKeyboard(content=rows)))
-    return message
+    return QQMsg(QQMessage.md_msg(md_with_choices(text, choices)))
 
 
 def safe_render(event: Any, text: str, choices: Iterable[Choice] | None = None):
     """``render`` 的兜底版：渲染失败也要把纯文本发出去。
 
-    QQ 段构造涉及 pydantic 模型，参数不合法会抛异常。回复发不出去比格式难看
-    严重得多，所以这里降级成纯文本。
+    回复发不出去比格式难看严重得多，所以这里降级成纯文本。
     """
     try:
         return render(event, text, choices)

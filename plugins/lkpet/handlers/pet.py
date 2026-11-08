@@ -68,7 +68,7 @@ from ..matchers import (
     pet_talent_matcher,
     pet_train_matcher,
 )
-from ..utils import menus, reply
+from ..utils import menus, reply, rogue_actions
 from ..utils.formatters import (
     format_biography,
     format_daily_logs,
@@ -387,9 +387,8 @@ async def handle_skill(event: Event, args: BaseMessage = CommandArg()):
 
     raw = _text_of(args)
     if not raw:
-        await reply.finish(
-            pet_skill_matcher, format_skill_list(pet), menus.skill_menu()
-        )
+        # 装备/卸下的命令已内嵌在每条技能行末，底部不再重复
+        await reply.finish(pet_skill_matcher, format_skill_list(pet))
 
     action, _, rest = raw.partition(" ")
     rest = rest.strip()
@@ -612,11 +611,8 @@ async def _shop_dispatch(matcher, event: Event, args: BaseMessage) -> None:
             await reply.finish(
                 matcher, text("shop.unknown", "❌ {msg}", msg=f"没有分类 {token}")
             )
-        await reply.finish(
-            matcher,
-            format_shop_category(reinc, str(cat.get("id"))),
-            menus.shop_category_menu(_shop_items(str(cat.get("id")))),
-        )
+        # 「查看」已内嵌在每件商品行末，底部不再重复
+        await reply.finish(matcher, format_shop_category(reinc, str(cat.get("id"))))
 
     # 商品详情或直接购买：``1-3`` / ``legacy_atk`` / ``前世武艺``
     try:
@@ -632,7 +628,7 @@ async def _shop_dispatch(matcher, event: Event, args: BaseMessage) -> None:
     await reply.finish(
         matcher,
         format_shop_item(reinc, item_id),
-        menus.shop_item_menu(_shop_index(token), affordable=price is not None),
+        menus.shop_item_menu(_shop_number(token), affordable=price is not None),
     )
 
 
@@ -646,36 +642,18 @@ def _shop_categories() -> list[dict]:
         return []
 
 
-def _shop_items(category_id: str) -> list[tuple[str, str]]:
-    """某个分类下的 ``(id, 名称)``；取不到就返回空列表。"""
+def _shop_number(token: str) -> str:
+    """商品的展示编号（形如 ``1-3``）。
+
+    **不能转 int**：编号是 ``分类-序号`` 的字符串，``item_number`` 也返回 str；
+    转 int 会失败或丢掉后半段，按钮就会指向另一件商品——买错东西比按不动严重。
+    """
     try:
         from ..core import shop
 
-        items = shop.items_in_category(category_id)
+        return str(shop.item_number(token))
     except Exception:
-        return []
-    result: list[tuple[str, str]] = []
-    for item in items:
-        if isinstance(item, dict):
-            result.append(
-                (
-                    str(item.get("id") or ""),
-                    str(item.get("name") or item.get("id") or ""),
-                )
-            )
-        elif isinstance(item, list | tuple) and len(item) >= 2:
-            result.append((str(item[0]), str(item[1])))
-    return result
-
-
-def _shop_index(token: str) -> int:
-    """商品在分类里的展示序号；解析不出就用 1，按钮至少不会指向空。"""
-    try:
-        from ..core import shop
-
-        return int(shop.display_index(token))
-    except Exception:
-        return 1
+        return str(token)
 
 
 def _shop_confirm_threshold() -> int:
@@ -972,22 +950,26 @@ async def handle_rogue(event: Event, args: BaseMessage = CommandArg()):
 
     raw = args.extract_plain_text().strip()
     rogue = await roguelike.get_or_create_rogue(player_id)
+    # QQ 端的选项由底部按钮承载，正文里再列一遍编号就是同一件事说两次；
+    # OneBot 端没有按钮，编号必须留着。
+    numbered = not reply.is_qq(event)
     try:
-        if raw == "":
-            usage = _never_empty(text("rogue.usage", ""), _ROGUE_USAGE_HINT)
-            msg = roguelike.progress(rogue) + "\n" + usage
-        elif raw == "开始":
-            msg = await roguelike.start(pet, rogue)
-        elif raw == "继续":
-            msg = await roguelike.resume(pet, rogue)
-        elif raw == "进度":
-            msg = roguelike.progress(rogue)
-        elif raw == "撤退":
-            msg = await roguelike.retreat(pet, rogue)
-        elif raw.isdigit():
-            msg = await roguelike.handle_number(pet, rogue, int(raw))
-        else:
-            msg = _never_empty(text("rogue.usage", ""), _ROGUE_USAGE_HINT)
+        with rogue_actions.numbered_options(numbered):
+            if raw == "":
+                usage = _never_empty(text("rogue.usage", ""), _ROGUE_USAGE_HINT)
+                msg = roguelike.progress(rogue) + "\n" + usage
+            elif raw == "开始":
+                msg = await roguelike.start(pet, rogue)
+            elif raw == "继续":
+                msg = await roguelike.resume(pet, rogue)
+            elif raw == "进度":
+                msg = roguelike.progress(rogue)
+            elif raw == "撤退":
+                msg = await roguelike.retreat(pet, rogue)
+            elif raw.isdigit():
+                msg = await roguelike.handle_number(pet, rogue, int(raw))
+            else:
+                msg = _never_empty(text("rogue.usage", ""), _ROGUE_USAGE_HINT)
     except ValueError as exc:
         await reply.finish(pet_rogue_matcher, f"❌ {exc}")
     except Exception as exc:  # 未知错误也要给用户回执，不静默吞掉对话
@@ -995,10 +977,16 @@ async def handle_rogue(event: Event, args: BaseMessage = CommandArg()):
         await reply.finish(pet_rogue_matcher, "❌ 肉鸽指令执行出错，请查看机器人日志。")
 
     await pet_core.save_pet(pet)
+    # 局内每一步都给「当前可选动作」的按钮：让玩家按编号手打太容易出错，
+    # 而肉鸽是纯编号推进，按钮几乎是唯一顺手的交互方式。
+    choices = rogue_actions.choices_from_rogue(rogue)
+    if not choices:
+        # 没有局内选项时退回固定菜单（开局 / 进度 / 撤退）
+        choices = menus.rogue_menu(running=bool(getattr(rogue, "floor", 0)))
     await reply.finish(
         pet_rogue_matcher,
         _never_empty(msg, _ROGUE_USAGE_HINT),
-        menus.rogue_menu(running=bool(getattr(rogue, "floor", 0))),
+        choices,
     )
 
 
@@ -1015,4 +1003,8 @@ async def handle_train(event: Event):
         await reply.finish(pet_train_matcher, f"❌ {exc}")
 
     await pet_core.save_pet(pet)
-    await reply.finish(pet_train_matcher, text("train.ok", result["message"], **result))
+    await reply.finish(
+        pet_train_matcher,
+        text("train.ok", result["message"], **result),
+        menus.train_menu(),
+    )

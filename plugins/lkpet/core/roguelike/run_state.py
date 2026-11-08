@@ -11,7 +11,7 @@ from dataclasses import dataclass, field
 from datetime import datetime
 from typing import Any
 
-from ._common import floor_rng, passive_effects
+from ._common import floor_rng, passive_effects, show_numbered_options
 
 # ---------------------------------------------------------------------------
 # RogueRun — 替代裸 dict
@@ -357,8 +357,10 @@ class FloorChoiceState(FloorState):
                 region=region_of(run.floor, cfg).get("name", ""),
             )
         ]
+        numbered = show_numbered_options()
         for idx, opt in enumerate(self.options, start=1):
-            line = f"{idx}. {labels.get(opt, opt)}"
+            label = labels.get(opt, opt)
+            line = f"{idx}. {label}" if numbered else f"· {label}"
             if opt == "battle":
                 monster = self._option_monster(cfg, run, self.enemy_at(idx))
                 if self.elite:
@@ -378,7 +380,8 @@ class FloorChoiceState(FloorState):
             else:
                 line += _text("event_hint", "（未知遭遇）")
             lines.append(line)
-        lines.append(_text("floor_reply", "回复编号选择路线。"))
+        if numbered:
+            lines.append(_text("floor_reply", "回复编号选择路线。"))
         return "\n".join(lines)
 
     def handle(
@@ -435,15 +438,17 @@ class EventState(FloorState):
             return _text("event_missing", "事件丢失，继续前进。")
         # 不显示事件分类标签：``kind`` 只作内部归类（配比统计/校验用），
         # 玩家应从文案本身判断这是福缘还是陷阱。
-        lines: list[str] = [
-            _text("event_prompt", "🎲 {text}\n回复编号选择行动：", text=event["text"])
-        ]
+        numbered = show_numbered_options()
+        head = "🎲 {text}"
+        if numbered:
+            head += "\n回复编号选择行动："
+        lines: list[str] = [_text("event_prompt", head, text=event["text"])]
         event_id = str(event.get("id", ""))
         heal_mult = 1.0
         if self.supply:
             heal_mult = float((region.get("shop") or {}).get("heal_mult", 1))
         for idx, choice in enumerate(event.get("choices", []), start=1):
-            line = f"{idx}. {choice['text']}"
+            line = f"{idx}. {choice['text']}" if numbered else f"· {choice['text']}"
             if f"{event_id}:{idx}" in chosen:
                 effect = dict(choice.get("effect", {}) or {})
                 if heal_mult != 1.0 and effect.get("run_hp"):
@@ -504,7 +509,9 @@ class RelicChoiceState(FloorState):
         from .relics import relic_effect_note, relic_specs
 
         specs = relic_specs()
-        lines = [_text("relic_choice", "🎁 遗物奖励层（回复编号三选一）：")]
+        numbered = show_numbered_options()
+        head = "🎁 遗物奖励层" + ("（回复编号三选一）：" if numbered else "：")
+        lines = [_text("relic_choice", head)]
         if not self.offer:
             lines.append(_text("relic_none", "遗物已集齐，直接前进。"))
         for idx, relic_id in enumerate(self.offer, start=1):
@@ -512,8 +519,8 @@ class RelicChoiceState(FloorState):
             lines.append(
                 _text(
                     "relic_option",
-                    "{idx}. {name}（{stat}） — {desc}",
-                    idx=idx,
+                    "{idx}{name}（{stat}） — {desc}",
+                    idx=f"{idx}. " if numbered else "· ",
                     name=spec.get("name", relic_id),
                     stat=relic_effect_note(spec.get("effect") or {}),
                     desc=spec.get("desc", ""),
@@ -615,6 +622,7 @@ def _shop_text_from_run(run: RogueRun, stock: list[str], cfg: dict[str, Any]) ->
 
     discount = _run_discount(run)
     owned = set(run.relics)
+    numbered = show_numbered_options()
     lines = [_text("shop_header", "🛒 遗物商店（金币 {coins}）", coins=run.coins)]
     if discount < 1.0:
         lines.append(
@@ -639,8 +647,8 @@ def _shop_text_from_run(run: RogueRun, stock: list[str], cfg: dict[str, Any]) ->
         lines.append(
             _text(
                 "relic_shop_line",
-                "{idx}. {name}（{label}｜{stat}）— {price}金{extra}",
-                idx=idx,
+                "{idx}{name}（{label}｜{stat}）— {price}金{extra}",
+                idx=f"{idx}. " if numbered else "· ",
                 name=spec.get("name", relic_id),
                 label=text(
                     f"rogue.tiers.{spec.get('rarity', 'normal')}",
@@ -651,7 +659,8 @@ def _shop_text_from_run(run: RogueRun, stock: list[str], cfg: dict[str, Any]) ->
                 extra=extra,
             )
         )
-    lines.append(_text("shop_reply", "回复编号购买，回复 0 离开。"))
+    if numbered:
+        lines.append(_text("shop_reply", "回复编号购买，回复 0 离开。"))
     return "\n".join(lines)
 
 

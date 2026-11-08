@@ -1,7 +1,35 @@
 """肉鸽系统共享常量、配置加载器与工具函数。"""
 
 import random
+from contextlib import contextmanager
+from contextvars import ContextVar
 from typing import Any
+
+#: 渲染时是否在正文里列「1. 战斗 / 2. 事件」这类编号选项。
+#:
+#: QQ 官方适配器会把选项做成底部按钮，正文再列一遍就是同一件事说两次；
+#: OneBot 端没有按钮，编号必须留着——否则玩家不知道该回什么数字。
+#: 用 ContextVar 而不是给每个 ``render`` 加参数：那要改七个子类的方法签名，
+#: 而这是「这次渲染怎么排版」的全局开关，天然适合上下文。
+_SHOW_NUMBERED_OPTIONS: ContextVar[bool] = ContextVar(
+    "lkpet_show_numbered_options", default=True
+)
+
+
+def show_numbered_options() -> bool:
+    """当前这次渲染要不要列编号选项。"""
+    return _SHOW_NUMBERED_OPTIONS.get()
+
+
+@contextmanager
+def numbered_options(enabled: bool):
+    """在 ``with`` 范围内控制编号选项的显示。"""
+    token = _SHOW_NUMBERED_OPTIONS.set(bool(enabled))
+    try:
+        yield
+    finally:
+        _SHOW_NUMBERED_OPTIONS.reset(token)
+
 
 """行动点键（见 daily.yaml action_points.costs 与 roguelike.yaml）。"""
 ENTRY_COST_KEY = "rogue"

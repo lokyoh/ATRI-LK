@@ -177,6 +177,18 @@ def _skill_scope_note(spec: dict[str, Any]) -> str:
     return ""
 
 
+def _skill_action(label: str, skill_id: str, cfg: dict[str, Any]) -> str:
+    """技能行末的操作命令（仅 QQ 端返回内容）。
+
+    内嵌而不是堆到底部：一行技能后面紧跟「卸下」，不用用户去末尾数第几个链接。
+    """
+    from ..core.skills import skill_name
+    from . import menus
+
+    name = skill_name(skill_id, cfg)
+    return menus.inline(label, f"宠物.技能 {label} {name}")
+
+
 def format_skill_list(pet, skills_config: dict[str, Any] | None = None) -> str:
     """Render the skill card: equipped slots first, then the collection pool.
 
@@ -243,6 +255,7 @@ def format_skill_list(pet, skills_config: dict[str, Any] | None = None) -> str:
                         ),
                         effect="",
                     )
+                    + _skill_action("卸下", skill_id, cfg)
                 )
             else:
                 lines.append(
@@ -255,6 +268,7 @@ def format_skill_list(pet, skills_config: dict[str, Any] | None = None) -> str:
                         power=0,
                         proficiency=0.0,
                     )
+                    + _skill_action("卸下", skill_id, cfg)
                 )
 
     unused = [
@@ -605,6 +619,13 @@ def format_shop_overview(reinc) -> str:
     return "\n".join(line for line in lines if line)
 
 
+def _shop_look_action(number: str) -> str:
+    """商品行末的「查看」命令（仅 QQ 端返回内容）。"""
+    from . import menus
+
+    return menus.inline("查看", f"宠物.商店 {number}")
+
+
 def format_shop_category(reinc, category_id: str) -> str:
     """``/宠物.商店 1`` —— 某分类下的商品行。"""
     from ..core import shop
@@ -651,6 +672,8 @@ def format_shop_category(reinc, category_id: str) -> str:
                 price_text += text(
                     "shop.item_gap", "（还差 {gap} 点）", gap=info["gap"]
                 )
+        # 详情命令直接内嵌在商品行末：末尾再写「发送 /宠物.商店 N」既占地方，
+        # 又要用户自己把行号和底部指令对上号。
         lines.append(
             text(
                 "shop.item_line",
@@ -661,16 +684,21 @@ def format_shop_category(reinc, category_id: str) -> str:
                 price=price_text,
                 gap="",
             )
+            + _shop_look_action(str(info["number"]))
         )
 
-    lines.append(
-        text(
-            "shop.category_hint",
-            "发送「/宠物.商店 {number}」查看详情。",
-            order=order,
-            number=f"{order}-1",
+    # OneBot 端没有内嵌命令，得留一句说明怎么查详情
+    from . import menus
+
+    if not menus.inline("看", "宠物.商店"):
+        lines.append(
+            text(
+                "shop.category_hint",
+                "发送「/宠物.商店 {number}」查看详情。",
+                order=order,
+                number=f"{order}-1",
+            )
         )
-    )
     return "\n".join(line for line in lines if line)
 
 
@@ -739,13 +767,22 @@ def format_shop_item(reinc, item_id: str) -> str:
             )
         )
         if info["affordable"]:
-            lines.append(
-                text(
-                    "shop.detail_confirm",
-                    "发送「/宠物.商店 确认 {number}」购买。",
-                    number=info["number"],
+            # 有按钮时不必写「发送某条指令」——那和底部按钮重复；
+            # OneBot 端没有按钮，指令必须留着。
+            from . import reply as _reply
+
+            if _reply.is_qq():
+                lines.append(
+                    text("shop.detail_confirm_button", "点下方的「购买」即可。")
                 )
-            )
+            else:
+                lines.append(
+                    text(
+                        "shop.detail_confirm",
+                        "发送「/宠物.商店 确认 {number}」购买。",
+                        number=info["number"],
+                    )
+                )
         else:
             lines.append(
                 text(

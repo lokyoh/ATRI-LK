@@ -65,6 +65,7 @@ from ..matchers import (
     pet_talent_matcher,
     pet_train_matcher,
 )
+from ..utils import menus, reply
 from ..utils.formatters import (
     format_biography,
     format_daily_logs,
@@ -112,15 +113,15 @@ def _cooldown_notice() -> str:
 async def _guard(matcher) -> None:
     """Refuse every command while the raising system is switched off."""
     if not lkpet_config.get("enable"):
-        await matcher.finish(text("status.disabled", "养成系统当前已关闭。"))
+        await reply.finish(matcher, text("status.disabled", "养成系统当前已关闭。"))
 
 
 async def _load_pet(matcher, player_id: int):
     """Return the caller's pet, or finish with a hint when they have none."""
     pet = await pet_core.get_pet(player_id)
     if pet is None:
-        await matcher.finish(
-            text("common.no_pet", "请先创建宠物：/宠物.创建 <性格> <名字>")
+        await reply.finish(
+            matcher, text("common.no_pet", "请先创建宠物：/宠物.创建 <性格> <名字>")
         )
     return pet
 
@@ -175,12 +176,13 @@ async def handle_create(bot: Bot, event: Event, args: Message = CommandArg()):
 
     parts = args.extract_plain_text().strip().split()
     if len(parts) < 2:
-        await pet_create_matcher.finish(
+        await reply.finish(
+            pet_create_matcher,
             text(
                 "create.usage",
                 "用法：/宠物.创建 <性格> <名字> [设定]",
                 personalities=" / ".join(pet_core.describe_personalities()),
-            )
+            ),
         )
     raw_personality, name = parts[0], parts[1]
     # 旧版「领养」的「设定」也在这里接收，不再走二次追问流程。
@@ -194,7 +196,7 @@ async def handle_create(bot: Bot, event: Event, args: Message = CommandArg()):
             player_id, personality, name, instruction=instruction
         )
     except ValueError as exc:
-        await pet_create_matcher.finish(f"❌ {exc}")
+        await reply.finish(pet_create_matcher, f"❌ {exc}")
 
     await tutorial.start_tutorial(pet)
     for _ in range(3):  # welcome / choose_personality / choose_name 已由创建流程完成
@@ -213,11 +215,13 @@ async def handle_create(bot: Bot, event: Event, args: Message = CommandArg()):
         "spd": attributes.get("spd", 0),
         "mp": attributes.get("mp", 0),
     }
-    await pet_create_matcher.finish(
+    await reply.finish(
+        pet_create_matcher,
         _compose(
             text("create.ok", "🎉 宠物创建成功！", **create_fields),
             await _tutorial_prompt(pet, "welcome"),
-        )
+        ),
+        menus.status_menu(),
     )
 
 
@@ -232,7 +236,11 @@ async def handle_status(bot: Bot, event: Event):
     await pet_core.save_pet(pet)
 
     report = format_daily_report(settle) if settle.get("need_settle") else None
-    await pet_status_matcher.finish(_compose(report, format_pet_status(pet), hint))
+    await reply.finish(
+        pet_status_matcher,
+        _compose(report, format_pet_status(pet), hint),
+        menus.status_menu(),
+    )
 
 
 @pet_feed_matcher.handle()
@@ -246,12 +254,14 @@ async def handle_feed(bot: Bot, event: Event):
         # 喂食不再区分食物：饱食恢复固定值（interactions.yaml effects.feed）。
         result = await interaction.feed(pet)
     except ValueError as exc:
-        await pet_feed_matcher.finish(f"❌ {exc}")
+        await reply.finish(pet_feed_matcher, f"❌ {exc}")
 
     hint = await _tutorial_prompt(pet, "first_feed")
     await pet_core.save_pet(pet)
-    await pet_feed_matcher.finish(
-        _compose(text("feed.ok", result["message"], **result), hint)
+    await reply.finish(
+        pet_feed_matcher,
+        _compose(text("feed.ok", result["message"], **result), hint),
+        menus.action_menu(),
     )
 
 
@@ -265,12 +275,14 @@ async def handle_play(bot: Bot, event: Event):
     try:
         result = await interaction.play(pet)
     except ValueError as exc:
-        await pet_play_matcher.finish(f"❌ {exc}")
+        await reply.finish(pet_play_matcher, f"❌ {exc}")
 
     hint = await _tutorial_prompt(pet, "first_play")
     await pet_core.save_pet(pet)
-    await pet_play_matcher.finish(
-        _compose(text("play.ok", result["message"], **result), hint)
+    await reply.finish(
+        pet_play_matcher,
+        _compose(text("play.ok", result["message"], **result), hint),
+        menus.action_menu(),
     )
 
 
@@ -284,10 +296,14 @@ async def handle_bathe(bot: Bot, event: Event):
     try:
         result = await interaction.bathe(pet)
     except ValueError as exc:
-        await pet_bathe_matcher.finish(f"❌ {exc}")
+        await reply.finish(pet_bathe_matcher, f"❌ {exc}")
 
     await pet_core.save_pet(pet)
-    await pet_bathe_matcher.finish(text("bathe.ok", result["message"], **result))
+    await reply.finish(
+        pet_bathe_matcher,
+        text("bathe.ok", result["message"], **result),
+        menus.action_menu(),
+    )
 
 
 @pet_rest_matcher.handle()
@@ -300,10 +316,14 @@ async def handle_rest(bot: Bot, event: Event):
     try:
         result = await interaction.rest(pet)
     except ValueError as exc:
-        await pet_rest_matcher.finish(f"❌ {exc}")
+        await reply.finish(pet_rest_matcher, f"❌ {exc}")
 
     await pet_core.save_pet(pet)
-    await pet_rest_matcher.finish(text("rest.ok", result["message"], **result))
+    await reply.finish(
+        pet_rest_matcher,
+        text("rest.ok", result["message"], **result),
+        menus.action_menu(),
+    )
 
 
 @pet_skill_matcher.handle()
@@ -315,16 +335,19 @@ async def handle_skill(bot: Bot, event: Event, args: Message = CommandArg()):
 
     raw = lk_util.get_trans_text(args).strip()
     if not raw:
-        await pet_skill_matcher.finish(format_skill_list(pet))
+        await reply.finish(
+            pet_skill_matcher, format_skill_list(pet), menus.skill_menu()
+        )
 
     action, _, rest = raw.partition(" ")
     rest = rest.strip()
     if action not in ("装备", "卸下") or not rest:
-        await pet_skill_matcher.finish(
+        await reply.finish(
+            pet_skill_matcher,
             text(
                 "skill.usage",
                 "用法：/宠物.技能 装备 <技能名>｜/宠物.技能 卸下 <技能名>",
-            )
+            ),
         )
 
     try:
@@ -334,7 +357,9 @@ async def handle_skill(bot: Bot, event: Event, args: Message = CommandArg()):
         else:
             skills.unequip_skill(pet, skill_id)
     except ValueError as exc:
-        await pet_skill_matcher.finish(text("skill.unknown", "❌ {msg}", msg=str(exc)))
+        await reply.finish(
+            pet_skill_matcher, text("skill.unknown", "❌ {msg}", msg=str(exc))
+        )
 
     await pet_core.save_pet(pet)
     key = "skill.equipped_ok" if action == "装备" else "skill.unequipped_ok"
@@ -343,11 +368,12 @@ async def handle_skill(bot: Bot, event: Event, args: Message = CommandArg()):
         if action == "装备"
         else "✅ 已卸下「{name}」（仍保留在技能库中）"
     )
-    await pet_skill_matcher.finish(
+    await reply.finish(
+        pet_skill_matcher,
         _compose(
             text(key, default, name=skills.skill_name(skill_id)),
             format_skill_list(pet),
-        )
+        ),
     )
 
 
@@ -362,7 +388,8 @@ async def handle_talent(bot: Bot, event: Event, args: Message = CommandArg()):
         from ..config_loader import load_config
 
         cfg = load_config("talents")
-        await pet_talent_matcher.finish(
+        await reply.finish(
+            pet_talent_matcher,
             _compose(
                 format_talent_list(pet, cfg),
                 text(
@@ -370,7 +397,8 @@ async def handle_talent(bot: Bot, event: Event, args: Message = CommandArg()):
                     "用法：/宠物.天赋 <天赋名或ID>",
                     talents=" / ".join(talents.describe_talents(cfg)),
                 ),
-            )
+            ),
+            menus.talent_menu(),
         )
 
     try:
@@ -379,15 +407,16 @@ async def handle_talent(bot: Bot, event: Event, args: Message = CommandArg()):
         # allocate_talent 是同步函数（返回 dict），不能 await——await dict 抛 TypeError。
         result = talents.allocate_talent(pet, talent_id)
     except ValueError as exc:
-        await pet_talent_matcher.finish(f"❌ {exc}")
+        await reply.finish(pet_talent_matcher, f"❌ {exc}")
 
     await pet_core.save_pet(pet)
-    await pet_talent_matcher.finish(
+    await reply.finish(
+        pet_talent_matcher,
         text(
             "talent.allocated",
             "{name} 提升到 Lv.{new_level}，剩余 {remaining_points} 点",
             **result,
-        )
+        ),
     )
 
 
@@ -398,7 +427,9 @@ async def handle_bio(bot: Bot, event: Event):
     pet = await _load_pet(pet_bio_matcher, player_id)
 
     bio = await biography.get_or_create_biography(player_id)
-    await pet_bio_matcher.finish(format_biography(bio, name=pet.name))
+    await reply.finish(
+        pet_bio_matcher, format_biography(bio, name=pet.name), menus.bio_menu()
+    )
 
 
 @pet_log_matcher.handle()
@@ -408,7 +439,7 @@ async def handle_log(bot: Bot, event: Event):
     await _load_pet(pet_log_matcher, player_id)
 
     bio = await biography.get_or_create_biography(player_id)
-    await pet_log_matcher.finish(format_daily_logs(bio))
+    await reply.finish(pet_log_matcher, format_daily_logs(bio), menus.log_menu())
 
 
 @pet_reincarnate_matcher.handle()
@@ -420,10 +451,19 @@ async def handle_reincarnate(bot: Bot, event: Event, args: Message = CommandArg(
     check = await reincarnation.check_reincarnation_available(pet)
     reinc = await reincarnation.get_or_create_reincarnation(player_id)
     if not check["can_reincarnate"]:
-        await pet_reincarnate_matcher.finish(format_reincarnation_check(check, reinc))
+        await reply.finish(
+            pet_reincarnate_matcher,
+            format_reincarnation_check(check, reinc),
+            menus.reincarnation_menu(ready=False),
+        )
 
     if args.extract_plain_text().strip() != CONFIRM_WORD:
-        await pet_reincarnate_matcher.finish(format_reincarnation_check(check, reinc))
+        # 条件够了但没写「确认」：给个按钮，省得手打
+        await reply.finish(
+            pet_reincarnate_matcher,
+            format_reincarnation_check(check, reinc),
+            menus.reincarnation_menu(ready=True),
+        )
 
     try:
         result = await reincarnation.perform_reincarnation(
@@ -433,10 +473,14 @@ async def handle_reincarnate(bot: Bot, event: Event, args: Message = CommandArg(
             biography_hook=biography.add_biography_entry,
         )
     except ValueError as exc:
-        await pet_reincarnate_matcher.finish(f"❌ {exc}")
+        await reply.finish(pet_reincarnate_matcher, f"❌ {exc}")
 
     await pet_core.save_pet(pet)
-    await pet_reincarnate_matcher.finish(format_reincarnation_result(result))
+    await reply.finish(
+        pet_reincarnate_matcher,
+        format_reincarnation_result(result),
+        menus.status_menu(),
+    )
 
 
 # ---------------------------------------------------------------------------
@@ -464,7 +508,11 @@ async def _shop_dispatch(matcher, event: Event, args: Message) -> None:
 
     # 概览
     if not raw:
-        await matcher.finish(format_shop_overview(reinc))
+        await reply.finish(
+            matcher,
+            format_shop_overview(reinc),
+            menus.shop_overview_menu(_shop_categories()),
+        )
 
     # 洗点：``洗点`` 预览 / ``洗点 确认`` 执行
     if raw.split()[0] == "洗点":
@@ -477,24 +525,27 @@ async def _shop_dispatch(matcher, event: Event, args: Message) -> None:
                 if pet is not None:
                     reincarnation.refresh_pet_attributes(pet, reinc.permanent_bonuses)
                     await pet_core.save_pet(pet)
-                await matcher.finish(format_shop_respec(result, done=True))
+                await reply.finish(matcher, format_shop_respec(result, done=True))
             preview = shop.respec_refund(reinc)
             if preview["tickets"] <= 0:
-                await matcher.finish(text("shop.respec_no_ticket", "没有洗点券了。"))
-            if not preview["cleared"]:
-                await matcher.finish(
-                    text("shop.respec_none", "现在没有任何可洗的商品。")
+                await reply.finish(
+                    matcher, text("shop.respec_no_ticket", "没有洗点券了。")
                 )
-            await matcher.finish(format_shop_respec(preview))
+            if not preview["cleared"]:
+                await reply.finish(
+                    matcher, text("shop.respec_none", "现在没有任何可洗的商品。")
+                )
+            await reply.finish(matcher, format_shop_respec(preview))
         except ValueError as exc:
-            await matcher.finish(text("shop.unknown", "❌ {msg}", msg=str(exc)))
+            await reply.finish(matcher, text("shop.unknown", "❌ {msg}", msg=str(exc)))
 
     parts = raw.split()
     # 购买：``确认 1-3``
     if parts[0] == CONFIRM_WORD:
         if len(parts) < 2:
-            await matcher.finish(
-                text("shop.unknown", "❌ {msg}", msg="用法：/宠物.商店 确认 1-3")
+            await reply.finish(
+                matcher,
+                text("shop.unknown", "❌ {msg}", msg="用法：/宠物.商店 确认 1-3"),
             )
         await _shop_buy(matcher, player_id, reinc, parts[1])
 
@@ -506,23 +557,73 @@ async def _shop_dispatch(matcher, event: Event, args: Message) -> None:
             None,
         )
         if cat is None:
-            await matcher.finish(
-                text("shop.unknown", "❌ {msg}", msg=f"没有分类 {token}")
+            await reply.finish(
+                matcher, text("shop.unknown", "❌ {msg}", msg=f"没有分类 {token}")
             )
-        await matcher.finish(format_shop_category(reinc, str(cat.get("id"))))
+        await reply.finish(
+            matcher,
+            format_shop_category(reinc, str(cat.get("id"))),
+            menus.shop_category_menu(_shop_items(str(cat.get("id")))),
+        )
 
     # 商品详情或直接购买：``1-3`` / ``legacy_atk`` / ``前世武艺``
     try:
         item_id = shop.resolve_item(token)
     except ValueError as exc:
-        await matcher.finish(text("shop.unknown", "❌ {msg}", msg=str(exc)))
+        await reply.finish(matcher, text("shop.unknown", "❌ {msg}", msg=str(exc)))
 
     spec = shop.catalog().get(item_id) or {}
     price = shop.next_price(reinc, spec)
     # 便宜的东西免二次确认（阈值见 shop.confirm_threshold），贵的要先看详情。
     if price is not None and price <= _shop_confirm_threshold():
         await _shop_buy(matcher, player_id, reinc, item_id)
-    await matcher.finish(format_shop_item(reinc, item_id))
+    await reply.finish(
+        matcher,
+        format_shop_item(reinc, item_id),
+        menus.shop_item_menu(_shop_index(token), affordable=price is not None),
+    )
+
+
+def _shop_categories() -> list[dict]:
+    """商店分类（渲染按钮用）；取不到就返回空列表，不影响正文。"""
+    try:
+        from ..core import shop
+
+        return list(shop.categories())
+    except Exception:
+        return []
+
+
+def _shop_items(category_id: str) -> list[tuple[str, str]]:
+    """某个分类下的 ``(id, 名称)``；取不到就返回空列表。"""
+    try:
+        from ..core import shop
+
+        items = shop.items_in_category(category_id)
+    except Exception:
+        return []
+    result: list[tuple[str, str]] = []
+    for item in items:
+        if isinstance(item, dict):
+            result.append(
+                (
+                    str(item.get("id") or ""),
+                    str(item.get("name") or item.get("id") or ""),
+                )
+            )
+        elif isinstance(item, list | tuple) and len(item) >= 2:
+            result.append((str(item[0]), str(item[1])))
+    return result
+
+
+def _shop_index(token: str) -> int:
+    """商品在分类里的展示序号；解析不出就用 1，按钮至少不会指向空。"""
+    try:
+        from ..core import shop
+
+        return int(shop.display_index(token))
+    except Exception:
+        return 1
 
 
 def _shop_confirm_threshold() -> int:
@@ -555,7 +656,7 @@ async def _shop_buy(matcher, player_id: int, reinc, token: str) -> None:
         spec = shop.catalog().get(item_id) or {}
         result = shop.purchase(reinc, item_id)
     except ValueError as exc:
-        await matcher.finish(text("shop.unknown", "❌ {msg}", msg=str(exc)))
+        await reply.finish(matcher, text("shop.unknown", "❌ {msg}", msg=str(exc)))
 
     result["consumable_on_reincarnation"] = bool(
         result.get("consumed_on_reincarnation")
@@ -568,7 +669,7 @@ async def _shop_buy(matcher, player_id: int, reinc, token: str) -> None:
         reincarnation.refresh_pet_attributes(pet, reinc.permanent_bonuses)
         await pet_core.save_pet(pet)
 
-    await matcher.finish(format_shop_purchase(result))
+    await reply.finish(matcher, format_shop_purchase(result))
 
 
 @pet_shop_matcher.handle()
@@ -607,8 +708,8 @@ async def handle_chat(event: Event, args: Message = CommandArg()):
 
     message = lk_util.get_trans_text(args).strip()
     if not message:
-        await pet_chat_matcher.finish(
-            text("chat.empty_message", "想对宠物说点什么呢？")
+        await reply.finish(
+            pet_chat_matcher, text("chat.empty_message", "想对宠物说点什么呢？")
         )
 
     chat = chat_manager.get(pet, lk_util.get_name(str(player_id)))
@@ -616,14 +717,22 @@ async def handle_chat(event: Event, args: Message = CommandArg()):
         response = await chat.chat_with(f"{chat.user_name}:{message}")
     except Exception as exc:  # 聊天失败不该打断机器人
         log.warning(exc)
-        await pet_chat_matcher.finish(text("chat.failed", "很可惜，宠物不理你了"))
+        await reply.finish(
+            pet_chat_matcher, text("chat.failed", "很可惜，宠物不理你了")
+        )
         return
 
     log.info(response)
-    reply = f"{pet.name}:\n{response}"
-    if len(reply) > 100:
-        await pet_chat_matcher.finish(img_msg(await text_to_pic(reply)))
-    await pet_chat_matcher.finish(reply)
+    # 变量名不能叫 reply——那是本文件导入的回复模块
+    answer = f"{pet.name}:\n{response}"
+    if len(answer) > 100:
+        # QQ 端用 md：长文本本来就能排版，不必转图（转图反而看不到可点的按钮）
+        if reply.is_qq(event):
+            await reply.finish(pet_chat_matcher, answer, menus.status_menu())
+        await reply.finish(
+            pet_chat_matcher, img_msg(await text_to_pic(answer)), menus.status_menu()
+        )
+    await reply.finish(pet_chat_matcher, answer, menus.status_menu())
 
 
 @pet_love_matcher.handle([Cooldown(30, prompt=_cooldown_notice())])
@@ -636,7 +745,8 @@ async def handle_love(event: Event):
     # 好感同时加成经验与战斗输出（最多 +10%），这里把当前档位一并说明，
     # 免得玩家只看到数字却不知道它有什么用。
     bonus_pct = round(affection_bonus_ratio(pet.affection) * 100, 1)
-    await pet_love_matcher.finish(
+    await reply.finish(
+        pet_love_matcher,
         _compose(
             text(
                 "love.line",
@@ -646,7 +756,8 @@ async def handle_love(event: Event):
                 level=get_affection_level(pet.affection),
             ),
             text("love.bonus", "", bonus_pct=f"{bonus_pct:g}"),
-        )
+        ),
+        menus.status_menu(),
     )
 
 
@@ -659,17 +770,19 @@ async def handle_rename(event: Event, args: Message = CommandArg()):
 
     raw = args.extract_plain_text().strip()
     if not raw:
-        await pet_rename_matcher.finish(
-            text("rename.usage", "用法：/宠物.改名 <新名字>")
+        await reply.finish(
+            pet_rename_matcher, text("rename.usage", "用法：/宠物.改名 <新名字>")
         )
 
     try:
         new_name = pet_core.clean_and_validate_name(raw)
     except ValueError as exc:
-        await pet_rename_matcher.finish(f"❌ {exc}")
+        await reply.finish(pet_rename_matcher, f"❌ {exc}")
 
     old_name, new_name = await pet_core.rename_pet(pet, new_name)
-    await pet_rename_matcher.finish(text("rename.ok", "", old=old_name, new=new_name))
+    await reply.finish(
+        pet_rename_matcher, text("rename.ok", "", old=old_name, new=new_name)
+    )
 
 
 @pet_instruction_matcher.handle([Cooldown(300, prompt=_cooldown_notice())])
@@ -681,19 +794,22 @@ async def handle_instruction(event: Event, args: Message = CommandArg()):
 
     instruction = pet_core.clean_instruction(args.extract_plain_text())
     if not instruction:
-        await pet_instruction_matcher.finish(
-            text("instruction.usage", "用法：/宠物.设定 <设定内容>")
+        await reply.finish(
+            pet_instruction_matcher,
+            text("instruction.usage", "用法：/宠物.设定 <设定内容>"),
         )
 
     await pet_core.set_instruction(pet, instruction)
-    await pet_instruction_matcher.finish(text("instruction.ok", "设定更新成功啦"))
+    await reply.finish(
+        pet_instruction_matcher, text("instruction.ok", "设定更新成功啦")
+    )
 
 
 async def _send_paged(matcher, title: str, entries: list[tuple[str, str]]) -> None:
     """Send ``(user_id, name)`` entries in pages of :data:`PAGE_SIZE`."""
     total = len(entries)
     if total == 0:
-        await matcher.finish(text("petlist.empty", "还没有任何宠物"))
+        await reply.finish(matcher, text("petlist.empty", "还没有任何宠物"))
 
     for start in range(0, total, PAGE_SIZE):
         chunk = entries[start : start + PAGE_SIZE]
@@ -716,7 +832,7 @@ async def _send_paged(matcher, title: str, entries: list[tuple[str, str]]) -> No
                 total=total,
             )
         )
-        await matcher.send("\n".join(lines))
+        await reply.send(matcher, "\n".join(lines))
 
 
 @pet_group_list_matcher.handle()
@@ -725,8 +841,8 @@ async def handle_group_list(bot: Bot, event: Event):
     await _guard(pet_group_list_matcher)
     group_id = getattr(event, "group_id", None)
     if group_id is None:
-        await pet_group_list_matcher.finish(
-            text("petlist.group_only", "这个指令只能在群里使用")
+        await reply.finish(
+            pet_group_list_matcher, text("petlist.group_only", "这个指令只能在群里使用")
         )
 
     names = load_pet_names()
@@ -796,13 +912,17 @@ async def handle_rogue(event: Event, args: Message = CommandArg()):
         else:
             msg = _never_empty(text("rogue.usage", ""), _ROGUE_USAGE_HINT)
     except ValueError as exc:
-        await pet_rogue_matcher.finish(f"❌ {exc}")
+        await reply.finish(pet_rogue_matcher, f"❌ {exc}")
     except Exception as exc:  # 未知错误也要给用户回执，不静默吞掉对话
         log.warning(f"宠物.肉鸽 处理失败：{exc!r}")
-        await pet_rogue_matcher.finish("❌ 肉鸽指令执行出错，请查看机器人日志。")
+        await reply.finish(pet_rogue_matcher, "❌ 肉鸽指令执行出错，请查看机器人日志。")
 
     await pet_core.save_pet(pet)
-    await pet_rogue_matcher.finish(_never_empty(msg, _ROGUE_USAGE_HINT))
+    await reply.finish(
+        pet_rogue_matcher,
+        _never_empty(msg, _ROGUE_USAGE_HINT),
+        menus.rogue_menu(running=bool(getattr(rogue, "floor", 0))),
+    )
 
 
 @pet_train_matcher.handle()
@@ -815,7 +935,7 @@ async def handle_train(bot: Bot, event: Event):
     try:
         result = await interaction.train(pet, player_id)
     except ValueError as exc:
-        await pet_train_matcher.finish(f"❌ {exc}")
+        await reply.finish(pet_train_matcher, f"❌ {exc}")
 
     await pet_core.save_pet(pet)
-    await pet_train_matcher.finish(text("train.ok", result["message"], **result))
+    await reply.finish(pet_train_matcher, text("train.ok", result["message"], **result))

@@ -17,6 +17,7 @@ from ATRI.exceptions import str_traceback
 from ATRI.log import log
 
 from ..main.data_source import bot_live
+from . import cache
 from .model import (
     AllChatAndCallCount,
     BotInfo,
@@ -36,18 +37,20 @@ async def _():
     CONNECT_TIME = int(time.time())
 
 
+@driver.on_bot_connect
+async def _(bot: Bot):
+    """重连时丢掉该 bot 的身份缓存。
+
+    重连可能意味着换了账号、改了昵称，继续用旧缓存会一直显示过期信息。
+    只清这一台，不影响别的机器人。
+    """
+    cache.clear(bot.self_id)
+
+
 class ApiDataSource:
     @classmethod
-    async def __build_bot_info(cls, bot: Bot) -> BotInfo:
-        """构建Bot信息
-
-        参数:
-            bot: Bot
-
-        返回:
-            BotInfo: Bot信息
-        """
-        now = datetime.now()
+    async def __fetch_identity(cls, bot: Bot) -> cache.Identity:
+        """真正去打远端拿身份信息——慢的那部分，只应该偶尔执行。"""
         platform = "Unknow"
         nickname = bot.self_id
         ava_url = ""
@@ -55,7 +58,7 @@ class ApiDataSource:
             platform = "onebot11"
             login_info = await bot.get_login_info()
             nickname = login_info["nickname"]
-            ava_url = BotUtils.get_user_avatar_url(bot.self_id, platform)
+            ava_url = BotUtils.get_user_avatar_url(bot.self_id, platform) or ""
         if isinstance(bot, QQBot):
             platform = "qq"
             try:
@@ -64,20 +67,60 @@ class ApiDataSource:
                 ava_url = login_info.avatar if login_info.avatar else ""
             except Exception:
                 log.warning("QQ获取信息失败")
-        bot_info = BotInfo(
-            self_id=bot.self_id, nickname=nickname, ava_url=ava_url, platform=platform
+
+        identity = cache.Identity(
+            self_id=bot.self_id,
+            nickname=nickname,
+            ava_url=ava_url,
+            platform=platform,
         )
         try:
             group, friend = await asyncio.gather(
                 BotUtils.get_group_list(bot),
                 BotUtils.get_friend_list(bot),
             )
-            bot_info.group_count = len(group)
-            bot_info.friend_count = len(friend)
+            identity.group_count = len(group)
+            identity.friend_count = len(friend)
         except Exception as e:
             log.warning(f"获取bot好友/群组信息失败...:{str_traceback(e)}")
-            bot_info.group_count = 0
-            bot_info.friend_count = 0
+        return identity
+
+    @classmethod
+    async def __identity(cls, bot: Bot) -> cache.Identity:
+        """取身份信息：命中缓存就直接用，否则拉一次并写入。
+
+        这是「QQ 端加载慢」的根治点——``bot.me()`` 每次刷新都打一遍 QQ 开放
+        平台，慢且毫无必要；昵称、头像、群数这些一天都不会变。
+        """
+        cached = cache.get(bot.self_id)
+        if cached is not None:
+            return cached
+        identity = await cls.__fetch_identity(bot)
+        cache.put(identity)
+        return identity
+
+    @classmethod
+    async def __build_bot_info(cls, bot: Bot) -> BotInfo:
+        """构建Bot信息
+
+        **身份**部分走缓存（慢、几乎不变），**统计**部分每次实查（快、要最新）。
+
+        参数:
+            bot: Bot
+
+        返回:
+            BotInfo: Bot信息
+        """
+        now = datetime.now()
+        identity = await cls.__identity(bot)
+        bot_info = BotInfo(
+            self_id=identity.self_id,
+            nickname=identity.nickname,
+            ava_url=identity.ava_url,
+            platform=identity.platform,
+            group_count=identity.group_count,
+            friend_count=identity.friend_count,
+        )
         bot_info.day_call = await ServiceStatistics.filter(
             created_at__gte=now - timedelta(hours=now.hour, minutes=now.minute),
             bot_id=bot.self_id,
@@ -99,10 +142,12 @@ class ApiDataSource:
         返回:
             list[BotInfo]: Bot列表
         """
-        bot_list: list[BotInfo] = []
-        for _, bot in nonebot.get_bots().items():
-            bot_list.append(await cls.__build_bot_info(bot))
-        return bot_list
+        bots = list(nonebot.get_bots().values())
+        if not bots:
+            return []
+        # 多机器人并发构建：串行时总耗时是各家的和，并发后只等最慢的那台。
+        # 缓存命中后这里本来就很快，未命中时（尤其 QQ 的 bot.me()）差别明显。
+        return list(await asyncio.gather(*(cls.__build_bot_info(bot) for bot in bots)))
 
     @classmethod
     async def get_chat_and_call_count(cls, bot_id: str | None) -> QueryChatCallCount:

@@ -1,5 +1,6 @@
 from pydantic import Field, model_validator
 
+from ATRI.permission import get_master_ids
 from ATRI.system.lkapi.entity.user import user_manager
 from ATRI.utils.model import BaseModel
 
@@ -78,7 +79,8 @@ _FAMILIARITY_BANDS = (
 
 
 #: 认识的人最多列出几个。太多会挤占提示词，且大部分她根本不在意。
-KNOWN_USERS_LIMIT = 20
+#: 名单是给人看的，10 个够用；再长的名单没人读完，只是白烧 token。
+KNOWN_USERS_LIMIT = 10
 
 #: 一个人最多记几个别名。别名的用途是「听得懂别人怎么称呼他」，几个就够，
 #: 多了只会让找人的匹配变模糊。
@@ -210,6 +212,33 @@ def list_known_users(limit: int = KNOWN_USERS_LIMIT) -> list[dict]:
         )
     users.sort(key=lambda u: u["familiarity"], reverse=True)
     return users[:limit]
+
+
+def describe_masters() -> str:
+    """把「主人是谁」渲染成人话，供关系查询直接回答。"""
+    ids = get_master_ids()
+    if not ids:
+        return "现在没有登记主人。"
+
+    blocks = []
+    for uid in ids:
+        found = find_user(uid) or {}
+        nickname = str(found.get("nickname") or _nickname(uid) or "").strip()
+        lines = [f"主人：{uid}" + (f"（{nickname}）" if nickname else "")]
+        alias = found.get("alias") or []
+        if alias:
+            lines.append("别名：" + "、".join(alias))
+        if found.get("relation"):
+            lines.append(f"你和TA的关系：{found['relation']}")
+        if found.get("profile"):
+            lines.append(f"你对TA的印象：{found['profile']}")
+        if not found and not nickname:
+            lines.append("（还没跟TA说过话，只知道号码）")
+        blocks.append("\n".join(lines))
+
+    if len(blocks) == 1:
+        return blocks[0]
+    return f"你的主人有 {len(blocks)} 位：\n" + "\n\n".join(blocks)
 
 
 def find_user(query: str) -> dict | None:

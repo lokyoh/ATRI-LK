@@ -4,6 +4,7 @@ from nonebot.adapters.qq import Bot as QQBot
 
 from ATRI.exceptions import str_traceback
 from ATRI.log import log
+from ATRI.permission import get_master_ids
 from ATRI.system.lkapi.bot import util as lk_util
 from ATRI.system.lkapi.entity.user import user_manager
 
@@ -45,7 +46,6 @@ async def get_name(bot: Bot, user_id: str, chat_id: str):
 
 def get_user_group(user_id):
     user_id = user_manager.resolve_user_id(user_id)
-    user_group = "用户"
-    if lk_util.is_master(user_id):
-        user_group = "主人"
-    return user_group
+    if str(user_id) in get_master_ids():
+        return "主人"
+    return "用户"

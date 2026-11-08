@@ -162,6 +162,13 @@ def _plugin_enabled(function_name: str) -> bool:
     )
 
 
+def _as_bool(value) -> bool:
+    """参数可能是 bool，也可能是 "true"/"1"/"是"（模型输出是文本）。"""
+    if isinstance(value, bool):
+        return value
+    return str(value or "").strip().lower() in ("true", "1", "yes", "是")
+
+
 def _plugin_rare(function_name: str) -> bool:
     """该功能是否被功能插件声明为不常用（只能经 call 调用）。"""
     from .function_plugin.manage import function_plugin_manager
@@ -677,44 +684,74 @@ def register_function_calling():
             FunctionCallingArg(
                 name="name",
                 _type="str",
-                description="要查的人（QQ 号、名字或别名）。留空则列出你认识的所有人",
+                description="（可选）要查的人：QQ 号、名字或别名",
+            ),
+            FunctionCallingArg(
+                name="master",
+                _type="bool",
+                description="（可选）查主人信息时置为 true",
+            ),
+            FunctionCallingArg(
+                name="list_all",
+                _type="bool",
+                description="（可选）列名单时置为 true，按熟络度最多 10 位",
             ),
         ]
 
         @staticmethod
         async def call(data: FunctionCallingData):
-            from .user import find_user, list_known_users
+            from .user import describe_masters, find_user, list_known_users
 
             keyword = str(data.data.get("name") or "").strip()
+            wants_master = _as_bool(data.data.get("master"))
+            wants_all = _as_bool(data.data.get("list_all"))
+            if not (keyword or wants_master or wants_all):
+                return (
+                    "给一个参数：name 查某个人，master=true 查主人，"
+                    "list_all=true 列名单（按熟络度最多 10 位）。"
+                )
 
-            if not keyword:
+            # 给几个参数就返回几份结果，不要求「三选一」：一次问「我和主人熟吗，
+            # 顺带列下我认识谁」本来就是两个问题，没必要逼它分两次调用。
+            blocks = []
+            if keyword:
+                found = find_user(keyword)
+                if found is None:
+                    blocks.append(
+                        f"你不太记得「{keyword}」这个人。可以如实说不认识，不要编。"
+                    )
+                else:
+                    here = (
+                        "（就是正在跟你说话的这位）"
+                        if found["user_id"] == str(data.sender_id)
+                        else ""
+                    )
+                    text = f"{found['user_id']}{here}：{found['relation']}"
+                    if found["profile"]:
+                        text += f"\n你对他的印象：{found['profile']}"
+                    blocks.append(text)
+
+            if wants_master:
+                blocks.append(describe_masters())
+
+            if wants_all:
                 users = list_known_users()
                 if not users:
-                    return "你还没记住任何人。"
-                lines = ["你认识的人（按熟悉程度）："]
-                for u in users:
-                    label = u["user_id"]
-                    if u["nickname"]:
-                        label += f"（{u['nickname']}）"
-                    if u["alias"]:
-                        label += "别名：" + "、".join(u["alias"])
-                    if u["user_id"] == str(data.sender_id):
-                        label += "（就是正在跟你说话的这位）"
-                    lines.append(f"- {label}：{u['relation']}")
-                return "\n".join(lines)
+                    blocks.append("你还没记住任何人。")
+                else:
+                    lines = ["你认识的人（按熟悉程度）："]
+                    for u in users:
+                        label = u["user_id"]
+                        if u["nickname"]:
+                            label += f"（{u['nickname']}）"
+                        if u["alias"]:
+                            label += "别名：" + "、".join(u["alias"])
+                        if u["user_id"] == str(data.sender_id):
+                            label += "（就是正在跟你说话的这位）"
+                        lines.append(f"- {label}：{u['relation']}")
+                    blocks.append("\n".join(lines))
 
-            found = find_user(keyword)
-            if found is None:
-                return f"你不太记得「{keyword}」这个人。可以如实说不认识，不要编。"
-            name = (
-                "（就是正在跟你说话的这位）"
-                if found["user_id"] == str(data.sender_id)
-                else ""
-            )
-            text = f"{found['user_id']}{name}：{found['relation']}"
-            if found["profile"]:
-                text += f"\n你对他的印象：{found['profile']}"
-            return text
+            return "\n\n".join(blocks)
 
     FunctionCallingManager.register(RelationQueryFunctionCalling)
 

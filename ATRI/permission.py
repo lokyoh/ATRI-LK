@@ -67,6 +67,11 @@ def is_master(bot: Bot, event: Event) -> bool:
     return user_id in _load_masters()
 
 
+def get_master_ids() -> list[str]:
+    """当前主人（超级用户）名单，按 id 排序。"""
+    return sorted(_load_masters())
+
+
 async def toggle_master(user_id: str):
     """
     添加/移除主人

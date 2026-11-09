@@ -314,12 +314,7 @@ def register_function_calling():
 
     class StopThinkingFunctionCalling(FunctionCalling):
         function_name = "stop_thinking"
-        description = (
-            "【不说话时的唯一方式】结束本次思考，什么也不发。\n"
-            "没什么想说的、不想接这个话、或不知道该说什么时调用。\n"
-            "注意：不调用 send_message、也不调用本功能，"
-            "只是把想说的话写在正文里 —— 那段文字不会发出去，等于白说。"
-        )
+        description = "结束本次思考。"
         essential = True
         args: ClassVar[list[FunctionCallingArg]] = []
 
@@ -334,9 +329,7 @@ def register_function_calling():
     class SendMessageFunctionCalling(FunctionCalling):
         function_name = "send_message"
         description = (
-            "【说话的唯一方式】在聊天里说话。\n"
-            "只有本功能会真的把消息发到群里；你写的正文、思考、解释，"
-            "任何不经过本功能的文字都不会被任何人看到。\n"
+            "在聊天里说话。\n"
             "想说什么，就必须调用本功能，把要说的话放进 msg 参数。\n"
             "msg 就是你直接发出去的那句话：口语、短，可以带语气词，"
             "不是对别人的解释、不是总结、不是报告。\n"
@@ -602,7 +595,6 @@ def register_function_calling():
         function_name = "feel"
         description = (
             "表达你此刻的情绪，会持续影响接下来一段时间的语气。"
-            "与 love_change 不同：这个只关当下感受，不改关系评价。"
             "如被冒犯、被感动、被逗笑、觉得无聊。"
         )
         args: ClassVar = [
@@ -675,9 +667,7 @@ def register_function_calling():
         function_name = "relation_query"
         description = (
             "查询你与某个人的关系，或列出你认识的人。\n"
-            "什么时候用：别人问「你主人是谁」「你跟某某关系怎么样」"
-            "「你记得我吗」这类涉及**关系**的问题时。\n"
-            "提示词里只会给出**当前对话人**的关系，其他人都要在这里查。\n"
+            "提示词里只会给出当前对话人的关系，其他人都要在这里查。\n"
             "查不到就如实说不太记得，不要凭印象编一个关系出来。"
         )
         args: ClassVar[list[FunctionCallingArg]] = [
@@ -759,8 +749,6 @@ def register_function_calling():
         function_name = "get_user_info"
         description = (
             "查一个人的完整资料：QQ 号、昵称、别名、关系、好感度、熟络度、你对他的印象。\n"
-            "什么时候用：想知道「这个人是谁」「他叫什么」「我对他了解多少」，"
-            "或者对话里出现了一个你不太确定的称呼时。\n"
             "查询串可以是 **QQ 号、名字或别名**，三者都认；"
             "查不到就如实说不记得，不要编。"
         )
@@ -802,7 +790,7 @@ def register_function_calling():
     class UserAliasFunctionCalling(FunctionCalling):
         function_name = "user_alias"
         description = (
-            "记下或忘掉一个人的**别名**（外号、习惯称呼）。\n"
+            "记下或忘掉一个人的别名（外号、习惯称呼）。\n"
             "什么时候用：有人说「叫我小 A」「他外号是 A 酱」，"
             "或者你发现大家老用另一个名字称呼某人时。\n"
             "先用 get_user_info 确认是哪个人，再记下来；记错了用 opt=remove 去掉。"

@@ -20,7 +20,7 @@ from plugins.fortune.qq import BTN_FORTUNE
 
 from .fortune_data import get_fortune
 
-plugin = Service("运势", "亚托莉的运势插件", "0.2.0", Service.ServiceType.ENTERTAINMENT)
+plugin = Service("运势", "亚托莉的运势插件", "0.3.0", Service.ServiceType.ENTERTAINMENT)
 
 
 def is_today_file(path) -> bool:
@@ -68,6 +68,11 @@ async def _(event: QQMessageEvent):
         message.text(f"## {ft['fortune']}")
         message.text(f"### {'★' * ft['level']}{'☆' * (5 - ft['level'])}")
         message.text(f"{choice(ft['content'])}")
+        message.text(f"> 日期: {datetime.now().strftime('%Y年%m月%d日 %H:%M')}")
+        message.text("> 仅供娱乐 相信科学 请勿迷信")
+        md_msg = message.done()
+        async with await anyio.open_file(save_path, "w", encoding="utf-8") as f:
+            await f.write(md_msg)
         if lk_util.is_valid_user(user_id):
             state, msg = sign(user_id)
             if state:
@@ -76,11 +81,7 @@ async def _(event: QQMessageEvent):
                     message.auto_append(f"- {m}")
         else:
             message.text(f"### {BIND_TIP}才能够自动签到哦!")
-        message.text(f"> 日期: {datetime.now().strftime('%Y年%m月%d日 %H:%M')}")
-        message.text("> 仅供娱乐 相信科学 请勿迷信")
         md_msg = message.done()
-        async with await anyio.open_file(save_path, "w", encoding="utf-8") as f:
-            await f.write(md_msg)
     md = QQMessage.md_msg(md_msg)
     kb = QQMessage.keyboard(content=InlineKeyboardRow(buttons=[BTN_FORTUNE, BTN_MENU]))
     await today_fortune.finish(md + kb)

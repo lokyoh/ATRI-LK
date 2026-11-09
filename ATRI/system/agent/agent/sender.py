@@ -51,21 +51,31 @@ async def send_to_chat(bot, chat_id, message) -> bool:
     - **QQ 官方**：``post_group_messages(group_openid=..., msg_type=0, content=...)``，
       用 openid 而不是数字群号。
 
+    :param message: 文本，或含 @ 段的 ``Message``。**QQ 官方要 @ 人只能走
+        消息对象**：``post_group_messages`` 的 ``content`` 是纯字符串，
+        ``msg_type=0`` 下不认 ``<@openid>``；换成 ``Message`` 后由
+        ``send_to_group`` 拆段，``mention_user`` 才能真正生效。
     :return: 是否发送成功。
     """
-    text = str(message or "").strip()
-    if not text:
+    is_segments = not isinstance(message, str) and message is not None
+    text = "" if is_segments else str(message or "").strip()
+    if not is_segments and not text:
         return False
 
     try:
         if bot_mtype(bot) == 1:
+            if is_segments:
+                await bot.send_to_group(group_openid=str(chat_id), message=message)
+                return True
             await bot.post_group_messages(
                 group_openid=str(chat_id), msg_type=0, content=text
             )
             return True
         from .initiative_start import _group_id
 
-        await bot.send_group_msg(group_id=_group_id(chat_id), message=text)
+        await bot.send_group_msg(
+            group_id=_group_id(chat_id), message=message if is_segments else text
+        )
         return True
     except Exception as exc:
         from ATRI.log import log
@@ -186,6 +196,8 @@ class OneBotChatSender(ChatSender):
 
 
 class QQChatSender(ChatSender):
+    mtype = 1
+
     def __init__(self, matcher: Matcher):
         super().__init__()
         self.matcher: Matcher = matcher
@@ -198,6 +210,15 @@ class QQChatSender(ChatSender):
         if message is not None:
             self.sent_count += 1
         await self.matcher.finish(message)
+
+
+def _plain_text(message) -> str:
+    """把 Message 里的文字取出来，供写历史用（丢掉 @、图片等段）。"""
+    try:
+        text = message.extract_plain_text()
+    except Exception:
+        text = ""
+    return str(text or "").strip() or str(message or "").strip()
 
 
 class BotChatSender(ChatSender):
@@ -225,6 +246,13 @@ class BotChatSender(ChatSender):
         self.mtype = bot_mtype(bot)
 
     async def send(self, message):
+        if not isinstance(message, str) and message is not None:
+            if not await send_to_chat(self.bot, self.chat_id, message):
+                return
+            self.sent_count += 1
+            self.sent.append(_plain_text(message))
+            return
+
         raw = message
         text = str(message or "").strip()
         if not text:

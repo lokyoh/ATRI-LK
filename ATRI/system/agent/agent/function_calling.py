@@ -114,6 +114,16 @@ class FunctionCallingData:
         bot = self.bot
         return str(getattr(bot, "self_id", "") or "") if bot is not None else ""
 
+    @property
+    def mtype(self) -> int:
+        """对话通道的协议类型：0 = OneBot，1 = QQ 官方。"""
+        return int(getattr(self.sender, "mtype", 0) or 0)
+
+    @property
+    def mention_target(self) -> str:
+        """要 @ 的人。"""
+        return str(self.sender_id or "").strip()
+
 
 class EnableCheck(BaseModel):
     """技能/功能的环境可用性判定结果"""
@@ -167,6 +177,26 @@ def _as_bool(value) -> bool:
     if isinstance(value, bool):
         return value
     return str(value or "").strip().lower() in ("true", "1", "yes", "是")
+
+
+def _with_mention(text: str, target: str, mtype: int):
+    """把「@某人」拼到正文前面，返回该适配器的 ``Message``。"""
+    who = str(target or "").strip()
+    if not who:
+        return text
+    try:
+        if mtype == 1:
+            from nonebot.adapters.qq import Message as QQMsg
+            from nonebot.adapters.qq import MessageSegment as QQSegment
+
+            return QQMsg(QQSegment.mention_user(who)) + QQMsg(QQSegment.text(text))
+        from nonebot.adapters.onebot.v11 import Message as OMsg
+        from nonebot.adapters.onebot.v11 import MessageSegment as OSegment
+
+        return OMsg(OSegment.at(who)) + OMsg(OSegment.text(text))
+    except Exception as exc:
+        log.debug(f"构造 @{who} 失败，本条不加 @：{exc}")
+        return text
 
 
 def _plugin_rare(function_name: str) -> bool:
@@ -356,7 +386,13 @@ def register_function_calling():
                     "我建议你可以……」\n"
                     "正例:「诶，怎么了」「啊这…」「哈哈哈哈哈真的假的」「唔，那你自己怎么想的」"
                 ),
-            )
+            ),
+            FunctionCallingArg(
+                name="at",
+                _type="bool",
+                description="(可选)时置为true时@正在跟你说话的人，"
+                "私聊、或本来就是在直接回答他时不必加。",
+            ),
         ]
 
         @staticmethod
@@ -371,8 +407,12 @@ def register_function_calling():
             shortened, cut_note = _trim_reply(msg)
             if cut_note:
                 log.debug(f"回复过长被截断，原长 {len(msg)}")
+            if _as_bool(data.data.get("at")):
+                payload = _with_mention(shortened, data.mention_target, data.mtype)
+            else:
+                payload = shortened
             try:
-                await data.sender.send(shortened)
+                await data.sender.send(payload)
                 if llm_manager.has_type(ModelType.TTS) and isinstance(
                     data.sender, OneBotChatSender
                 ):

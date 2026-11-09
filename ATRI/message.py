@@ -236,7 +236,7 @@ class QQMessage:
         if show is not None:
             safe_show = quote(show, safe="")
             return f'<qqbot-cmd-input text="{safe_text}" show="{safe_show}" reference="{"true" if reference else "false"}" />'
-        return f'<qqbot-cmd-input text="{safe_text}" reference="{"true" if reference else "false"}/>'
+        return f'<qqbot-cmd-input text="{safe_text}" reference="{"true" if reference else "false"}" />'
 
     @staticmethod
     def keyboard(

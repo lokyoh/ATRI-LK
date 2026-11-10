@@ -1,4 +1,7 @@
+import secrets
+
 from ATRI.bot import BotUtils
+from ATRI.log import log
 from ATRI.message import (
     ATRIMessage,
     MessageBuilder,
@@ -14,6 +17,50 @@ from .util import UserInfoEvent, lk_util, user_info_events
 
 
 class LKBot:
+    @staticmethod
+    def auto_bind_user(user_id: str | int, nickname: str | None = None) -> str | None:
+        """首次访问 LK 用户功能时自动创建账号并赠送改名卡。"""
+        user_id = str(user_id)
+        if lk_util.is_valid_user(user_id):
+            return None
+        if not items.has_item("改名卡"):
+            raise RuntimeError("改名卡尚未加载，无法发放新用户赠礼")
+
+        name = lk_util.clean_str(nickname or "")
+        if (
+            not name
+            or len(name) > 64
+            or not lk_util.is_valid_name(name)
+            or name in users.get_name_list()
+        ):
+            name = ""
+
+        start = secrets.randbelow(90_000) + 10_000
+        preferred_name = name
+        for offset in range(90_000):
+            candidate = (
+                preferred_name
+                if offset == 0 and preferred_name
+                else f"用户{(start + offset - 10_000) % 90_000 + 10_000:05d}"
+            )
+            if candidate in users.get_name_list() or not lk_util.is_valid_name(
+                candidate
+            ):
+                continue
+            if users.add_user(user_id, candidate):
+                name = candidate
+                break
+            if lk_util.is_valid_user(user_id):
+                return None
+        else:
+            raise RuntimeError("无法为新 LK 用户生成唯一名称")
+
+        if not lk_util.item_change(user_id, "改名卡", 1):
+            raise RuntimeError(f"为新 LK 用户 {user_id} 发放改名卡失败")
+
+        log.info(f"自动绑定 LK 用户 {user_id}，名称：{name}，已赠送改名卡")
+        return name
+
     @staticmethod
     def get_info(user_id):
         with users.get_user_data(user_id) as user:

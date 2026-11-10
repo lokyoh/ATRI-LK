@@ -1,31 +1,23 @@
 from nonebot.adapters import Event as BaseEvent
 from nonebot.adapters.onebot.v11 import GroupMessageEvent
-from nonebot.adapters.onebot.v11.message import Message, MessageSegment
-from nonebot.adapters.qq import MessageEvent as QQMessageEvent
 from nonebot.internal.matcher import Matcher
 from nonebot.internal.params import Depends
 
-from ATRI.message import QQMessage
-
 from .config import config
-from .qq import BIND_TIP
+from .data_source import LKBot
 from .util import lk_util
 
 
 async def is_lk_user(matcher: Matcher, event: BaseEvent):
-    """检查是否是LK插件的用户，不是则中断当前事件处理"""
+    """检查并自动绑定首次使用 LK 功能的用户。"""
     user_id = event.get_user_id()
     if not lk_util.is_valid_user(user_id):
-        if isinstance(event, GroupMessageEvent):
-            msg = (
-                Message()
-                .append(MessageSegment.at(event.get_user_id()))
-                .append(MessageSegment.text(lk_util.bind_tip))
-            )
-            await matcher.finish(msg)
-        if isinstance(event, QQMessageEvent):
-            await matcher.finish(QQMessage.md_msg(BIND_TIP))
-        await matcher.finish(lk_util.bind_tip)
+        sender = getattr(event, "sender", None)
+        author = getattr(event, "author", None)
+        nickname = getattr(sender, "nickname", None) or getattr(
+            author, "username", None
+        )
+        LKBot.auto_bind_user(user_id, nickname)
 
 
 async def not_safe_mode(matcher: Matcher, event: GroupMessageEvent):

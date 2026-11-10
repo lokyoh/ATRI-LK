@@ -15,6 +15,7 @@ from nonebot.adapters.qq import MessageEvent as QQMessageEvent
 from nonebot.matcher import Matcher
 from nonebot.params import ArgPlainText, CommandArg
 
+from ATRI import conf
 from ATRI.bot import BotUtils
 from ATRI.log import log
 from ATRI.message import QQMessage
@@ -53,6 +54,15 @@ from ..qq import BIND_TIP
 from ..util import lk_util
 
 cmd_start = BotUtils.get_command_start()
+
+
+def _strip_repeated_bind_command(name: str) -> str:
+    name = name.strip()
+    for separator in conf.BotConfig.command_sep:
+        prefix = f"{cmd_start}lk{separator}绑定"
+        if name.startswith(prefix):
+            return name[len(prefix) :].lstrip()
+    return name
 
 
 @my_info.handle([IsLkUser])
@@ -207,14 +217,16 @@ async def _(matcher: Matcher, args: BaseMessage = CommandArg()):
 
 @bind.got("bind_id", "要绑定的名字呢？速速")
 async def _(event: MessageEvent | QQMessageEvent, name: str = ArgPlainText("bind_id")):
-    await bind.finish(LKBot.bind(event.get_user_id(), name))
+    await bind.finish(
+        LKBot.bind(event.get_user_id(), _strip_repeated_bind_command(name))
+    )
 
 
 @get_binding_secret.handle()
 async def _(event: MessageEvent | QQMessageEvent):
     if not isinstance(
         event,
-        (PrivateMessageEvent, C2CMessageCreateEvent, DirectMessageCreateEvent),
+        PrivateMessageEvent | C2CMessageCreateEvent | DirectMessageCreateEvent,
     ):
         await get_binding_secret.finish("请私聊获取绑定密钥")
     if not lk_util.is_valid_user(event.get_user_id()):

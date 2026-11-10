@@ -19,7 +19,7 @@ MAX_LIST_USERS = 500
 
 class LkUserInfo(BaseModel):
     id: str
-    """账号 ID（主账号）"""
+    """账号 ID"""
     name: str
     """lkbot 里登记的名称"""
     level: int
@@ -38,6 +38,8 @@ class LkUserInfo(BaseModel):
     """最后一次签到的日期"""
     is_master: bool
     """是否为主人（含绑定到主人的账号解析后的结果）"""
+    bound_to: str = ""
+    """如果账号绑定到其他账号，这里是最终主账号"""
 
 
 class LkBindingInfo(BaseModel):
@@ -63,8 +65,6 @@ class LkBackpackItem(BaseModel):
 class LkUserDetail(LkUserInfo):
     bindings: list[LkBindingInfo] = []
     """这个账号绑定了哪些小号（仅在它本身是主账号时有内容）"""
-    bound_to: str = ""
-    """如果它自己是个小号，这里是它所属的主账号"""
     backpack: list[LkBackpackItem] = []
     """背包内容"""
 
@@ -116,6 +116,9 @@ def _to_info(user_id: str, name: str) -> LkUserInfo:
         signdays=int(data.signdays),
         lastsign=str(data.lastsign),
         is_master=BaseFunc.is_master(user_id),
+        bound_to=(
+            users.resolve_user_id(user_id) if str(user_id) in users._bindings else ""
+        ),
     )
 
 
@@ -164,7 +167,14 @@ async def _(limit: int = MAX_LIST_USERS) -> Result[list[LkUserInfo]]:
     try:
         limit = max(1, min(int(limit), MAX_LIST_USERS))
         items = []
-        for user_id, name in list(users._ids.items())[:limit]:
+        user_entries = list(users._ids.items())
+        registered_ids = set(users._ids)
+        user_entries.extend(
+            (account_id, "已绑定账号")
+            for account_id in users._bindings
+            if account_id not in registered_ids
+        )
+        for user_id, name in user_entries[:limit]:
             try:
                 items.append(_to_info(user_id, name))
             except Exception as exc:
@@ -192,7 +202,7 @@ async def _(user_id: str) -> Result[LkUserDetail]:
         base = _to_info(resolved, name)
         bound_to = str(users._bindings.get(str(user_id), "") or "")
         detail = LkUserDetail(
-            **base.model_dump(),
+            **base.model_dump(exclude={"bound_to"}),
             bindings=_bindings_of(resolved),
             bound_to=bound_to,
             backpack=_backpack_of(resolved),
@@ -254,7 +264,7 @@ async def _detail_of(resolved: str) -> Result[LkUserDetail]:
     base = _to_info(resolved, name)
     return Result.ok(
         LkUserDetail(
-            **base.model_dump(),
+            **base.model_dump(exclude={"bound_to"}),
             bindings=_bindings_of(resolved),
             bound_to=str(users._bindings.get(str(resolved), "") or ""),
             backpack=_backpack_of(resolved),

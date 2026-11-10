@@ -473,6 +473,7 @@ LOVEMULCOUNT    INTEGER DEFAULT 0
         user_id = self.resolve_user_id(user_id)
         if not self.change_name_list(name, new_name):
             return False
+        self._ids[user_id] = new_name
 
         @self.user_lock.lock(user_id)
         def _change_name():

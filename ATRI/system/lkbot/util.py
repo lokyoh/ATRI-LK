@@ -6,7 +6,7 @@ from nonebot.adapters.onebot.v11 import Message
 
 from ATRI import conf
 from ATRI.log import log
-from ATRI.permission import MASTER_LIST
+from ATRI.permission import get_master_ids
 from ATRI.utils.event import BaseEvent, BaseEvents
 
 from .config import config
@@ -51,10 +51,12 @@ class BaseFunc:
 
     @staticmethod
     def is_master(user_id: str | int) -> bool:
-        """检查用户是否为主人(超级用户)"""
-        if type(user_id) is int:
-            user_id = str(user_id)
-        return user_id in MASTER_LIST
+        """检查用户是否为主人(超级用户)。
+
+        走 ``get_master_ids()`` 而不是模块级 ``MASTER_LIST``：后者是 import 时的
+        快照，``master.json`` 改了它不会跟着变，会出现「指令认、她不认」。
+        """
+        return str(user_id) in get_master_ids()
 
     @staticmethod
     def is_valid_user(user_id: str | int) -> bool:

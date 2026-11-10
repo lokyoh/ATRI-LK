@@ -53,6 +53,16 @@ class DependencyResult:
     message: str = ""
 
 
+@dataclass
+class VersionCheckInfo:
+    branch: str
+    latest: str | None = None
+    has_update: bool = False
+    update_time: str | None = None
+    notes: str | None = None
+    error: str | None = None
+
+
 async def _stash_local_changes() -> tuple[bool, str]:
     """更新前备份本地改动，返回 ``(是否创建, stash 标记)``。
 
@@ -176,21 +186,64 @@ async def _ensure_dependencies(previous: str, current: str) -> DependencyResult:
 
 class Updater:
     @classmethod
+    async def get_version_info(cls) -> VersionCheckInfo:
+        """按当前更新通道检查版本或远程提交。"""
+        branch = current_branch_setting()
+        if branch == BETA_BRANCH:
+            remote_commit = await CheckUpdate.get_latest_commit(BETA_BRANCH)
+            current_commit = await git.head_commit(REPO_DIR)
+            if remote_commit is None:
+                return VersionCheckInfo(
+                    branch=branch, error=f"无法获取远程 {branch} 分支提交"
+                )
+            if not current_commit:
+                return VersionCheckInfo(branch=branch, error="无法获取当前代码提交")
+            has_update = current_commit != remote_commit
+            return VersionCheckInfo(
+                branch=branch,
+                latest=f"{branch}@{remote_commit[:7]}",
+                has_update=has_update,
+                notes=(
+                    f"远程 {branch} 分支有新提交"
+                    if has_update
+                    else f"当前代码已与 {branch} 分支同步"
+                ),
+            )
+
+        latest_info = await CheckUpdate.get_latest_info()
+        if latest_info is None:
+            return VersionCheckInfo(branch=branch, error="无法获取远程版本")
+        return VersionCheckInfo(
+            branch=branch,
+            latest=latest_info.version,
+            has_update=is_newer_version(
+                latest_info.version, __version__, __sub_version__
+            ),
+            update_time=latest_info.update_time,
+            notes=latest_info.info,
+        )
+
+    @classmethod
     async def check(cls):
         message = MessageBuilder().text(f"当前版本: {__version__} {__sub_version__}")
-        latest_info = await CheckUpdate.get_latest_info()
-        if latest_info:
-            if is_newer_version(latest_info.version, __version__, __sub_version__):
+        info = await cls.get_version_info()
+        if info.error:
+            return message.text(f"检查更新失败：{info.error}")
+        if info.branch == BETA_BRANCH:
+            message.text(f"更新通道: {info.branch}")
+            message.text(f"远程提交: {info.latest}")
+            if info.has_update:
+                message.text("dev 分支有新提交,请更新!!!")
+            else:
+                message.text("当前已是 dev 分支最新提交")
+        elif info.latest:
+            if info.has_update:
                 message.text("新版本已发布,请更新!!!")
-            message.text(
-                f"远程版本: {latest_info.version} 更新时间: {latest_info.update_time}"
-            )
-            message.text(f"更新信息: {latest_info.info}")
-            if in_container():
-                message.text("当前是容器部署：/更新 后发送 /重启 即可，依赖会自动对齐")
-            return message
-        else:
-            return message.text("最新版本获取失败")
+            message.text(f"远程版本: {info.latest} 更新时间: {info.update_time}")
+            message.text(f"更新信息: {info.notes}")
+        if in_container():
+            message.text("当前是容器部署：/更新 后发送 /重启 即可，依赖会自动对齐")
+        return message
 
     @classmethod
     async def update(cls, branch: str | None = None) -> str:

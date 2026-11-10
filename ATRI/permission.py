@@ -59,12 +59,38 @@ def _load_masters() -> set[str]:
         return masters
 
 
+def resolve_account_id(user_id: str) -> str:
+    """把账号解析到 lkbot 的主账号；解析不了就原样返回。"""
+    raw = str(user_id)
+    if not raw:
+        return raw
+    try:
+        from ATRI.system.lkapi.entity.user import user_manager
+
+        return str(user_manager.resolve_user_id(raw))
+    except Exception:
+        return raw
+
+
+def is_master_user(user_id: str) -> bool:
+    """这个账号算不算主人（**不含** None / 空串判断，调用方负责）。"""
+    raw = str(user_id)
+    if not raw:
+        return False
+    masters = _load_masters()
+    if raw in masters:
+        return True
+    resolved = resolve_account_id(raw)
+    return resolved in masters if resolved != raw else False
+
+
 def is_master(bot: Bot, event: Event) -> bool:
+    """这个事件是不是主人发的。"""
     try:
         user_id = event.get_user_id()
     except Exception:
         return False
-    return user_id in _load_masters()
+    return is_master_user(user_id)
 
 
 def get_master_ids() -> list[str]:

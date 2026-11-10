@@ -71,9 +71,9 @@ def _describe_people() -> str | None:
 
     if not master_id:
         try:
-            from ATRI.permission import MASTER_LIST
+            from ATRI.permission import get_master_ids
 
-            master_id = next(iter(sorted(MASTER_LIST)), "")
+            master_id = next(iter(get_master_ids()), "")
         except Exception:
             master_id = ""
     if not master_id:

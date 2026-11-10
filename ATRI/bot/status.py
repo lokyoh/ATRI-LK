@@ -11,7 +11,7 @@ from pydantic import Field
 from ATRI import driver
 from ATRI.bot.model import PanelItem
 from ATRI.dir import SYS_CONFIG_DIR
-from ATRI.permission import MASTER_LIST
+from ATRI.permission import is_master_user
 from ATRI.utils.model import BaseModel
 
 BOT_STATUS_FILE_PATH = SYS_CONFIG_DIR / "bot_status.json"
@@ -81,7 +81,7 @@ class BotStatus:
         if not statu.enable:
             return True
         if user_id:
-            if user_id in MASTER_LIST:
+            if is_master_user(user_id):
                 return False
             if statu.is_user_black_list:
                 if user_id in statu.user_black_list:

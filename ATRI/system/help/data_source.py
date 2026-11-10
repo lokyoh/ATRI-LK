@@ -17,7 +17,7 @@ from ATRI.bot import BotUtils
 from ATRI.exceptions import ServiceNotFoundError
 from ATRI.log import log
 from ATRI.message import MessageBuilder, QQMessage, img_msg, img_msg_from_path
-from ATRI.permission import MASTER_LIST
+from ATRI.permission import is_master_user
 from ATRI.service import Service, ServiceTools
 from ATRI.system.htmlrender import html_to_pic
 from ATRI.utils.img_editor import IMGEditor
@@ -457,7 +457,7 @@ class Helper:
         cls.get_typed_services()
         level = 0
         user_id = str(event.get_user_id())
-        if user_id in MASTER_LIST:
+        if is_master_user(user_id):
             level = 2
         elif isinstance(event, GroupMessageEvent) and event.sender.role in [
             "admin",
@@ -575,7 +575,7 @@ class Helper:
         cls.get_typed_services()
         level = 0
         user_id = str(event.get_user_id())
-        if user_id in MASTER_LIST:
+        if is_master_user(user_id):
             level = 2
         elif isinstance(
             event, GroupMessageCreateEvent

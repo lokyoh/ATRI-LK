@@ -38,7 +38,7 @@ from ATRI.exceptions import (
     WriteFileError,
 )
 from ATRI.log import log
-from ATRI.permission import MASTER_LIST, Permission
+from ATRI.permission import Permission, get_master_ids
 from ATRI.scheduler import SchedulerController
 from ATRI.utils.model import BaseModel
 
@@ -448,7 +448,7 @@ class Service:
         :param message: 消息
         """
         bot = get_bot()
-        for m in MASTER_LIST:
+        for m in get_master_ids():
             await bot.send_private_msg(user_id=m, message=message)
 
     def get_info(self) -> ServiceInfo:

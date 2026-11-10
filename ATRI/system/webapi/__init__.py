@@ -14,6 +14,7 @@ from .api.logs.log_manager import LOG_STORAGE
 from .api.menu import router as menu_router
 from .api.tabs.agent import router as agent_router
 from .api.tabs.dashboard import router as dashboard_router
+from .api.tabs.lkbuser import router as lkbot_user_router
 from .api.tabs.main import router as main_router
 from .api.tabs.main import ws_router as status_routes
 from .api.tabs.manage import router as manage_router
@@ -43,6 +44,7 @@ BaseApiRouter.include_router(plugin_router)
 BaseApiRouter.include_router(menu_router)
 BaseApiRouter.include_router(configure_router)
 BaseApiRouter.include_router(agent_router)
+BaseApiRouter.include_router(lkbot_user_router)
 
 WsApiRouter = APIRouter(prefix="/atri/socket")
 

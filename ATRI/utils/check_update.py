@@ -1,5 +1,6 @@
 import time
 from datetime import UTC, datetime
+from typing import ClassVar
 
 import pytz
 
@@ -31,6 +32,7 @@ class ReleaseInfo:
 class CheckUpdate:
     _cached: ReleaseInfo | None = None
     _cached_at: float = 0.0
+    _commit_cache: ClassVar[dict[str, tuple[str, float]]] = {}
 
     @staticmethod
     async def _get_release_info() -> dict:
@@ -62,9 +64,38 @@ class CheckUpdate:
         return info
 
     @classmethod
+    async def get_latest_commit(cls, branch: str, force: bool = False) -> str | None:
+        """取远程分支最新提交；失败时沿用该分支上一次成功的结果。"""
+        now = time.time()
+        cached = cls._commit_cache.get(branch)
+        if not force and cached is not None and now - cached[1] < CACHE_TTL:
+            return cached[0]
+
+        from . import git
+
+        result = await git.run_git(
+            "ls-remote", "origin", f"refs/heads/{branch}", cwd="."
+        )
+        if not result.ok:
+            log.error(f"获取远程 {branch} 分支提交失败：{result.detail}")
+            return cached[0] if cached is not None else None
+        try:
+            commit, ref = result.stdout.strip().split()
+        except ValueError:
+            log.error(f"远程 {branch} 分支提交数据无效")
+            return cached[0] if cached is not None else None
+        if ref != f"refs/heads/{branch}" or not commit:
+            log.error(f"远程 {branch} 分支不存在")
+            return cached[0] if cached is not None else None
+
+        cls._commit_cache[branch] = (commit, now)
+        return commit
+
+    @classmethod
     def clear_cache(cls):
         cls._cached = None
         cls._cached_at = 0.0
+        cls._commit_cache.clear()
 
 
 def get_version_num(v: str) -> int:

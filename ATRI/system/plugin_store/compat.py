@@ -156,7 +156,13 @@ def lkapi_note(requirement: PluginRequirement) -> str:
     if requirement.lkapi is None or current_lkapi is None:
         return ""
     if current_lkapi == requirement.lkapi:
-        return f"lkapi {current_lkapi} 存在变动说明，使用前请确认已适配"
+        return ""
+    if current_lkapi > requirement.lkapi:
+        return (
+            f"插件基于 lkapi {requirement.lkapi}，当前 lkapi {current_lkapi} "
+            "存在变动说明，使用前请确认已适配"
+        )
     return (
-        f"插件基于 lkapi {requirement.lkapi}，当前 lkapi {current_lkapi} 存在变动说明"
+        f"插件基于 lkapi {requirement.lkapi}，高于当前 lkapi {current_lkapi}，"
+        "可能需要更新的框架"
     )

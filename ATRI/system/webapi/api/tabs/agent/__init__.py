@@ -27,11 +27,13 @@ from ....utils import authentication
 from .function_calling import router as function_calling_router
 from .function_plugin import router as function_plugin_router
 from .skills import router as skills_router
+from .tasks import router as tasks_router
 
 router = APIRouter(prefix="/agent")
 router.include_router(function_plugin_router)
 router.include_router(function_calling_router)
 router.include_router(skills_router)
+router.include_router(tasks_router)
 
 
 class ModelPricingInfo(BaseModel):

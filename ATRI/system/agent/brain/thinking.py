@@ -188,7 +188,7 @@ class ThinkingModel:
             "我该怎么做的思考内容。\n"
             'send_message(msg="想要说的话")\n'
             "...\n"
-            "# 不需要调用的结果或不想说就在最后调用 stop_thinking 结束思考。\n"
+            "# 如果不需要调用结果或不想说就在最后调用 stop_thinking 结束本次思考，如果需要继续思考则不要调用。\n"
             "stop_thinking()"
         )
 

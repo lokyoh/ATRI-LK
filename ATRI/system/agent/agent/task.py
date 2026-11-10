@@ -497,8 +497,14 @@ def _when_text(task: dict) -> str:
     return f"每 {int(secs)} 秒" if secs else "按间隔规则"
 
 
-#: 任务类型的中文说法，给管理指令看
-_KIND_LABEL = {"once": "一次性", "cron": "每天", "interval": "周期"}
+#: 任务类型的中文说法，给管理指令与 WebUI 看
+KIND_LABEL = {"once": "一次性", "cron": "每天", "interval": "周期"}
+_KIND_LABEL = KIND_LABEL
+
+
+def when_text(task: dict) -> str:
+    """触发时间的人话描述。对外入口（WebUI 与指令共用同一套说法）。"""
+    return _when_text(task)
 
 
 def describe(task: dict) -> str:

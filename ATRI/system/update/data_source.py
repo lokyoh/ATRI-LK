@@ -186,11 +186,13 @@ async def _ensure_dependencies(previous: str, current: str) -> DependencyResult:
 
 class Updater:
     @classmethod
-    async def get_version_info(cls) -> VersionCheckInfo:
+    async def get_version_info(cls, force: bool = False) -> VersionCheckInfo:
         """按当前更新通道检查版本或远程提交。"""
         branch = current_branch_setting()
         if branch == BETA_BRANCH:
-            remote_commit = await CheckUpdate.get_latest_commit(BETA_BRANCH)
+            remote_commit = await CheckUpdate.get_latest_commit(
+                BETA_BRANCH, force=force
+            )
             current_commit = await git.head_commit(REPO_DIR)
             if remote_commit is None:
                 return VersionCheckInfo(
@@ -210,7 +212,7 @@ class Updater:
                 ),
             )
 
-        latest_info = await CheckUpdate.get_latest_info()
+        latest_info = await CheckUpdate.get_latest_info(force=force)
         if latest_info is None:
             return VersionCheckInfo(branch=branch, error="无法获取远程版本")
         return VersionCheckInfo(

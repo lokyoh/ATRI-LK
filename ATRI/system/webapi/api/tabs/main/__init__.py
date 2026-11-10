@@ -73,9 +73,9 @@ async def _(bot_id: str | None = None) -> Result[list[BaseInfo]]:
     response_class=JSONResponse,
     description="获取版本信息与可更新版本",
 )
-async def _() -> Result[VersionInfo]:
+async def _(force: bool = False) -> Result[VersionInfo]:
     try:
-        info = await ApiDataSource.get_version_info()
+        info = await ApiDataSource.get_version_info(force=force)
         return Result.ok(info, "拿到信息啦!")
     except Exception as e:
         log.error(f"{router.prefix}/get_version_info 调用错误:{str_traceback(e)}")

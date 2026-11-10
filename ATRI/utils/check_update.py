@@ -52,12 +52,12 @@ class CheckUpdate:
             data = await cls._get_release_info()
         except Exception:
             log.error("获取发布列表失败...")
-            return cls._cached
+            return None if force else cls._cached
         try:
             release_data: dict = data[0]
         except Exception:
             log.error("GitHub 数据结构已更改, 请前往仓库提交 Issue.")
-            return cls._cached
+            return None if force else cls._cached
         info = ReleaseInfo(release_data)
         cls._cached = info
         cls._cached_at = now
@@ -78,15 +78,15 @@ class CheckUpdate:
         )
         if not result.ok:
             log.error(f"获取远程 {branch} 分支提交失败：{result.detail}")
-            return cached[0] if cached is not None else None
+            return None if force else cached[0] if cached is not None else None
         try:
             commit, ref = result.stdout.strip().split()
         except ValueError:
             log.error(f"远程 {branch} 分支提交数据无效")
-            return cached[0] if cached is not None else None
+            return None if force else cached[0] if cached is not None else None
         if ref != f"refs/heads/{branch}" or not commit:
             log.error(f"远程 {branch} 分支不存在")
-            return cached[0] if cached is not None else None
+            return None if force else cached[0] if cached is not None else None
 
         cls._commit_cache[branch] = (commit, now)
         return commit

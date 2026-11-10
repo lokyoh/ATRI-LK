@@ -102,7 +102,7 @@ class ApiDataSource:
         return f"{__version__} {__sub_version__}"
 
     @classmethod
-    async def get_version_info(cls) -> VersionInfo:
+    async def get_version_info(cls, force: bool = False) -> VersionInfo:
         """页首版本信息：当前版本 + 是否有新版。
 
         由更新服务按当前通道检查 Release 或 dev 分支提交。
@@ -112,7 +112,7 @@ class ApiDataSource:
             current_name=framework_version(),
         )
         try:
-            latest = await Updater.get_version_info()
+            latest = await Updater.get_version_info(force=force)
         except Exception as e:
             info.error = f"检查更新失败：{type(e).__name__}"
             log.warning(f"页首检查更新失败：{str_traceback(e)}")

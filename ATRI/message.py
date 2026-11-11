@@ -273,12 +273,12 @@ class ATRIMessage(BaseMessage):
             self.mtype = 0
         super().__init__()
 
-    async def md(self, md: str):
+    async def md(self, md: str, **kwargs):
         if self.mtype == 1:
             self.append(QQMessage.md_msg(md))
             return self
         else:
             from ATRI.system.htmlrender.data_source import md_to_pic
 
-            self.append(img_msg(await md_to_pic(md)))
+            self.append(img_msg(await md_to_pic(md, **kwargs)))
             return self

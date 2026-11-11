@@ -1,0 +1,300 @@
+<!DOCTYPE html>
+<html lang="zh">
+
+<head>
+    <meta charset="UTF-8">
+    <title>{{ title }}</title>
+    <style>
+        :root {
+            --bg-color: #ffffff;
+            --bg-color-secondary: #f7fafc;
+            --bg-color-hover: #edf2f7;
+            --text-color: #2d3748;
+            --text-color-secondary: #4a5568;
+            --text-color-placeholder: #a0aec0;
+            --border-color: #e2e8f0;
+            --border-color-light: #edf2f7;
+            --primary-color: #3182ce;
+            --primary-color-light: #4299e1;
+            --primary-color-light-3: #4299e1;
+            --primary-color-light-5: #63b3ed;
+            --primary-color-light-7: #90cdf4;
+            --primary-color-light-8: #b3d7f7;
+            --primary-color-light-9: #e6f3fc;
+            --success-color: #38a169;
+            --warning-color: #dd6b20;
+            --danger-color: #e53e3e;
+            --info-color: #3182ce;
+            --card-bg: var(--bg-color-secondary);
+            --border-radius: 8px;
+            --box-shadow-light: 0 2px 6px 0 rgba(0, 0, 0, 0.05);
+        }
+
+        * {
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Segoe UI', 'PingFang SC', 'Microsoft YaHei', sans-serif;
+            width: 100%;
+            max-width: 760px;
+            margin: 0 auto;
+            padding: 20px;
+            background-color: var(--bg-color);
+            color: var(--text-color);
+            line-height: 1.6;
+            font-size: 14px;
+        }
+
+        h1 {
+            text-align: center;
+            color: var(--text-color);
+            margin: 0 0 8px;
+            font-size: 1.6em;
+            font-weight: 600;
+            padding-bottom: 10px;
+            border-bottom: 2px solid var(--primary-color);
+        }
+
+        .subtitle {
+            text-align: center;
+            color: var(--text-color-secondary);
+            font-size: 0.9em;
+            margin: 0 0 20px;
+        }
+
+        .badge {
+            width: fit-content;
+            margin: 0 auto 20px;
+            background: var(--primary-color);
+            color: #fff;
+            padding: 6px 20px;
+            border-radius: 999px;
+            font-weight: 600;
+            font-size: 0.95em;
+        }
+
+        .stat-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+            gap: 12px;
+            margin-bottom: 24px;
+        }
+
+        .stat-card {
+            background: var(--card-bg);
+            border: 1px solid var(--border-color);
+            border-radius: var(--border-radius);
+            padding: 12px 14px;
+            box-shadow: var(--box-shadow-light);
+        }
+
+        .stat-label {
+            color: var(--text-color-secondary);
+            font-size: 0.82em;
+        }
+
+        .stat-value {
+            color: var(--primary-color);
+            font-size: 1.5em;
+            font-weight: 700;
+            line-height: 1.3;
+            word-break: break-all;
+        }
+
+        .stat-extra {
+            color: var(--text-color-secondary);
+            font-size: 0.8em;
+        }
+
+        .section {
+            margin-bottom: 24px;
+        }
+
+        .section-title {
+            background: var(--primary-color);
+            color: #fff;
+            padding: 8px 14px;
+            border-radius: var(--border-radius);
+            font-size: 1.05em;
+            font-weight: 600;
+            margin: 0 0 12px;
+        }
+
+        .rank-list {
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+        }
+
+        .rank-row {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            background: var(--card-bg);
+            border: 1px solid var(--border-color);
+            border-radius: var(--border-radius);
+            padding: 10px 14px;
+            box-shadow: var(--box-shadow-light);
+        }
+
+        .rank-index {
+            width: 26px;
+            height: 26px;
+            flex-shrink: 0;
+            border-radius: 50%;
+            background: var(--primary-color-light-9);
+            color: var(--primary-color);
+            font-weight: 700;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 0.85em;
+        }
+
+        .rank-1 {
+            background: var(--primary-color);
+            color: #fff;
+        }
+
+        .rank-2 {
+            background: var(--primary-color-light-3);
+            color: #fff;
+        }
+
+        .rank-3 {
+            background: var(--primary-color-light-7);
+            color: #2c5282;
+        }
+
+        .rank-name {
+            flex: 1;
+            font-weight: 600;
+            word-break: break-all;
+        }
+
+        .rank-value {
+            color: var(--primary-color);
+            font-weight: 600;
+            white-space: nowrap;
+        }
+
+        .word-list {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 8px;
+        }
+
+        .word-chip {
+            background: var(--primary-color-light-9);
+            border: 1px solid var(--primary-color-light-8);
+            border-radius: 999px;
+            padding: 6px 14px;
+            font-weight: 600;
+            color: var(--primary-color);
+            box-shadow: var(--box-shadow-light);
+        }
+
+        .word-count {
+            color: var(--primary-color);
+            font-weight: 700;
+            margin-left: 6px;
+            font-size: 0.85em;
+            opacity: 0.75;
+        }
+
+        .sentence-list {
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+        }
+
+        .sentence-row {
+            display: flex;
+            align-items: flex-start;
+            justify-content: space-between;
+            gap: 12px;
+            background: var(--card-bg);
+            border-left: 4px solid var(--primary-color);
+            border-radius: 6px;
+            padding: 10px 14px;
+            box-shadow: var(--box-shadow-light);
+        }
+
+        .sentence-text {
+            flex: 1;
+            word-break: break-word;
+        }
+
+        .sentence-value {
+            color: var(--primary-color);
+            font-weight: 700;
+            white-space: nowrap;
+        }
+
+        .empty-tip {
+            text-align: center;
+            color: var(--text-color-secondary);
+            padding: 48px 0;
+            font-size: 1em;
+        }
+    </style>
+</head>
+
+<body>
+    <h1>{{ title }}</h1>
+    <p class="subtitle">{{ subtitle }}</p>
+    {% if badge %}
+    <div class="badge">{{ badge }}</div>
+    {% endif %}
+
+    {% if empty_text %}
+    <div class="empty-tip">{{ empty_text }}</div>
+    {% else %}
+    <div class="stat-grid">
+        {% for stat in stats %}
+        <div class="stat-card">
+            <div class="stat-label">{{ stat.label }}</div>
+            <div class="stat-value">{{ stat.value }}</div>
+            {% if stat.extra %}
+            <div class="stat-extra">{{ stat.extra }}</div>
+            {% endif %}
+        </div>
+        {% endfor %}
+    </div>
+
+    {% for section in sections %}
+    <div class="section">
+        <h2 class="section-title">{{ section.title }}</h2>
+        {% if section.kind == 'rank' %}
+        <div class="rank-list">
+            {% for entry in section.entries %}
+            <div class="rank-row">
+                <span class="rank-index rank-{{ loop.index }}">{{ loop.index }}</span>
+                <span class="rank-name">{{ entry.name }}</span>
+                <span class="rank-value">{{ entry.value }}</span>
+            </div>
+            {% endfor %}
+        </div>
+        {% elif section.kind == 'words' %}
+        <div class="word-list">
+            {% for entry in section.entries %}
+            <span class="word-chip">{{ entry.name }}<span class="word-count">× {{ entry.value }}</span></span>
+            {% endfor %}
+        </div>
+        {% elif section.kind == 'sentences' %}
+        <div class="sentence-list">
+            {% for entry in section.entries %}
+            <div class="sentence-row">
+                <span class="sentence-text">{{ entry.name }}</span>
+                <span class="sentence-value">× {{ entry.value }}</span>
+            </div>
+            {% endfor %}
+        </div>
+        {% endif %}
+    </div>
+    {% endfor %}
+    {% endif %}
+</body>
+
+</html>

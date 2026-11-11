@@ -6,14 +6,28 @@
     <title>ATRI 服务列表</title>
     <style>
         :root {
-            --primary-color: #8abeb7;
-            --secondary-color: #6d8b8a;
-            --accent-color: #c17d6e;
-            --text-dark: #4a4a4a;
-            --text-light: #6c6c6c;
-            --bg-color: #e3f0e8;
-            --card-bg: rgba(255, 255, 255, 0.9);
+            --bg-color: #ffffff;
+            --bg-color-secondary: #f7fafc;
+            --bg-color-hover: #edf2f7;
+            --text-color: #2d3748;
+            --text-color-secondary: #4a5568;
+            --text-color-placeholder: #a0aec0;
+            --border-color: #e2e8f0;
+            --border-color-light: #edf2f7;
+            --primary-color: #3182ce;
+            --primary-color-light: #4299e1;
+            --primary-color-light-3: #4299e1;
+            --primary-color-light-5: #63b3ed;
+            --primary-color-light-7: #90cdf4;
+            --primary-color-light-8: #b3d7f7;
+            --primary-color-light-9: #e6f3fc;
+            --success-color: #38a169;
+            --warning-color: #dd6b20;
+            --danger-color: #e53e3e;
+            --info-color: #3182ce;
+            --card-bg: var(--bg-color-secondary);
             --border-radius: 8px;
+            --box-shadow-light: 0 2px 6px 0 rgba(0, 0, 0, 0.05);
         }
 
         * {
@@ -27,14 +41,14 @@
             margin: 0 auto;
             padding: 16px;
             background-color: var(--bg-color);
-            color: var(--text-dark);
+            color: var(--text-color);
             line-height: 1.6;
             font-size: 14px;
         }
 
         h1 {
             text-align: center;
-            color: var(--text-dark);
+            color: var(--text-color);
             margin: 0 0 20px;
             font-size: 1.6em;
             font-weight: 600;
@@ -64,10 +78,10 @@
 
         .service-card {
             background: var(--card-bg);
-            border: 1px solid #d1e0d7;
+            border: 1px solid var(--border-color);
             border-radius: var(--border-radius);
             padding: 12px 14px;
-            box-shadow: 0 1px 3px rgba(0, 0, 0, 0.06);
+            box-shadow: var(--box-shadow-light);
             display: flex;
             flex-direction: column;
             gap: 6px;
@@ -86,7 +100,7 @@
 
         .service-name {
             font-weight: 600;
-            color: var(--accent-color);
+            color: var(--primary-color);
             font-size: 1em;
             word-break: break-all;
         }
@@ -99,8 +113,8 @@
         }
 
         .meta-badge {
-            background: rgba(109, 139, 138, 0.12);
-            color: var(--secondary-color);
+            background: var(--primary-color-light-9);
+            color: var(--primary-color);
             padding: 2px 6px;
             border-radius: 4px;
             font-size: 0.75em;
@@ -108,8 +122,8 @@
         }
 
         .status-usable {
-            color: #2e7d32;
-            background: rgba(46, 125, 50, 0.12);
+            color: var(--success-color);
+            background: rgba(56, 161, 105, 0.12);
             padding: 2px 6px;
             border-radius: 4px;
             font-size: 0.75em;
@@ -117,8 +131,8 @@
         }
 
         .status-disabled {
-            color: #c62828;
-            background: rgba(198, 40, 40, 0.12);
+            color: var(--danger-color);
+            background: rgba(229, 62, 62, 0.12);
             padding: 2px 6px;
             border-radius: 4px;
             font-size: 0.75em;
@@ -126,14 +140,14 @@
         }
 
         .service-desc {
-            color: var(--text-light);
+            color: var(--text-color-secondary);
             font-size: 0.85em;
             margin: 0;
             word-break: break-word;
         }
 
         .service-docs {
-            color: var(--text-light);
+            color: var(--text-color-secondary);
             font-size: 0.82em;
             margin: 0;
             word-break: break-word;
@@ -149,11 +163,12 @@
             gap: 6px;
             margin-top: 6px;
             padding-top: 8px;
-            border-top: 1px dashed #d1e0d7;
+            border-top: 1px dashed var(--border-color);
         }
 
         .command-item {
-            background: rgba(218, 231, 225, 0.75);
+            background: var(--bg-color-hover);
+            color: var(--text-color);
             border-radius: 4px;
             padding: 3px 8px;
             font-size: 0.78em;
@@ -165,7 +180,7 @@
 
         .command-name {
             font-weight: 500;
-            color: var(--secondary-color);
+            color: var(--primary-color);
             font-family: 'Consolas', 'Menlo', monospace;
         }
 
@@ -177,43 +192,43 @@
         }
 
         .type-default {
-            background: #f5f5f5;
-            color: #9e9e9e;
+            background: var(--bg-color-hover);
+            color: var(--text-color-placeholder);
         }
 
         .type-msg {
-            background: #e3f2fd;
-            color: #1565c0;
+            background: rgba(49, 130, 206, 0.12);
+            color: #3182ce;
         }
 
         .type-ntc {
-            background: #fff8e1;
-            color: #ff8f00;
+            background: rgba(221, 107, 32, 0.12);
+            color: #dd6b20;
         }
 
         .type-req {
-            background: #e8f5e9;
-            color: #2e7d32;
+            background: rgba(56, 161, 105, 0.12);
+            color: #38a169;
         }
 
         .type-cmd {
-            background: #f3e5f5;
-            color: #7b1fa2;
+            background: rgba(43, 108, 176, 0.12);
+            color: #2b6cb0;
         }
 
         .type-kw {
-            background: #e0f7fa;
-            color: #00838f;
+            background: rgba(44, 82, 130, 0.12);
+            color: #2c5282;
         }
 
         .type-rgx {
-            background: #ffebee;
-            color: #c62828;
+            background: rgba(229, 62, 62, 0.12);
+            color: #e53e3e;
         }
 
         .empty-tip {
             text-align: center;
-            color: var(--text-light);
+            color: var(--text-color-secondary);
             padding: 40px 0;
             font-size: 1em;
         }

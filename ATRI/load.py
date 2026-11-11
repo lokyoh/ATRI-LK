@@ -51,10 +51,7 @@ def check_package_installed(package_name: str, installed_packages: list[dict]) -
         是否已安装
     """
     package_name = package_name.lower()
-    for pkg in installed_packages:
-        if pkg["name"].lower() == package_name:
-            return True
-    return False
+    return any(pkg["name"].lower() == package_name for pkg in installed_packages)
 
 
 def load_plugins():
@@ -81,7 +78,7 @@ def load_plugins():
             log.debug(f"检测到插件 {item.name} 有依赖文件：{requirements_file}")
             # 读取并解析 requirements.txt
             try:
-                with open(requirements_file, "r", encoding="utf-8") as f:
+                with open(requirements_file, encoding="utf-8") as f:
                     lines = f.readlines()
                 missing_packages = []
                 plugin_packages = []
@@ -122,7 +119,8 @@ def load_plugins():
 
 
 def load_system():
-    import ATRI.adapter  # noqa: F401
+    import ATRI.adapter  # 注册适配器
+    import ATRI.auth.pipeline  # noqa: F401  注册鉴权 preprocessor
     from ATRI.event.register import register_triggers
 
     register_triggers()
@@ -131,12 +129,18 @@ def load_system():
 
 def load_atri():
     from ATRI import conf
+    from ATRI.auth.migrate import init_auth_data
     from ATRI.bot.statistics import delete_outdated_statistics
+    from ATRI.bot.withdraw import install_withdraw
     from ATRI.service import driver_startup
     from ATRI.utils.datetime import set_timezone
 
     set_timezone(conf.BotConfig.timezone)
     load_system()
     load_plugins()
+    install_withdraw()
+    # 必须排在 init_database 之后：ATRI.system 的 startup 钩子先注册，
+    # 这里注册的钩子后执行。
+    driver().on_startup(init_auth_data)
     driver().on_startup(delete_outdated_statistics)
     driver().on_startup(driver_startup)

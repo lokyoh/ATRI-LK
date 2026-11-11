@@ -9,6 +9,7 @@ from nonebot.config import Config
 from starlette.websockets import WebSocket, WebSocketDisconnect, WebSocketState
 from websockets.exceptions import ConnectionClosedError, ConnectionClosedOK
 
+from ATRI.auth import ban as auth_ban
 from ATRI.bot.status import BotStatus, GlobalStatus, Statu
 from ATRI.bot.utils import BotUtils
 from ATRI.exceptions import str_traceback
@@ -232,7 +233,7 @@ async def _(param: BotStatusParam):
 )
 async def get_bot_config(bot_id: str) -> Result[Statu]:
     try:
-        return Result.ok(BotStatus.get_bot_statu(bot_id))
+        return Result.ok(BotStatus.sync_from_cache(bot_id))
     except Exception as e:
         log.error(f"{router.prefix}/get_bot_config 调用错误:{str_traceback(e)}")
         return Result.fail(f"获取机器人配置失败: {e}")
@@ -247,7 +248,18 @@ async def get_bot_config(bot_id: str) -> Result[Statu]:
 )
 async def update_bot_config(param: BotStatusConfigParam) -> Result:
     try:
-        BotStatus.set_bot_status(param.bot_id, param.config)
+        await auth_ban.apply_blacklists(
+            param.config.user_black_list,
+            param.config.group_black_list,
+            operator_id="webui",
+        )
+        statu = param.config
+        if auth_ban.ban_cache.loaded:
+            statu.user_black_list = auth_ban.ban_cache.active_ids(auth_ban.TARGET_USER)
+            statu.group_black_list = auth_ban.ban_cache.active_ids(
+                auth_ban.TARGET_GROUP
+            )
+        BotStatus.set_bot_status(param.bot_id, statu)
         return Result.ok(info="机器人专项配置已保存")
     except Exception as e:
         log.error(f"{router.prefix}/update_bot_config 调用错误:{str_traceback(e)}")
@@ -264,6 +276,11 @@ async def update_bot_config(param: BotStatusConfigParam) -> Result:
 async def get_global_config() -> Result[Statu]:
     try:
         GlobalStatus.read_from_file()
+        try:
+            await auth_ban.refresh_cache()
+        except Exception as e:
+            log.warning(f"刷新封禁快照失败: {e}")
+        GlobalStatus.sync_from_cache()
         return Result.ok(GlobalStatus.status)
     except Exception as e:
         log.error(f"{router.prefix}/get_global_config 调用错误:{str_traceback(e)}")
@@ -279,7 +296,13 @@ async def get_global_config() -> Result[Statu]:
 )
 async def update_global_config(config: Statu) -> Result:
     try:
+        await auth_ban.apply_blacklists(
+            config.user_black_list,
+            config.group_black_list,
+            operator_id="webui",
+        )
         GlobalStatus.status = config
+        GlobalStatus.sync_from_cache()
         GlobalStatus.save_to_file()
         return Result.ok(info="机器人全局配置已保存")
     except Exception as e:

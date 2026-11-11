@@ -5,6 +5,7 @@ from collections.abc import Callable
 from nonebot.adapters.onebot.v11 import (
     Bot,
     FriendRequestEvent,
+    GroupMessageEvent,
     GroupRequestEvent,
     Message,
     MessageEvent,
@@ -12,6 +13,7 @@ from nonebot.adapters.onebot.v11 import (
 from nonebot.matcher import Matcher
 from nonebot.params import ArgPlainText, CommandArg
 
+from ATRI.auth.ban import purge_expired
 from ATRI.message import MessageBuilder
 from ATRI.permission import ADMIN, MASTER
 from ATRI.rule import to_bot
@@ -65,23 +67,157 @@ def handle_command(
             await plugin_matcher.send(fail_msg.format(target, error_msg))
 
 
+def _parse_ban_args(text: str) -> tuple[str, float, str]:
+    """解析 ``目标 [时长分钟] [原因]``。
+
+    第二段能转成数字就当时长，否则整段都算原因（保持旧写法可用）。
+    """
+    parts = text.split(maxsplit=2)
+    target = parts[0]
+    minutes = 0.0
+    reason = ""
+    if len(parts) >= 2:
+        try:
+            minutes = max(0.0, float(parts[1]))
+        except ValueError:
+            reason = " ".join(parts[1:]).strip()
+        else:
+            if len(parts) == 3:
+                reason = parts[2].strip()
+    return target, minutes, reason
+
+
+def _duration_text(minutes: float) -> str:
+    if minutes <= 0:
+        return "永久"
+    if minutes < 60:
+        return f"{minutes:g} 分钟"
+    if minutes % 60 == 0:
+        return f"{minutes // 60:g} 小时"
+    return f"{minutes / 60:.1f} 小时"
+
+
+def _ban_message(kind: str, target: str, minutes: float, reason: str) -> str:
+    text = f"{kind} {target} 已封禁（{_duration_text(minutes)}）"
+    if reason:
+        text += f"，原因：{reason}"
+    return text
+
+
 plugin = (
     Service("管理", "控制 ATRI 的各项服务", "1.1.0", Service.ServiceType.SYSTEM)
     .permission(MASTER)
     .allow_switch(False)
 )
 
-block_user = plugin.on_command("封禁用户", "阻止目标用户使用 ATRI")
-handle_command(block_user, BotManager().block_user, "用户 {} 危！")
+block_user = plugin.on_command("封禁用户", "阻止目标用户使用 ATRI，可附时长与原因")
+
+
+async def _do_block_user(event: MessageEvent, text: str) -> None:
+    target, minutes, reason = _parse_ban_args(text)
+    await BotManager().block_user(
+        target,
+        duration_minutes=minutes,
+        reason=reason,
+        operator_id=str(event.get_user_id()),
+    )
+    await block_user.finish(_ban_message("用户", target, minutes, reason))
+
+
+@block_user.handle()
+async def _(event: MessageEvent, args: Message = CommandArg()):
+    text = args.extract_plain_text().strip()
+    if text:
+        await _do_block_user(event, text)
+
+
+@block_user.got("target", "要封禁的目标是？")
+async def _(event: MessageEvent, target: str = ArgPlainText("target")):
+    if target in _QUIT_ARGS:
+        await block_user.finish("好吧")
+    await _do_block_user(event, target)
+
 
 unblock_user = plugin.on_command("解封用户", "对被阻止的用户解封")
 handle_command(unblock_user, BotManager().unblock_user, "用户 {} 已解封")
 
-block_group = plugin.on_command("封禁群", "阻止目标群所有人使用 ATRI")
-handle_command(block_group, BotManager().block_group, "群 {} 危！")
+block_group = plugin.on_command("封禁群", "阻止目标群所有人使用 ATRI，可附时长与原因")
+
+
+async def _do_block_group(event: MessageEvent, text: str) -> None:
+    target, minutes, reason = _parse_ban_args(text)
+    await BotManager().block_group(
+        target,
+        duration_minutes=minutes,
+        reason=reason,
+        operator_id=str(event.get_user_id()),
+    )
+    await block_group.finish(_ban_message("群", target, minutes, reason))
+
+
+@block_group.handle()
+async def _(event: MessageEvent, args: Message = CommandArg()):
+    text = args.extract_plain_text().strip()
+    if text:
+        await _do_block_group(event, text)
+
+
+@block_group.got("target", "要封禁的目标是？")
+async def _(event: MessageEvent, target: str = ArgPlainText("target")):
+    if target in _QUIT_ARGS:
+        await block_group.finish("好吧")
+    await _do_block_group(event, target)
+
 
 unblock_group = plugin.on_command("解封群", "对被阻止的群解封")
 handle_command(unblock_group, BotManager().unblock_group, "群 {} 已解封")
+
+group_switch = plugin.on_command("群开关", "在本群启用/禁用 ATRI", permission=ADMIN)
+
+
+@group_switch.handle()
+async def _(event: MessageEvent):
+    try:
+        enabled = await BotManager().toggle_group_enabled(event)
+    except Exception as e:
+        await group_switch.finish(f"操作失败，原因：{e}")
+    await group_switch.finish(f"本群已{'启用' if enabled else '禁用'} ATRI")
+
+
+group_level = plugin.on_command("群权限", "设置用户在本群的权限等级", permission=ADMIN)
+
+
+@group_level.handle()
+async def _(event: MessageEvent, args: Message = CommandArg()):
+    if not isinstance(event, GroupMessageEvent):
+        await group_level.finish("该功能只能在群聊中使用")
+    parts = args.extract_plain_text().strip().split(maxsplit=1)
+    if len(parts) != 2:
+        await group_level.finish("用法：/群权限 用户ID 等级")
+    target, raw_level = parts
+    try:
+        level = int(raw_level)
+    except ValueError:
+        await group_level.finish("等级需要是整数")
+    await BotManager().set_user_level(str(event.group_id), target, level)
+    await group_level.finish(f"已把用户 {target} 在本群的等级设为 {level}")
+
+
+group_level_list = plugin.on_command(
+    "群权限列表", "查看本群设置的权限等级", permission=ADMIN
+)
+
+
+@group_level_list.handle()
+async def _(event: MessageEvent):
+    if not isinstance(event, GroupMessageEvent):
+        await group_level_list.finish("该功能只能在群聊中使用")
+    levels = await BotManager().get_group_levels(str(event.group_id))
+    if not levels:
+        await group_level_list.finish("本群还没有设置权限等级")
+    rows = [f"{user_id} | {level}" for user_id, level in sorted(levels.items())]
+    await group_level_list.finish("用户ID | 等级\n" + "\n".join(rows))
+
 
 toggle_global_service = plugin.on_command("全局控制", "全局禁用/启用某一服务")
 handle_command(
@@ -377,4 +513,12 @@ plugin.scheduler_jobs().add_job(
     hours=1,
     max_instances=3,
     misfire_grace_time=60,
+)
+plugin.scheduler_jobs().add_job(
+    purge_expired,
+    "过期封禁清理",
+    "interval",
+    hours=24,
+    max_instances=1,
+    misfire_grace_time=600,
 )

@@ -1,10 +1,11 @@
 import asyncio
 import inspect
+import json
 import re
 from enum import Enum
 from pathlib import Path
 from types import ModuleType
-from typing import ClassVar
+from typing import Any, ClassVar, Literal
 
 from nonebot import get_bot
 from nonebot.adapters import Event
@@ -29,6 +30,8 @@ from nonebot.typing import (
 from pydantic import Field
 
 from ATRI import driver
+from ATRI.auth import ban as auth_ban
+from ATRI.auth.reason import BlockReason
 from ATRI.configs import PluginConfig
 from ATRI.dir import CONFIG_DIR, PLUGIN_DATA_DIR
 from ATRI.exceptions import (
@@ -38,7 +41,7 @@ from ATRI.exceptions import (
     WriteFileError,
 )
 from ATRI.log import log
-from ATRI.permission import Permission, get_master_ids
+from ATRI.permission import Permission, get_master_ids, is_master_user
 from ATRI.scheduler import SchedulerController
 from ATRI.utils.model import BaseModel
 
@@ -60,6 +63,39 @@ class ServiceConfig(BaseModel):
     disable_group: list[str] = Field(default_factory=list)
     white_list_mode: bool = False
     white_list: list[str] = Field(default_factory=list)
+
+    # ---- 运行时策略（阶段 2）----
+    cd: float = 0.0
+    """冷却时间（秒），0 表示不限制"""
+    max_count: int = 0
+    """统计窗口内允许的调用次数，0 表示不限制"""
+    limit_window: float = 0.0
+    """统计窗口长度（秒）"""
+    limit_scope: Literal["user", "group", "both"] = "user"
+    """计次 / 冷却的作用范围"""
+    block_type: list[str] = Field(default_factory=list)
+    """禁用的会话类型：private / group；空列表表示都允许"""
+    min_level: int = 0
+    """最低权限等级，0 表示不限制；仅群聊生效，主人不受限"""
+    parent: str | None = None
+    """父服务名；父服务关闭时本服务一并关闭"""
+    ignore_statistics: bool = False
+    """是否跳过调用统计"""
+    ignore_prompt: bool = False
+    """是否跳过拒绝提示（阶段 4 使用）"""
+    withdraw_delay: float = 0.0
+    """回复自动撤回延迟（秒），0 表示不撤回"""
+    concurrency: int = 0
+    """同一目标允许的并发处理数，0 表示不限制"""
+
+
+_service_config_cache: dict[str, tuple[float, ServiceConfig]] = {}
+"""服务配置缓存。{服务名: (文件 mtime, 配置对象)}"""
+
+
+def _invalidate_service_config(service: str) -> None:
+    """使指定服务的配置缓存失效。"""
+    _service_config_cache.pop(service, None)
 
 
 class CommandInfo(BaseModel):
@@ -137,7 +173,11 @@ class Service:
         self._priority = 10
         self._main_cmd = ("",)
         self._temp = False
-        self._rule = is_in_service(service)
+        # 服务级运行时策略的默认值，由链式 API 写入；旧 JSON 缺键时用它补齐。
+        # 服务开关 / 黑名单 / 白名单已由鉴权流水线统一处理，这里不再默认挂
+        # is_in_service 规则（该函数仍然导出，外部插件可继续使用）。
+        self._policy_defaults: dict[str, Any] = {}
+        self._rule = Rule()
         self._handlers = None
         self._state = None
         self._path = PLUGIN_DATA_DIR / self.service
@@ -198,6 +238,78 @@ class Service:
         :return: 服务本身
         """
         self._rule = self._rule & rule
+        return self
+
+    def cd(self, seconds: float) -> "Service":
+        """设置服务冷却时间（秒）。``0`` 表示不限制。"""
+        return self._set_policy(cd=max(0.0, float(seconds)))
+
+    def limit(self, count: int, window: float, scope: str = "user") -> "Service":
+        """设置统计窗口内允许的调用次数。
+
+        :param count: 窗口内允许的次数，``0`` 表示不限制
+        :param window: 窗口长度（秒）
+        :param scope: 作用范围，``user`` / ``group`` / ``both``
+        """
+        if scope not in {"user", "group", "both"}:
+            raise ValueError("limit scope 必须是 user / group / both")
+        return self._set_policy(
+            max_count=max(0, int(count)),
+            limit_window=max(0.0, float(window)),
+            limit_scope=scope,
+        )
+
+    def block_type(self, *types: str) -> "Service":
+        """禁用指定会话类型：``private`` / ``group``。"""
+        invalid = set(types) - {"private", "group"}
+        if invalid:
+            raise ValueError(f"未知会话类型：{sorted(invalid)}")
+        return self._set_policy(block_type=list(dict.fromkeys(types)))
+
+    def parent(self, service: str) -> "Service":
+        """设置父服务；父服务关闭时本服务一并关闭。"""
+        return self._set_policy(parent=service or None)
+
+    def withdraw(self, delay: float) -> "Service":
+        """设置回复自动撤回延迟（秒）。``0`` 表示不撤回。"""
+        return self._set_policy(withdraw_delay=max(0.0, float(delay)))
+
+    def ignore_statistics(self, _is: bool = True) -> "Service":
+        """是否跳过调用统计。"""
+        return self._set_policy(ignore_statistics=bool(_is))
+
+    def ignore_prompt(self, _is: bool = True) -> "Service":
+        """是否跳过拒绝提示（阶段 4 使用）。"""
+        return self._set_policy(ignore_prompt=bool(_is))
+
+    def concurrency(self, count: int) -> "Service":
+        """设置同一目标的并发处理数。``0`` 表示不限制。"""
+        return self._set_policy(concurrency=max(0, int(count)))
+
+    def _set_policy(self, **values: Any) -> "Service":
+        """写入策略默认值，并把缺失的键补进已存在的配置文件。
+
+        已有 JSON 里的值优先，这里只补键，不覆盖用户配置。
+        """
+        self._policy_defaults.update(values)
+        path = CONFIG_DIR / f"{self.service}.json"
+        try:
+            raw = json.loads(path.read_text(encoding="utf-8"))
+            if not isinstance(raw, dict):
+                raw = {}
+        except (OSError, json.JSONDecodeError):
+            raw = {}
+        missing = {k: v for k, v in values.items() if k not in raw}
+        if not missing:
+            return self
+        raw.update(missing)
+        try:
+            path.write_text(
+                json.dumps(raw, indent=4, ensure_ascii=False), encoding="utf-8"
+            )
+        except OSError as e:
+            raise WriteFileError("Write service config failed") from e
+        _invalidate_service_config(self.service)
         return self
 
     def permission(self, perm: Permission) -> "Service":
@@ -272,14 +384,17 @@ class Service:
         path = CONFIG_DIR / f"{self.service}.json"
         if path.is_file():
             return
-        data = ServiceConfig(
-            enabled=True,
-            white_list_mode=False,
-        )
+        # 只写基础键：其余字段交给 ``ServiceConfig`` 的默认值，链式 API 调用后
+        # 再由 ``_set_policy`` 把缺失的键补进来。这样插件声明的默认值不会被
+        # 初始化时写下的 0 值抢先“钉死”。
+        data = {"enabled": True, "white_list_mode": False, **self._policy_defaults}
         try:
-            data.write_into_file(path)
-        except Exception as e:
+            path.write_text(
+                json.dumps(data, indent=4, ensure_ascii=False), encoding="utf-8"
+            )
+        except OSError as e:
             raise WriteFileError("Write service config failed") from e
+        _invalidate_service_config(self.service)
 
     def on_message(
         self,
@@ -318,6 +433,7 @@ class Service:
             handlers=handlers,
             default_state=state,
         )
+        matcher.service_name = self.service
         return matcher
 
     def on_notice(
@@ -346,6 +462,7 @@ class Service:
             handlers=self._handlers,
             default_state=self._state,
         )
+        matcher.service_name = self.service
         return matcher
 
     def on_request(self, name: str, docs: str, block: bool = True) -> type[Matcher]:
@@ -365,6 +482,7 @@ class Service:
             handlers=self._handlers,
             default_state=self._state,
         )
+        matcher.service_name = self.service
         return matcher
 
     def on_command(
@@ -536,7 +654,8 @@ class Service:
             matcher_group[:] = [
                 matcher
                 for matcher in matcher_group
-                if getattr(matcher, "module_name", None)
+                if getattr(matcher, "service_name", None) != service_name
+                and getattr(matcher, "module_name", None)
                 not in {module_name, service_name}
             ]
             if not matcher_group:
@@ -554,7 +673,9 @@ class Service:
                 jobs.pop(job_name, None)
         SchedulerController.service_schedulers.pop(self.service, None)
         self._scheduler_manager = None
-        # 4. 执行卸载回调，保证在清理结束后再释放资源
+        # 4. 清理配置缓存，避免重载后读到旧对象
+        _invalidate_service_config(self.service)
+        # 5. 执行卸载回调，保证在清理结束后再释放资源
         hooks = list(getattr(self, "_on_unload_handlers", []))
         if hasattr(self, "_on_unload_handlers"):
             self._on_unload_handlers.clear()
@@ -609,12 +730,15 @@ class ServiceTools:
         "管理",
         "插件商店",
         "更新",
+        "调度管理",
+        "备份",
         "WebAPI",
         "广播",
         "基础部件",
         "反馈",
         "重启",
         "状态",
+        "年终总结",
         "运势",
         "聊天",
         "农场",
@@ -648,25 +772,108 @@ class ServiceTools:
         """
         path = CONFIG_DIR / f"{self.service}.json"
         service_config.write_into_file(path)
+        _invalidate_service_config(self.service)
+
+    def _load_service_config_cached(self) -> ServiceConfig:
+        """读取服务配置（带 mtime 缓存）。
+
+        读取时先把磁盘上的原始 JSON 与服务声明的 ``_policy_defaults`` 合并
+        （只补缺失键，用户配置优先），再交给 ``ServiceConfig`` 校验。这样
+        旧 JSON 缺新字段也能正常加载。
+
+        返回的是缓存对象本身，调用方**不要直接修改**；需要修改时用
+        :meth:`load_service_config` 取副本。
+        """
+        path = CONFIG_DIR / f"{self.service}.json"
+        try:
+            mtime = path.stat().st_mtime
+        except OSError as e:
+            raise ReadFileError(
+                f"无法找到服务 {self.service} 对应的信息文件\n请重新启动"
+            ) from e
+        cached = _service_config_cache.get(self.service)
+        if cached is not None and cached[0] == mtime:
+            return cached[1]
+        try:
+            raw = json.loads(path.read_text(encoding="utf-8"))
+        except (OSError, json.JSONDecodeError) as e:
+            raise ReadFileError(
+                f"无法读取服务 {self.service} 对应的信息文件\n请检查文件格式"
+            ) from e
+        if not isinstance(raw, dict):
+            raw = {}
+        defaults = getattr(self.get_service(self.service), "_policy_defaults", {})
+        config = ServiceConfig.model_validate({**defaults, **raw})
+        _service_config_cache[self.service] = (mtime, config)
+        return config
 
     def load_service_config(self) -> ServiceConfig:
         """
         加载服务配置。
         :return: ServiceConfig对象
         """
-        path = CONFIG_DIR / f"{self.service}.json"
-        if not path.is_file():
-            raise ReadFileError(
-                f"无法找到服务 {self.service} 对应的信息文件\n请重新启动"
-            )
-        return ServiceConfig.read_from_file(path)
+        return self._load_service_config_cached().model_copy(deep=True)
 
     def del_service(self):
         """
         删除服务配置。
         """
         c_path = CONFIG_DIR / f"{self.service}.json"
-        c_path.unlink()
+        c_path.unlink(missing_ok=True)
+        _invalidate_service_config(self.service)
+
+    def check_service(
+        self, user_id: str | None = None, group_id: str | None = None
+    ) -> BlockReason | None:
+        """当前服务对指定用户或群聊是否可用，返回原因码。
+
+        :param user_id: 用户id
+        :param group_id: 群聊id
+        :return: 拦截原因；可用返回 ``None``
+        """
+        data = self._load_service_config_cached()
+        if not data.enabled:
+            return BlockReason.SERVICE_DISABLED
+        parent_reason = self._check_parent(data.parent)
+        if parent_reason is not None:
+            return parent_reason
+        if data.block_type:
+            scope = "group" if group_id else "private"
+            if scope in data.block_type:
+                return BlockReason.SERVICE_BLOCKED_TYPE
+        if user_id and user_id in data.disable_user:
+            return BlockReason.SERVICE_USER_DISABLED
+        if group_id:
+            if group_id in data.disable_group:
+                return BlockReason.SERVICE_GROUP_DISABLED
+            if data.white_list_mode and group_id not in data.white_list:
+                return BlockReason.SERVICE_GROUP_NOT_IN_WHITELIST
+        if (
+            data.min_level > 0
+            and user_id
+            and group_id
+            and not is_master_user(user_id)
+            and auth_ban.group_cache.level_of(group_id, user_id) < data.min_level
+        ):
+            return BlockReason.USER_LEVEL_TOO_LOW
+        return None
+
+    @classmethod
+    def _check_parent(cls, parent: str | None) -> BlockReason | None:
+        """沿父服务链向上检查，父服务被关闭时返回原因码。"""
+        seen: set[str] = set()
+        while parent and parent not in seen and len(seen) < 10:
+            seen.add(parent)
+            if parent not in cls.service_list:
+                return None
+            try:
+                config = cls(parent)._load_service_config_cached()
+            except ReadFileError:
+                return None
+            if not config.enabled:
+                return BlockReason.SERVICE_PARENT_DISABLED
+            parent = config.parent
+        return None
 
     def auth_service(
         self, user_id: str | None = None, group_id: str | None = None
@@ -677,20 +884,13 @@ class ServiceTools:
         :param group_id: 群聊id
         :return: 服务是否可用
         """
-        data = self.load_service_config()
-        auth_global = data.enabled
-        if not auth_global:
-            return False
-        auth_user = data.disable_user
-        if user_id and user_id in auth_user:
-            return False
-        auth_group = data.disable_group
-        if group_id:
-            if group_id in auth_group:
-                return False
-            if data.white_list_mode and group_id not in data.white_list:
-                return False
-        return True
+        reason = self.check_service(user_id, group_id)
+        if reason is not None:
+            log.debug(
+                f"Service {self.service} blocked: reason={reason.value} "
+                f"user_id={user_id or '-'} group_id={group_id or '-'}"
+            )
+        return reason is None
 
     def service_controller(self, is_enabled: bool):
         """
@@ -730,5 +930,9 @@ def is_in_service(service: str) -> Rule:
 
 
 def driver_startup():
+    import sys
+
+    if "ATRI.auth.pipeline" not in sys.modules:
+        log.warning("鉴权流水线未加载，服务级策略不会生效")
     log.success("启动函数执行完成")
     Service.driver_started = True

@@ -35,10 +35,12 @@ async def run():
 
 
 async def init_database():
+    from ATRI.auth import model as auth_model
     from ATRI.scheduler import model as scheduler_model
 
     add_database("ATRI", statistics_model)
     add_database("ATRI", scheduler_model)
+    add_database("ATRI", auth_model)
     log.info(f"正在初始化{len(data)}个数据库...")
     await run()
     log.success("数据库初始化完成")

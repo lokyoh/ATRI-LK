@@ -82,7 +82,12 @@ class ApiDataSource:
             DbPluginInfo | None: 插件数据
         """
         s = ServiceTools(param.service)
-        config = ServiceConfig.model_validate(param.configs)
+        # 以磁盘上的现有配置为基底合并，避免前端只提交部分字段时
+        # 把新增的策略字段（CD、次数、撤回延迟等）重置为默认值。
+        merged = s.load_service_config().model_dump()
+        if param.configs:
+            merged.update(param.configs)
+        config = ServiceConfig.model_validate(merged)
         s.save_service_config(config)
         return None
 

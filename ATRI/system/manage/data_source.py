@@ -4,7 +4,8 @@ from nonebot import get_bot
 from nonebot.adapters import Bot
 from nonebot.adapters.onebot.v11 import GroupMessageEvent
 
-from ATRI.bot import BotStatus, GlobalStatus
+from ATRI.auth import ban as auth_ban
+from ATRI.bot import BotStatus
 from ATRI.exceptions import load_error
 from ATRI.message import MessageBuilder
 from ATRI.service import ServiceTools
@@ -56,32 +57,66 @@ class BotManager:
         await self.__store_data("group_invite.json", data)
 
     @staticmethod
-    async def block_group(group_id: str) -> None:
-        GlobalStatus.read_from_file()
-        GlobalStatus.status.group_black_list.append(group_id)
-        GlobalStatus.save_to_file()
+    async def block_group(
+        group_id: str,
+        duration_minutes: float = 0,
+        reason: str = "",
+        operator_id: str = "",
+    ) -> None:
+        """封禁群聊。
+
+        :param duration_minutes: 时长（分钟），``<= 0`` 表示永久
+        """
+        await auth_ban.ban(
+            auth_ban.TARGET_GROUP,
+            group_id,
+            minutes=duration_minutes,
+            reason=reason,
+            operator_id=operator_id,
+        )
 
     @staticmethod
     async def unblock_group(group_id: str) -> None:
-        GlobalStatus.read_from_file()
-        if group_id not in GlobalStatus.status.group_black_list:
+        if not await auth_ban.unban(auth_ban.TARGET_GROUP, group_id):
             raise Exception("群不存在于封禁名单")
-        GlobalStatus.status.group_black_list.remove(group_id)
-        GlobalStatus.save_to_file()
 
     @staticmethod
-    async def block_user(user_id: str) -> None:
-        GlobalStatus.read_from_file()
-        GlobalStatus.status.user_black_list.append(user_id)
-        GlobalStatus.save_to_file()
+    async def block_user(
+        user_id: str,
+        duration_minutes: float = 0,
+        reason: str = "",
+        operator_id: str = "",
+    ) -> None:
+        """封禁用户。
+
+        :param duration_minutes: 时长（分钟），``<= 0`` 表示永久
+        """
+        await auth_ban.ban(
+            auth_ban.TARGET_USER,
+            user_id,
+            minutes=duration_minutes,
+            reason=reason,
+            operator_id=operator_id,
+        )
 
     @staticmethod
     async def unblock_user(user_id: str) -> None:
-        GlobalStatus.read_from_file()
-        if user_id not in GlobalStatus.status.user_black_list:
+        if not await auth_ban.unban(auth_ban.TARGET_USER, user_id):
             raise Exception("用户不存在于封禁名单")
-        GlobalStatus.status.user_black_list.remove(user_id)
-        GlobalStatus.save_to_file()
+
+    async def toggle_group_enabled(self, event) -> bool:
+        """翻转当前群的开关，返回新状态。"""
+        if not isinstance(event, GroupMessageEvent):
+            raise Exception("该功能只能在群聊中使用")
+        return await auth_ban.toggle_group_enabled(str(event.group_id))
+
+    @staticmethod
+    async def set_user_level(group_id: str, user_id: str, level: int) -> None:
+        await auth_ban.set_user_level(group_id, user_id, level)
+
+    @staticmethod
+    async def get_group_levels(group_id: str) -> dict[str, int]:
+        return auth_ban.group_cache.levels_in(group_id)
 
     @staticmethod
     async def toggel_bot_status(bot_id: str) -> bool:

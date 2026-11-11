@@ -3,12 +3,12 @@ import os
 from typing import ClassVar
 
 import anyio
-from nonebot.adapters import Bot, Event
-from nonebot.exception import IgnoredException
-from nonebot.message import run_preprocessor
+from nonebot.adapters import Bot
 from pydantic import Field
 
 from ATRI import driver
+from ATRI.auth import ban
+from ATRI.auth.reason import BlockReason
 from ATRI.bot.model import PanelItem
 from ATRI.dir import SYS_CONFIG_DIR
 from ATRI.permission import is_master_user
@@ -67,6 +67,37 @@ class BotStatus:
         cls.data[bot_id] = statu
 
     @classmethod
+    def check_blocked(
+        cls, bot_id: str, user_id: str | None = None, group_id: str | None = None
+    ) -> BlockReason | None:
+        """判断机器人规则是否阻挡，返回原因码。
+
+        黑名单优先走 :class:`ATRI.auth.ban.BanCache`（数据库快照）；快照还没
+        加载时退回 ``Statu`` 里的旧 JSON 名单。
+
+        :param bot_id: 机器人ID
+        :param user_id: 用户ID
+        :param group_id: 群聊ID
+        :return: 拦截原因；未拦截返回 ``None``
+        """
+        statu = cls.get_bot_statu(bot_id)
+        if not statu.enable:
+            return BlockReason.BOT_DISABLED
+        if user_id:
+            if is_master_user(user_id):
+                return None
+            if ban.is_banned(ban.TARGET_USER, user_id, statu.user_black_list):
+                return BlockReason.USER_BANNED
+            if not statu.is_user_black_list and user_id not in statu.user_white_list:
+                return BlockReason.USER_NOT_ALLOWED
+        if group_id:
+            if ban.is_banned(ban.TARGET_GROUP, group_id, statu.group_black_list):
+                return BlockReason.GROUP_BANNED
+            if not statu.is_group_black_list and group_id not in statu.group_white_list:
+                return BlockReason.GROUP_NOT_ALLOWED
+        return None
+
+    @classmethod
     def is_blocked(
         cls, bot_id: str, user_id: str | None = None, group_id: str | None = None
     ) -> bool:
@@ -77,26 +108,16 @@ class BotStatus:
         :param group_id: 群聊ID
         :return: 是否被阻挡
         """
+        return cls.check_blocked(bot_id, user_id, group_id) is not None
+
+    @classmethod
+    def sync_from_cache(cls, bot_id: str) -> Statu:
+        """用封禁快照重建该机器人的黑名单兼容视图。"""
         statu = cls.get_bot_statu(bot_id)
-        if not statu.enable:
-            return True
-        if user_id:
-            if is_master_user(user_id):
-                return False
-            if statu.is_user_black_list:
-                if user_id in statu.user_black_list:
-                    return True
-            else:
-                if user_id not in statu.user_white_list:
-                    return True
-        if group_id:
-            if statu.is_group_black_list:
-                if group_id in statu.group_black_list:
-                    return True
-            else:
-                if group_id not in statu.group_white_list:
-                    return True
-        return False
+        if ban.ban_cache.loaded:
+            statu.user_black_list = ban.ban_cache.active_ids(ban.TARGET_USER)
+            statu.group_black_list = ban.ban_cache.active_ids(ban.TARGET_GROUP)
+        return statu
 
 
 class GlobalStatusModel:
@@ -104,26 +125,50 @@ class GlobalStatusModel:
         self.status = Statu()
         self.read_from_file()
 
+    def check_blocked(
+        self, user_id: str | None = None, group_id: str | None = None
+    ) -> BlockReason | None:
+        """判断全局状态是否阻挡，返回原因码。
+
+        黑名单走 :class:`ATRI.auth.ban.BanCache`，快照未加载时退回旧 JSON
+        名单；群控制台关闭的群直接拦截。
+        """
+        if not self.status.enable:
+            return BlockReason.GLOBAL_DISABLED
+        if user_id:
+            if ban.is_banned(ban.TARGET_USER, user_id, self.status.user_black_list):
+                return BlockReason.USER_BANNED
+            if (
+                not self.status.is_user_black_list
+                and user_id not in self.status.user_white_list
+            ):
+                return BlockReason.USER_NOT_ALLOWED
+        if group_id:
+            if ban.is_banned(ban.TARGET_GROUP, group_id, self.status.group_black_list):
+                return BlockReason.GROUP_BANNED
+            if (
+                not self.status.is_group_black_list
+                and group_id not in self.status.group_white_list
+            ):
+                return BlockReason.GROUP_NOT_ALLOWED
+            if not ban.group_cache.is_enabled(group_id):
+                return BlockReason.GROUP_DISABLED
+        return None
+
+    def sync_from_cache(self) -> None:
+        """用封禁快照重建 ``Statu`` 里的黑名单（兼容视图）。
+
+        快照还没加载时不做任何事，避免把名单清空。
+        """
+        if not ban.ban_cache.loaded:
+            return
+        self.status.user_black_list = ban.ban_cache.active_ids(ban.TARGET_USER)
+        self.status.group_black_list = ban.ban_cache.active_ids(ban.TARGET_GROUP)
+
     def is_blocked(
         self, user_id: str | None = None, group_id: str | None = None
     ) -> bool:
-        if not self.status.enable:
-            return True
-        if user_id:
-            if self.status.is_user_black_list:
-                if user_id in self.status.user_black_list:
-                    return True
-            else:
-                if user_id not in self.status.user_white_list:
-                    return True
-        if group_id:
-            if self.status.is_group_black_list:
-                if group_id in self.status.group_black_list:
-                    return True
-            else:
-                if group_id not in self.status.group_white_list:
-                    return True
-        return False
+        return self.check_blocked(user_id, group_id) is not None
 
     def save_to_file(self) -> None:
         self.status.write_into_file(GLOBAL_STATUS_FILE_PATH)
@@ -199,19 +244,3 @@ async def _(bot: Bot):
 async def _(bot: Bot):
     bot_id = str(bot.self_id)
     BotStatus.remove_bot_statu(bot_id)
-
-
-@run_preprocessor
-async def _(event: Event, bot: Bot):
-    bot_id = str(bot.self_id)
-    user_id = str(getattr(event, "user_id", ""))
-    group_id = str(getattr(event, "group_id", ""))
-
-    if GlobalStatus.is_blocked(user_id, group_id):
-        raise IgnoredException(
-            f"Blocked by GlobalStatus: user_id={user_id}, group_id={group_id}"
-        )
-    if BotStatus.is_blocked(bot_id, user_id, group_id):
-        raise IgnoredException(
-            f"Blocked by BotStatus: bot_id={bot_id}, user_id={user_id}, group_id={group_id}"
-        )

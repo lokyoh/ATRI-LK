@@ -34,7 +34,7 @@ def normalize_model_type(value: str | list[str] | None) -> list[str]:
         return []
     if isinstance(value, str):
         value = [value]
-    if isinstance(value, (tuple, set, list)):
+    if isinstance(value, tuple | set | list):
         normalized = []
         for item in value:
             if isinstance(item, str):
@@ -217,7 +217,7 @@ class ProviderManager:
     def save_provider_config(cls):
         from ATRI.system.agent.config import (
             PROVIDER_CONFIG_FILE,
-            load_provider_from_config,
+            _apply_model_preferences,
         )
 
         provider_data = {
@@ -232,7 +232,15 @@ class ProviderManager:
                 default_flow_style=False,
                 sort_keys=False,
             )
-        load_provider_from_config()
+        # ``ProviderManager`` 只描述“有哪些模型”，真正被调用的是
+        # ``llm_manager`` 里注册的实例。只重载 provider 会让新增、删除或修改
+        # 的模型在重启前一直沿用旧实例——WebUI 的下拉选项也取自
+        # ``llm_manager``，于是出现“模型改了、配置里还是旧模型”。
+        # 这里连模型一起重建，并按当前 agent 配置恢复“指定模型”。
+        from ATRI.system.agent.llm import load_models_from_config
+
+        load_models_from_config()
+        _apply_model_preferences()
 
 
 default_provider = LLMProvider(

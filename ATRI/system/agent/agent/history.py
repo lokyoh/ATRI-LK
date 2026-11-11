@@ -100,10 +100,10 @@ class ImageHistory:
                 base64_str = base64.b64encode(image_bytes).decode("utf-8")
                 image_base64 = f"data:image/jpeg;base64,{base64_str}"
                 contents = LLMContents()
-                contents.image(image_base64)
                 contents.text(
                     "请用中文描述这张图片的内容。如果有文字，请把文字描述概括出来，请留意其主题，直观感受，输出为一段平文本，请注意不要分点，就输出一段文本"
                 )
+                contents.image(image_base64)
                 try:
                     result = await llm_manager.call_model_by_type(
                         ModelType.IMAGE, contents, "Agent-图片识别"

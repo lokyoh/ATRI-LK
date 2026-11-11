@@ -418,7 +418,7 @@ class ApiDataSource:
                 continue
             for task in tasks.values():
                 all_task.append(task.id)
-                if task.status == "paused":
+                if task.is_paused:
                     block_tasks.append(task.id)
         return BotBlockModule(
             block_tasks=block_tasks,

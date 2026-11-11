@@ -22,11 +22,40 @@ aps_logger.addHandler(LoguruHandler())
 class SchedulerJob:
     """计划任务对象"""
 
-    def __init__(self, func, id: str, trigger: str | BaseTrigger = "date", **kwargs):
+    def __init__(
+        self,
+        func,
+        id: str,
+        trigger: str | BaseTrigger = "date",
+        service: str = "",
+        name: str = "",
+        **kwargs,
+    ):
         self.id = id
+        self.service = service
+        self.name = name or id
         self.job: Job = scheduler.add_job(
             func=func, trigger=trigger, id=id, name=id, **kwargs
         )
+
+    @property
+    def is_paused(self) -> bool:
+        """任务是否处于暂停状态。
+
+        与 :meth:`status` 保持同一口径：``next_run_time`` 为空即视为暂停。
+        """
+        return getattr(self.job, "next_run_time", None) is None
+
+    @property
+    def next_run_time(self):
+        """下次执行时间；暂停或调度器尚未启动时为 ``None``。"""
+        return getattr(self.job, "next_run_time", None)
+
+    @property
+    def trigger_text(self) -> str:
+        """触发器的可读描述，例如 ``cron[hour='4', minute='0']``。"""
+        trigger = getattr(self.job, "trigger", None)
+        return str(trigger) if trigger is not None else "unknown"
 
     def status(self):
         if hasattr(self.job, "next_run_time"):
@@ -138,6 +167,8 @@ class SchedulerController:
             func=job_func(func),
             trigger=trigger,
             id=f"{self.service}-{name}",
+            service=self.service,
+            name=name,
             **job_kwargs,
         )
         self.service_schedulers[self.service][name] = job
@@ -227,6 +258,46 @@ class SchedulerController:
             self.service in self.service_schedulers
             and name in self.service_schedulers[self.service]
         )
+
+    @classmethod
+    def list_jobs(cls, service: str | None = None) -> list[SchedulerJob]:
+        """列出计划任务；``service`` 为空时返回全部服务的任务。"""
+        if service is not None:
+            return list(cls.service_schedulers.get(service, {}).values())
+        return [
+            job for jobs in cls.service_schedulers.values() for job in jobs.values()
+        ]
+
+    def pause_job(self, name: str) -> SchedulerJob:
+        """暂停指定任务。"""
+        job = self.get_job(name)
+        job.pause()
+        return job
+
+    def resume_job(self, name: str) -> SchedulerJob:
+        """恢复指定任务。"""
+        job = self.get_job(name)
+        job.resume()
+        return job
+
+    def run_job_now(self, name: str) -> SchedulerJob:
+        """立即执行一次指定任务。
+
+        通过 ``resume()`` + 修改 ``next_run_time`` 让调度器马上跑一遍，
+        **不直接调用任务函数**——这样日志包装、异常兜底和一次性任务的
+        清理逻辑都还在。
+        """
+        from ATRI.utils.datetime import now
+
+        job = self.get_job(name)
+        if scheduler.get_job(job.id) is None:
+            raise BotRuntimeError(f"任务`{name}`已过期，无法执行")
+        if job.is_paused:
+            job.resume()
+        if scheduler.get_job(job.id) is None:
+            raise BotRuntimeError(f"任务`{name}`已过期，无法执行")
+        job.job.modify(next_run_time=now())
+        return job
 
     @classmethod
     def get_job_by_id(cls, job_id: str) -> Job:

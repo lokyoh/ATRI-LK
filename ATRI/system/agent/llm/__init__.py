@@ -1,6 +1,6 @@
 from ATRI.exceptions import str_traceback
 
-from ..utils import log
+from ..utils import log as logger
 from .contents import (
     LLMContent,
     LLMContents,
@@ -20,7 +20,13 @@ from .model import (
     ModelType,
 )
 from .openai import create_openai_model
-from .provider import LLMModel, LLMProvider, ModelPricing, ProviderManager
+from .provider import (
+    LLMModel,
+    LLMProvider,
+    LLMProviderKey,
+    ModelPricing,
+    ProviderManager,
+)
 from .system_one import SystemOneModel, create_sys1_model
 from .tts import create_tts_model
 
@@ -46,28 +52,37 @@ def load_models_from_config():
                 type_ = [m.type] if isinstance(m.type, str) else m.type
                 type_ = [t for t in type_ if t]
                 if not type_:
-                    log.warning(f"{m.name}没有配置模型类型，已跳过")
+                    logger.warning(f"{m.name}没有配置模型类型，已跳过")
                     continue
                 for t in type_:
                     if t in {model_type.value for model_type in ModelType}:
                         try:
-                            llm_manager.register_model(
-                                model=provider_type[_provider.provider_type](
-                                    name=m.name,
-                                    model=m.model,
-                                    endpoint=_provider.url,
-                                    api_key=_provider.api_key,
-                                    temperature=m.temperature,
-                                    data=m.data,
-                                ),
-                                model_type=t,
+                            selected_keys = _provider.keys_for_model(m)
+                            key_values = [
+                                item.key for item in selected_keys if item.key
+                            ]
+                            api_key = (
+                                key_values[0]
+                                if len(key_values) == 1
+                                else key_values or None
                             )
+                            model = provider_type[_provider.provider_type](
+                                name=m.name,
+                                model=m.model,
+                                endpoint=_provider.url,
+                                api_key=api_key,
+                                temperature=m.temperature,
+                                data=m.data,
+                            )
+                            llm_manager.register_model(model=model, model_type=t)
                         except Exception as e:
-                            log.error(f"注册模型失败：{m.name}\n{str_traceback(e)}")
+                            logger.error(f"注册模型失败：{m.name}\n{str_traceback(e)}")
                     else:
-                        log.warning(f"{m.name}的{t}暂不支持")
+                        logger.warning(f"{m.name}的{t}暂不支持")
         else:
-            log.warning(f"{_provider.provider_name}的{_provider.provider_type}暂不支持")
+            logger.warning(
+                f"{_provider.provider_name}的{_provider.provider_type}暂不支持"
+            )
 
 
 __all__ = [
@@ -80,6 +95,7 @@ __all__ = [
     "LLMMessages",
     "LLMModel",
     "LLMProvider",
+    "LLMProviderKey",
     "LLMResponse",
     "ModelPricing",
     "ModelRequestError",

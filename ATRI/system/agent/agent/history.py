@@ -218,50 +218,101 @@ class LLMMessage:
             instance.message.append(MessageSegment(message))
             return instance
         for segment in message:
+            data = segment.data if isinstance(segment.data, dict) else {}
             if segment.type == "text":
-                instance.message.append(MessageSegment(segment.data["text"]))
+                instance.message.append(MessageSegment(data.get("text", "")))
             elif segment.type == "at":
-                instance.message.append(AtMessageSegment((segment.data["qq"], chat_id)))
+                target = str(data.get("qq", ""))
+                if target == "all" or target == "everyone":
+                    instance.message.append(MessageSegment("[@全体成员]"))
+                else:
+                    instance.message.append(AtMessageSegment((target, chat_id)))
             elif segment.type == "face":
-                face_text = segment.data.get("raw", {}).get("faceText", "")
-                if face_text:
+                face_text = data.get("raw", {}).get("faceText", "")
+                if not face_text:
+                    face_id = data.get("id", "")
+                    face_text = f"[表情:{face_id}]" if face_id else "[表情]"
+                else:
                     face_text = face_text.replace("[", "[表情:", 1)
-                    instance.message.append(MessageSegment(face_text))
+                instance.message.append(MessageSegment(face_text))
+            elif segment.type == "mface":
+                summary = data.get("summary") or data.get("emoji_id") or ""
+                instance.message.append(
+                    MessageSegment(f"[表情:{summary}]" if summary else "[表情]")
+                )
             elif segment.type == "image":
                 if img_count >= 10:
                     log.warning("图片数量过多，已忽略")
                     continue
-                file_name = segment.data.get("file", "")
-                url = segment.data.get("url", "")
-                file_size = segment.data.get("file_size", 0)
+                file_name = data.get("file", "")
+                url = data.get("url", "")
+                file_size = data.get("file_size", 0)
                 if url:
                     result, desp = await ChatHistoryManager.get_img_history(
                         chat_id
                     ).add_image(mid, url, file_name, file_size)
                     instance.message.append(ImageMessageSegment(result, desp))
+                else:
+                    instance.message.append(MessageSegment("[图片]"))
                 img_count += 1
+            elif segment.type == "record":
+                instance.message.append(MessageSegment("[语音]"))
             elif segment.type == "video":
                 instance.message.append(MessageSegment("[视频]"))
             elif segment.type == "file":
-                continue
+                file_name = data.get("file") or data.get("name") or ""
+                instance.message.append(
+                    MessageSegment(f"[文件:{file_name}]" if file_name else "[文件]")
+                )
             elif segment.type == "json":
-                now_type = "json"
                 try:
-                    json_data = json.loads(segment.data["data"])
-                    if "detail_1" in json_data["meta"]:
-                        json_meta = json_data["meta"]["detail_1"]
-                        if json_meta["title"] == "哔哩哔哩":
-                            now_type = "哔哩哔哩"
-                            title = json_meta["title"]
-                            instance.message.append(
-                                MessageSegment(f"[B站分享:{title}]")
+                    raw_json = data.get("data", "")
+                    json_data = (
+                        json.loads(raw_json) if isinstance(raw_json, str) else raw_json
+                    )
+                    meta = json_data.get("meta", {}) if isinstance(json_data, dict) else {}
+                    detail = next(
+                        (
+                            meta[key]
+                            for key in ("detail_1", "news", "music", "video", "app")
+                            if isinstance(meta.get(key), dict)
+                        ),
+                        {},
+                    )
+                    title = detail.get("title") or detail.get("desc") or ""
+                    url = (
+                        detail.get("qqdocurl")
+                        or detail.get("jumpUrl")
+                        or detail.get("url")
+                        or ""
+                    )
+                    if title == "哔哩哔哩":
+                        title = detail.get("desc") or detail.get("qqdocurl") or "视频"
+                        instance.message.append(
+                            MessageSegment(f"[B站分享:{title}]")
+                        )
+                    elif title:
+                        suffix = f" {url}" if url else ""
+                        instance.message.append(
+                            MessageSegment(f"[卡片分享:{title}{suffix}]")
+                        )
+                    else:
+                        prompt = (
+                            json_data.get("prompt", "")
+                            if isinstance(json_data, dict)
+                            else ""
+                        )
+                        instance.message.append(
+                            MessageSegment(
+                                f"[卡片消息:{prompt}]" if prompt else "[卡片消息]"
                             )
-                            continue
-                    log.info("存在未支持的json消息类型")
-                    log.debug(f"消息内容：{segment.data}")
+                        )
                 except Exception as e:
-                    log.warning(f"{now_type}消息处理错误：{e}")
+                    log.warning(f"json消息处理错误：{e}")
                     log.debug(f"消息内容：{segment.data}")
+                    instance.message.append(MessageSegment("[卡片消息]"))
+            elif segment.type == "xml":
+                instance.message.append(MessageSegment("[XML消息]"))
             elif segment.type == "forward":
                 content = segment.data.get("content", [])
                 if not content:
@@ -311,6 +362,75 @@ class LLMMessage:
                             instance.message.append(MessageSegment("[转发消息]"))
                     else:
                         instance.message.append(MessageSegment("[转发消息]"))
+            elif segment.type == "share":
+                title = data.get("title", "")
+                url = data.get("url", "")
+                suffix = f" {url}" if url else ""
+                instance.message.append(
+                    MessageSegment(f"[链接分享:{title}{suffix}]" if title else "[链接分享]")
+                )
+            elif segment.type == "music":
+                title = data.get("title", "")
+                instance.message.append(
+                    MessageSegment(f"[音乐分享:{title}]" if title else "[音乐分享]")
+                )
+            elif segment.type == "location":
+                title = data.get("title") or data.get("content") or ""
+                lat = data.get("lat", "")
+                lon = data.get("lon", "")
+                coords = f" {lat},{lon}" if lat and lon else ""
+                if title:
+                    location_text = f"[位置:{title}{coords}]"
+                elif coords:
+                    location_text = f"[位置:{coords.strip()}]"
+                else:
+                    location_text = "[位置]"
+                instance.message.append(MessageSegment(location_text))
+            elif segment.type == "contact":
+                contact_type = data.get("type", "")
+                contact_id = data.get("id", "")
+                instance.message.append(
+                    MessageSegment(f"[推荐联系人:{contact_type} {contact_id}]")
+                )
+            elif segment.type == "poke":
+                instance.message.append(MessageSegment("[戳一戳]"))
+            elif segment.type == "shake":
+                instance.message.append(MessageSegment("[窗口抖动]"))
+            elif segment.type == "dice":
+                result = data.get("result", "")
+                instance.message.append(
+                    MessageSegment(f"[骰子:{result}]" if result else "[骰子]")
+                )
+            elif segment.type == "rps":
+                result = data.get("result", "")
+                instance.message.append(
+                    MessageSegment(f"[猜拳:{result}]" if result else "[猜拳]")
+                )
+            elif segment.type == "markdown":
+                content = str(data.get("content", "")).strip()
+                instance.message.append(
+                    MessageSegment(
+                        f"[Markdown:{content[:200]}]" if content else "[Markdown]"
+                    )
+                )
+            elif segment.type == "attachment":
+                url = data.get("url", "")
+                file_name = data.get("filename") or data.get("name") or ""
+                label = file_name or url
+                instance.message.append(
+                    MessageSegment(f"[附件:{label}]" if label else "[附件]")
+                )
+            elif segment.type == "ark":
+                instance.message.append(MessageSegment("[卡片消息]"))
+            elif segment.type == "embed":
+                title = data.get("title", "")
+                instance.message.append(
+                    MessageSegment(f"[嵌入消息:{title}]" if title else "[嵌入消息]")
+                )
+            elif segment.type in {"anonymous", "node", "keyboard", "forum"}:
+                if segment.type == "node":
+                    instance.message.append(MessageSegment("[合并转发]"))
+                continue
             elif segment.type == "atri_reply" or segment.type == "reply":
                 reply_msg = None
                 try:
@@ -351,6 +471,9 @@ class LLMMessage:
             else:
                 log.info(f"未支持的消息类型：{segment.type}")
                 log.debug(f"消息内容：{segment.data}")
+                instance.message.append(
+                    MessageSegment(f"[消息类型:{segment.type}]")
+                )
         return instance
 
     async def get_message(self, bot) -> str:

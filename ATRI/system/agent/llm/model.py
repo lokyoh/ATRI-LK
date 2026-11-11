@@ -1,3 +1,4 @@
+import copy
 import json
 import random
 import time
@@ -60,6 +61,15 @@ class ModelRequestError(Exception):
         self.status_code = status_code
 
 
+def normalize_api_keys(api_key: str | list[str] | None) -> list[str]:
+    """把 API key 统一成列表；空值表示无需鉴权。"""
+    if not api_key:
+        return []
+    if isinstance(api_key, str):
+        return [api_key]
+    return [key for key in api_key if key]
+
+
 class LLMModel:
     """
     单个模型的描述与调用封装
@@ -71,7 +81,7 @@ class LLMModel:
         model: str,
         endpoint: str,
         temperature: float = 1,
-        api_key: str | None = None,
+        api_key: str | list[str] | None = None,
         headers: dict[str, str] | None = None,
         method: str = "POST",
         call_func: Callable[..., Awaitable[Any]] | None = None,
@@ -80,8 +90,8 @@ class LLMModel:
         """
         :param name: 模型唯一标识名称
         :param model: 模型名
-        :param endpoint: API 端点 URL
-        :param api_key: 可选的 API 密钥,将自动添加到 Authorization 头
+        :param endpoint: API 端点 URL（仅支持单个）
+        :param api_key: 可选的 API 密钥；可以是单个密钥或按顺序尝试的密钥列表
         :param headers: 额外的 HTTP 头
         :param method: HTTP 方法，默认为 POST
         :param call_func: 自定义调用函数，若提供则完全接管调用逻辑
@@ -90,7 +100,8 @@ class LLMModel:
         self.name: str = name
         self.model: str = model
         self.endpoint: str = endpoint
-        self.api_key: str | None = api_key
+        self.api_keys: list[str] = normalize_api_keys(api_key)
+        self.api_key: str | None = self.api_keys[0] if self.api_keys else None
         self.temperature: float = temperature
         self.headers: dict[str, str] | None = headers or {}
         self.method: str = method.upper()
@@ -99,9 +110,33 @@ class LLMModel:
 
     async def call(self, content: str | LLMContents | list | Any) -> LLMResponse:
         """
-        调用模型，返回解析后的响应（通常为 JSON 对象）
-        若提供了 call_func，则使用自定义逻辑；否则使用默认的 HTTP 请求。
+        调用模型，按顺序尝试配置的多个 API 密钥，前一个失败后自动切换。
+
+        每次尝试都在模型副本上执行，避免并发调用时互相篡改 ``api_key``。
+        全部失败时抛出最后一次异常，保留原始状态码供上层识别。
         """
+        key_total = len(self.api_keys)
+        attempts = self.api_keys or [None]
+        errors: list[Exception] = []
+        for index, api_key in enumerate(attempts):
+            attempt = copy.copy(self)
+            attempt.api_key = api_key
+            try:
+                return await attempt._call_once(content)
+            except Exception as exc:
+                errors.append(exc)
+                if index < len(attempts) - 1:
+                    log.warning(
+                        f"模型 {self.name} 通过 API {self.endpoint}"
+                        f"（密钥 {index + 1}/{key_total}）调用失败，"
+                        f"尝试下一个密钥：{exc}"
+                    )
+        if len(errors) == 1:
+            raise errors[0]
+        raise ModelRequestError(f"所有 API 密钥请求失败：{errors[-1]}") from errors[-1]
+
+    async def _call_once(self, content: str | LLMContents | list | Any) -> LLMResponse:
+        """使用当前 ``endpoint`` / ``api_key`` 发起一次调用。"""
         if self.call_func:
             return await self.call_func(self, content)
         if isinstance(content, LLMContents):

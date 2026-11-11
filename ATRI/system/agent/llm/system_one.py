@@ -13,11 +13,18 @@ class SystemOneModel(LLMModel):
         name: str,
         model: str,
         endpoint: str,
-        api_key: str,
+        api_key: str | list[str],
+        **kwargs,
     ):
-        super().__init__(name=name, model=model, endpoint=endpoint, api_key=api_key)
+        super().__init__(
+            name=name,
+            model=model,
+            endpoint=endpoint,
+            api_key=api_key,
+            **kwargs,
+        )
 
-    async def call(self, content: Sys1Content) -> LLMResponse:
+    async def _call_once(self, content: Sys1Content) -> LLMResponse:
         if isinstance(content, Sys1Content):
             data = content.to_dict()
         else:

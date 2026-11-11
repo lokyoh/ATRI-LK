@@ -177,7 +177,8 @@ async def _() -> Result[list[LLMProvider]]:
     try:
         p_list = ProviderManager.get_provider_list()
         for p in p_list:
-            p.api_key = ""
+            for item in p.api_key:
+                item.key = ""
         return Result.ok(p_list, "拿到信息啦!")
     except Exception as e:
         log.error(f"{router.prefix}/get_providers 调用错误:{str_traceback(e)}")
@@ -193,6 +194,7 @@ async def _() -> Result[list[LLMProvider]]:
 )
 async def _(provider: LLMProvider) -> Result:
     try:
+        provider.api_key = [item for item in provider.api_key if item.key]
         ProviderManager.register(provider)
         ProviderManager.save_provider_config()
         return Result.ok(info="添加成功!")
@@ -227,10 +229,45 @@ async def _(provider_name: str) -> Result:
 )
 async def _(provider_name, provider: LLMProvider) -> Result:
     try:
+        target_name = provider.provider_name or provider_name
+        if target_name != provider_name and target_name in ProviderManager.providers:
+            return Result.fail("已存在同名的模型提供商")
         current_provider = ProviderManager.providers.get(provider_name)
-        if current_provider and not provider.api_key:
-            provider.api_key = current_provider.api_key
-        ProviderManager.set_provider(provider_name, provider)
+        if current_provider:
+            # WebUI 编辑时不会回填密钥；留空表示按名称沿用原有密钥。
+            existing = {item.name: item for item in current_provider.api_key}
+            merged = []
+            for item in provider.api_key:
+                old = existing.get(item.previous_name or item.name)
+                if old and not item.key:
+                    item.key = old.key
+                if item.key:
+                    merged.append(item)
+            # 全部为空且没有匹配到旧密钥时，视为前端未提交密钥，保留原配置。
+            if provider.api_key and not merged:
+                provider.api_key = current_provider.api_key
+            else:
+                provider.api_key = merged
+            # 密钥改名后同步更新模型里的选择名称。
+            renames = {
+                item.previous_name: item.name
+                for item in provider.api_key
+                if item.previous_name and item.previous_name != item.name
+            }
+            if renames:
+                for model in provider.models:
+                    if not model.api_key:
+                        continue
+                    selectors = (
+                        [model.api_key]
+                        if isinstance(model.api_key, str)
+                        else model.api_key
+                    )
+                    updated = [renames.get(name, name) for name in selectors]
+                    model.api_key = updated[0] if len(updated) == 1 else updated
+        ProviderManager.set_provider(target_name, provider)
+        if target_name != provider_name:
+            ProviderManager.del_provider(provider_name)
         ProviderManager.save_provider_config()
         return Result.ok(info="设置成功!")
     except Exception as e:
@@ -309,14 +346,18 @@ async def _(provider_name: str, model_name: str) -> Result:
     elif provider.provider_type == "embedding":
         test_content = "ATRI model API connectivity test"
     try:
+        selected_keys = provider.keys_for_model(model_config)
+        key_values = [item.key for item in selected_keys if item.key]
+        api_key = key_values[0] if len(key_values) == 1 else key_values or None
         test_model = model_factory(
             name=model_config.name,
             model=model_config.model,
             endpoint=provider.url,
-            api_key=provider.api_key,
+            api_key=api_key,
             temperature=model_config.temperature,
             data=model_config.data,
         )
+        # 与运行时一致：多个密钥会按顺序测试，前一个失败自动切换。
         response = await test_model.call(test_content)
         if response.content is None or response.content == "" or response.content == []:
             return Result.fail("API 请求成功，但模型未返回有效内容")

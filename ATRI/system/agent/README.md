@@ -85,6 +85,37 @@ ATRI/system/agent/
 - `LLMModel`：描述某个具体模型实例及其参数
 - `ProviderManager`：统一管理 provider 和 model 注册
 
+一个 Provider 只对应一个 `url`。`api_key` 是一个带名称的密钥列表，模型可以按名称选择自己使用的密钥；同一个 Provider 内的密钥名称唯一，未命名时会自动生成 `key-1`、`key-2` 等名称：
+
+```yaml
+provider_name: example
+provider_type: openai
+url: https://api.example.com/v1
+api_key:
+  - name: main
+    key: sk-main
+  - name: backup
+    key: sk-backup
+models:
+  - name: example
+    model: example-model
+    type: chat
+    api_key: backup
+  - name: example-all
+    model: example-model
+    type: chat
+    api_key: all
+```
+
+Provider 的 `api_key` 列表项必须是 `name` / `key` 对象。模型上的 `api_key` 支持单个名称或名称列表：
+
+- 留空：使用 Provider 的第一个密钥；
+- 填写名称：按名称选择密钥，多个名称会按顺序调用，前一个失败自动切换；
+- 填写 `all` 或 `*`：使用 Provider 下的全部密钥；
+- 名称未匹配时按密钥原文处理，因此也可以直接在该字段填写模型专属密钥。
+
+旧版 `api_key: "sk-xxx"` 仍可直接加载，会自动转换为名为 `key-1` 的密钥。
+
 在启动或 reload 时，会从系统配置目录读取 `provider.yml`（由 `PROVIDER_CONFIG_FILE` 指定），并通过 `load_provider_from_config()` 注册所有模型。
 
 ### 3.5 模型调用日志

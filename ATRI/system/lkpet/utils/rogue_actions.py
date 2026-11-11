@@ -8,7 +8,7 @@
 
 所以每一步都该直接给按钮：``战斗`` / ``事件`` / ``商店`` 点一下就是
 ``/宠物.肉鸽 1`` 这样的完整指令。这里负责把 ``FloorState`` 的选项结构
-翻译成 :class:`plugins.lkpet.utils.reply.Choice`。
+翻译成 :class:`ATRI.system.lkpet.utils.reply.Choice`。
 
 ## 只依赖「能算出来」的信息
 

@@ -9,6 +9,7 @@ from nonebot.adapters.qq import MessageEvent as QQMessageEvent
 
 from ATRI.message import InlineKeyboardRow, MessageBuilder, QQMessage, img_msg_from_path
 from ATRI.service import Service
+from ATRI.system.fortune.qq import BTN_FORTUNE
 from ATRI.system.help.qq import BTN_MENU
 from ATRI.system.lkapi.bot import PLUGIN_DIR
 from ATRI.system.lkapi.bot import util as lk_util
@@ -16,7 +17,6 @@ from ATRI.system.lkapi.entity.user import sign
 from ATRI.system.lkapi.utils.picture import get_pic_from
 from ATRI.system.lkapi.utils.qq import BIND_TIP
 from ATRI.utils.img_editor import IMGEditor
-from plugins.fortune.qq import BTN_FORTUNE
 
 from .fortune_data import get_fortune
 

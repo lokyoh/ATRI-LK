@@ -12,7 +12,7 @@ from ATRI.system.lkapi.bot.events import item_loading_events
 from ATRI.system.lkapi.entity.item import Item, ItemType, items
 from ATRI.system.lkapi.entity.shop import Shop, shops
 from ATRI.system.lkapi.entity.user import get_user_data
-from plugins.lkfarm.system.farm_user import get_user_farm_data, user_farm_datas
+from ATRI.system.lkfarm.system.farm_user import get_user_farm_data, user_farm_datas
 
 from .data.achievement import achievements, load_achievements
 from .data.bait import Bait, bait_dict

@@ -75,7 +75,7 @@ data/config/plugins/宠物_config.json   # 插件设置，缺失时按默认值�
 
 ### 插件设置 `config.py`
 
-按 `plugins/lkchat/config.py` 的模式定义，**每个字段都有默认值**，用户不改任何一项也能跑：
+按 `ATRI/system/lkchat/config.py` 的模式定义，**每个字段都有默认值**，用户不改任何一项也能跑：
 
 | 字段 | 默认 | 说明 |
 |---|---|---|
@@ -563,7 +563,7 @@ skills:        # 列表，每条带 **稳定 id**
     9 件遗物已重做为 `coins_mult` / `shop_discount` / 属性类效果，不是空壳。
 - **每日入场券（签到联动）**：`/宠物.肉鸽 开始` 会**先检查 LK 背包里的「肉鸽入场券」**——
   有券就自动消耗 1 张且**当次入场不消耗行动点**；没券才按原规则扣 3 点行动点。
-  券是 **LK 账户物品**（`plugins/lkpet/items.py` 定义，`item_loading_events` 时注册），
+  券是 **LK 账户物品**（`ATRI/system/lkpet/items.py` 定义，`item_loading_events` 时注册），
   **每日签到发放 1 张**（`sign_in_events` 钩子，张数由插件设置 `rogue_ticket_per_sign` 控制，
   设为 0 即关闭），所以「每天一次免费入场」直接绑定在签到习惯上；多余的券可以攒着。
   撤退会按到达层数结算并结束本局，**下次入场重新判定券/行动点**。

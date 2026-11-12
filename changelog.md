@@ -52,6 +52,30 @@
 - Patch4:
   - `Agent`修复「已想好要说的话却没有调用`send_message`,导致回复丢失」的问题:Patch3 加入「像人聊天」的风格引导后,模型倾向直接把话写进正文
 
+## Nov 13, 2026
+
+> !!!破坏性更新!!! `Agent`模型类型改为`atri-*`族,需在 WebUI 重新配置模型;功能调用改用短名(旧名与旧参数不再兼容),旧日程需迁移
+
+- 更新版本号: `YHN-LK0-025`
+- Patch1:
+  - `Agent`模型类型改为`atri-*`族(12 类),Agent 不再回退`chat`/`tool`,需在 WebUI 重新配置模型;新增模型健康检查与配置版本 v2
+  - `Agent`新增三级权限(主人 / 群管理 / 用户):默认权限由功能自己声明,配置只记覆盖项;群管理不能调用任何 `bot` 作用域功能,拒绝原因可解释;个人规则只能降权、不能提权
+  - `Agent`功能调用改为短名并保留旧名别名一个版本;新增`say`/`md`/`face`的意图参数、`say_exact`逐字发送、`plan`/`wear`/`home`/`where`/`go`生活函数
+  - `Agent`新增生活系统:固定作息表 + 填入式日程、实时位置、白天/晚上两套着装、`home.md`分节读写与备份;旧整日日程改为迁移脚本转换
+  - `Agent`新增聊天输出流:thinking 只产出意图,经`atri-chat`渲染、清洗、分条、去重后由单队列保序发送;发送不阻塞思考,回合结束`drain`保证计数与历史
+  - `Agent`新增无返回值调用并行化:数据调用可并发,副作用按模型顺序执行;新增`ActionExecutor`与队列上限、单轮副作用上限
+  - `Agent`技能目录直接进提示词,`skill`支持按章节与偏移读取;`skills`降为补漏清单;内嵌正文与索引受预算约束
+  - `Agent`新增行为埋点:`chat_render`、`outbox`、`permission_denied`、`life.*`、技能索引与读取
+  - `Agent`升级时自动清空旧版权限清单,避免群管理因旧覆盖项丢失默认允许的生活/关系功能;新增配置迁移日志
+  - `Agent`修复`plan(fill)`不带`end`时清空当天后续安排;修复`home(edit)`整体替换父章节会连子章节一起删除,写入校验补上「房间下必须有子章节」
+  - `Agent`修复早间生活计划的提示词走成「有人发消息叫你」分支;早安发言补上清洗与历史记录
+  - `Agent`修复个人`downgrade_to`不作用于定时任务存等级与`plan(force)`判断;`explain`不再重复最后一环
+  - `Agent`补上`chat_parallel_render`/`max_parallel_render`的实际实现:渲染可并发,发送仍严格保序;缺失`atri-chat`时降级直发而不是整轮拒聊
+  - `Agent`拼提示词不再写`permission_denied`埋点;`say_exact`/`skills`在提示词里单列为「可直调但不在常规清单」
+  - `Agent`聊天模型输出不像 JSON 且内容是解释/拒绝时,改用 intent 兜底,不再把解释直接发进群
+  - `Agent``outfit_night_hour`同时作用于`wear(show)`、`describe`与 WebUI,不再两套默认值
+  - `Agent`迁移脚本`migrate_agent_life.py`可直接`python`运行(自补仓库根路径并初始化 NoneBot)
+
 ## Sep 9, 2026
 
 > - !!!破坏性更新!!! `Service`重命名方法`type`,移除`ATRI.utils.apsheduler`,`lkapi`移除`ai`模块,会导致过时插件无法使用,请先更新插件

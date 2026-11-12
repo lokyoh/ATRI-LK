@@ -1,5 +1,8 @@
 ---
 description: 文件操作：查目录树、读文件。两个功能都不常用，只能通过 call 调用
+when_to_use: 需要查代码结构、配置项、错误报告或读某个文件时读
+tags: [工具, 文件]
+priority: 30
 ---
 
 # 文件操作
@@ -10,10 +13,10 @@ description: 文件操作：查目录树、读文件。两个功能都不常用�
 
 | 功能 | 作用 | 参数 |
 |---|---|---|
-| `get_dir_tree` | 查目录树 | `dir`：目录代号 |
-| `read_file` | 读文件内容 | `path`、`start`、`end` |
+| `tree` | 查目录树 | `dir`：目录代号 |
+| `read` | 读文件内容 | `path`、`start`、`end` |
 
-## get_dir_tree
+## tree
 
 `dir` 只接受下面六个代号，写别的一律返回"请提供正确的目录名"：
 
@@ -29,10 +32,10 @@ description: 文件操作：查目录树、读文件。两个功能都不常用�
 用法：
 
 ```text
-call(function="get_dir_tree", args={"dir": "plugins"})
+call(function="tree", args={"dir": "plugins"})
 ```
 
-## read_file
+## read
 
 - `path`：相对机器人根目录的路径，例如 `ATRI/system/agent/config.py`；
 - `start`、`end`：可选的行号范围，`start` 默认 1、`end` 默认 0（读到末尾）。大文件**务必**用行号分段读，否则一次返回的内容会撑爆上下文；
@@ -41,12 +44,12 @@ call(function="get_dir_tree", args={"dir": "plugins"})
 用法：
 
 ```text
-call(function="read_file", args={"path": "ATRI/system/agent/config.py", "start": 1, "end": 40})
+call(function="read", args={"path": "ATRI/system/agent/config.py", "start": 1, "end": 40})
 ```
 
 ## 使用建议
 
-- **先 `get_dir_tree` 再 `read_file`**：不确定路径时先看目录，别猜。
+- **先 `tree` 再 `read`**：不确定路径时先看目录，别猜。
 - 一次只读需要的行段；确认无关后不要反复读同一段。
 - 这两个功能只读不写，读完即可，不需要回报给用户。
 - 用户问"你能看文件吗"这类问题时，说明这是你查阅自身代码与配置的能力，不涉及用户设备。

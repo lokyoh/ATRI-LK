@@ -1,3 +1,6 @@
+import shutil
+import zipfile
+
 import anyio
 from fastapi import APIRouter, FastAPI, HTTPException
 from fastapi.responses import FileResponse
@@ -12,6 +15,11 @@ router = APIRouter()
 WEBUI_PATH = DATA_DIR / "webui"
 VERSION_FILE = WEBUI_PATH / "version"
 REPO_RELEASE_URL = "https://api.github.com/repos/lokyoh/ATRI-LK-WebUI/releases"
+WEBUI_URL = (
+    "https://github.com/lokyoh/ATRI-LK-WebUI/releases/latest/download/public.zip"
+)
+# WebUI 目录下由程序生成的用户数据, 更新时需保留
+WEBUI_USER_FILES = {"menu.json", "token.json"}
 
 
 @router.get("/")
@@ -19,6 +27,12 @@ async def index():
     return FileResponse(WEBUI_PATH / "index.html")
 
 
+@router.get("/favicon.ico")
+async def favicon():
+    return FileResponse(WEBUI_PATH / "favicon.ico")
+
+
+# 放在最后: 兜底路由会匹配所有剩余路径, 先注册的具体路由会被它拦截
 @router.get("/{full_path:path}", include_in_schema=False)
 async def spa_fallback(full_path: str):
     if full_path.startswith(("atri/", "api/", "assets/")):
@@ -28,29 +42,64 @@ async def spa_fallback(full_path: str):
     return FileResponse(WEBUI_PATH / "index.html")
 
 
-@router.get("/favicon.ico")
-async def favicon():
-    return FileResponse(WEBUI_PATH / "favicon.ico")
-
-
 def check_webui_exists():
     return (WEBUI_PATH / "index.html").exists()
 
 
+def clean_webui_files():
+    """清理 WebUI 旧文件, 保留用户数据(menu.json/token.json)
+
+    旧版本打包出的 assets 文件名带哈希, 不清理会一直堆积无用文件。
+    """
+    if not WEBUI_PATH.exists():
+        return
+    for item in WEBUI_PATH.iterdir():
+        if item.name in WEBUI_USER_FILES:
+            log.debug(f"保留用户数据: {item.name}")
+            continue
+        if item.is_dir():
+            shutil.rmtree(item, ignore_errors=True)
+        else:
+            item.unlink(missing_ok=True)
+    log.info("已清理WebUI旧文件")
+
+
 async def webui_download():
     log.info("开始下载WebUI...")
-    response = await request.get(
-        "https://github.com/lokyoh/ATRI-LK-WebUI/releases/latest/download/public.zip",
-        follow_redirects=True,
-    )
     zip_path = TEMP_DIR / "public.zip"
-    async with await anyio.open_file(zip_path, "wb") as f:
-        await f.write(response.content)
-    import shutil
+    unpack_path = TEMP_DIR / "webui_unpack"
+    try:
+        response = await request.get(WEBUI_URL, follow_redirects=True)
+        response.raise_for_status()
+        async with await anyio.open_file(zip_path, "wb") as f:
+            await f.write(response.content)
+        if not zipfile.is_zipfile(zip_path):
+            raise RuntimeError("WebUI 压缩包无效")
 
-    log.info("解压WebUI...")
-    shutil.unpack_archive(zip_path, WEBUI_PATH)
-    log.success("WebUI下载完成")
+        # 先解压到临时目录校验, 避免坏包直接覆盖 WEBUI_PATH
+        shutil.rmtree(unpack_path, ignore_errors=True)
+        log.info("解压WebUI...")
+        shutil.unpack_archive(zip_path, unpack_path)
+        if not (unpack_path / "index.html").exists():
+            raise RuntimeError("WebUI 压缩包缺少 index.html")
+
+        # 校验通过后再清理旧文件, 避免更新失败后连旧版本都没了
+        clean_webui_files()
+        WEBUI_PATH.mkdir(parents=True, exist_ok=True)
+        for item in unpack_path.iterdir():
+            target = WEBUI_PATH / item.name
+            if target.exists() and item.name in WEBUI_USER_FILES:
+                # 用户数据优先: 压缩包内同名文件不覆盖本地已有内容
+                log.debug(f"跳过覆盖用户数据: {item.name}")
+                continue
+            if item.is_dir():
+                shutil.copytree(item, target, dirs_exist_ok=True)
+            else:
+                shutil.copy2(item, target)
+        log.success("WebUI下载完成")
+    finally:
+        shutil.rmtree(unpack_path, ignore_errors=True)
+        zip_path.unlink(missing_ok=True)
 
 
 async def get_latest_webui_version() -> str:

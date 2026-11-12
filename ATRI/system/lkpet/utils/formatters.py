@@ -312,15 +312,17 @@ def _skill_scope_note(spec: dict[str, Any]) -> str:
 
 
 def _skill_action(label: str, skill_id: str, cfg: dict[str, Any]) -> str:
-    """技能行末的操作命令（仅 QQ 端返回内容）。
+    """技能行末的操作命令（仅 QQ 端返回内容，且带前导空格）。
 
     内嵌而不是堆到底部：一行技能后面紧跟「卸下」，不用用户去末尾数第几个链接。
+    用 :func:`menus.inline_append` 而不是 ``inline``——不加前导空格时真机上会
+    渲染成「熟练度 1.0卸下」，按钮和数值粘在一起像错别字。
     """
     from ..core.skills import skill_name
     from . import menus
 
     name = skill_name(skill_id, cfg)
-    return menus.inline(label, f"宠物.技能 {label} {name}")
+    return menus.inline_append(label, f"宠物.技能 {label} {name}")
 
 
 def format_skill_list(pet, skills_config: dict[str, Any] | None = None) -> str:

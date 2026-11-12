@@ -58,6 +58,17 @@ def tail(choices: list[Choice]) -> str:
     return f"\n\n> {links.replace(chr(10), chr(10) + '> ')}" if links else ""
 
 
+def inline_append(label: str, path: str) -> str:
+    """把可点命令**接在已有文本后面**（QQ 端返回带前导空格的标记）。
+
+    与 :func:`inline` 的区别只有一个空格，但不加这个空格时按钮会紧贴前一个
+    ``数值``/``）」``——真机上渲染成「熟练度 1.0卸下」，看起来像个错别字。
+    非 QQ 端返回空串（不吃掉任何字符），所以调用方可以无条件 ``+``。
+    """
+    link = inline(label, path)
+    return f" {link}" if link else ""
+
+
 # ---------------------------------------------------------------- 常用
 
 

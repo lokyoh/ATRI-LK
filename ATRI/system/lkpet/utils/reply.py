@@ -35,6 +35,7 @@ from __future__ import annotations
 from collections.abc import Iterable
 from dataclasses import dataclass, field
 from typing import Any
+from urllib.parse import quote
 
 from nonebot.adapters.qq import MessageEvent as QQMessageEvent
 
@@ -151,19 +152,32 @@ def md_with_choices(text: str, choices: Iterable[Choice]) -> str:
     优先用 :func:`cmd_at` 把命令内嵌进对应的行。这个函数是给「正文只是一句
     提示、没有可挂靠的行」的情形兜底，不要当成默认做法。
 
-    **正文里已经内嵌过命令就不再追加**：肉鸽的楼层/事件/商店渲染会把每一条
-    选项做成整行链接，渲染完成后正文里已经有一批 ``<qqbot-cmd-input>``；
-    此时再把同一批 ``choices`` 贴到末尾，等于同一件事在一屏里出现两遍，
-    还要用户去末尾重找一遍。
+    **只跳过「已经内嵌过同一批命令」的情况**：肉鸽的楼层/事件/商店渲染会把
+    每一条选项做成整行链接，渲染完成后正文里已经有一批 ``<qqbot-cmd-input>``；
+    此时再把同一批 ``choices`` 贴到末尾，等于同一件事在一屏里出现两遍。
+
+    判据必须是**命令本身**，不能是「正文里有任意一个标记」：技能卡正文里每个
+    技能都带「装备 / 卸下」，但底部导航（状态 / 天赋 / 传记 / 日志）是完全不同
+    的一批命令，早期按「只要有标记就跳过」写，结果技能卡底部被整段吞掉了。
+
+    QQ 端命令是 URL 编码后的字符串，所以这里比的是编码后的形式。
     """
     body = _clamp_markdown(text)
-    if QQ_CMD_MARK in body:
-        return body
     links = inline_links(choices)
     if not links:
         return body
+    if _all_commands_embedded(body, choices):
+        return body
     # 多行按钮时每行都要带引用前缀，否则第二行起会左对齐、看起来像散落的标记。
     return f"{body}\n\n> " + links.replace("\n", "\n> ")
+
+
+def _all_commands_embedded(body: str, choices: Iterable[Choice]) -> bool:
+    """正文里是否**已经**包含了这组建选项的全部命令。"""
+    items = [choice for choice in choices if choice.command]
+    if not items:
+        return False
+    return all(quote(choice.command, safe="") in body for choice in items)
 
 
 def plain_with_choices(text: str, choices: Iterable[Choice]) -> str:

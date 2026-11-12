@@ -4,9 +4,13 @@ from ATRI.dir import RES_DATA_DIR
 from ATRI.log import log
 
 from .model import (
+    DEFAULT_MAX_READ_CHARS,
     MAX_SKILL_DESCRIPTION_LENGTH,
     Skill,
     SkillSource,
+    _parse_bool,
+    _parse_int,
+    _parse_tags,
 )
 
 BUILTIN_SKILLS_DIR = RES_DATA_DIR / "agent" / "skills"
@@ -68,6 +72,8 @@ def load_skill_file(path, source: SkillSource) -> Skill | None:
         log.warning(f"技能文件 {path} 读取失败:{e}")
         return None
     meta, content = parse_skill_text(text)
+    if not str(meta.get("description") or "").strip():
+        log.warning(f"技能文件 {path} 缺少 description，已回退正文首行")
     declared = meta.get("name")
     if declared is not None and str(declared).strip() != name:
         # 名称以文件名为准，避免覆盖匹配错乱
@@ -79,6 +85,11 @@ def load_skill_file(path, source: SkillSource) -> Skill | None:
         description=extract_description(meta, content),
         content=content,
         source=source,
+        when_to_use=str(meta.get("when_to_use") or "").strip(),
+        tags=_parse_tags(meta.get("tags")),
+        priority=_parse_int(meta.get("priority"), 0),
+        embed=_parse_bool(meta.get("embed")),
+        max_read_chars=_parse_int(meta.get("max_read_chars"), DEFAULT_MAX_READ_CHARS),
     )
 
 

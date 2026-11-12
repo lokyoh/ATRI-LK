@@ -20,8 +20,16 @@ class SkillInfo(BaseModel):
     """技能名（= 文件名主干）"""
     description: str
     """技能说明"""
+    when_to_use: str = ""
+    """什么时候该读这篇；进入技能索引"""
+    tags: list[str] = []
+    """分类标签"""
+    priority: int = 0
+    """索引排序"""
+    sections: list[str] = []
+    """章节标题（可用 skill(section=...) 精确读取）"""
     source: str
-    """builtin / user / modified"""
+    """builtin / user / modified / virtual"""
     enabled: bool
     """启用开关：false 时既不入提示词也不可查询"""
     embedded: bool
@@ -41,6 +49,11 @@ class SaveSkillModel(BaseModel):
     name: str
     description: str = ""
     content: str = ""
+    when_to_use: str | None = None
+    tags: list[str] | None = None
+    priority: int | None = None
+    embed: bool | None = None
+    max_read_chars: int | None = None
 
 
 class SetSkillStateModel(BaseModel):
@@ -49,10 +62,27 @@ class SetSkillStateModel(BaseModel):
     embedded: bool | None = None
 
 
+class SkillReadPreview(BaseModel):
+    name: str
+    """技能名"""
+    text: str
+    """按章节/偏移读取得到的正文（与 agent 的 skill() 一致）"""
+    chars: int
+    """本次返回字符数"""
+    total: int
+    """技能正文总字符数"""
+    sections: list[str] = []
+    """完整章节标题，供前端下拉选择"""
+
+
 def _to_detail(skill) -> SkillDetail:
     return SkillDetail(
         name=skill.name,
         description=skill.description,
+        when_to_use=skill.when_to_use,
+        tags=list(skill.tags),
+        priority=skill.priority,
+        sections=skill.section_titles(),
         source=str(skill.source),
         enabled=skill.enabled,
         embedded=skill.embedded,
@@ -66,6 +96,10 @@ def _to_info(skill) -> SkillInfo:
     return SkillInfo(
         name=skill.name,
         description=skill.description,
+        when_to_use=skill.when_to_use,
+        tags=list(skill.tags),
+        priority=skill.priority,
+        sections=skill.section_titles(),
         source=str(skill.source),
         enabled=skill.enabled,
         embedded=skill.embedded,
@@ -109,6 +143,38 @@ async def _(name: str) -> Result[SkillDetail]:
         return Result.fail(f"发生了一点错误捏 {type(e)}: {e}")
 
 
+@router.get(
+    "/get_skill_read",
+    dependencies=[authentication()],
+    response_model=Result[SkillReadPreview],
+    response_class=JSONResponse,
+    description="按章节或偏移预览 agent 读取到的技能正文（与 skill() 同协议）",
+)
+async def _(
+    name: str, section: str = "", offset: int = 0, limit: int = 0
+) -> Result[SkillReadPreview]:
+    try:
+        skill = skill_manager.get(name)
+        if skill is None:
+            return Result.fail(f"技能 {name} 不存在", 404)
+        if not skill.enabled:
+            return Result.fail(f"技能 {name} 已停用", 400)
+        text = skill_manager.read(skill, section=section, offset=offset, limit=limit)
+        return Result.ok(
+            SkillReadPreview(
+                name=skill.name,
+                text=text,
+                chars=len(text),
+                total=len(skill.content),
+                sections=skill.section_titles(),
+            ),
+            "拿到正文啦!",
+        )
+    except Exception as e:
+        log.error(f"{router.prefix}/get_skill_read 调用错误:{str_traceback(e)}")
+        return Result.fail(f"发生了一点错误捏 {type(e)}: {e}")
+
+
 @router.post(
     "/save_skill",
     dependencies=[authentication()],
@@ -124,7 +190,14 @@ async def _(payload: SaveSkillModel) -> Result[SkillInfo]:
                 f"技能 {payload.name} 属于功能插件 {owner}，插件内技能不可编辑", 400
             )
         skill = skill_manager.save_user(
-            payload.name, payload.description, payload.content
+            payload.name,
+            payload.description,
+            payload.content,
+            when_to_use=payload.when_to_use,
+            tags=payload.tags,
+            priority=payload.priority,
+            embed=payload.embed,
+            max_read_chars=payload.max_read_chars,
         )
         return Result.ok(_to_info(skill), "保存成功!")
     except ValueError as e:

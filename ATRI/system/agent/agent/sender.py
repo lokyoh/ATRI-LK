@@ -5,10 +5,10 @@ class ChatSender:
     """发送通道。
 
     ``sent_count`` 记录本次链路**真的发出去了几条**。主动发言限流只认这个数——
-    「决定要说」和「说出口了」是两件事，模型可能在思考后只调用
-    ``stop_thinking`` 一句不说，那种情况不该占用发言配额。
+    「决定要说」和「说出口了」是两件事，模型可能在思考后一句话都不说，
+    那种情况不该占用发言配额。
 
-    ``mtype`` 声明这个通道属于哪种消息协议，供 ``send_md_message`` 决定
+    ``mtype`` 声明这个通道属于哪种消息协议，供 ``md`` 决定
     用图片还是 Markdown 卡片渲染：0 = OneBot（渲染成图片），1 = QQ。
     靠 isinstance 判断会漏掉新增的通道——``BotChatSender`` 就曾因此
     落到 else 分支，把 Markdown 源码直接发进群。
@@ -23,6 +23,26 @@ class ChatSender:
 
     async def send(self, message):
         pass
+
+    async def send_text(self, text):
+        """发送纯文本；各通道都支持。"""
+        await self.send(text)
+
+    async def send_markdown(self, document: str):
+        """发送 Markdown：QQ 官方发卡片，OneBot 渲染成图片。"""
+        if self.mtype == 1:
+            from ATRI.message import QQMessage
+
+            await self.send(QQMessage.md_msg(document))
+            return
+        from ATRI.message import img_msg
+        from ATRI.system.htmlrender import md_to_pic
+
+        await self.send(img_msg(await md_to_pic(document)))
+
+    async def send_face(self, face):
+        """发送一个表情消息段。"""
+        await self.send(face)
 
     async def finish(self, message=None):
         pass

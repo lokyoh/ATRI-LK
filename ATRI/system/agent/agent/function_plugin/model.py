@@ -21,6 +21,21 @@ class PluginSkill(BaseModel):
     description: str = ""
     """一句话说明；留空时由注入逻辑从正文首行回退"""
 
+    when_to_use: str = ""
+    """什么时候该读这篇；进入技能索引"""
+
+    tags: list[str] = Field(default_factory=list)
+    """分类标签"""
+
+    priority: int = 0
+    """索引排序"""
+
+    embed: bool | None = None
+    """frontmatter 声明的内嵌覆盖"""
+
+    max_read_chars: int = 4000
+    """单次读取上限"""
+
 
 class PluginSkillFile(BaseModel):
     """插件自带的技能正文（来自插件自有目录下的 md 文件）。"""
@@ -110,6 +125,12 @@ class FunctionPlugin(BaseModel):
                 log.warning(f"功能插件 {self.name} 的技能文件 {path} 读取失败:{e}")
                 continue
             from ..skills.loader import parse_skill_text
+            from ..skills.model import (
+                DEFAULT_MAX_READ_CHARS,
+                _parse_bool,
+                _parse_int,
+                _parse_tags,
+            )
 
             meta, content = parse_skill_text(text)
             loaded.append(
@@ -117,6 +138,13 @@ class FunctionPlugin(BaseModel):
                     name=name,
                     content=content,
                     description=str(meta.get("description") or "").strip(),
+                    when_to_use=str(meta.get("when_to_use") or "").strip(),
+                    tags=_parse_tags(meta.get("tags")),
+                    priority=_parse_int(meta.get("priority"), 0),
+                    embed=_parse_bool(meta.get("embed")),
+                    max_read_chars=_parse_int(
+                        meta.get("max_read_chars"), DEFAULT_MAX_READ_CHARS
+                    ),
                 )
             )
         return loaded
@@ -137,9 +165,16 @@ class FunctionPlugin(BaseModel):
     @staticmethod
     def _func_name(item: Any) -> str:
         if isinstance(item, str):
-            return item
-        name = getattr(item, "function_name", "")
-        return str(name or type(item).__name__)
+            name = item
+        else:
+            name = str(getattr(item, "function_name", "") or type(item).__name__)
+        # 旧名在注册/展示时归一，配置与 UI 都只看到规范名。
+        try:
+            from ..function_calling import FunctionCallingManager
+
+            return FunctionCallingManager.resolve_name(name)
+        except Exception:
+            return name
 
     def normalized(self) -> "FunctionPlugin":
         """纯名字视图：自带内容解析成名字，便于持久展示与归属查询。

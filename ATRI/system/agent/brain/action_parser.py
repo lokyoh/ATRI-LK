@@ -170,8 +170,8 @@ def _split_bare_calls(
 def _keyword_params_only(segment: str) -> bool:
     """判断一行是否**像调用**（决定要不要把它当调用处理）。
 
-    认作调用：``send_message(msg="hi")``、``stop_thinking()``，以及
-    ``send_message("位置参数")`` 这种写错了的调用——后者必须进 ``issues``
+    认作调用：``say(msg="hi")``、``face(meme="...")``，以及
+    ``say("位置参数")`` 这种写错了的调用——后者必须进 ``issues``
     回填给模型，而不是当正文丢掉。排除叙述里的英文括号：括号里含空格、
     且不是「参数名=」开头的（``Note (this is fine)``）。
     """

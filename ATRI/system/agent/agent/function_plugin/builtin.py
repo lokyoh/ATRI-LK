@@ -15,7 +15,8 @@ from .model import FunctionPlugin, PluginSkillFile
 class GetDirTreeFunctionCalling(FunctionCalling):
     """查询目录树。"""
 
-    function_name = "get_dir_tree"
+    function_name = "tree"
+    aliases = ("get_dir_tree",)
     description = "查询文件目录:root:不包含后续目录根目录;ATRI:系统代码目录;system_plugins:系统插件目录;plugins:插件目录;config:配置目录;errors:最近7天的错误报告目录"
     args: ClassVar[list[FunctionCallingArg]] = [
         FunctionCallingArg(name="dir", _type="str", description="目录名")
@@ -52,7 +53,8 @@ class GetDirTreeFunctionCalling(FunctionCalling):
 class ReadFileFunctionCalling(FunctionCalling):
     """读取文件内容。"""
 
-    function_name = "read_file"
+    function_name = "read"
+    aliases = ("read_file",)
     description = "读取指定文件"
     args: ClassVar[list[FunctionCallingArg]] = [
         FunctionCallingArg(name="path", _type="str", description="文件路径"),

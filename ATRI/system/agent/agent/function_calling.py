@@ -1,18 +1,21 @@
-import time
 from typing import ClassVar
 
 import anyio
 from pydantic import BaseModel
 
 from ATRI.exceptions import str_traceback
-from ATRI.message import QQMessage, img_msg, rec_msg_from_path
-from ATRI.system.htmlrender import md_to_pic
 from ATRI.utils.datetime import now
 
 from ..config import config
 from ..event import AgentEventBus
 from ..llm import ModelType, llm_manager
 from ..utils import log, request
+from .function_permission import (
+    FunctionScope,
+    PermissionContext,
+    PermissionLevel,
+    PermissionResolver,
+)
 from .history import History
 from .memes import FaceManager
 from .memory.manage import memory_manager
@@ -23,49 +26,36 @@ from .telemetry import telemetry
 from .user import add_self_memory, get_user_info, save_user_info
 from .user_profile import UserProfile
 
-#: 单个对话人「临时长期记忆」的条数上限（`memory_change` 写入时强制，先进先出）。
+#: 单个对话人「临时长期记忆」的条数上限（`remember` 写入时强制，先进先出）。
 #: 这份列表每轮整段进提示词，所以上限是成本约束，不只是整洁问题。
 USER_MEMORY_LIMIT = 11
 
 #: 亚托莉自我记忆的条数上限。
 SELF_MEMORY_LIMIT = 8
 
-#: 单条回复的字数上限。超出会在句子边界截断。
+#: 单条回复的字数上限（兼容旧常量）。
 #:
-#: 为什么需要这个：提示词里写了「短」，但那是**要求**不是**约束**——
-#: 模型照样能发三百字，而且发出去就收不回来了。
-#: 300 字留给「确实需要解释一句」的情况，再长一定是把整段思考倒出来了。
+#: 实际运行时以 `AgentConfig.reply_max_chars` 为准；`reply_pipeline.split`
+#: 会读取配置。这里保留常量供旧调用与测试引用。
 REPLY_MAX_CHARS = 300
-
-#: 截断时优先在最近的这些标点处断开，尽量不截断在半句话中间。
-_SENTENCE_ENDS = ("。", "！", "？", "…", "\n", "；", "，", ".", "!", "?")
 
 
 def _trim_reply(text: str) -> tuple[str, str]:
-    """把过长的回复截短。返回 (新文本, 提示语)。
+    """兼容旧代码：把过长文本截短，返回 (新文本, 提示语)。
 
-    提示语会作为 `send_message` 的返回值回填给模型，让它知道被截了、
-    下次主动拆成几条发。**不抛错**：已经想好的内容丢掉更可惜，
-    截断比失败好。
-
-    截断点优先取最近的句子边界，实在找不到才硬切——半句话比长句更难看。
+    P5 之后实际清洗在 `reply_pipeline`；这里保留给旧调用方，
+    行为与 `split` 的句子边界截断一致。
     """
+    from .reply_pipeline import split
+
     body = (text or "").strip()
     if len(body) <= REPLY_MAX_CHARS:
         return body, ""
-
-    head = body[:REPLY_MAX_CHARS]
-    # 从后往前找最近的句子边界，至少保留一半长度（否则截得太碎）
-    cut = -1
-    for i in range(len(head) - 1, len(head) // 2, -1):
-        if head[i] in _SENTENCE_ENDS:
-            cut = i + 1
-            break
-    trimmed = (head[:cut] if cut > 0 else head).rstrip()
-
+    parts = split(body, REPLY_MAX_CHARS)
+    trimmed = parts[0] if parts else ""
     note = (
         f"已发送，但内容过长被截断（原 {len(body)} 字，只发了 {len(trimmed)} 字）。"
-        "下次想说的多，就分几次调用 send_message，每条一句。"
+        "下次想说的多，就分几次调用 say，每条一句。"
     )
     return trimmed, note
 
@@ -77,6 +67,27 @@ class FunctionCallingArg:
         self.description = description
 
 
+def _context_for(user_id: str = "", chat_id: str = "", bot=None) -> PermissionContext:
+    """没有显式权限上下文时的兜底。
+
+    有真实用户 ID 就按该用户求值（旧调用只传 sender / user_id）；
+    完全没有对话人（后台、测试、主动开口）时按 ``system`` 处理——
+    保持旧行为，而不是把所有无参调用都判成 ``user`` 后大面积不可用。
+    """
+    uid = str(user_id or "").strip()
+    if not uid:
+        return PermissionContext.system(
+            chat_id=str(chat_id or ""),
+            bot_id=str(getattr(bot, "self_id", "") or "") if bot is not None else "",
+        )
+    return PermissionContext(
+        user_id=uid,
+        chat_id=str(chat_id or ""),
+        bot_id=str(getattr(bot, "self_id", "") or "") if bot is not None else "",
+        level=PermissionResolver.resolve_level(uid),
+    )
+
+
 class FunctionCallingData:
     def __init__(
         self,
@@ -86,6 +97,7 @@ class FunctionCallingData:
         data: dict,
         current_history: History | None = None,
         bot=None,
+        permission: PermissionContext | None = None,
     ):
         self.sender_id = sender_id
         self.chat_id = chat_id
@@ -93,6 +105,7 @@ class FunctionCallingData:
         self.data = data
         self.current_history = current_history
         self._bot = bot
+        self.permission = permission or _context_for(sender_id, chat_id, bot)
 
     @property
     def bot(self):
@@ -135,10 +148,36 @@ class EnableCheck(BaseModel):
 
 class FunctionCalling:
     function_name = ""
+    aliases: ClassVar[tuple[str, ...]] = ()
+    """旧名 / 别名。解析时归一到 ``function_name``，提示词与回填只用新名。"""
     description = ""
     args: ClassVar[list[FunctionCallingArg]] = []
     essential: ClassVar[bool] = False
     """核心功能：始终启用，不受手动开关影响（见 FunctionCallingManager）"""
+    prompt_hidden: ClassVar[bool] = False
+    """不进入常规功能提示词，但仍可被模型直接调用。
+
+    与插件 `rare_functions` 的区别：rare 只能经 `call` 调用（受 bot 权限约束），
+    `prompt_hidden` 只是不给提示词占位，例如仅在技能索引被截断时才提示的
+    `skills()`。
+    """
+    scope: ClassVar[FunctionScope] = FunctionScope.BOT
+    """默认作用域。忘记声明时按 ``bot`` 处理——最安全，普通用户不会误用。"""
+    scope_by_action: ClassVar[dict[str, FunctionScope]] = {}
+    """按动作细分作用域，例如读本群 ``chat``、写本群 ``group``。"""
+    returns_data: ClassVar[bool] = True
+    """调用结果是否需要回填给思考。
+
+    ``False`` 表示副作用调用（发消息 / 发表情 / 改状态），派发后立即返回，
+    结果不进入下一轮上下文。默认 ``True``：忘记声明时行为退化为「安全但慢」，
+    而不是把真实结果悄悄丢掉。
+    """
+    parallel_safe: ClassVar[bool] = True
+    """同一轮里能否与其他数据调用并发执行。
+
+    发送类必须是 ``False``（保持模型输出顺序）；会改共享状态或调用模型的
+    生活系统写操作也应为 ``False``，由执行器放进串行 lane。
+    """
 
     @classmethod
     def can_enable(cls) -> EnableCheck:
@@ -150,6 +189,11 @@ class FunctionCalling:
         """② 对当前对话人是否可用。sender 可能为 None（后台/测试调用），必须容忍。"""
         return True
 
+    @classmethod
+    def action_for(cls, data: FunctionCallingData) -> str:
+        """③ 本次调用的动作名，用于 ``scope_by_action``。默认无动作。"""
+        return ""
+
     @staticmethod
     async def call(data: FunctionCallingData):
         pass
@@ -160,7 +204,7 @@ class FunctionCallingUnavailableError(Exception):
 
 
 class FunctionCallingEssentialError(Exception):
-    """核心功能不可关闭（stop_thinking / send_message 等）"""
+    """核心功能不可关闭（say 等）"""
 
 
 def _plugin_enabled(function_name: str) -> bool:
@@ -208,47 +252,109 @@ def _plugin_rare(function_name: str) -> bool:
 
 class FunctionCallingManager:
     function_calling: ClassVar[dict[str, type[FunctionCalling]]] = {}
+    alias_index: ClassVar[dict[str, str]] = {}
+    """旧名 / 别名 → 规范名。注册时建立，解析后统一用规范名。"""
+    _alias_warned: ClassVar[set[str]] = set()
 
     @classmethod
     def register(cls, func: type[FunctionCalling]):
         cls.function_calling[func.function_name] = func
+        aliases = {
+            str(alias).strip()
+            for alias in (getattr(func, "aliases", ()) or ())
+            if str(alias).strip()
+        }
+        # 同名类重新注册时，清掉已经不再声明的旧别名，避免指向过期实现。
+        for alias, canonical in list(cls.alias_index.items()):
+            if canonical == func.function_name and alias not in aliases:
+                cls.alias_index.pop(alias, None)
+        for alias in aliases:
+            if alias != func.function_name:
+                cls.alias_index[alias] = func.function_name
         if getattr(func, "essential", False):
             cls.purge_essential_disables()
 
     @classmethod
     def clear_all(cls):
         cls.function_calling.clear()
+        cls.alias_index.clear()
+        cls._alias_warned.clear()
+
+    @classmethod
+    def unregister(cls, name: str) -> type[FunctionCalling] | None:
+        """摘除一个功能及其全部别名；插件回滚 / 卸载时使用。"""
+        canonical = cls.resolve_name(name)
+        func = cls.function_calling.pop(canonical, None)
+        for alias, target in list(cls.alias_index.items()):
+            if target == canonical:
+                cls.alias_index.pop(alias, None)
+        return func
+
+    @classmethod
+    def resolve_name(cls, name: str) -> str:
+        """把旧名 / 别名解析成规范名；未注册的名字原样返回。"""
+        key = str(name or "").strip()
+        if key in cls.function_calling:
+            return key
+        canonical = cls.alias_index.get(key)
+        if canonical and canonical in cls.function_calling:
+            if key not in cls._alias_warned:
+                cls._alias_warned.add(key)
+                log.debug(f"功能调用名 {key} 是旧名，已归一为 {canonical}")
+            return canonical
+        return key
+
+    @classmethod
+    def _disabled_set(cls) -> set[str]:
+        return {
+            cls.resolve_name(name)
+            for name in (config.get("function_calling_disable") or [])
+        }
 
     # ---- 手动开关（存 AgentConfig 的禁用列表：默认启用，列表只记例外）----
 
     @classmethod
     def is_essential(cls, name: str) -> bool:
         """核心功能：维持对话闭环所必需，永远启用，不能被手动关闭。"""
-        func = cls.function_calling.get(name)
+        func = cls.function_calling.get(cls.resolve_name(name))
         return bool(getattr(func, "essential", False))
 
     @classmethod
     def is_rare(cls, name: str) -> bool:
         """不常用功能：不进入常规功能提示词，只能由 call 调用。"""
-        return _plugin_rare(name)
+        return _plugin_rare(cls.resolve_name(name))
 
     @classmethod
     def is_manually_enabled(cls, name: str) -> bool:
-        if cls.is_essential(name):
+        canonical = cls.resolve_name(name)
+        if cls.is_essential(canonical):
             return True
-        return name not in (config.get("function_calling_disable") or [])
+        return canonical not in cls._disabled_set()
+
+    @classmethod
+    def is_plugin_enabled(cls, name: str) -> bool:
+        return _plugin_enabled(cls.resolve_name(name))
+
+    @classmethod
+    def owner_of(cls, name: str) -> str:
+        """功能所属插件名；不属于任何插件时为空串。"""
+        from .function_plugin.manage import function_plugin_manager
+
+        return function_plugin_manager.owner_of_function(cls.resolve_name(name)) or ""
 
     @classmethod
     def set_manually_enabled(cls, name: str, enabled: bool):
-        if not enabled and cls.is_essential(name):
-            raise FunctionCallingEssentialError(f"功能 {name} 是核心功能，不能关闭")
+        canonical = cls.resolve_name(name)
+        if not enabled and cls.is_essential(canonical):
+            raise FunctionCallingEssentialError(
+                f"功能 {canonical} 是核心功能，不能关闭"
+            )
         # config.get() 返回内部引用，必须构造新列表后 config.set 才会落盘
         names = list(config.get("function_calling_disable") or [])
-        if enabled:
-            if name in names:
-                names.remove(name)
-        elif name not in names:
-            names.append(name)
+        # 旧名与规范名视为同一个开关，避免迁移期出现「关了一个另一个还开着」。
+        names = [item for item in names if cls.resolve_name(item) != canonical]
+        if not enabled:
+            names.append(canonical)
         config.set("function_calling_disable", names)
 
     @classmethod
@@ -258,7 +364,12 @@ class FunctionCallingManager:
         返回被修复后的列表；没有变化时不写盘。
         """
         names = list(config.get("function_calling_disable") or [])
-        kept = [name for name in names if not cls.is_essential(name)]
+        kept: list[str] = []
+        for name in names:
+            canonical = cls.resolve_name(name)
+            if cls.is_essential(canonical) or canonical in kept:
+                continue
+            kept.append(canonical)
         if kept != names:
             config.set("function_calling_disable", kept)
         return kept
@@ -267,68 +378,192 @@ class FunctionCallingManager:
 
     @classmethod
     def get_can_enable(cls, name: str) -> EnableCheck:
-        func = cls.function_calling.get(name)
+        canonical = cls.resolve_name(name)
+        func = cls.function_calling.get(canonical)
         if func is None:
             return EnableCheck(available=False, reason="功能未注册")
         try:
             return func.can_enable()
         except Exception as e:
-            log.warning(f"功能 {name} 环境可用性检查失败:{str_traceback(e)}")
+            log.warning(f"功能 {canonical} 环境可用性检查失败:{str_traceback(e)}")
             return EnableCheck(available=False, reason="环境可用性检查失败")
 
     @classmethod
-    def is_available(
-        cls, name: str, sender: ChatSender | None = None, user_id: str = ""
-    ) -> bool:
-        func = cls.function_calling.get(name)
+    def _context(
+        cls,
+        sender: ChatSender | None = None,
+        user_id: str = "",
+        permission: PermissionContext | None = None,
+    ) -> PermissionContext:
+        if permission is not None:
+            return permission
+        return _context_for(user_id)
+
+    @classmethod
+    def availability(
+        cls,
+        name: str,
+        sender: ChatSender | None = None,
+        user_id: str = "",
+        permission: PermissionContext | None = None,
+        action: str | None = None,
+        *,
+        record: bool = True,
+    ) -> EnableCheck:
+        """功能是否可用，并给出**具体原因**。
+
+        判定顺序：注册 → 权限（含全局/插件开关、能力上限、个人与等级规则）
+        → 环境 → 对话人。
+
+        :param record: 是否写拒绝埋点。列清单（``get_available``）只是求值，
+            不是「模型试图越权」，必须传 ``False``——否则每处理一条消息都会
+            为每个 bot 作用域功能各写一条 ``permission_denied``，把真实拒绝淹掉。
+        """
+        canonical = cls.resolve_name(name)
+        func = cls.function_calling.get(canonical)
         if func is None:
-            return False
-        if not cls.is_manually_enabled(name):
-            return False
-        if not _plugin_enabled(name):
-            return False
-        if not cls.get_can_enable(name).available:
-            return False
+            return EnableCheck(available=False, reason="功能未注册")
+
+        ctx = cls._context(sender, user_id, permission)
+        decision = PermissionResolver.check(canonical, ctx, action, record=record)
+        if not decision.allowed:
+            return EnableCheck(available=False, reason=decision.reason)
+
+        check = cls.get_can_enable(canonical)
+        if not check.available:
+            return check
         try:
-            return bool(func.is_available_for(sender, user_id))
+            if not bool(func.is_available_for(sender, user_id)):
+                return EnableCheck(available=False, reason="当前对话人不可用")
         except Exception as e:
-            log.warning(f"功能 {name} 对话人可用性检查失败:{str_traceback(e)}")
-            return False
+            log.warning(f"功能 {canonical} 对话人可用性检查失败:{str_traceback(e)}")
+            return EnableCheck(available=False, reason="对话人可用性检查失败")
+        return EnableCheck()
+
+    @classmethod
+    def is_available(
+        cls,
+        name: str,
+        sender: ChatSender | None = None,
+        user_id: str = "",
+        permission: PermissionContext | None = None,
+        action: str | None = None,
+        *,
+        record: bool = True,
+    ) -> bool:
+        return cls.availability(
+            name, sender, user_id, permission, action, record=record
+        ).available
 
     @classmethod
     def get_available(
-        cls, sender: ChatSender | None = None, user_id: str = ""
+        cls,
+        sender: ChatSender | None = None,
+        user_id: str = "",
+        permission: PermissionContext | None = None,
     ) -> dict[str, type[FunctionCalling]]:
-        """保持注册顺序（= 提示词顺序）的可用功能子集"""
+        """保持注册顺序（= 提示词顺序）的可用功能子集。
+
+        **求值不写拒绝埋点**：这里只是在拼提示词，模型并没有试图调用这些
+        功能。写埋点会让每条消息都产出 4~6 条 ``permission_denied``，
+        真正的越权尝试反而查不出来。
+        """
         return {
             name: func
             for name, func in cls.function_calling.items()
-            if not _plugin_rare(name) and cls.is_available(name, sender, user_id)
+            if not _plugin_rare(name)
+            and not bool(getattr(func, "prompt_hidden", False))
+            and cls.availability(
+                name, sender, user_id, permission, record=False
+            ).available
         }
 
     @classmethod
     def get_rare_available(
-        cls, sender: ChatSender | None = None, user_id: str = ""
+        cls,
+        sender: ChatSender | None = None,
+        user_id: str = "",
+        permission: PermissionContext | None = None,
     ) -> dict[str, type[FunctionCalling]]:
-        """可由 call 调用的不常用功能子集（不进常规提示词）。"""
+        """可由 call 调用的不常用功能子集（不进常规提示词）。求值同样不写埋点。"""
         return {
             name: func
             for name, func in cls.function_calling.items()
             if name != "call"
             and _plugin_rare(name)
-            and cls.is_available(name, sender, user_id)
+            and cls.availability(
+                name, sender, user_id, permission, record=False
+            ).available
         }
 
     @classmethod
+    def hidden_available(
+        cls,
+        sender: ChatSender | None = None,
+        user_id: str = "",
+        permission: PermissionContext | None = None,
+    ) -> dict[str, type[FunctionCalling]]:
+        """``prompt_hidden`` 但仍可直接调用、且当前可用的功能。
+
+        它们不进常规清单，但提示词里点名要求使用（例如 ``say_exact``），
+        需要单独列出来，否则会和「禁止调用未列出的功能」自相矛盾。
+        """
+        return {
+            name: func
+            for name, func in cls.function_calling.items()
+            if bool(getattr(func, "prompt_hidden", False))
+            and cls.availability(
+                name, sender, user_id, permission, record=False
+            ).available
+        }
+
+    @classmethod
+    def action_for(cls, name: str, data: FunctionCallingData) -> str:
+        canonical = cls.resolve_name(name)
+        func = cls.function_calling.get(canonical)
+        if func is None:
+            return ""
+        try:
+            return str(func.action_for(data) or "")
+        except Exception as exc:
+            log.debug(f"功能 {canonical} 动作解析失败，按默认作用域处理：{exc}")
+            return ""
+
+    @classmethod
     async def call(cls, func_name: str, data: FunctionCallingData):
-        if func_name not in cls.function_calling:
+        canonical = cls.resolve_name(func_name)
+        if canonical not in cls.function_calling:
             raise KeyError(func_name)
-        if not cls.is_available(func_name, data.sender, data.sender_id):
-            raise FunctionCallingUnavailableError(f"功能 {func_name} 当前不可用")
-        return await cls.function_calling[func_name].call(data)
+        action = cls.action_for(canonical, data)
+        decision = PermissionResolver.check(canonical, data.permission, action)
+        if not decision.allowed:
+            raise FunctionCallingUnavailableError(
+                f"功能 {canonical} 当前不可用：{decision.reason}"
+            )
+        if not cls.is_available(
+            canonical,
+            data.sender,
+            data.sender_id,
+            data.permission,
+            action,
+            record=False,
+        ):
+            check = cls.availability(
+                canonical,
+                data.sender,
+                data.sender_id,
+                data.permission,
+                action,
+                record=False,
+            )
+            raise FunctionCallingUnavailableError(
+                f"功能 {canonical} 当前不可用：{check.reason or '未知原因'}"
+            )
+        return await cls.function_calling[canonical].call(data)
 
 
-# 生成表情的例子字符串
+#: 表情候选清单；实际由 `action_executor._available_faces()` 在投递时读取，
+#: 这里保留旧变量供插件/测试引用。
 meme_examples = []
 for meme in FaceManager.get_all_memes():
     desc = FaceManager.get_meme_description(meme)
@@ -342,93 +577,135 @@ meme_example_str = ";".join(meme_examples)
 def register_function_calling():
     FunctionCallingManager.clear_all()
 
-    class StopThinkingFunctionCalling(FunctionCalling):
-        function_name = "stop_thinking"
-        description = "结束本次思考。"
-        essential = True
-        args: ClassVar[list[FunctionCallingArg]] = []
-
-        @staticmethod
-        async def call(data: FunctionCallingData):
-            from ..brain.thinking import StopThinkingError
-
-            raise StopThinkingError("结束思考")
-
-    FunctionCallingManager.register(StopThinkingFunctionCalling)
-
     class SendMessageFunctionCalling(FunctionCalling):
-        function_name = "send_message"
+        function_name = "say"
+        aliases = ("send_message",)
+        scope = FunctionScope.CHAT
+        returns_data = False
+        parallel_safe = False
         description = (
             "在聊天里说话。\n"
-            "想说什么，就必须调用本功能，把要说的话放进 msg 参数。\n"
-            "msg 就是你直接发出去的那句话：口语、短，可以带语气词，"
-            "不是对别人的解释、不是总结、不是报告。\n"
-            "想分几条发就多次调用，一次一条。\n"
-            "如果此刻不想说话，调用 stop_thinking，不要用正文代替。"
+            "说出你的意图，不用雕琢措辞：intent 写「想表达什么」，"
+            "例如「解释钓鱼要先抛钩再收线」，"
+            "不要写「你好呀，钓鱼要先抛钩哦」这种最终台词。\n"
+            "最终怎么说由聊天模型决定；想分几条说就用 count，不要重复调用。\n"
+            "如果此刻不想说话，就不要再调用任何功能，也不要用正文代替。"
         )
         essential = True
         args: ClassVar = [
             FunctionCallingArg(
-                name="msg",
+                name="intent",
                 _type="str",
                 description=(
-                    "你要发出去的那句话。像在群里打字，不是在写文章：\n"
-                    "  1. 短。一句通常 5-20 字；想说的多就分几条发，别一口气写一大段\n"
-                    "  2. 口语。用「诶」「唔」「啊」「嘛」「啦」「哈哈」这类语气词；"
-                    "不用「此外」「因此」「总而言之」这类书面连接词\n"
-                    "  3. 可以不完整。「啊这」「真的假的」「笑死」都是完整的一句话\n"
-                    "  4. 有反应先于有内容。别人说「今天好累」，回「怎么了」"
-                    "比「建议您注意休息」像人\n"
-                    "  5. 不写动作描写（如「(笑)」「*点头*」）、不写括号里的心理活动\n"
-                    "  6. 不列 1234、不用 markdown 记号\n"
-                    "  7. 不要复述对方刚说的话\n"
-                    "反例:「你好！很高兴为你解答这个问题。关于你提到的情况，"
-                    "我建议你可以……」\n"
-                    "正例:「诶，怎么了」「啊这…」「哈哈哈哈哈真的假的」「唔，那你自己怎么想的」"
+                    "你要表达的意思。像在群里想说什么，不是写文章：\n"
+                    "  1. 短。一句通常 5-20 字；想说的多就 count=2/3，别一口气写一大段\n"
+                    "  2. 口语。想好语气词与书面语的区别，但不必自己写最终台词\n"
+                    "  3. 有反应先于有内容。别人说「今天好累」，表达「关心一下」"
+                    "比「建议注意休息」像人\n"
+                    "  4. 不写动作描写、不写括号里的心理活动、不列 1234\n"
+                    "  5. 不要复述对方刚说的话"
                 ),
+            ),
+            FunctionCallingArg(
+                name="tone",
+                _type="str",
+                description="(可选)语气，如「轻松」「敷衍」「认真」；留空按自然语气",
+            ),
+            FunctionCallingArg(
+                name="count",
+                _type="int",
+                description="(可选)希望分几条说，1-3，默认 1",
             ),
             FunctionCallingArg(
                 name="at",
                 _type="bool",
-                description="(可选)时置为true时@正在跟你说话的人，"
+                description="(可选)置为 true 时 @ 正在跟你说话的人；"
                 "私聊、或本来就是在直接回答他时不必加。",
             ),
         ]
 
         @staticmethod
         async def call(data: FunctionCallingData):
-            msg = data.data.get("msg", "")
+            """降级直发路径。
+
+            正常链路由 `ChatOutbox` 渲染后发送；只有绕过 Outbox 的旧调用
+            （测试 / 插件直接调用）才走这里：把 intent 清洗后当最终文本发。
+            """
+            from .reply_pipeline import sanitize, split
+
+            intent = str(data.data.get("intent") or "").strip()
             current_history = data.current_history
             if current_history is None:
                 raise RuntimeError("发送消息时缺少关联的聊天历史")
-            # 提示词要求「短」，但没有任何机制兜底——模型照样能发一大段。
-            # 这里做**软截断**：超长时在最近的句子边界断开，并回填一句提示，
-            # 让模型知道被截了、下次自己拆成几条。不直接报错（会丢内容）。
-            shortened, cut_note = _trim_reply(msg)
-            if cut_note:
-                log.debug(f"回复过长被截断，原长 {len(msg)}")
+            if not intent:
+                return None
+            count = data.data.get("count") or 1
+            try:
+                count = max(1, min(3, int(count)))
+            except (TypeError, ValueError):
+                count = 1
+            messages = split(sanitize(intent), REPLY_MAX_CHARS)[:count]
+            if not messages:
+                return None
             if _as_bool(data.data.get("at")):
-                payload = _with_mention(shortened, data.mention_target, data.mtype)
+                payload = _with_mention(messages[0], data.mention_target, data.mtype)
             else:
-                payload = shortened
+                payload = messages[0]
             try:
                 await data.sender.send(payload)
-                if llm_manager.has_type(ModelType.TTS) and isinstance(
-                    data.sender, OneBotChatSender
-                ):
-                    file = await llm_manager.call_model_by_type(
-                        ModelType.TTS, shortened, "Agent-语音"
-                    )
-                    await data.sender.send(rec_msg_from_path(file.content))
             except Exception:
                 return "发送失败,请勿再次尝试"
-            current_history.add_response(shortened)
-            return cut_note or "发送成功"
+            current_history.add_response(messages[0])
+            return None
 
     FunctionCallingManager.register(SendMessageFunctionCalling)
 
+    class SayExactFunctionCalling(FunctionCalling):
+        function_name = "say_exact"
+        scope = FunctionScope.CHAT
+        returns_data = False
+        parallel_safe = False
+        prompt_hidden = True
+        description = (
+            "逐字发送内容，唯一跳过聊天模型的发送入口。"
+            "只用于代码、命令、配置片段、引用原文或用户明确要求「原样发」。"
+            "普通聊天不要用它；想说什么用 say(intent=...)。"
+        )
+        args: ClassVar[list[FunctionCallingArg]] = [
+            FunctionCallingArg(
+                name="text", _type="str", description="要逐字发送的内容"
+            ),
+            FunctionCallingArg(
+                name="at",
+                _type="bool",
+                description="(可选)置为 true 时 @ 正在跟你说话的人",
+            ),
+        ]
+
+        @staticmethod
+        async def call(data: FunctionCallingData):
+            """降级直发路径；正常链路由 Outbox 以 exact job 发送。"""
+            from .reply_pipeline import sanitize
+
+            text = str(data.data.get("text") or "").strip()
+            current_history = data.current_history
+            if current_history is None:
+                raise RuntimeError("发送消息时缺少关联的聊天历史")
+            if not text:
+                return None
+            # 逐字发送唯一允许的清洗只有去代码围栏，不做说话人/动作清洗
+            try:
+                await data.sender.send(text)
+            except Exception:
+                return "发送失败,请勿再次尝试"
+            current_history.add_response(sanitize(text) or text)
+            return None
+
+    FunctionCallingManager.register(SayExactFunctionCalling)
+
     class CallFunctionCalling(FunctionCalling):
         function_name = "call"
+        scope = FunctionScope.BOT
         description = (
             "调用不常用功能。不常用功能不会出现在上面的功能列表里，"
             "它们的具体用法通常写在技能正文中，请按技能给出的功能名与参数调用"
@@ -469,9 +746,10 @@ def register_function_calling():
         async def call(data: FunctionCallingData):
             from ..brain.action_parser import normalize_args
 
-            func_name = str(data.data.get("function") or "").strip()
-            if not func_name:
+            requested = str(data.data.get("function") or "").strip()
+            if not requested:
                 return "请提供要调用的功能名"
+            func_name = FunctionCallingManager.resolve_name(requested)
             if func_name == "call":
                 return "call 不能调用自己"
             required = data.data.get("args")
@@ -486,9 +764,16 @@ def register_function_calling():
             if not FunctionCallingManager.is_rare(func_name):
                 return f"功能 {func_name} 不是不常用功能，请直接调用它"
             if not FunctionCallingManager.is_available(
-                func_name, data.sender, data.sender_id
+                func_name, data.sender, data.sender_id, data.permission
             ):
-                check = FunctionCallingManager.get_can_enable(func_name)
+                # 第一次求值已经写过拒绝埋点，这里只取原因，不要重复记。
+                check = FunctionCallingManager.availability(
+                    func_name,
+                    data.sender,
+                    data.sender_id,
+                    data.permission,
+                    record=False,
+                )
                 return (
                     f"功能 {func_name} 当前不可用：{check.reason or '该功能已被关闭'}"
                 )
@@ -504,52 +789,76 @@ def register_function_calling():
                     args,
                     data.current_history,
                     bot=data.bot,
+                    permission=data.permission,
                 ),
             )
 
     FunctionCallingManager.register(CallFunctionCalling)
 
     class SendMdMessageFunctionCalling(FunctionCalling):
-        function_name = "send_md_message"
-        description = "发送md格式消息,用于专业性回答"
+        function_name = "md"
+        aliases = ("send_md_message",)
+        scope = FunctionScope.CHAT
+        returns_data = False
+        parallel_safe = False
+        description = (
+            "发一张 Markdown 卡片，用于专业性回答或需要排版的说明。\n"
+            "intent 写「这张卡片要表达什么」，不要自己写最终排版；"
+            "标题与正文由聊天模型决定。"
+        )
         args: ClassVar = [
-            FunctionCallingArg(name="msg", _type="str", description="要发送的消息内容")
+            FunctionCallingArg(
+                name="intent", _type="str", description="这张卡片要表达什么"
+            ),
+            FunctionCallingArg(
+                name="image",
+                _type="str",
+                description="(可选)已经确定好的图片 URL/路径；没有就不要填，禁止编造",
+            ),
+            FunctionCallingArg(
+                name="title",
+                _type="str",
+                description="(可选)希望使用的标题；留空由聊天模型决定",
+            ),
+            FunctionCallingArg(
+                name="tone", _type="str", description="(可选)语气，如「认真」「轻松」"
+            ),
         ]
 
         @staticmethod
         async def call(data: FunctionCallingData):
-            msg = data.data.get("msg", "")
+            """降级直发路径：不做 Chat 渲染，直接把 intent 当正文发卡片。"""
+            from .function_calling_utils import send_markdown_document
+            from .reply_pipeline import parse_markdown, sanitize
+
+            intent = str(data.data.get("intent") or "").strip()
             current_history = data.current_history
             if current_history is None:
                 raise RuntimeError("发送消息时缺少关联的聊天历史")
+            if not intent:
+                return None
+            fallback = sanitize(intent)
+            image = str(data.data.get("image") or "").strip()
+            title = str(data.data.get("title") or "").strip()
+            parsed = parse_markdown("", fallback, image)
+            if title and not parsed["title"]:
+                parsed["title"] = title[:40]
+            if not parsed["body"]:
+                return None
             try:
-                from ..service import plugin
-
-                md_file = f"{time.time()}.md"
-                md_path = (
-                    plugin.get_path() / "chat" / str(data.chat_id) / "md" / md_file
-                )
-                md_path.parent.mkdir(parents=True, exist_ok=True)
-                async with await anyio.open_file(md_path, "w", encoding="utf-8") as f:
-                    await f.write(msg)
-                mtype = getattr(data.sender, "mtype", 0)
-                if mtype == 1:
-                    await data.sender.send(QQMessage.md_msg(msg))
-                else:
-                    await data.sender.send(img_msg(await md_to_pic(msg)))
-                md_ref = getattr(data.sender, "md_refs", None)
-                if isinstance(md_ref, list):
-                    md_ref.append((md_file, msg))
+                md_file = await send_markdown_document(data, parsed)
             except Exception as e:
                 log.warning(f"MD发送发生错误:{str_traceback(e)}")
                 return "发送失败,请勿再次尝试"
             current_history.add_response(f"[md:{md_file}]")
-            return "发送成功"
+            return None
 
     FunctionCallingManager.register(SendMdMessageFunctionCalling)
 
     class ReadMdMessageFunctionCalling(FunctionCalling):
-        function_name = "read_md_message"
+        function_name = "md_read"
+        aliases = ("read_md_message",)
+        scope = FunctionScope.CHAT
         description = "获取你发送的md格式消息"
         args: ClassVar = [
             FunctionCallingArg(name="file", _type="str", description="文件名")
@@ -573,7 +882,11 @@ def register_function_calling():
     FunctionCallingManager.register(ReadMdMessageFunctionCalling)
 
     class LoveChangeFunctionCalling(FunctionCalling):
-        function_name = "love_change"
+        function_name = "love"
+        aliases = ("love_change",)
+        scope = FunctionScope.CHAT
+        returns_data = False
+        parallel_safe = True
         description = (
             "更改你对用户的好感度（长期关系评价）。"
             "注意：好感度不会改变你当下的心情——心情用 feel 记录。"
@@ -599,7 +912,11 @@ def register_function_calling():
     FunctionCallingManager.register(LoveChangeFunctionCalling)
 
     class RelationSetFunctionCalling(FunctionCalling):
-        function_name = "relation_set"
+        function_name = "rel_set"
+        aliases = ("relation_set",)
+        scope = FunctionScope.CHAT
+        returns_data = False
+        parallel_safe = True
         description = (
             "设置你对某个人的关系态度（不是心情，也不是好感度）。"
             "用于记录「刚吵完架」「在闹别扭」「最近很黏人」这类针对某个人的状态。"
@@ -633,6 +950,9 @@ def register_function_calling():
 
     class FeelFunctionCalling(FunctionCalling):
         function_name = "feel"
+        scope = FunctionScope.CHAT
+        returns_data = False
+        parallel_safe = True
         description = (
             "表达你此刻的情绪，会持续影响接下来一段时间的语气。"
             "如被冒犯、被感动、被逗笑、觉得无聊。"
@@ -674,37 +994,49 @@ def register_function_calling():
     FunctionCallingManager.register(FeelFunctionCalling)
 
     class SendFaceFunctionCalling(FunctionCalling):
-        function_name = "send_face"
-        description = "仅在表达自己的强烈情绪时发送表情"
+        function_name = "face"
+        aliases = ("send_face",)
+        scope = FunctionScope.CHAT
+        returns_data = False
+        parallel_safe = False
+        description = (
+            "仅在表达自己的强烈情绪时发送表情。\n"
+            "intent 写想表达的情绪；具体选哪个表情由聊天模型决定，"
+            "不可用时不会发送。"
+        )
         args: ClassVar = [
             FunctionCallingArg(
-                name="meme", _type="str", description=f"表情词,定义:{meme_example_str}"
-            )
+                name="intent", _type="str", description="为什么想发表情、想表达什么情绪"
+            ),
+            FunctionCallingArg(
+                name="with_text",
+                _type="bool",
+                description="(可选)是否允许聊天模型附一句话，默认 false",
+            ),
         ]
 
         @classmethod
         def is_available_for(cls, sender: ChatSender | None, user_id: str) -> bool:
-            return sender is not None and getattr(sender, "mtype", 0) == 0
+            if sender is None:
+                return False
+            if isinstance(sender, OneBotChatSender):
+                return True
+            # 裸 ChatSender 只是抽象基类，不是任何真实通道。
+            return type(sender) is not ChatSender and getattr(sender, "mtype", 1) == 0
 
         @staticmethod
         async def call(data: FunctionCallingData):
-            # 兜底判断：防止绕过 FCM 直接调用
-            if getattr(data.sender, "mtype", 0) != 0:
-                return "发送失败,不支持发送表情"
-            meme = data.data.get("meme", "")
-            try:
-                face = FaceManager.get_face(meme)
-                if not face:
-                    return "表情不存在"
-                await data.sender.send(face)
-            except Exception:
-                return "发送失败,请勿再次尝试"
-            return "发送成功"
+            # 没有 Chat 模型就无法从可用表情中挑选；按 3.5.7 直接不发送。
+            # 正常链路由 Outbox 以 face job 交给 ChatModel.render。
+            log.debug("face 未经过 Chat 渲染，已跳过（缺少可选表情）")
+            return None
 
     FunctionCallingManager.register(SendFaceFunctionCalling)
 
     class RelationQueryFunctionCalling(FunctionCalling):
-        function_name = "relation_query"
+        function_name = "rel_get"
+        aliases = ("relation_query",)
+        scope = FunctionScope.CHAT
         description = (
             "查询你与某个人的关系，或列出你认识的人。\n"
             "提示词里只会给出当前对话人的关系，其他人都要在这里查。\n"
@@ -786,7 +1118,9 @@ def register_function_calling():
     FunctionCallingManager.register(RelationQueryFunctionCalling)
 
     class GetUserInfoFunctionCalling(FunctionCalling):
-        function_name = "get_user_info"
+        function_name = "user"
+        aliases = ("get_user_info",)
+        scope = FunctionScope.CHAT
         description = (
             "查一个人的完整资料：QQ 号、昵称、别名、关系、好感度、熟络度、你对他的印象。\n"
             "查询串可以是 **QQ 号、名字或别名**，三者都认；"
@@ -828,12 +1162,14 @@ def register_function_calling():
     FunctionCallingManager.register(GetUserInfoFunctionCalling)
 
     class UserAliasFunctionCalling(FunctionCalling):
-        function_name = "user_alias"
+        function_name = "alias"
+        aliases = ("user_alias",)
+        scope = FunctionScope.CHAT
         description = (
             "记下或忘掉一个人的别名（外号、习惯称呼）。\n"
             "什么时候用：有人说「叫我小 A」「他外号是 A 酱」，"
             "或者你发现大家老用另一个名字称呼某人时。\n"
-            "先用 get_user_info 确认是哪个人，再记下来；记错了用 opt=remove 去掉。"
+            "先用 user 确认是哪个人，再记下来；记错了用 opt=remove 去掉。"
         )
         args: ClassVar[list[FunctionCallingArg]] = [
             FunctionCallingArg(
@@ -881,7 +1217,9 @@ def register_function_calling():
     FunctionCallingManager.register(UserAliasFunctionCalling)
 
     class UserProfileGetFunctionCalling(FunctionCalling):
-        function_name = "user_profile"
+        function_name = "profile"
+        aliases = ("user_profile",)
+        scope = FunctionScope.CHAT
         description = "获取或修改指定用户的用户画像。用户画像是用于存储用户的个性化信息和偏好设置的文本数据，它可以包含用户的兴趣、行为模式、偏好设置等信息，用于在与用户交互时提供更个性化的体验。同时也可以用于存储你对用户的看法和评价，可以多次调用"
         args: ClassVar = [
             FunctionCallingArg(
@@ -899,8 +1237,10 @@ def register_function_calling():
 
         @classmethod
         def can_enable(cls) -> EnableCheck:
-            if not llm_manager.has_type(ModelType.TOOL):
-                return EnableCheck(available=False, reason="未配置 TOOL 类型模型")
+            if not llm_manager.has_type(ModelType.ATRI_PROFILE):
+                return EnableCheck(
+                    available=False, reason="未配置 atri-profile 类型模型"
+                )
             return EnableCheck()
 
         @staticmethod
@@ -920,7 +1260,9 @@ def register_function_calling():
     FunctionCallingManager.register(UserProfileGetFunctionCalling)
 
     class ScheduleTaskFunctionCalling(FunctionCalling):
-        function_name = "schedule_task"
+        function_name = "remind"
+        aliases = ("schedule_task",)
+        scope = FunctionScope.CHAT
         description = (
             "给自己安排一个定时任务：到点时会**重新唤起你自己的思考**，"
             "由那一刻的你来决定说什么。\n"
@@ -969,6 +1311,10 @@ def register_function_calling():
             minutes = data.data.get("minutes")
             hour = data.data.get("hour")
             minute = data.data.get("minute")
+            # 存**有效等级**（已应用个人 downgrade_to），不是原始 ctx.level：
+            # 否则被降权的主人创建任务后，到点 from_chat_args 会按 is_master_user
+            # 复核回 master，绕过降级。
+            level = PermissionResolver.effective_level(data.permission).value
 
             try:
                 if hour is not None:
@@ -983,6 +1329,8 @@ def register_function_calling():
                         spec={"hour": h, "minute": m},
                         bot_id=data.bot_id,
                         user_id=data.sender_id,
+                        level=level,
+                        group_id=data.permission.group_id,
                     )
                     return f"已安排：每天 {h:02d}:{m:02d} 提醒你「{message}」（id: {task_id}）"
 
@@ -996,6 +1344,8 @@ def register_function_calling():
                     delay,
                     bot_id=data.bot_id,
                     user_id=data.sender_id,
+                    level=level,
+                    group_id=data.permission.group_id,
                 )
                 return f"已安排：{float(minutes):.0f} 分钟后提醒你「{message}」（id: {task_id}）"
             except ValueError as exc:
@@ -1007,7 +1357,9 @@ def register_function_calling():
     FunctionCallingManager.register(ScheduleTaskFunctionCalling)
 
     class ListTasksFunctionCalling(FunctionCalling):
-        function_name = "list_tasks"
+        function_name = "tasks"
+        aliases = ("list_tasks",)
+        scope = FunctionScope.CHAT
         description = "查看当前会话里你已经安排、但还没执行完的定时任务。"
         args: ClassVar[list[FunctionCallingArg]] = []
 
@@ -1016,6 +1368,17 @@ def register_function_calling():
             from . import task as task_mod
 
             tasks = await task_mod.list_tasks(data.chat_id, data.bot_id)
+            # 普通用户只能看到自己委托的任务；管理 / 主人看整个会话。
+            # 用求值后的有效等级，个人 downgrade_to 不能绕过这里。
+            effective = PermissionResolver.check(
+                "tasks", data.permission, record=False
+            ).level
+            if effective is PermissionLevel.USER:
+                tasks = [
+                    t
+                    for t in tasks
+                    if str(t.get("user_id") or "") == str(data.sender_id)
+                ]
             if not tasks:
                 return "这个会话目前没有定时任务"
             return "当前任务：\n" + "\n".join(task_mod.describe(t) for t in tasks)
@@ -1023,8 +1386,10 @@ def register_function_calling():
     FunctionCallingManager.register(ListTasksFunctionCalling)
 
     class CancelTaskFunctionCalling(FunctionCalling):
-        function_name = "cancel_task"
-        description = "取消一个自己安排的定时任务。任务 id 可先用 list_tasks 查看。"
+        function_name = "untask"
+        aliases = ("cancel_task",)
+        scope = FunctionScope.CHAT
+        description = "取消一个自己安排的定时任务。任务 id 可先用 tasks 查看。"
         args: ClassVar[list[FunctionCallingArg]] = [
             FunctionCallingArg(
                 name="task_id", _type="str", description="要取消的任务 id"
@@ -1045,7 +1410,9 @@ def register_function_calling():
     FunctionCallingManager.register(CancelTaskFunctionCalling)
 
     class GetServiceListFunctionCalling(FunctionCalling):
-        function_name = "get_service_list"
+        function_name = "services"
+        aliases = ("get_service_list",)
+        scope = FunctionScope.BOT
         description = (
             "查询当前可用服务列表及服务分类。需要了解自己支持哪些功能服务时调用。"
         )
@@ -1060,7 +1427,9 @@ def register_function_calling():
     FunctionCallingManager.register(GetServiceListFunctionCalling)
 
     class GetServiceInfoFunctionCalling(FunctionCalling):
-        function_name = "get_service_info"
+        function_name = "service"
+        aliases = ("get_service_info",)
+        scope = FunctionScope.BOT
         description = "查询指定服务的说明、可用命令和启用状态。"
         args: ClassVar = [
             FunctionCallingArg(
@@ -1080,7 +1449,9 @@ def register_function_calling():
     FunctionCallingManager.register(GetServiceInfoFunctionCalling)
 
     class GetCommandInfoFunctionCalling(FunctionCalling):
-        function_name = "get_command_info"
+        function_name = "command"
+        aliases = ("get_command_info",)
+        scope = FunctionScope.BOT
         description = "查询指定服务中某条命令的类型、说明和别名。"
         args: ClassVar = [
             FunctionCallingArg(
@@ -1105,6 +1476,7 @@ def register_function_calling():
 
     class SearchFunctionCalling(FunctionCalling):
         function_name = "search"
+        scope = FunctionScope.CHAT
         description = "搜索网络上的信息，并到一个总结性回答"
         args: ClassVar = [
             FunctionCallingArg(name="query", _type="str", description="搜索关键词")
@@ -1126,7 +1498,7 @@ def register_function_calling():
             """
             query = data.data.get("query", "")
             if not query:
-                return None
+                return "请提供搜索关键词"
             try:
                 # 构建搜索 URL
                 url = "https://api.tavily.com/search"
@@ -1162,7 +1534,11 @@ def register_function_calling():
     FunctionCallingManager.register(SearchFunctionCalling)
 
     class MemoryChangeFunctionCalling(FunctionCalling):
-        function_name = "memory_change"
+        function_name = "remember"
+        aliases = ("memory_change",)
+        scope = FunctionScope.CHAT
+        returns_data = False
+        parallel_safe = True
         description = (
             f"更改你对用户的临时长期记忆，该记忆存在数量上限{USER_MEMORY_LIMIT}"
         )
@@ -1189,8 +1565,10 @@ def register_function_calling():
 
         @classmethod
         def can_enable(cls) -> EnableCheck:
-            if not llm_manager.has_type(ModelType.EMBEDDING):
-                return EnableCheck(available=False, reason="未配置 EMBEDDING 类型模型")
+            if not llm_manager.has_type(ModelType.ATRI_EMBEDDING):
+                return EnableCheck(
+                    available=False, reason="未配置 atri-embedding 类型模型"
+                )
             return EnableCheck()
 
         @staticmethod
@@ -1237,7 +1615,11 @@ def register_function_calling():
     FunctionCallingManager.register(MemoryChangeFunctionCalling)
 
     class SelfMemoryFunctionCalling(FunctionCalling):
-        function_name = "self_memory"
+        function_name = "self_note"
+        aliases = ("self_memory",)
+        scope = FunctionScope.CHAT
+        returns_data = False
+        parallel_safe = True
         description = (
             "记下你自己（亚托莉）的经历与感受，不是关于用户的资料。"
             f"上限 {SELF_MEMORY_LIMIT} 条，超出先入先出。"
@@ -1281,7 +1663,9 @@ def register_function_calling():
     FunctionCallingManager.register(SelfMemoryFunctionCalling)
 
     class GetMemoriesFunctionCalling(FunctionCalling):
-        function_name = "get_memories"
+        function_name = "recall"
+        aliases = ("get_memories",)
+        scope = FunctionScope.CHAT
         description = "根据语义检索长期记忆。仅在需要回忆相关历史事实时使用，由你自行决定查询数量和最低相似度。"
         args: ClassVar = [
             FunctionCallingArg(
@@ -1301,8 +1685,10 @@ def register_function_calling():
 
         @classmethod
         def can_enable(cls) -> EnableCheck:
-            if not llm_manager.has_type(ModelType.EMBEDDING):
-                return EnableCheck(available=False, reason="未配置 EMBEDDING 类型模型")
+            if not llm_manager.has_type(ModelType.ATRI_EMBEDDING):
+                return EnableCheck(
+                    available=False, reason="未配置 atri-embedding 类型模型"
+                )
             return EnableCheck()
 
         @staticmethod
@@ -1323,7 +1709,9 @@ def register_function_calling():
     FunctionCallingManager.register(GetMemoriesFunctionCalling)
 
     class AccessMemoryFunctionCalling(FunctionCalling):
-        function_name = "access_memory"
+        function_name = "reinforce"
+        aliases = ("access_memory",)
+        scope = FunctionScope.CHAT
         description = "采用并强化一条已经检索到的长期记忆。只能采用检索结果中的记忆，并自行决定强化值。"
         args: ClassVar = [
             FunctionCallingArg(
@@ -1338,8 +1726,10 @@ def register_function_calling():
 
         @classmethod
         def can_enable(cls) -> EnableCheck:
-            if not llm_manager.has_type(ModelType.EMBEDDING):
-                return EnableCheck(available=False, reason="未配置 EMBEDDING 类型模型")
+            if not llm_manager.has_type(ModelType.ATRI_EMBEDDING):
+                return EnableCheck(
+                    available=False, reason="未配置 atri-embedding 类型模型"
+                )
             return EnableCheck()
 
         @staticmethod
@@ -1349,7 +1739,7 @@ def register_function_calling():
             memory_id = data.data.get("memory_id")
             reinforce = data.data.get("reinforce", 0.1)
             if memory_id is None:
-                return None
+                return "请提供要采用的记忆 ID"
             return await memory_manager.access_memory(
                 {"id": int(memory_id)}, float(reinforce)
             )
@@ -1357,8 +1747,14 @@ def register_function_calling():
     FunctionCallingManager.register(AccessMemoryFunctionCalling)
 
     class ListSkillsFunctionCalling(FunctionCalling):
-        function_name = "list_skills"
-        description = "列出你当前可查阅的技能清单。技能是详细的玩法与操作说明文档，当用户询问某个功能怎么用、某个玩法有哪些指令时，先调用本功能查看有哪些技能，再调用 get_skill_content 获取正文。"
+        function_name = "skills"
+        aliases = ("list_skills",)
+        scope = FunctionScope.CHAT
+        prompt_hidden = True
+        description = (
+            "列出你当前可查阅的全部技能与说明。技能目录通常已经写在你的提示词里；"
+            "只有提示词说「还有 N 个技能未列出」时才调用本功能查完整清单。"
+        )
         args: ClassVar[list[FunctionCallingArg]] = []
 
         @staticmethod
@@ -1370,20 +1766,41 @@ def register_function_calling():
                 return "当前没有可查询的技能"
             return "\n".join(
                 f"{s.name}: [{s.source_label}] {s.description or '无说明'}"
-                for s in skills
+                + (f"\n  何时读：{s.when_to_use}" if s.when_to_use else "")
+                for s in sorted(
+                    skills, key=lambda item: (-int(item.priority or 0), item.name)
+                )
             )
 
     FunctionCallingManager.register(ListSkillsFunctionCalling)
 
     class GetSkillContentFunctionCalling(FunctionCalling):
-        function_name = "get_skill_content"
+        function_name = "skill"
+        aliases = ("get_skill_content",)
+        scope = FunctionScope.CHAT
         description = (
-            "获取指定技能的完整正文（Markdown）。技能名必须来自 list_skills 的结果。"
+            "读取指定技能的正文。技能名来自提示词里的技能目录或 skills()。\n"
+            "长技能优先用 section 按章节读；不要凭印象编造玩法。"
         )
         args: ClassVar[list[FunctionCallingArg]] = [
             FunctionCallingArg(
-                name="name", _type="str", description="技能名，来自 list_skills 的结果"
-            )
+                name="name", _type="str", description="技能名，来自技能目录"
+            ),
+            FunctionCallingArg(
+                name="section",
+                _type="str",
+                description="(可选)章节标题或片段，如「指令列表」；只看某一节时填",
+            ),
+            FunctionCallingArg(
+                name="offset",
+                _type="int",
+                description="(可选)从第几个字符开始读，默认0",
+            ),
+            FunctionCallingArg(
+                name="limit",
+                _type="int",
+                description="(可选)最多读多少字，默认4000",
+            ),
         ]
 
         @staticmethod
@@ -1395,14 +1812,342 @@ def register_function_calling():
                 return "请提供技能名"
             skill = skill_manager.get(name)
             if skill is None:
-                return f"技能 {name} 不存在，请调用 list_skills 查看可用技能"
+                available = (
+                    "、".join(s.name for s in skill_manager.list_queryable()) or "无"
+                )
+                return f"技能 {name} 不存在；当前可用技能：{available}"
             if not skill.enabled:
-                return f"技能 {name} 已被停用，无法查看"
+                return f"技能 {name} 已被停用"
             if skill.embedded:
-                return f"技能 {name} 已直接写入你的提示词，无需查询"
-            return f"# {skill.name}\n{skill.description}\n\n{skill.content}"
+                return f"技能 {name} 已直接写入你的提示词，无需读取"
+            section = str(data.data.get("section") or "").strip()
+            offset = data.data.get("offset") or 0
+            limit = data.data.get("limit") or 0
+            try:
+                offset = int(offset)
+            except (TypeError, ValueError):
+                offset = 0
+            try:
+                limit = int(limit)
+            except (TypeError, ValueError):
+                limit = 0
+            text = skill_manager.read(
+                skill, section=section, offset=offset, limit=limit
+            )
+            telemetry.record(
+                "skill_read",
+                name=skill.name,
+                section=section or None,
+                offset=offset,
+                chars=len(text),
+            )
+            return text
 
     FunctionCallingManager.register(GetSkillContentFunctionCalling)
+
+    class PlanFunctionCalling(FunctionCalling):
+        function_name = "plan"
+        scope = FunctionScope.CHAT
+        returns_data = True
+        parallel_safe = False
+        description = (
+            "查看或填入你今天的日程。\n"
+            "action=show：读今天的完整安排（固定作息 + 已填入的活动）。\n"
+            "action=fill：按 hint 用日程模型填入活动，会自动补「前往/回到」；"
+            "新填入会覆盖旧填入，但不会覆盖睡觉、吃饭等固定作息。\n"
+            "action=clear：只清空今天填入的活动，保留固定作息。"
+        )
+        args: ClassVar[list[FunctionCallingArg]] = [
+            FunctionCallingArg(
+                name="action",
+                _type="str",
+                description="show / fill / clear，默认 show",
+            ),
+            FunctionCallingArg(
+                name="date",
+                _type="str",
+                description="(可选)日期 YYYY-MM-DD，默认今天（06:00 前算前一天）",
+            ),
+            FunctionCallingArg(
+                name="start",
+                _type="str",
+                description="(可选)只替换这个时间点之后的旧安排，如 13:00",
+            ),
+            FunctionCallingArg(
+                name="end",
+                _type="str",
+                description="(可选)只替换到这个时间点为止的旧安排",
+            ),
+            FunctionCallingArg(
+                name="hint",
+                _type="str",
+                description="(fill) 你想怎么安排今天，例如「下午想去海边，晚饭前回家」",
+            ),
+            FunctionCallingArg(
+                name="truncate_after",
+                _type="bool",
+                description="(fill) 为 true 时清掉新计划之后的旧填入条目",
+            ),
+            FunctionCallingArg(
+                name="force",
+                _type="bool",
+                description="(fill) 仅主人可用：允许覆盖固定作息条目",
+            ),
+        ]
+
+        @staticmethod
+        async def call(data: FunctionCallingData):
+            from .life import get_life_system
+
+            life = get_life_system()
+            action = str(data.data.get("action") or "show").strip().lower()
+            date = str(data.data.get("date") or "").strip() or None
+            if action == "show":
+                entries = life.plan(date)
+                if not entries:
+                    return "今天还没有安排。"
+                from .life import describe_entries
+
+                return describe_entries(entries)
+
+            if action == "clear":
+                removed = life.clear(date)
+                return (
+                    "已清空今天填入的活动，固定作息保留。"
+                    if removed
+                    else "今天本来就没有填入的活动。"
+                )
+
+            if action != "fill":
+                return f"未知的 action：{action}，可用 show / fill / clear"
+
+            force = _as_bool(data.data.get("force"))
+            if force and PermissionResolver.effective_level(
+                data.permission
+            ).value not in {"master", "system"}:
+                return "只有主人可以覆盖固定作息"
+
+            hint = str(data.data.get("hint") or "").strip()
+            if not hint:
+                return "请用 hint 说明你想怎么安排"
+
+            from ..llm import ModelType, llm_manager
+            from .life.routine import describe_gaps
+            from .life.system import extract_json
+            from .role import ATRI
+
+            if not llm_manager.has_type(ModelType.ATRI_SCHEDULE):
+                return "未配置 atri-schedule 类型模型，无法填入日程"
+            routine = life.routine()
+            state = life.location(date)
+            current = life.schedule_summary(date)
+            home = life.home_summary()
+            prompt = (
+                "为亚托莉填入今天的日程片段。\n"
+                f"角色：{ATRI.get_role_prompt()}\n"
+                f"固定作息（不可覆盖）：\n"
+                + "\n".join(
+                    f"- {slot.start.strftime('%H:%M')}-{slot.end.strftime('%H:%M')} "
+                    f"{slot.place}：{slot.activity}"
+                    for slot in routine.slots
+                )
+                + f"\n可用空档：{describe_gaps(routine) or '无'}\n"
+                f"现在的位置：{state.describe()}\n"
+                f"现有安排：\n{current or '无'}\n"
+                f"家的位置与周边：{home or '无'}\n"
+                f"她的想法：{hint}\n"
+                '只输出 JSON：{"entries": [...]}。每条包含 start、end、kind（stay/travel）、'
+                "activity；stay 用 place，travel 用 from/to。"
+                "地点变化必须写 travel；出门了必须安排回家。最多 12 条，每条活动不超过 60 字。"
+            )
+            try:
+                response = await llm_manager.call_agent(
+                    ModelType.ATRI_SCHEDULE, prompt, "Agent-日程填入"
+                )
+                payload = extract_json(response.content)
+            except Exception as exc:
+                log.warning(f"日程填入模型调用失败：{exc}")
+                return "日程模型没有给出可用的安排，已保留原日程"
+
+            entries, issues = life.parse_entries(payload)
+            if issues:
+                return "日程格式有问题：" + "；".join(issues)
+            result = life.fill_schedule(
+                entries,
+                date=date,
+                start=str(data.data.get("start") or ""),
+                end=str(data.data.get("end") or ""),
+                truncate_after=_as_bool(data.data.get("truncate_after")),
+                force=force,
+            )
+            if not result.ok:
+                return f"日程没有更新：{result.message}"
+            if not life.outfit(date).day and not life.outfit(date).night:
+                await life.generate_outfit(
+                    date=date,
+                    activities=result.message,
+                    place=life.location(date).place,
+                )
+            return result.message
+
+    FunctionCallingManager.register(PlanFunctionCalling)
+
+    class WearFunctionCalling(FunctionCalling):
+        function_name = "wear"
+        scope = FunctionScope.CHAT
+        returns_data = True
+        parallel_safe = False
+        description = (
+            "查看或更换你今天的穿搭。白天与晚上是两套：晚上是回家后的居家服/睡衣。"
+            "action=show 读当前穿搭；generate 让穿搭模型按今天的活动生成；"
+            "set 手动指定其中一套。"
+        )
+        args: ClassVar[list[FunctionCallingArg]] = [
+            FunctionCallingArg(
+                name="action",
+                _type="str",
+                description="show / generate / set，默认 show",
+            ),
+            FunctionCallingArg(
+                name="period",
+                _type="str",
+                description="(set) day 或 night",
+            ),
+            FunctionCallingArg(
+                name="text",
+                _type="str",
+                description="(set) 这套穿搭的内容，最多 120 字",
+            ),
+        ]
+
+        @staticmethod
+        async def call(data: FunctionCallingData):
+            from .life import get_life_system
+
+            life = get_life_system()
+            action = str(data.data.get("action") or "show").strip().lower()
+            if action == "show":
+                return life.outfits.describe()
+            if action == "generate":
+                ok, message = await life.generate_outfit(
+                    activities=life.schedule_summary(),
+                    place=life.location().place,
+                )
+                return message
+            if action == "set":
+                period = str(data.data.get("period") or "day").strip().lower()
+                if period not in {"day", "night"}:
+                    return "period 只能是 day 或 night"
+                text = str(data.data.get("text") or "").strip()
+                if not text:
+                    return "请提供要设置的穿搭内容"
+                life.set_outfit(period, text)
+                label = "白天" if period == "day" else "晚上"
+                return f"{label}穿搭已更新：{text}"
+            return f"未知的 action：{action}，可用 show / generate / set"
+
+    FunctionCallingManager.register(WearFunctionCalling)
+
+    class HomeFunctionCalling(FunctionCalling):
+        function_name = "home"
+        scope = FunctionScope.CHAT
+        returns_data = True
+        parallel_safe = False
+        description = (
+            "查看或修改你的家。家按章节保存（位置、外观、房间、周边、物品、衣柜、冰箱）。\n"
+            "show 读整篇或某一节；edit 替换某一节；add 在某一节末尾追加；"
+            "generate 让家模型扩写；每次写入都会自动备份。"
+        )
+        args: ClassVar[list[FunctionCallingArg]] = [
+            FunctionCallingArg(
+                name="action",
+                _type="str",
+                description="show / edit / add / generate，默认 show",
+            ),
+            FunctionCallingArg(
+                name="section",
+                _type="str",
+                description="(show/edit/add) 章节名，如「客厅」「物品」",
+            ),
+            FunctionCallingArg(
+                name="content",
+                _type="str",
+                description="(edit/add) 要写入或追加的内容",
+            ),
+        ]
+
+        @staticmethod
+        async def call(data: FunctionCallingData):
+            from .life import get_life_system
+
+            store = get_life_system().home()
+            action = str(data.data.get("action") or "show").strip().lower()
+            section = str(data.data.get("section") or "").strip()
+            content = str(data.data.get("content") or "").strip()
+            if action == "show":
+                return store.show(section)
+            if action == "edit":
+                if not section or not content:
+                    return "edit 需要 section 与 content"
+                return store.edit(section, content)
+            if action == "add":
+                if not section or not content:
+                    return "add 需要 section 与 content"
+                return store.add(section, content)
+            if action == "generate":
+                ok, message = await store.generate()
+                return message
+            return f"未知的 action：{action}，可用 show / edit / add / generate"
+
+    FunctionCallingManager.register(HomeFunctionCalling)
+
+    class WhereFunctionCalling(FunctionCalling):
+        function_name = "where"
+        scope = FunctionScope.CHAT
+        description = "查看你现在在哪里、正在做什么、什么时候离开。"
+        args: ClassVar[list[FunctionCallingArg]] = []
+
+        @staticmethod
+        async def call(data: FunctionCallingData):
+            from .life import get_life_system
+
+            return get_life_system().location().describe()
+
+    FunctionCallingManager.register(WhereFunctionCalling)
+
+    class GoFunctionCalling(FunctionCalling):
+        function_name = "go"
+        scope = FunctionScope.CHAT
+        returns_data = True
+        parallel_safe = False
+        description = (
+            "现在就出发去某个地方。会截断当前安排，插入一段路程与目的地的停留；"
+            "适合「主人现在叫我过去」「临时想出门」这种不等原计划的场景。"
+        )
+        args: ClassVar[list[FunctionCallingArg]] = [
+            FunctionCallingArg(name="place", _type="str", description="目的地"),
+            FunctionCallingArg(
+                name="minutes",
+                _type="int",
+                description="(可选)路程分钟数，默认15，范围5-45",
+            ),
+        ]
+
+        @staticmethod
+        async def call(data: FunctionCallingData):
+            from .life import get_life_system
+
+            place = str(data.data.get("place") or "").strip()
+            if not place:
+                return "请提供目的地"
+            try:
+                minutes = int(data.data.get("minutes") or 0)
+            except (TypeError, ValueError):
+                minutes = 0
+            result = get_life_system().go(place, minutes)
+            return result.message if result.ok else f"没有出发：{result.message}"
+
+    FunctionCallingManager.register(GoFunctionCalling)
 
     from .function_plugin.builtin import register_builtin_function_plugins
 

@@ -37,7 +37,16 @@ class FunctionPluginManager:
         registered_functions: list[str] = []
         try:
             for item in bundled_skills:
-                skill_manager.put_virtual(item.name, item.description, item.content)
+                skill_manager.put_virtual(
+                    item.name,
+                    item.description,
+                    item.content,
+                    when_to_use=item.when_to_use,
+                    tags=item.tags,
+                    priority=item.priority,
+                    embed=item.embed,
+                    max_read_chars=item.max_read_chars,
+                )
                 written_skills.append(item.name)
             for cls in bundled_functions:
                 FunctionCallingManager.register(cls)
@@ -48,7 +57,7 @@ class FunctionPluginManager:
             self._sources[plugin.name] = plugin.model_copy(deep=True)
         except Exception:
             for func_name in registered_functions:
-                FunctionCallingManager.function_calling.pop(func_name, None)
+                FunctionCallingManager.unregister(func_name)
             for skill_name in written_skills:
                 skill_manager.drop_virtual(skill_name)
             raise
@@ -147,7 +156,7 @@ class FunctionPluginManager:
         from ..skills import skill_manager
 
         for func_name in plugin.bundled_function_names:
-            FunctionCallingManager.function_calling.pop(func_name, None)
+            FunctionCallingManager.unregister(func_name)
 
         if not remove_skills:
             return
@@ -157,8 +166,15 @@ class FunctionPluginManager:
     @staticmethod
     def _name_of(item) -> str:
         if isinstance(item, str):
-            return item
-        return str(getattr(item, "function_name", "") or type(item).__name__)
+            name = item
+        else:
+            name = str(getattr(item, "function_name", "") or type(item).__name__)
+        try:
+            from ..function_calling import FunctionCallingManager
+
+            return FunctionCallingManager.resolve_name(name)
+        except Exception:
+            return name
 
     def _reject_claimed_members(self, plugin: FunctionPlugin, func_names: set[str]):
         """成员已属于其它插件时拒绝注册（同插件重复注册视为覆盖）。"""
@@ -217,8 +233,9 @@ class FunctionPluginManager:
         return self.is_manually_enabled(name)
 
     def owner_of_function(self, function_name: str) -> str | None:
+        canonical = self._canonical(function_name)
         for plugin in self._plugins.values():
-            if function_name in plugin.all_functions:
+            if canonical in {self._canonical(name) for name in plugin.all_functions}:
                 return plugin.name
         return None
 
@@ -230,10 +247,20 @@ class FunctionPluginManager:
 
     def is_rare_function(self, function_name: str) -> bool:
         """是否被某个插件声明为不常用功能（这类功能只能通过 call 调用）。"""
+        canonical = self._canonical(function_name)
         for plugin in self._plugins.values():
-            if function_name in plugin.rare_functions:
+            if canonical in {self._canonical(name) for name in plugin.rare_functions}:
                 return True
         return False
+
+    @staticmethod
+    def _canonical(name: str) -> str:
+        try:
+            from ..function_calling import FunctionCallingManager
+
+            return FunctionCallingManager.resolve_name(name)
+        except Exception:
+            return name
 
     def functions_of(self, name: str) -> list[str]:
         plugin = self._plugins.get(name)

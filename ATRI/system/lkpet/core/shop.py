@@ -27,7 +27,6 @@
 几何涨价是无限等级的唯一合理写法——列表无法表达无限级。
 """
 
-import math
 from typing import Any
 
 PERK_EFFECT_KEYS = frozenset(
@@ -215,16 +214,6 @@ def total_cost(
     return sum(price_for(spec, i, cfg) for i in range(max(0, int(levels))))
 
 
-def preview_prices(
-    spec: dict[str, Any],
-    owned: int,
-    count: int = 5,
-    cfg: dict[str, Any] | None = None,
-) -> list[int]:
-    """从 ``owned`` 之后的若干级价格，用于展示"越买越贵"。"""
-    return [price_for(spec, owned + i, cfg) for i in range(max(0, int(count)))]
-
-
 # ---------------------------------------------------------------------------
 # 效果
 # ---------------------------------------------------------------------------
@@ -291,11 +280,6 @@ def recompute_bonuses(
         else:
             result[key] = int(value)
     return result
-
-
-def apply_percent(value: float, pct: float) -> float:
-    """把百分比加成叠到 ``value`` 上（``pct`` 为 0.01 = +1%）。"""
-    return float(value) * (1.0 + float(pct))
 
 
 # ---------------------------------------------------------------------------
@@ -742,29 +726,3 @@ def validate_catalog(cfg: dict[str, Any] | None = None) -> list[str]:
             problems.append(f"{name}：cost 必须是数字 / 列表 / {{start, mult}} 映射")
 
     return problems
-
-
-def projected_growth(
-    spec: dict[str, Any],
-    owned: int,
-    steps: int = 10,
-    cfg: dict[str, Any] | None = None,
-) -> list[tuple[int, int, float]]:
-    """未来 ``steps`` 级的价格与累计效果，用于给玩家看"越买越贵、越买越强"。
-
-    返回 ``[(等级, 该级价格, 累计百分比效果), ...]``；平值类的累计效果
-    单独用 :func:`total_effect` 取。
-    """
-    out: list[tuple[int, int, float]] = []
-    for i in range(max(0, int(steps))):
-        lvl = owned + i + 1
-        price = price_for(spec, lvl - 1, cfg)
-        effects = total_effect(spec, lvl, cfg)
-        pct = sum(v for k, v in effects.items() if k.endswith("_pct"))
-        out.append((lvl, price, pct))
-    return out
-
-
-def geometric_preview(start: float, mult: float, count: int) -> list[int]:
-    """几何涨价的直观预览（调试/预览脚本用）。"""
-    return [max(0, round(start * math.pow(mult, i))) for i in range(max(0, count))]

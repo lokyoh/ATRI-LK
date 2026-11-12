@@ -229,11 +229,12 @@ class BattleState(FloorState):
         )
 
     def render(self, run: RogueRun, cfg: dict[str, Any], chosen: set[str]) -> str:
-        from ._common import _text
+        from ._common import _style, _text
         from .tower import _gen_monster, _monster_label, region_of
 
         floor = run.floor
         region = region_of(floor, cfg)
+        s = _style()
         # QQ 端有可点的「迎战」，不必再教用户回「1」
         numbered = show_numbered_options()
         monster = _gen_monster(
@@ -248,22 +249,27 @@ class BattleState(FloorState):
             elite_fight=self.elite_fight or None,
         )
         if self.boss:
-            return _text(
-                "boss_floor",
-                "🎲 本层首领随机选定：{monster}！"
-                + ("回复「1」开战。" if numbered else "点下方迎战。"),
-                floor=floor,
-                monster=_monster_label(monster),
-                region=region.get("name", ""),
+            return s.heading(
+                _text(
+                    "boss_floor",
+                    "🎲 本层首领随机选定：{monster}！"
+                    + ("回复「1」开战。" if numbered else "点下方迎战。"),
+                    floor=floor,
+                    monster=_monster_label(monster),
+                    region=region.get("name", ""),
+                )
             )
         if self.elite_fight:
-            return _text(
-                "elite_fight_prompt",
-                "⚠️ 强化精英 · {title}：{monster}"
-                + ("\n回复「1」迎战。" if numbered else ""),
-                title=str(monster.get("elite_fight_title") or "强化形态"),
-                monster=_monster_label(monster),
+            return s.heading(
+                _text(
+                    "elite_fight_prompt",
+                    "⚠️ 强化精英 · {title}：{monster}"
+                    + ("\n回复「1」迎战。" if numbered else ""),
+                    title=str(monster.get("elite_fight_title") or "强化形态"),
+                    monster=_monster_label(monster),
+                )
             )
+        # 普通战斗预告只有一句，标题化会显得头重脚轻，保持原样。
         return _text(
             "battle_prompt",
             "回复「1」迎战。" if numbered else "点下方迎战。",
@@ -356,21 +362,26 @@ class FloorChoiceState(FloorState):
         )
 
     def render(self, run: RogueRun, cfg: dict[str, Any], chosen: set[str]) -> str:
-        from ._common import _text
+        from ._common import _style, _text
         from .tower import _monster_label, region_of
 
+        s = _style()
         labels = {
             "battle": _text("opt_battle", "战斗"),
             "event": _text("opt_event", "事件"),
             "shop": _text("opt_shop", "商店"),
         }
         stock_text = _stock_preview_text(self.stock, cfg, run)
+        # 楼层头做成卡片标题：一场爬塔里玩家要看几十次这块，标题化之后
+        # 「第 12 层 · 迷雾森林」在一屏里最先被认出来。
         lines = [
-            _text(
-                "floor_header",
-                "—— 第 {floor} 层 · {region} ——",
-                floor=run.floor,
-                region=region_of(run.floor, cfg).get("name", ""),
+            s.heading(
+                _text(
+                    "floor_header",
+                    "—— 第 {floor} 层 · {region} ——",
+                    floor=run.floor,
+                    region=region_of(run.floor, cfg).get("name", ""),
+                )
             )
         ]
         numbered = show_numbered_options()
@@ -448,11 +459,12 @@ class EventState(FloorState):
         )
 
     def render(self, run: RogueRun, cfg: dict[str, Any], chosen: set[str]) -> str:
-        from ._common import _find_event, _text
+        from ._common import _find_event, _style, _text
         from .floor import _choice_effect_note
         from .tower import region_of
 
         self._sync_mp(run)
+        s = _style()
         floor = run.floor
         region = region_of(floor, cfg)
         event = _find_event(self.event_id, region, cfg)
@@ -464,7 +476,17 @@ class EventState(FloorState):
         head = "🎲 {text}"
         if numbered:
             head += "\n回复编号选择行动："
-        lines: list[str] = [_text("event_prompt", head, text=event["text"])]
+        lines: list[str] = [
+            s.heading(
+                _text(
+                    "event_header",
+                    "第 {floor} 层 · {region}",
+                    floor=floor,
+                    region=region.get("name", ""),
+                )
+            ),
+            _text("event_prompt", head, text=event["text"]),
+        ]
         event_id = str(event.get("id", ""))
         heal_mult = 1.0
         if self.supply:
@@ -527,23 +549,36 @@ class RelicChoiceState(FloorState):
         return cls(offer=pending.get("offer", []))
 
     def render(self, run: RogueRun, cfg: dict[str, Any], chosen: set[str]) -> str:
-        from ._common import _text
+        from ._common import _style, _text
         from .relics import relic_effect_note, relic_specs
 
         specs = relic_specs()
+        s = _style()
         numbered = show_numbered_options()
-        head = "🎁 遗物奖励层" + ("（回复编号三选一）：" if numbered else "：")
-        lines = [_text("relic_choice", head)]
+        # 「回复编号三选一」只在 OneBot 端成立；QQ 端整行就是按钮，写编号反而误导。
+        how = (
+            _text("relic_how_numbered", "回复编号三选一")
+            if numbered
+            else _text("relic_how_click", "点一下领取")
+        )
+        lines = [
+            s.heading(
+                _text("relic_choice", "🎁 遗物奖励层（{how}，遗物仅本局生效）", how=how)
+            )
+        ]
         if not self.offer:
             lines.append(_text("relic_none", "遗物已集齐，直接前进。"))
         for idx, relic_id in enumerate(self.offer, start=1):
             spec = specs.get(relic_id, {})
+            note = relic_effect_note(spec.get("effect") or {})
             body = _text(
                 "relic_option",
-                "{idx}{name}（{stat}） — {desc}",
+                "{idx}{name}{stat_note} — {desc}",
                 idx=f"{idx}. " if numbered else "",
                 name=spec.get("name", relic_id),
-                stat=relic_effect_note(spec.get("effect") or {}),
+                stat_note=_text("relic_stat_note", "（{stat}）", stat=note)
+                if note
+                else "",
                 desc=spec.get("desc", ""),
             )
             lines.append(line_link(body, f"宠物.肉鸽 {idx}"))
@@ -638,13 +673,16 @@ def _tags(relic_id: str, owned: set[str]) -> str:
 
 def _shop_text_from_run(run: RogueRun, stock: list[str], cfg: dict[str, Any]) -> str:
     from ...utils.texts import text
-    from ._common import _text
+    from ._common import _style, _text
     from .relics import relic_effect_note, relic_specs
 
     discount = _run_discount(run)
     owned = set(run.relics)
+    s = _style()
     numbered = show_numbered_options()
-    lines = [_text("shop_header", "🛒 遗物商店（金币 {coins}）", coins=run.coins)]
+    lines = [
+        s.heading(_text("shop_header", "🛒 遗物商店（金币 {coins}）", coins=run.coins))
+    ]
     if discount < 1.0:
         lines.append(
             _text(

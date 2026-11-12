@@ -1,8 +1,9 @@
 """Biography system: the pet's life record, daily logs, memories and titles.
 
-Only biography-worthy events are stored (see :data:`IMPORTANT_EVENTS`); routine
-actions such as feeding are deliberately filtered out so the record stays a
-life story rather than an activity log.
+Routine actions such as feeding are deliberately **not** recorded here, so the
+record stays a life story rather than an activity log. Callers decide what is
+worth writing (``core.reincarnation`` writes endings, handlers write milestones)
+and call :func:`add_biography_entry` directly; there is no event-type whitelist.
 
 Every mutating helper persists explicitly: ``get_or_create_biography`` always
 returns a freshly loaded model, so an unsaved change would be silently lost on
@@ -17,15 +18,6 @@ MAX_ENTRIES = 1000
 
 MAX_DAILY_LOGS = 365
 """Oldest daily logs are dropped past this count."""
-
-IMPORTANT_EVENTS = (
-    "milestone",
-    "key_choice",
-    "battle_victory",
-    "first_time",
-    "ending",
-)
-"""Only these event types reach the biography."""
 
 ENDING_EVENT = "ending"
 """An entry of this type also fills ``Biography.ending``."""
@@ -117,9 +109,3 @@ async def unlock_title(pet, title: str) -> bool:
     )
     save_biography(bio)
     return True
-
-
-async def maybe_add_biography(pet, event_type: str, content: str) -> None:
-    """Record ``content`` only when ``event_type`` is biography-worthy."""
-    if event_type in IMPORTANT_EVENTS:
-        await add_biography_entry(pet, {"type": event_type, "content": content})

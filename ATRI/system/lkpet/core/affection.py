@@ -66,21 +66,6 @@ def apply_affection_bonus(
     return math.floor(float(value) * (1.0 + affection_bonus_ratio(affection, cap)))
 
 
-def get_affection_bonus(affection: int) -> dict[str, float | bool]:
-    """Return the derived modifiers granted by ``affection``.
-
-    ``exp_bonus`` / ``battle_bonus`` 都是**乘区系数**（1.0 = 无加成），
-    上限分别为 +30%（沿用历史值，见 ``core.leveling``）与
-    :data:`AFFECTION_BONUS_MAX`（+10%，见 ``core.roguelike.battle``）。
-    """
-    return {
-        "exp_bonus": 1.0
-        + (min(AFFECTION_MAX, max(0, affection)) / AFFECTION_MAX) * 0.3,
-        "battle_bonus": 1.0 + affection_bonus_ratio(affection),
-        "unlock_special_skill": affection >= HIGH_AFFECTION,
-    }
-
-
 def add_affection(pet, amount: int) -> None:
     """Raise affection by ``amount``, halving the gain once it is already high."""
     current = pet.affection

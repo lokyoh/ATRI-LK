@@ -106,15 +106,6 @@ def skill_name(skill_id: str, skills_config: dict[str, Any] | None = None) -> st
     return str(spec.get("name") or skill_id)
 
 
-def skill_type(
-    skill_id: str, skills_config: dict[str, Any] | None = None
-) -> str | None:
-    """技能类型（``active`` / ``passive``）；未知技能返回 ``None``。"""
-    spec = skill_spec(skill_id, skills_config) or {}
-    slot = spec.get("type")
-    return slot if slot in SLOT_TYPES else None
-
-
 def equipped_limit(slot_type: str, skills_config: dict[str, Any] | None = None) -> int:
     """某类型的装备槽数量（默认 4）。"""
     cfg = skills_config if skills_config is not None else _load_skills_config()
@@ -437,38 +428,6 @@ def grant_skill(
         "added": added,
         "equipped": is_equipped(pet, skill_id),
     }
-
-
-def forget_skill(
-    pet, skill_id: str, skills_config: dict[str, Any] | None = None
-) -> bool:
-    """从收集池与装备槽里彻底移除一个技能（熟练度一并清理）。"""
-    cfg = skills_config if skills_config is not None else _load_skills_config()
-    ensure_skill_storage(pet, cfg)
-    skill_id = str(skill_id)
-    removed = False
-    collection = _as_slot_map(getattr(pet, "skills", None))
-    for slot in SLOT_TYPES:
-        if skill_id in collection[slot]:
-            collection[slot].remove(skill_id)
-            removed = True
-    pet.skills = collection
-
-    equipped = _as_slot_map(getattr(pet, "skill_equipped", None))
-    for slot in SLOT_TYPES:
-        if skill_id in equipped[slot]:
-            equipped[slot].remove(skill_id)
-            removed = True
-    pet.skill_equipped = equipped
-
-    sources = dict(getattr(pet, "skill_sources", None) or {})
-    sources.pop(skill_id, None)
-    pet.skill_sources = sources
-
-    proficiency = dict(getattr(pet, "skill_proficiency", None) or {})
-    proficiency.pop(skill_id, None)
-    pet.skill_proficiency = proficiency
-    return removed
 
 
 # ---------------------------------------------------------------------------

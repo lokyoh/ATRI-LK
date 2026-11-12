@@ -53,32 +53,25 @@ MAX_INLINE_PER_LINE = 4
 QQ_CMD_MARK = "<qqbot-cmd-input"
 
 
+#: 一个交互选项。
 @dataclass
 class Choice:
     """一个交互选项。
 
     :param label: 链接上显示的字
     :param command: 点下去实际发出的指令（完整、可执行）
-    :param enter: **预留，当前不生效**。见下方说明。
-    :param style: 预留：内联命令没有样式，保留字段让调用方不必区分
 
-    ``enter`` 曾经被当成「点一下直接发送 / 只填入输入框」的开关，但 QQ 官方
-    协议里这两个能力是**两种不同的标记**：
+    **只有两个字段**：内联命令（``<qqbot-cmd-input>``）没有样式，也没有
+    「直接发送 / 只填输入框」的区别——QQ 官方协议里后者是另一种标记
+    ``<qqbot-cmd-enter>``，而它**群聊与文字子频道不支持**。本插件全是群聊，
+    所以只有「插入输入框」这一种行为，没有可调的开关。
 
-    * ``<qqbot-cmd-input>`` —— 只把文本**插入输入框**，由用户自己确认发送；
-    * ``<qqbot-cmd-enter>`` —— 点一下直接发送，但**群聊与文字子频道不支持**。
-
-    本插件全部是群聊场景，所以实际只有前者可用，``enter`` 无论真假都走
-    「插入输入框」。想「点一下就发出去」只能靠键盘按钮（``keyboard`` 段），
-    而那条路有 10 个按钮的总量上限，正文一长就整条发不出去——本插件明确不走。
-
-    字段保留是为了不破坏既有调用方与测试；新代码不要依赖它。
+    想「点一下就发出去」只能走键盘按钮（``keyboard`` 段），那条路有 10 个按钮
+    的总量上限，正文一长就整条发不出去——本插件明确不走。
     """
 
     label: str
     command: str
-    enter: bool = True
-    style: int = 1
 
 
 def current_event() -> Any:
@@ -236,9 +229,9 @@ async def finish(matcher, text: str, choices: Iterable[Choice] | None = None):
 # ---------------------------------------------------------------- 便捷构造
 
 
-def choice(label: str, command: str, *, enter: bool = True, style: int = 1) -> Choice:
+def choice(label: str, command: str) -> Choice:
     """构造一个 ``Choice`` 的简写。"""
-    return Choice(label=label, command=command, enter=enter, style=style)
+    return Choice(label=label, command=command)
 
 
 @dataclass
@@ -247,8 +240,8 @@ class Menu:
 
     choices: list[Choice] = field(default_factory=list)
 
-    def add(self, label: str, command: str, **kwargs) -> Menu:
-        self.choices.append(choice(label, command, **kwargs))
+    def add(self, label: str, command: str) -> Menu:
+        self.choices.append(choice(label, command))
         return self
 
     def __iter__(self):

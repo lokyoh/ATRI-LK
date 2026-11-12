@@ -90,26 +90,6 @@ async def settle_days(
     }
 
 
-async def settle_one_day(
-    pet: Any,
-    day: int,
-    *,
-    config: dict[str, Any] | None = None,
-) -> dict[str, Any]:
-    """Settle one personal day without automatically ending the pet's cycle."""
-    cfg = config if config is not None else _load_daily_config()
-    pet.age_days += 1
-    changes = apply_daily_decay(pet, cfg)
-    pet.action_points = cfg["action_points"]["max_per_day"]
-    pet.ap_reset_day = day
-    changes["age_days"] = 1
-    changes["action_points"] = pet.action_points
-    pet.daily_flags = dict.fromkeys(cfg["daily_flags"], False)
-    update_health_state(pet)
-    update_emotion_state(pet)
-    return {"day": day, "changes": changes, "log": _daily_log(pet, day, changes)}
-
-
 async def check_daily_reset(
     pet: Any,
     *,
@@ -135,14 +115,3 @@ async def check_daily_reset(
         now=now,
     )
     return {"need_settle": True, **result}
-
-
-def get_daily_summary(pet: Any) -> dict[str, Any]:
-    return {
-        "age_days": pet.age_days,
-        "lifespan_days": pet.lifespan_days,
-        "action_points": pet.action_points,
-        "daily_flags": pet.daily_flags,
-        "health_state": pet.health_state,
-        "emotion_state": pet.emotion_state,
-    }

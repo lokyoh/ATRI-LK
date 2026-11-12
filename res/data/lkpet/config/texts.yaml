@@ -30,7 +30,7 @@ tutorial:
     - id: tutorial_done
       day: 3
       text: "新手引导完成！祝你和宠物旅途愉快～"
-  hint: "📖 引导：{text}"
+  hint: "💡 引导：{text}"
 
 messages:
   feed: "{name}开心地吃下了食物"
@@ -67,7 +67,7 @@ daily:
   title: "📅 已结算 {days_settled} 天（第 {to_day} 天）"
   truncated: "（离线明细只保留最近 {kept} 天）"
   action_points: "行动点已重置为 {action_points}"
-  reincarnation: "⚡ 满足轮回条件：{reasons}（预计 {points} 成就点，需主动执行「/宠物.轮回 确认」）"
+  reincarnation: "⚡ 满足轮回条件：{reasons}（预计 {points} 成就点，可发「/宠物.轮回」查看）"
   no_settle: "今天已经结算过了"
   log_fallback: "第 {day} 天"
   new_day: "🌅 新的一天到了，{name} 又长大了一天！\n行动点已补满（{action_points}/{max_action_points}），快来看看它吧：/宠物.状态"
@@ -113,8 +113,8 @@ skill:
   equipped_ok: "✅ 已装备「{name}」"
   unequipped_ok: "✅ 已卸下「{name}」（仍保留在技能库中）"
   unknown: "❌ {msg}"
-  granted: "📖 学会新技能：{names}"
-  granted_full: "📖 新技能 {name} 已进入技能库（装备槽已满，可在 /宠物.技能 中调整）"
+  granted: "📚 学会新技能：{names}"
+  granted_full: "📚 新技能 {name} 已进入技能库（装备槽已满，可在 /宠物.技能 中调整）"
 
 talent:
   title: "✨ {name} 的天赋"
@@ -144,9 +144,17 @@ love:
 reincarnation:
   title: "🔄 轮回（当前第 {cycle} 世）"
   unavailable: "当前无法轮回"
-  available: "可以轮回：{reasons}\n预计获得 {estimated_points} 成就点\n累计成就点：{achievement_points}（已用 {spent_points}）"
+  section_condition: "条件"
+  section_points: "成就点"
+  available: "可以轮回：{reasons}"
+  points_line: "预计获得 {estimated_points} ｜ 累计 {achievement_points} ｜ 已用 {spent_points}"
   manual_hint: "发送「/宠物.轮回 确认」执行轮回，此操作会结束当前一世。"
-  done: "🔄 轮回完成！\n获得成就点：{points_earned}\n总成就点：{total_points}\n轮回次数：{cycle}\n结局：{ending}"
+  hint_button: "点下方「确认轮回」结束这一世；此操作不可撤销。"
+  done: "🔄 轮回完成！"
+  section_gain: "获得"
+  done_points: "成就点 +{points_earned} ｜ 累计 {total_points}"
+  done_cycle: "轮回次数：{cycle}"
+  done_ending: "结局：{ending}"
   kept_skills: "🎒 保留技能（轮回技能 / 奖励技能）：{names}"
   no_kept_skills: "🎒 本世没有轮回技能或奖励技能，技能库已清空"
   drawn_skill: "🌟 满级轮回，从轮回技能池抽得：{name}"
@@ -154,24 +162,20 @@ reincarnation:
   drawn_skill_none: "🌟 满级轮回，但轮回技能池已被抽空"
   skill_bench: "（技能槽已满，请在「/宠物.技能」中装备）"
 
-perk:
-  title: "🏅 成就点特权（可用：{available}）"
-  empty: "暂无可兑换特权"
-  line: "· {perk_id} - {name}（{cost} 点）"
-  granted: "✅ 兑换成功：{perk}\n剩余成就点：{remaining_points}"
-
 # ---- 轮回商店 ----
 shop:
-  overview_title: "🏛 轮回商店｜可用 {available} 点（累计 {total}，已用 {spent}）"
+  overview_title: "🏛 轮回商店"
+  overview_points: "可用 {available} ｜ 累计 {total} ｜ 已用 {spent}"
+  section_categories: "分类"
   overview_line: "{order}. {name}　{count} 项 · {mode}"
   overview_mode_infinite: "无限成长"
   overview_mode_capped: "有限等级"
   overview_hint: "发送「/宠物.商店 1」查看分类；「/宠物.商店 1-3」直接看某件。"
   overview_respec: "♻️ 洗点券 {tickets} 张（每完成一次轮回赠送 {free} 张）"
 
-  category_title: "🏛 {name}｜{desc}"
+  category_title: "🏛 {name}"
   category_empty: "这个分类还没有商品。"
-  item_line: "· {number} {name}　{level}　{price}{gap}"
+  item_line: "{number} {name}　{level}　{price}{gap}"
   item_level_max: "{owned}/{cap}"
   item_level_inf: "已买 {owned} 级"
   item_price: "{price} 点"
@@ -182,13 +186,17 @@ shop:
   category_hint: "发送「/宠物.商店 {order}-1」查看详情；「/宠物.商店 确认 {number}」购买。"
 
   detail_title: "🏛 {category} · {number} {name}"
+  detail_section_now: "当前"
   detail_level: "当前：{level}"
   detail_effect: "效果：{effect}"
+  detail_desc: "「{desc}」"
   detail_next: "下一级：{next}"
   detail_price: "价格：{price} 点（可用 {available}）"
   detail_maxed: "这条已经买满了。"
   detail_locked: "需要累计轮回 {cycles} 次才开放。"
   detail_confirm: "发送「/宠物.商店 确认 {number}」购买。"
+  detail_confirm_button: "点下方「购买」即可。"
+  detail_short: "还差 {gap} 点。多轮回几次再来吧。"
   detail_hint_none: "发送「/宠物.商店」返回概览。"
 
   bought: "✅ 已购买「{name}」第 {level} 级（-{price} 点，剩余 {remaining}）"
@@ -286,7 +294,7 @@ rogue:
   step_no_ap: "行动点不足，原地待命；明天 00:00 重置后发送「/宠物.肉鸽 继续」。"
   need_ap: "行动点不足，原地待命；明天 00:00 重置后发送「/宠物.肉鸽 继续」。"
   region_enter: "🗺 抵达新区域【{name}】{desc}"
-  floor_header: "—— 第 {floor} 层 · {region} ——"
+  floor_header: "第 {floor} 层 · {region}"
   opt_battle: "战斗"
   opt_event: "事件"
   opt_shop: "商店"
@@ -295,8 +303,9 @@ rogue:
   shop_hint: "（{stock}）"
   floor_reply: "回复编号选择路线。"
   elite_hint: "：⚠️ {monster}"
-  relic_choice: "🎁 遗物奖励层（回复编号三选一，遗物仅本局生效）："
-  relic_option: "{idx}. {name}（{stat}） — {desc}"
+  relic_choice: "🎁 遗物奖励层（{how}，遗物仅本局生效）"
+  relic_option: "{idx}{name}{stat_note} — {desc}"
+  relic_stat_note: "（{stat}）"
   relic_none: "遗物已集齐，直接前进。"
   relic_gained: "✨ 获得遗物（本局生效）：{name}（{stat}） — {desc}"
   relic_owned: "这件遗物本局已经拥有了。"
@@ -304,7 +313,7 @@ rogue:
   relic_boss_heal: "💚 遗物生效：回复 {amount} 局内生命"
   codex: "📇 遗物图鉴：{owned}/{total}"
   run_relics: "🗡 本局遗物（{count} 件，仅本局生效）：{names}"
-  relic_shop_line: "{idx}. {name}（{label}｜{stat}）— {price}金{extra}"
+  relic_shop_line: "{idx}{name}（{label}｜{stat}）— {price}金{extra}"
   tiers:
     normal: 普通
     rare: 稀有
@@ -406,7 +415,7 @@ rogue:
   skill_note_leech: "吸血"
   phase_item: "{name}（生命 ≤{percent}%）"
   # —— 逐回合战报 ——
-  battle_log_header: "📖 战报（最近 {count} 条）："
+  battle_log_header: "🗒 战报（最近 {count} 条）："
   log_attack: "回合{round} {actor} 普攻，造成 {dmg} 伤害。"
   log_skill: "回合{round} {actor} 使用【{skill}】，造成 {dmg} 伤害。"
   log_skill_multi: "回合{round} {actor} 使用【{skill}】，{strikes} 连击共 {dmg} 伤害。"
@@ -458,6 +467,6 @@ rogue:
   unlock_elite_skill: "🔓 首次击败精英解锁技能：{name}（已进入技能库）"
   unlock_boss_skill: "🔓 首次击败首领解锁技能：{name}（已进入技能库）"
   settle_unlock_title_hint: "🎖 称号可在 /宠物.状态 中查看"
-  settle_grant_skill: "📖 升级奖励技能：{names}"
+  settle_grant_skill: "📚 升级奖励技能：{names}"
   unlock_title: "🔓 首通解锁称号：{title}"
   settle_points: "成就点 +{points}（累计 {total}）"

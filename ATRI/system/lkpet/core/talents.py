@@ -73,26 +73,3 @@ def apply_talent_effect(pet, talent: dict, levels: int = 1) -> None:
     for key, value in talent.get("effect_per_level", {}).items():
         if key in pet.attributes:
             pet.attributes[key] += int(value * levels)
-
-
-def reset_talents(pet, talent_config: dict | None = None) -> dict:
-    config = talent_config if talent_config is not None else _load_talent_config()
-    total_points = sum(pet.talents.values())
-    removed_bonuses = {}
-
-    for talent_id, talent_level in pet.talents.items():
-        talent = config.get("talents", {}).get(talent_id)
-        if talent is None:
-            raise ValueError(f"天赋配置不存在，无法重置：{talent_id}")
-        for key, value in talent.get("effect_per_level", {}).items():
-            if key not in pet.attributes or not isinstance(value, int | float):
-                raise ValueError(f"天赋效果配置无效：{talent_id}")
-            removed_bonuses[key] = removed_bonuses.get(key, 0) + int(
-                value * talent_level
-            )
-
-    for key, value in removed_bonuses.items():
-        pet.attributes[key] -= value
-    pet.talents = {}
-    pet.talent_points += total_points
-    return {"refunded": total_points, "removed_bonuses": removed_bonuses}

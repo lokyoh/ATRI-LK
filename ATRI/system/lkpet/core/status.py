@@ -129,18 +129,3 @@ def update_emotion_state(pet) -> None:
         pet.emotion_state = "angry"
     else:
         pet.emotion_state = "excited"
-
-
-def get_status_summary(pet) -> dict[str, Any]:
-    """Snapshot the decayed status fields plus the derived states."""
-    return {
-        "mood": pet.mood,
-        "hunger": pet.hunger,
-        "fatigue": pet.fatigue,
-        "cleanliness": pet.cleanliness,
-        "affection": pet.affection,
-        "health_state": pet.health_state,
-        "emotion_state": pet.emotion_state,
-        "age_days": pet.age_days,
-        "lifespan_days": pet.lifespan_days,
-    }

@@ -8,6 +8,7 @@ from ._common import (
     _load_rogue_config,
     _load_skills_config,
     _persist,
+    _style,
     _text,
 )
 
@@ -37,13 +38,19 @@ async def settle_run(
         points += int(rewards.get("clear_bonus", 0))
 
     lines = [
-        _text(
-            "settle_header",
-            "📊 本局结算：到达第 {floor} 层{cleared}",
-            floor=floors_reached,
-            cleared=_text("settle_cleared", "，通关！") if cleared else "",
+        _style().heading(
+            _text(
+                "settle_header",
+                "📊 本局结算：到达第 {floor} 层{cleared}",
+                floor=floors_reached,
+                cleared=_text("settle_cleared", "，通关！") if cleared else "",
+            )
         )
     ]
+    # 撤退是「怎么结束的」，紧跟在标题下作为副标题——早先它是插在标题**前面**的，
+    # 于是卡片第一眼看到的是「已撤退」，反而看不出结算到第几层。
+    if reason == "retreat" and not cleared:
+        lines.append(_text("retired", "🏳️ 已撤退。"))
 
     # 1) 经验写回并允许升级。
     # 局内累积的 exp 是「原始经验」，写回前统一叠一次好感加成（最多 +10%，按总值
@@ -123,8 +130,6 @@ async def settle_run(
     rogue.updated_at = datetime.now()
     await _persist(rogue)
 
-    if reason == "retreat" and not cleared:
-        lines.insert(0, _text("retired", "🏳️ 已撤退。"))
     return "\n".join(line for line in lines if line)
 
 

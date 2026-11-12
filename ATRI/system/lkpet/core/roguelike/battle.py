@@ -1718,7 +1718,7 @@ async def _do_battle(
     ``enemy_index`` 是普通层选项里预抽好的敌人池下标（精英层则是 ``region.elites``
     池的下标，见 ``FloorChoiceState``）；``elite`` 缺省时沿用 pending 里的层内精英标记。
     """
-    from ._common import _persist, _text, floor_rng
+    from ._common import _persist, _style, _text, floor_rng
     from .relics import (
         _grant_relic,
         _run_relics,
@@ -1788,14 +1788,16 @@ async def _do_battle(
             "⚔️ 第 {floor} 层 · {region}：{name} VS {monster}",
         )
     lines = [
-        _text(
-            header_key,
-            header_default,
-            floor=floor,
-            region=region.get("name", ""),
-            name=pet.name,
-            title=str(monster.get("elite_fight_title") or "强化形态"),
-            monster=_monster_name(monster),
+        _style().heading(
+            _text(
+                header_key,
+                header_default,
+                floor=floor,
+                region=region.get("name", ""),
+                name=pet.name,
+                title=str(monster.get("elite_fight_title") or "强化形态"),
+                monster=_monster_name(monster),
+            )
         )
     ]
     # 战斗详情：怪物描述（小怪/精英/首领都按 desc 渲染），特点单独一行。
@@ -1817,6 +1819,8 @@ async def _do_battle(
         )
     if monster.get("boss") or is_elite:
         lines.extend(_enemy_skill_lines(monster, cfg, hint=True))
+    # 「节奏」与「战报」各自分节：这两块是复盘用的，混在描述后面就找不着了。
+    lines.append(_style().label(_text("battle_section_pace", "节奏")))
     lines.append(
         _text(
             "battle_pace",
@@ -1832,10 +1836,12 @@ async def _do_battle(
     if battle_log is not None:
         shown = battle_log[-log_limit:]
         lines.append(
-            _text(
-                "battle_log_header",
-                "📖 战报（最近 {count} 条）：",
-                count=len(shown),
+            _style().label(
+                _text(
+                    "battle_log_header",
+                    "📖 战报（最近 {count} 条）：",
+                    count=len(shown),
+                )
             )
         )
         if shown:
@@ -1843,6 +1849,8 @@ async def _do_battle(
         else:
             lines.append(_text("log_none", "（战斗过于漫长，战报已截断）"))
 
+    # 结果行单独分节：胜负是这张卡最重要的信息，不该埋在一串战报后面。
+    lines.append(_style().label(_text("battle_section_result", "结果")))
     if not result.victory:
         if run["hp"] <= 0:
             lines.append(

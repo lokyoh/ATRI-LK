@@ -82,7 +82,7 @@ def _cmd(action: str) -> str:
 
 def _pick(text: str, index: int) -> Choice:
     """第 ``index`` 号选项的按钮（编号从 1 开始，与局内输入一致）。"""
-    return Choice(label=text, command=_cmd(str(index)), style=1)
+    return Choice(label=text, command=_cmd(str(index)))
 
 
 def _floor_choices(state: Any) -> list[Choice]:
@@ -132,7 +132,7 @@ def _shop_choices(state: Any, run: Any) -> list[Choice]:
     choices: list[Choice] = []
     for index, label in enumerate(labels, start=1):
         choices.append(_pick(label, index))
-    choices.append(Choice(label=_text("opt_leave", "离开"), command=_cmd("0"), style=0))
+    choices.append(Choice(label=_text("opt_leave", "离开"), command=_cmd("0")))
     return choices
 
 

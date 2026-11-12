@@ -426,37 +426,3 @@ def refresh_pet_attributes(
     bonus = permanent_bonus if permanent_bonus is not None else bonus_for(pet.player_id)
     cfg = pet_config if pet_config is not None else _load_pet_config()
     pet.attributes = calc_attributes_on_level_up(pet, cfg, permanent_bonus=bonus)
-
-
-async def spend_achievement_points(
-    player_id: str | int,
-    perk_id: str,
-    *,
-    reincarnation_config: dict[str, Any] | None = None,
-) -> dict[str, Any]:
-    """Exchange achievement points for a permanent perk."""
-    cfg = (
-        reincarnation_config
-        if reincarnation_config is not None
-        else _load_reincarnation_config()
-    )
-    perk = cfg["perks"].get(perk_id)
-    if not perk:
-        raise ValueError("特权不存在")
-
-    reinc = await get_or_create_reincarnation(player_id)
-    available = reinc.achievement_points - reinc.spent_points
-    if available < perk["cost"]:
-        raise ValueError(f"成就点不足，需要 {perk['cost']}，可用 {available}")
-
-    reinc.spent_points += perk["cost"]
-    reinc.unlocked_perks.append(perk_id)
-    for key, value in perk["effect"].items():
-        reinc.permanent_bonuses[key] = reinc.permanent_bonuses.get(key, 0) + value
-    reinc.updated_at = datetime.now()
-    _persist(reinc)
-
-    return {
-        "perk": perk_id,
-        "remaining_points": reinc.achievement_points - reinc.spent_points,
-    }

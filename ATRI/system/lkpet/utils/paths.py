@@ -14,6 +14,12 @@ STATIC_DATA_ROOT: Path = RES_DATA_DIR / "lkpet"
 RUNTIME_DATA_ROOT: Path = PLUGIN_DATA_DIR / "lkpet"
 CONFIG_DIR: Path = STATIC_DATA_ROOT / "config"
 USERS_DIR: Path = RUNTIME_DATA_ROOT / "users"
+"""`data/plugins/lkpet/users` —— 目前**只有创建、没有读写**。
+
+宠物数据全部落在 ``data/sql/ATRI.sqlite3``；这个目录是历史遗留的「按玩家缓存」
+预留位置（README 里描述了它的存在）。保留它是为了让部署目录结构保持不变，
+新代码不要往里写东西。
+"""
 LOGS_DIR: Path = RUNTIME_DATA_ROOT / "logs"
 
 _DIRECTORIES: tuple[Path, ...] = (
@@ -34,8 +40,3 @@ def ensure_dirs() -> None:
 def get_config_path(name: str) -> Path:
     """Return the YAML path for the config named ``name``."""
     return CONFIG_DIR / f"{name}.yaml"
-
-
-def get_user_path(player_id: str | int) -> Path:
-    """Return the optional runtime cache path for ``player_id``."""
-    return USERS_DIR / f"{player_id}.json"

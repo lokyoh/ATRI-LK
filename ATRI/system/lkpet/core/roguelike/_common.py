@@ -120,6 +120,17 @@ def _text(key: str, default: str = "", **fields: Any) -> str:
     return text(f"rogue.{key}", default, **fields)
 
 
+def _style():
+    """本次渲染的排版能力（QQ 端 markdown / OneBot 端纯文本）。
+
+    core 层只表达「这是标题、这是分节」，具体长什么样由 ``utils.style`` 决定；
+    这样肉鸽的十几张卡不必各写一份 ``if is_qq()``。
+    """
+    from ...utils import style
+
+    return style.current()
+
+
 async def _persist(rogue) -> None:
     from ...database import save_rogue
 

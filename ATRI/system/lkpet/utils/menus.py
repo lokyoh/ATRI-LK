@@ -3,8 +3,8 @@
 集中在一个文件里，好处是**改一处就能看全**：选项对应的指令必须是真实存在
 的，散落在各 handler 里很容易写了却指向一条不存在的命令。
 
-所有 command 都经 :func:`cmd` 生成，自动带上当前 ``command_start``——
-部署把前缀配成 ``！`` 时，用户点下去的内容也跟着变。
+所有 command 都经 :func:`cmd` 生成，自动带上当前 ``command_start``——部署把
+前缀配成 ``！`` 时，用户点下去的内容也跟着变。
 
 ## 优先内嵌，不要堆在底部
 
@@ -16,6 +16,15 @@ QQ 端的选项是 markdown 里的 ``<qqbot-cmd-input>``。如果统一追加到
     🐾 野狼  体力 80%  <命令>
 
 只有当正文确实没有可挂靠的行（纯提示语）时，才退回 :func:`tail`。
+
+## 底部按钮按「卡片类别」分组
+
+同一个类别的卡片用同一套底部按钮（详见各函数文档）：
+
+* :func:`care_menu` —— 照护类：状态 / 四种互动 / 训练 / 创建成功 / 轮回完成 / 聊天；
+* :func:`detail_menu` —— 记录类：技能 / 天赋 / 传记 / 日志 / 好感度，自动去掉
+  指向当前这张卡的那个按钮；
+* 商店 / 肉鸽 / 轮回确认是**操作型**按钮（「这一步做什么」），保持自己的语义。
 """
 
 from __future__ import annotations
@@ -45,6 +54,17 @@ def inline(label: str, path: str) -> str:
     return cmd_at(label, cmd(path))
 
 
+def inline_append(label: str, path: str) -> str:
+    """把可点命令**接在已有文本后面**（QQ 端返回带前导空格的标记）。
+
+    与 :func:`inline` 的区别只有一个空格，但不加这个空格时按钮会紧贴前一个
+    ``数值``/``）」``——真机上渲染成「熟练度 1.0卸下」，看起来像个错别字。
+    非 QQ 端返回空串（不吃掉任何字符），所以调用方可以无条件 ``+``。
+    """
+    link = inline(label, path)
+    return f" {link}" if link else ""
+
+
 def tail(choices: list[Choice]) -> str:
     """兜底：把选项拼成一行追加到末尾。
 
@@ -58,51 +78,11 @@ def tail(choices: list[Choice]) -> str:
     return f"\n\n> {links.replace(chr(10), chr(10) + '> ')}" if links else ""
 
 
-def inline_append(label: str, path: str) -> str:
-    """把可点命令**接在已有文本后面**（QQ 端返回带前导空格的标记）。
-
-    与 :func:`inline` 的区别只有一个空格，但不加这个空格时按钮会紧贴前一个
-    ``数值``/``）」``——真机上渲染成「熟练度 1.0卸下」，看起来像个错别字。
-    非 QQ 端返回空串（不吃掉任何字符），所以调用方可以无条件 ``+``。
-    """
-    link = inline(label, path)
-    return f" {link}" if link else ""
-
-
-# ---------------------------------------------------------------- 常用
-
-
-def main_menu() -> list[Choice]:
-    """宠物主菜单：最常用的一屏。"""
-    return list(
-        Menu()
-        .add("状态", cmd("宠物.状态"))
-        .add("喂食", cmd("宠物.喂食"))
-        .add("玩耍", cmd("宠物.玩耍"))
-        .add("技能", cmd("宠物.技能"))
-        .add("商店", cmd("宠物.商店"))
-        .add("肉鸽", cmd("宠物.肉鸽"))
-    )
-
-
-def status_menu() -> list[Choice]:
-    """通用入口：状态 / 照护 / 配置。
-
-    **不再作为「某张卡看完之后」的默认底部**——那种场合该用
-    :func:`care_menu`（照护动作）或 :func:`detail_menu`（看别的卡）。
-    这里保留是给「创建成功」「轮回完成」这类**没有明确下一步**的场合当总入口。
-    """
-    return list(
-        Menu()
-        .add("状态", cmd("宠物.状态"))
-        .add("喂食", cmd("宠物.喂食"))
-        .add("技能", cmd("宠物.技能"), style=0)
-        .add("商店", cmd("宠物.商店"), style=0)
-    )
+# ---------------------------------------------------------------- 照护类
 
 
 def care_menu() -> list[Choice]:
-    """照护卡（状态 / 四种互动 / 训练）底部的统一动作组。
+    """照护卡（状态 / 四种互动 / 训练 / 创建成功 / 轮回完成 / 聊天）底部的动作组。
 
     列的是「玩家看完这张卡最可能想干的一件照护工作」——喂食 / 玩耍 / 洗澡 /
     休息 / 训练，正好覆盖 ``daily.yaml`` 里那五个行动点消耗项。
@@ -121,6 +101,29 @@ def care_menu() -> list[Choice]:
         .add("休息", cmd("宠物.休息"))
         .add("训练", cmd("宠物.训练"))
     )
+
+
+def action_menu() -> list[Choice]:
+    """四种互动（喂食 / 玩耍 / 洗澡 / 休息）回执底部的统一动作组。
+
+    与 :func:`care_menu` 同一套：互动完最顺手的就是接着做另一项照护，
+    所以直接复用，不再维护第二份「只有状态/玩耍/休息」的短名单——
+    那份名单会让玩家喂完食想洗澡时只能手打。
+    """
+    return care_menu()
+
+
+def train_menu() -> list[Choice]:
+    """训练之后：最可能接着再练一次，或看看成果。"""
+    return list(
+        Menu()
+        .add("再训练", cmd("宠物.训练"))
+        .add("状态", cmd("宠物.状态"))
+        .add("肉鸽", cmd("宠物.肉鸽"))
+    )
+
+
+# ---------------------------------------------------------------- 记录类
 
 
 CARD_ENTRIES = (
@@ -147,33 +150,7 @@ def detail_menu(exclude: str | None = None) -> list[Choice]:
     之后的项数；只有好感度那种不在表里的卡才会折成第二行。
     """
     entries = [item for item in CARD_ENTRIES if item[0] != exclude]
-    return [Choice(label=label, command=cmd(path), style=0) for label, path in entries]
-
-
-def create_menu() -> list[Choice]:
-    return list(
-        Menu().add("创建宠物", cmd("宠物.创建")).add("玩法说明", cmd("帮助"), style=0)
-    )
-
-
-def train_menu() -> list[Choice]:
-    """训练之后：最可能接着再练一次，或看看成果。"""
-    return list(
-        Menu()
-        .add("再训练", cmd("宠物.训练"))
-        .add("状态", cmd("宠物.状态"), style=0)
-        .add("肉鸽", cmd("宠物.肉鸽"), style=0)
-    )
-
-
-def action_menu() -> list[Choice]:
-    """四种互动（喂食 / 玩耍 / 洗澡 / 休息）回执底部的统一动作组。
-
-    与 :func:`care_menu` 同一套：互动完最顺手的就是接着做另一项照护，
-    所以直接复用，不再维护第二份「只有状态/玩耍/休息」的短名单——
-    那份名单会让玩家喂完食想洗澡时只能手打。
-    """
-    return care_menu()
+    return [Choice(label=label, command=cmd(path)) for label, path in entries]
 
 
 def skill_menu() -> list[Choice]:
@@ -189,6 +166,19 @@ def talent_menu() -> list[Choice]:
     return detail_menu(exclude="天赋")
 
 
+def log_menu() -> list[Choice]:
+    """日志卡底部：与其它记录卡同一套出口（见 :func:`detail_menu`）。"""
+    return detail_menu(exclude="日志")
+
+
+def bio_menu() -> list[Choice]:
+    """传记卡底部：同上。"""
+    return detail_menu(exclude="传记")
+
+
+# ---------------------------------------------------------------- 操作类
+
+
 def shop_overview_menu(categories: list[dict] | None = None) -> list[Choice]:
     """商店概览：直接给分类入口，省得手打编号。
 
@@ -202,8 +192,8 @@ def shop_overview_menu(categories: list[dict] | None = None) -> list[Choice]:
         name = str(cat.get("name") or cat.get("id") or "")
         if order is None or not name:
             continue
-        result.append(Choice(label=name, command=cmd(f"宠物.商店 {order}"), style=0))
-    result.append(Choice(label="洗点", command=cmd("宠物.商店 洗点"), style=0))
+        result.append(Choice(label=name, command=cmd(f"宠物.商店 {order}")))
+    result.append(Choice(label="洗点", command=cmd("宠物.商店 洗点")))
     return result
 
 
@@ -215,10 +205,8 @@ def shop_item_menu(number: str, *, affordable: bool = True) -> list[Choice]:
     """
     result: list[Choice] = []
     if affordable:
-        result.append(
-            Choice(label="购买", command=cmd(f"宠物.商店 确认 {number}"), style=1)
-        )
-    result.append(Choice(label="返回", command=cmd("宠物.商店"), style=0))
+        result.append(Choice(label="购买", command=cmd(f"宠物.商店 确认 {number}")))
+    result.append(Choice(label="返回", command=cmd("宠物.商店")))
     return result
 
 
@@ -226,15 +214,13 @@ def rogue_menu(*, running: bool) -> list[Choice]:
     """肉鸽：没开局给「开始」，局内给「继续 / 进度 / 撤退」。"""
     if not running:
         return list(
-            Menu()
-            .add("开始", cmd("宠物.肉鸽 开始"))
-            .add("进度", cmd("宠物.肉鸽 进度"), style=0)
+            Menu().add("开始", cmd("宠物.肉鸽 开始")).add("进度", cmd("宠物.肉鸽 进度"))
         )
     return list(
         Menu()
         .add("继续", cmd("宠物.肉鸽 继续"))
-        .add("预计进度", cmd("宠物.肉鸽 进度"), style=0)
-        .add("撤退", cmd("宠物.肉鸽 撤退"), style=0)
+        .add("预计进度", cmd("宠物.肉鸽 进度"))
+        .add("撤退", cmd("宠物.肉鸽 撤退"))
     )
 
 
@@ -244,22 +230,6 @@ def reincarnation_menu(*, ready: bool) -> list[Choice]:
         return list(
             Menu()
             .add("确认轮回", cmd("宠物.轮回 确认"))
-            .add("再想想", cmd("宠物.状态"), style=0)
+            .add("再想想", cmd("宠物.状态"))
         )
-    return list(
-        Menu().add("查看条件", cmd("宠物.轮回")).add("商店", cmd("宠物.商店"), style=0)
-    )
-
-
-def log_menu() -> list[Choice]:
-    """日志卡底部：与其它记录卡同一套出口（见 :func:`detail_menu`）。"""
-    return detail_menu(exclude="日志")
-
-
-def bio_menu() -> list[Choice]:
-    """传记卡底部：同上。"""
-    return detail_menu(exclude="传记")
-
-
-def list_menu() -> list[Choice]:
-    return list(Menu().add("我的状态", cmd("宠物.状态")))
+    return list(Menu().add("查看条件", cmd("宠物.轮回")).add("商店", cmd("宠物.商店")))

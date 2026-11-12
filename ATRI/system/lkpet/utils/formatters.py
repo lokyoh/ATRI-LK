@@ -221,28 +221,41 @@ def format_action_result(kind: str, result: dict[str, Any]) -> str:
 
 
 def format_daily_report(settle: dict[str, Any]) -> str:
-    """Render the outcome of ``core.daily.check_daily_reset``."""
+    """Render the outcome of ``core.daily.check_daily_reset``.
+
+    排版意图：这张卡永远拼在状态卡**前面**，所以它需要一个自己的标题，
+    以及一条分节线——不然玩家看到的是「已结算 3 天」下面紧跟一串日志、再下面
+    突然冒出「🐾 状态」，会以为是同一张卡的两个部分。
+
+    逐日日志用 ``style.bullet`` 而不是裸文本：一天一条、条条等长，一眼能数清
+    离线了几天。
+    """
+    s = style.current()
     if not settle.get("need_settle"):
         return text("daily.no_settle", "今天已经结算过了")
 
     report = settle.get("report") or []
     to_day = report[-1]["day"] if report else settle.get("days_settled", 0)
     lines = [
-        text(
-            "daily.title",
-            "📅 已结算 {days_settled} 天",
-            days_settled=settle.get("days_settled", 0),
-            to_day=to_day,
+        s.heading(
+            text(
+                "daily.title",
+                "📅 已结算 {days_settled} 天",
+                days_settled=settle.get("days_settled", 0),
+                to_day=to_day,
+            )
         )
     ]
     if settle.get("report_truncated"):
         lines.append(text("daily.truncated", "", kept=len(report)))
-    lines.extend(entry.get("log", "") for entry in report)
+    lines.extend(s.bullet(entry["log"]) for entry in report if entry.get("log"))
     lines.append(
-        text(
-            "daily.action_points",
-            "行动点已重置为 {action_points}",
-            action_points=settle.get("action_points", 0),
+        s.label(
+            text(
+                "daily.action_points",
+                "行动点已重置为 {action_points}",
+                action_points=settle.get("action_points", 0),
+            )
         )
     )
 
@@ -256,6 +269,8 @@ def format_daily_report(settle: dict[str, Any]) -> str:
                 points=reincarnation.get("estimated_points", 0),
             )
         )
+    # 这张卡与后面的状态卡是两件事，画一条线分开。
+    lines.append(s.hr())
     return "\n".join(line for line in lines if line)
 
 
@@ -608,24 +623,43 @@ def format_reincarnation_check(
     *,
     pet=None,
 ) -> str:
-    """Render ``/轮回`` — condition report only, never a performed cycle."""
+    """Render ``/轮回`` — condition report only, never a performed cycle.
+
+    QQ 端底部已经有「确认轮回」按钮，所以这里**不再写「发送 /宠物.轮回 确认」**
+    ——那句话会让玩家以为必须手打，而且和按钮重复。OneBot 端没有按钮，指令
+    必须留着，靠 ``reply.is_qq()`` 分流。
+    """
+    from . import reply as _reply
+
+    s = style.current()
     cycle = (reinc.total_cycles + 1) if reinc is not None else 1
-    lines = [text("reincarnation.title", "🔄 轮回", cycle=cycle)]
+    lines = [s.heading(text("reincarnation.title", "🔄 轮回", cycle=cycle))]
     if not check.get("can_reincarnate"):
-        lines.append(text("reincarnation.unavailable", "当前无法轮回"))
+        lines.append(s.label(text("reincarnation.unavailable", "当前无法轮回")))
         return "\n".join(line for line in lines if line)
 
+    lines.append(s.label(text("reincarnation.section_condition", "条件")))
     lines.append(
         text(
             "reincarnation.available",
-            "",
+            "可以轮回：{reasons}",
             reasons="、".join(check.get("reasons", [])),
+        )
+    )
+    lines.append(s.label(text("reincarnation.section_points", "成就点")))
+    lines.append(
+        text(
+            "reincarnation.points_line",
+            "预计获得 {estimated_points} ｜ 累计 {achievement_points} ｜ 已用 {spent_points}",
             estimated_points=check.get("estimated_points", 0),
             achievement_points=getattr(reinc, "achievement_points", 0),
             spent_points=getattr(reinc, "spent_points", 0),
         )
     )
-    lines.append(text("reincarnation.manual_hint", ""))
+    if _reply.is_qq():
+        lines.append(text("reincarnation.hint_button", ""))
+    else:
+        lines.append(text("reincarnation.manual_hint", ""))
     return "\n".join(line for line in lines if line)
 
 
@@ -639,23 +673,29 @@ def format_reincarnation_result(result: dict[str, Any]) -> str:
     """
     from ..core.skills import skill_name
 
-    lines = [
+    s = style.current()
+    lines = [s.heading(text("reincarnation.done", "🔄 轮回完成！"))]
+
+    # 获得段：成就点与轮回次数是「这一世换来了什么」，排在标题下最显眼处。
+    lines.append(s.label(text("reincarnation.section_gain", "获得")))
+    lines.append(
         text(
-            "reincarnation.done",
-            "",
-            **{
-                key: value
-                for key, value in result.items()
-                if key
-                not in (
-                    "drawn_skill",
-                    "drawn_skills",
-                    "kept_skills",
-                    "max_level_cycle",
-                )
-            },
+            "reincarnation.done_points",
+            "成就点 +{points_earned} ｜ 累计 {total_points}",
+            points_earned=result.get("points_earned", 0),
+            total_points=result.get("total_points", 0),
         )
-    ]
+    )
+    lines.append(
+        text(
+            "reincarnation.done_cycle",
+            "轮回次数：{cycle}",
+            cycle=result.get("cycle", 1),
+        )
+    )
+    ending = result.get("ending")
+    if ending:
+        lines.append(text("reincarnation.done_ending", "结局：{ending}", ending=ending))
 
     drawn = [item for item in (result.get("drawn_skills") or []) if item]
     if not drawn and result.get("drawn_skill"):
@@ -704,32 +744,6 @@ def format_reincarnation_result(result: dict[str, Any]) -> str:
         )
     elif not drawn:
         lines.append(text("reincarnation.no_kept_skills", ""))
-    return "\n".join(line for line in lines if line)
-
-
-def format_perk_list(
-    reincarnation_config: dict[str, Any],
-    available: int,
-) -> str:
-    """List the perks exchangeable with achievement points.
-
-    旧版特权列表（``reincarnation.yaml`` 的 ``perks`` 块）。商店上线后
-    ``/宠物.特权`` 已改走 :func:`format_shop_overview`，这里保留只为兼容。
-    """
-    perks = reincarnation_config.get("perks", {})
-    lines = [text("perk.title", "🏅 成就点特权", available=available)]
-    if not perks:
-        lines.append(text("perk.empty", "暂无可兑换特权"))
-    for perk_id, perk in perks.items():
-        lines.append(
-            text(
-                "perk.line",
-                "",
-                perk_id=perk_id,
-                name=perk.get("name", perk_id),
-                cost=perk.get("cost", 0),
-            )
-        )
     return "\n".join(line for line in lines if line)
 
 
@@ -817,36 +831,59 @@ def _shop_is_clickable() -> bool:
 
 
 def _shop_category_link(line: str, name: str, order: str) -> str:
-    """分类行的可点命令（仅 QQ 端）。"""
+    """分类行的可点命令（仅 QQ 端返回带标记的整行）。
+
+    **整行都是按钮**，不只是名字：早先只把 ``name`` 做成按钮，于是 QQ 端
+    ``1. 传承　5 项 · 无限成长`` 里除了名字以外全被吞掉——玩家看不到项数与
+    成长模式，还得再看一遍正文才知道这行说的是什么。
+    """
     from . import menus
 
     if not _shop_is_clickable():
         return line
-    return menus.inline(name, f"宠物.商店 {order}") or line
+    return menus.cmd_at(line, menus.cmd(f"宠物.商店 {order}")) if line else line
 
 
 def format_shop_overview(reinc) -> str:
-    """``/宠物.商店`` —— 可用点数 + 分类列表。"""
+    """``/宠物.商店`` —— 可用点数 + 分类列表。
+
+    排版意图：标题给出「可用 / 累计 / 已用」三个数（花点数前最需要的三个值），
+    中间每行一个分类（**整行可点**，行内保留项数与成长模式），最后单列洗点券。
+    洗点券单独成行而不是挂在标题里：它是一个「余额」而不是商店的统计。
+    """
     from ..core import shop
 
+    st = style.current()
     cfg = _load_config("reincarnation")
     specs = shop.catalog(cfg)
     if not specs:
         return (
-            text("shop.overview_title", "🏛 轮回商店", available=0)
+            st.heading(text("shop.overview_title", "🏛 轮回商店", available=0))
             + "\n"
             + text("shop.empty", "商店里还没有任何商品。")
         )
 
     available = shop.available_points(reinc)
+    total = int(getattr(reinc, "achievement_points", 0) or 0)
+    spent = int(getattr(reinc, "spent_points", 0) or 0)
     lines = [
+        st.heading(
+            text(
+                "shop.overview_title",
+                "🏛 轮回商店",
+                available=available,
+                total=total,
+                spent=spent,
+            )
+        ),
         text(
-            "shop.overview_title",
-            "🏛 轮回商店｜可用 {available} 点",
+            "shop.overview_points",
+            "可用 {available} ｜ 累计 {total} ｜ 已用 {spent}",
             available=available,
-            total=int(getattr(reinc, "achievement_points", 0) or 0),
-            spent=int(getattr(reinc, "spent_points", 0) or 0),
-        )
+            total=total,
+            spent=spent,
+        ),
+        st.label(text("shop.section_categories", "分类")),
     ]
     for cat in shop.categories(cfg):
         order = int(cat.get("order", 999))
@@ -855,7 +892,7 @@ def format_shop_overview(reinc) -> str:
         ]
         if not members:
             continue
-        infinite = any(shop.level_mode(s) == shop.LEVEL_INFINITE for s in members)
+        infinite = any(shop.level_mode(spec) == shop.LEVEL_INFINITE for spec in members)
         mode = text(
             "shop.overview_mode_infinite" if infinite else "shop.overview_mode_capped",
             "无限成长" if infinite else "有限等级",
@@ -863,13 +900,13 @@ def format_shop_overview(reinc) -> str:
         cat_name = str(cat.get("name") or cat.get("id"))
         body = text(
             "shop.overview_line",
-            "{order}. {name}",
+            "{order}. {name}　{count} 项 · {mode}",
             order=order,
             name=cat_name,
             count=len(members),
             mode=mode,
         )
-        # 分类行本身可点：点名字就进这个分类，不必看末尾那句「发送 /宠物.商店 1」。
+        # 整行可点：点这行就进这个分类。只把名字做成按钮会吞掉项数与成长模式。
         lines.append(_shop_category_link(body, cat_name, str(order)))
 
     if not _shop_is_clickable():
@@ -881,7 +918,7 @@ def format_shop_overview(reinc) -> str:
         lines.append(
             text(
                 "shop.overview_respec",
-                "♻️ 洗点券 {tickets} 张",
+                "♻️ 洗点券 {tickets} 张（每完成一次轮回赠送 {free} 张）",
                 tickets=tickets,
                 free=int(respec_cfg.get("free_per_cycle", 0) or 0),
             )
@@ -914,12 +951,15 @@ def format_shop_category(reinc, category_id: str) -> str:
         for spec in shop.catalog(cfg).values()
         if str(spec.get("category")) == cat["id"]
     ]
+    st = style.current()
     lines = [
-        text(
-            "shop.category_title",
-            "🏛 {name}",
-            name=str(cat.get("name") or cat.get("id")),
-            desc=str(cat.get("desc") or ""),
+        st.heading(
+            text(
+                "shop.category_title",
+                "🏛 {name}",
+                name=str(cat.get("name") or cat.get("id")),
+                desc=str(cat.get("desc") or ""),
+            )
         )
     ]
     if not members:
@@ -945,14 +985,16 @@ def format_shop_category(reinc, category_id: str) -> str:
         # 详情命令直接内嵌在商品行末：末尾再写「发送 /宠物.商店 N」既占地方，
         # 又要用户自己把行号和底部指令对上号。
         lines.append(
-            text(
-                "shop.item_line",
-                "· {number} {name}",
-                number=info["number"],
-                name=info["name"],
-                level=_shop_level_text(info),
-                price=price_text,
-                gap="",
+            st.bullet(
+                text(
+                    "shop.item_line",
+                    "{number} {name}　{level}　{price}{gap}",
+                    number=info["number"],
+                    name=info["name"],
+                    level=_shop_level_text(info),
+                    price=price_text,
+                    gap="",
+                )
             )
             + _shop_look_action(str(info["number"]))
         )
@@ -973,10 +1015,15 @@ def format_shop_category(reinc, category_id: str) -> str:
 
 
 def format_shop_item(reinc, item_id: str) -> str:
-    """``/宠物.商店 1-3`` —— 单件详情。"""
+    """``/宠物.商店 1-3`` —— 单件详情。
+
+    排版意图：标题给出编号与名字，``当前 / 效果`` 用两行短字段铺开，
+    再把「下一级」与「价格」放在最后——玩家决定买不买只看这两行。
+    """
     from ..core import shop
 
     cfg = _load_config("reincarnation")
+    st = style.current()
     spec = shop.catalog(cfg).get(str(item_id))
     if spec is None:
         raise ValueError("商品不存在")
@@ -987,13 +1034,16 @@ def format_shop_item(reinc, item_id: str) -> str:
         {},
     )
     lines = [
-        text(
-            "shop.detail_title",
-            "🏛 {number} {name}",
-            category=str(cat.get("name") or ""),
-            number=info["number"],
-            name=info["name"],
+        st.heading(
+            text(
+                "shop.detail_title",
+                "🏛 {category} · {number} {name}",
+                category=str(cat.get("name") or ""),
+                number=info["number"],
+                name=info["name"],
+            )
         ),
+        st.label(text("shop.detail_section_now", "当前")),
         text("shop.detail_level", "当前：{level}", level=_shop_level_text(info)),
         text(
             "shop.detail_effect",
@@ -1002,7 +1052,7 @@ def format_shop_item(reinc, item_id: str) -> str:
         ),
     ]
     if info["desc"]:
-        lines.append(f"「{info['desc']}」")
+        lines.append(text("shop.detail_desc", "「{desc}」", desc=info["desc"]))
 
     if not info["unlocked"]:
         cycles = (spec.get("unlock") or {}).get("cycles", 1)
@@ -1065,7 +1115,11 @@ def format_shop_item(reinc, item_id: str) -> str:
 
 
 def format_shop_purchase(result: dict[str, Any]) -> str:
-    """购买成交回执。"""
+    """购买成交回执。
+
+    排版意图：成交、效果变化各一行，起始等级那种「下次轮回才生效」的附注
+    单独一段——它不是成交内容，而是**提醒**，混在正文里会被当成已生效。
+    """
     if result.get("consumable"):
         return text(
             "shop.bought_respec",
@@ -1097,7 +1151,12 @@ def format_shop_purchase(result: dict[str, Any]) -> str:
 
 
 def format_shop_respec(preview: dict[str, Any], *, done: bool = False) -> str:
-    """洗点预览 / 完成回执。"""
+    """洗点预览 / 完成回执。
+
+    完成回执是「一句话交代结果」，预览则要玩家确认，所以预览拆成三行：
+    退还多少、清空多少、还有几张券——最后一行是「点了会怎样」，它是确认的依据。
+    """
+    st = style.current()
     if done:
         return text(
             "shop.respec_done",
@@ -1105,7 +1164,7 @@ def format_shop_respec(preview: dict[str, Any], *, done: bool = False) -> str:
             **preview,
         )
     lines = [
-        text("shop.respec_title", "♻️ 洗点预览"),
+        st.heading(text("shop.respec_title", "♻️ 洗点预览")),
         text(
             "shop.respec_body",
             "将退还 {refund} 点，清空 {items} 条共 {levels} 级。",

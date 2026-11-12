@@ -42,6 +42,79 @@ BAR_EMPTY = "▱"
 BAR_WIDTH = 10
 
 
+ICONS = {
+    "pet": "🐾",
+    "daily": "📅",
+    "feed": "🍚",
+    "play": "🎾",
+    "bathe": "🛁",
+    "rest": "😴",
+    "train": "🏋",
+    "skill": "📚",
+    "talent": "✨",
+    "record": "📖",
+    "affection": "💗",
+    "reincarnation": "🔄",
+    "shop": "🏛",
+    "respec": "♻",
+    "success": "✅",
+    "failure": "❌",
+    "reward": "🎉",
+    "battle": "⚔",
+    "danger": "⚠",
+    "gift": "🎁",
+    "boss": "👑",
+    "rng": "🎲",
+    "mana": "🔵",
+    "guard": "🛡",
+    "unlock": "🔓",
+    "codex": "📇",
+    "relic": "🗡",
+    "pack": "🐝",
+    "defeat": "💀",
+    "phase": "🌀",
+    "enemy_skill": "📜",
+    "trait": "🔹",
+    "empower": "🔥",
+    "heal": "💚",
+    "pace": "⏱",
+    "settle": "📊",
+    "retreat": "🏳",
+    "tower": "🗼",
+    "region": "🗺",
+    "ticket": "🎫",
+    "dawn": "🌅",
+    "hint": "💡",
+    "note": "★",
+    "beginner_pack": "🎒",
+    "star": "🌟",
+    "logs": "🗓",
+    "rogue_shop": "🛒",
+    "tag": "🏷",
+    "title_badge": "🎖",
+    "ready": "⚡",
+    "heart": "❤",
+    "battle_log": "🗒",
+}
+"""**一义一符**：每个符号只表达一个含义，同一含义只用这一个符号。
+
+之所以要这张表而不是随手挑 emoji：``texts.yaml`` 一度出现过 50 种符号 / 89 处，
+其中 ``📖`` 同时表示「新手引导」「学会技能」「传记」「战报」四种东西——
+玩家没法从符号判断这一行讲的是什么，符号就退化成装饰。
+
+改文案时从这里取符号（``ICONS["skill"]`` 之类），**不要**再临时加新的 emoji。
+新增含义时先在这张表里登记，再改 YAML。
+
+容易混的两对已拆开：``🏛`` 是**轮回商店**、``🛒`` 是**肉鸽遗物商店**；
+``🏅`` 是成就点特权、``🎖`` 是称号。
+"""
+
+
+def icon(name: str, default: str = "") -> str:
+    """取某个含义对应的符号；未登记时返回 ``default``（不抛错，文案优先）。"""
+    return ICONS.get(name, default)
+
+
 #: 标签列宽（按汉字计）。所有数值条共用这一列，条才会左右对齐。
 LABEL_CELLS = 3
 

@@ -7,7 +7,18 @@ module only assembles the fields.  Enum keys that have no YAML counterpart
 
 from typing import Any
 
-from .texts import text
+from . import style
+from .texts import template, text
+
+STATUS_MAX = 100
+"""四项照护状态的上限（与 ``core.status.STATUS_MAX`` 同值）。
+
+这里复制一份而不是 import：``formatters`` 是展示层，``core.status`` 反向依赖
+``utils.texts``，跨层取常量会把导入顺序绑死。数值变了会一起改。
+"""
+
+AFFECTION_MAX = 1000
+"""好感量表上限（与 ``core.affection.AFFECTION_MAX`` 同值）。"""
 
 RARITY_LABELS = {
     "common": "普通",
@@ -49,14 +60,37 @@ def format_days(days: int) -> str:
     return f"{days // 365}年{(days % 365) // 30}个月"
 
 
+def _max_action_points() -> int:
+    """每天的行动点上限（``daily.yaml`` 的 ``action_points.max_per_day``）。"""
+    try:
+        return int(
+            (_load_config("daily").get("action_points") or {}).get("max_per_day", 10)
+        )
+    except Exception:
+        return 10
+
+
 def format_pet_status(pet, pet_config: dict[str, Any] | None = None) -> str:
-    """Full status card for ``/宠物.状态``."""
+    """Full status card for ``/宠物.状态``.
+
+    排版意图（两端同一份内容，只是 QQ 端多一层 markdown 结构）：
+
+    * 标题：名字 + 状态；
+    * ``状态``：饱食 / 心情 / 疲劳 / 清洁四条带条形的数值，亲密度单独一条（量程 1000）；
+    * ``属性``：HP / 攻 / 防 / 速 / 魔一行排开——这些是横向比较的数值，逐行反而难扫；
+    * ``成长``：等级、经验、年龄、寿命，外加健康 / 情绪 / 稀有度 / 性格；
+    * ``行动点``：今天的剩余行动点也做成条，一眼看出还剩几次互动。
+
+    条与精确值同时出现：条给比例，数字给「够不够练一次」这种精确判断。
+    """
     from ..core.affection import get_affection_level
 
     cfg = pet_config if pet_config is not None else _load_config("pet")
     personality = cfg.get("personalities", {}).get(pet.personality, {})
     attributes = pet.attributes or {}
+    s = style.current()
 
+    affection_level = get_affection_level(pet.affection)
     fields = {
         "name": pet.name,
         "personality": personality.get("name", pet.personality),
@@ -68,22 +102,120 @@ def format_pet_status(pet, pet_config: dict[str, Any] | None = None) -> str:
         "lifespan": format_days(pet.lifespan_days),
         "health": HEALTH_LABELS.get(pet.health_state, pet.health_state),
         "emotion": EMOTION_LABELS.get(pet.emotion_state, pet.emotion_state),
-        "hunger": pet.hunger,
-        "mood": pet.mood,
-        "fatigue": pet.fatigue,
-        "cleanliness": pet.cleanliness,
         "affection": pet.affection,
-        "affection_level": get_affection_level(pet.affection),
+        "affection_level": affection_level,
         "action_points": pet.action_points,
+        "action_points_max": _max_action_points(),
         "hp": attributes.get("hp", 0),
         "atk": attributes.get("atk", 0),
         "def": attributes.get("def", 0),
         "spd": attributes.get("spd", 0),
         "mp": attributes.get("mp", 0),
     }
-    title = text("status.title", "🐾 {name} 的状态", name=pet.name)
-    body = text("status.body", "", **fields)
-    return f"{title}\n{body}" if body else title
+
+    lines = [s.heading(text("status.title", "🐾 {name} 的状态", name=pet.name))]
+
+    lines.append(s.label(text("status.section_care", "状态")))
+    lines.extend(
+        [
+            style.meter(
+                text("status.hunger_label", "饱食"),
+                pet.hunger,
+                STATUS_MAX,
+            ),
+            style.meter(text("status.mood_label", "心情"), pet.mood, STATUS_MAX),
+            style.meter(text("status.fatigue_label", "疲劳"), pet.fatigue, STATUS_MAX),
+            style.meter(
+                text("status.cleanliness_label", "清洁"), pet.cleanliness, STATUS_MAX
+            ),
+        ]
+    )
+    lines.append(
+        text(
+            "status.meter_affection",
+            "亲密 {bar} {affection}/{affection_max}（{affection_level}）",
+            bar=style.bar(pet.affection, AFFECTION_MAX),
+            affection=pet.affection,
+            affection_max=AFFECTION_MAX,
+            affection_level=affection_level,
+        )
+    )
+
+    lines.append(s.label(text("status.section_attr", "属性")))
+    lines.append(
+        text(
+            "status.attr_line",
+            "HP {hp} ｜ 攻 {atk} ｜ 防 {def} ｜ 速 {spd} ｜ 魔 {mp}",
+            **fields,
+        )
+    )
+
+    lines.append(s.label(text("status.section_growth", "成长")))
+    lines.append(
+        text(
+            "status.growth_line",
+            "Lv.{level} ｜ 经验 {exp}/{exp_next} ｜ 年龄 {age} ｜ 寿命 {lifespan}",
+            **fields,
+        )
+    )
+    lines.append(
+        text(
+            "status.state_line",
+            "健康 {health} ｜ 情绪 {emotion} ｜ {rarity} ｜ {personality}",
+            **fields,
+        )
+    )
+    lines.append(
+        text(
+            "status.ap_line",
+            "行动点 {bar} {action_points}/{action_points_max}",
+            bar=style.bar(pet.action_points, _max_action_points()),
+            **fields,
+        )
+    )
+
+    return "\n".join(line for line in lines if line)
+
+
+def format_action_result(kind: str, result: dict[str, Any]) -> str:
+    """喂食 / 玩耍 / 洗澡 / 休息 / 训练的回执卡。
+
+    两端同一份内容：QQ 端是「标题 + 引用一句叙述 + 状态条」，OneBot 端去掉
+    markdown 结构后逐行可读。条形与精确值并列，让玩家一眼看出「还能不能接着练」。
+
+    ``kind`` 决定读哪条模板（``feed`` / ``play`` / ``bathe`` / ``rest`` / ``train``），
+    模板键为 ``<kind>.line``，缺失时退回旧版的 ``<kind>.ok``（部署没同步 res/ 时
+    仍能出话）。
+    """
+    s = style.current()
+    title = text(f"{kind}.title", "")
+    # 模板里有 {bar_*} / {max} 这类只有本函数才知道的占位符，所以先取原文再自行填充；
+    # 用 text() 会把「缺字段」误判成未填完的模板，拿到的其实是同一份原文，但语义模糊。
+    line = template(f"{kind}.line", "") or template(f"{kind}.ok", "")
+
+    bars = {
+        "bar_hunger": style.bar(result.get("hunger", 0), STATUS_MAX),
+        "bar_mood": style.bar(result.get("mood", 0), STATUS_MAX),
+        "bar_fatigue": style.bar(result.get("fatigue", 0), STATUS_MAX),
+        "bar_cleanliness": style.bar(result.get("cleanliness", 0), STATUS_MAX),
+    }
+    if not line:
+        # 兜底：模板全缺时至少把叙述发出去，绝不发空消息
+        return str(result.get("message", ""))
+    # 先合并数据、再补齐本函数专有的占位符；用 setdefault 而不是直接展开两遍，
+    # 避免 result 里恰好有同名键时 ``format`` 收到重复关键字参数而抛 TypeError。
+    fields = dict(result.items())
+    fields.setdefault("max", STATUS_MAX)
+    fields.setdefault("action_points_max", _max_action_points())
+    fields.update(bars)
+    body = line.format(**fields)
+
+    # 第一段是叙述（"{name}开心地吃下了食物"）：QQ 端做成引用块，OneBot 原样。
+    head, _, rest = body.partition("\n")
+    rendered = s.quote(head) + ("\n" + rest if rest else "")
+    if title:
+        rendered = s.label(title) + "\n" + rendered
+    return rendered
 
 
 def format_daily_report(settle: dict[str, Any]) -> str:

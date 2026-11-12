@@ -49,11 +49,13 @@ def tail(choices: list[Choice]) -> str:
     """兜底：把选项拼成一行追加到末尾。
 
     只在正文挂不上命令时用——正常应把 :func:`inline` 拼进对应那一行。
+    选项超过 :data:`~reply.MAX_INLINE_PER_LINE` 时会折成多行，每行都要补
+    引用前缀，否则第二行起会左对齐、看起来像散落的标记。
     """
     from .reply import inline_links
 
     links = inline_links(choices)
-    return f"\n\n> {links}" if links else ""
+    return f"\n\n> {links.replace(chr(10), chr(10) + '> ')}" if links else ""
 
 
 # ---------------------------------------------------------------- 常用
@@ -80,6 +82,27 @@ def status_menu() -> list[Choice]:
         .add("玩耍", cmd("宠物.玩耍"), style=1)
         .add("技能", cmd("宠物.技能"), style=0)
         .add("商店", cmd("宠物.商店"), style=0)
+    )
+
+
+def care_menu() -> list[Choice]:
+    """``/宠物.状态`` 底部的照护动作：当天所有会消耗行动点的事。
+
+    列的是「玩家看完这张卡最可能想干的一件照护工作」——喂食 / 玩耍 / 洗澡 /
+    休息 / 训练，正好覆盖 ``daily.yaml`` 里那五个行动点消耗项。
+    技能与商店属于**配置与购买**，不是照护动作，放进来只会把五行挤出两个与
+    当下无关的入口；它们仍可从各自的指令进入。
+
+    训练排在最后：它有饱食 / 心情 / 疲劳三道门槛，失败时会给出「先喂食 / 先玩耍
+    / 先休息」的可点建议，放在照护动作之后正合适。
+    """
+    return list(
+        Menu()
+        .add("喂食", cmd("宠物.喂食"), style=1)
+        .add("玩耍", cmd("宠物.玩耍"), style=1)
+        .add("洗澡", cmd("宠物.洗澡"))
+        .add("休息", cmd("宠物.休息"))
+        .add("训练", cmd("宠物.训练"))
     )
 
 

@@ -48,16 +48,18 @@ messages:
 
 status:
   title: "🐾 {name} 的状态"
-  body: |-
-    性格：{personality}    稀有度：{rarity}
-    等级：{level}    经验：{exp}/{exp_next}
-    年龄：{age}    寿命：{lifespan}
-    健康：{health}    情绪：{emotion}
-    饱食：{hunger}    心情：{mood}
-    疲劳：{fatigue}    清洁：{cleanliness}
-    亲密：{affection}（{affection_level}）
-    行动点：{action_points}
-    属性：HP {hp} / 攻 {atk} / 防 {def} / 速 {spd} / 魔 {mp}
+  section_care: "状态"
+  section_attr: "属性"
+  section_growth: "成长"
+  hunger_label: "饱食"
+  mood_label: "心情"
+  fatigue_label: "疲劳"
+  cleanliness_label: "清洁"
+  meter_affection: "亲密 {bar} {affection}/{affection_max}（{affection_level}）"
+  attr_line: "HP {hp} ｜ 攻 {atk} ｜ 防 {def} ｜ 速 {spd} ｜ 魔 {mp}"
+  growth_line: "Lv.{level} ｜ 经验 {exp}/{exp_next} ｜ 年龄 {age} ｜ 寿命 {lifespan}"
+  state_line: "健康 {health} ｜ 情绪 {emotion} ｜ 稀有 {rarity} ｜ 性格 {personality}"
+  ap_line: "行动点 {bar} {action_points}/{action_points_max}"
   no_pet: "你还没有宠物，使用「/宠物.创建 <性格> <名字>」开始吧！"
   disabled: "养成系统当前已关闭。"
 
@@ -76,19 +78,24 @@ create:
   need_name: "还要给宠物起个名字哦，例如：/宠物.创建 勇敢 小豆"
 
 feed:
-  ok: "{message}\n饱食：{hunger} | 心情：{mood} | 亲密：{affection}（+{affection_gain}）\n行动点：{action_points}"
+  title: "🍚 喂食完成"
+  line: "{message}\n饱食 {bar_hunger} {hunger}/{max} ｜ 心情 {bar_mood} {mood}/{max}\n亲密 {affection}（+{affection_gain}）｜ 行动点 {action_points}"
 
 play:
-  ok: "{message}\n心情：{mood} | 疲劳：{fatigue} | 亲密：{affection}（+{affection_gain}）\n行动点：{action_points}"
+  title: "🎾 玩耍完成"
+  line: "{message}\n心情 {bar_mood} {mood}/{max} ｜ 疲劳 {bar_fatigue} {fatigue}/{max}\n亲密 {affection}（+{affection_gain}）｜ 行动点 {action_points}"
 
 bathe:
-  ok: "{message}\n清洁：{cleanliness} | 亲密：{affection}（+{affection_gain}）\n行动点：{action_points}"
+  title: "🛁 洗澡完成"
+  line: "{message}\n清洁 {bar_cleanliness} {cleanliness}/{max}\n亲密 {affection}（+{affection_gain}）｜ 行动点 {action_points}"
 
 rest:
-  ok: "{message}\n疲劳：{fatigue} | 亲密：{affection}（+{affection_gain}）\n行动点：{action_points}"
+  title: "😴 休息完成"
+  line: "{message}\n疲劳 {bar_fatigue} {fatigue}/{max}\n亲密 {affection}（+{affection_gain}）｜ 行动点 {action_points}"
 
 train:
-  ok: "{message}\n经验 +{exp}（等级 {level}）\n饱食：{hunger} | 疲劳：{fatigue} | 心情：{mood}\n行动点：{action_points}"
+  title: "🏋 训练完成"
+  line: "{message}\n经验 +{exp}（Lv.{level}）\n饱食 {bar_hunger} {hunger}/{max} ｜ 疲劳 {bar_fatigue} {fatigue}/{max} ｜ 心情 {bar_mood} {mood}/{max}\n行动点 {action_points}"
 
 skill:
   title: "📚 {name} 的技能｜主动 {active_used}/{active_max}　被动 {passive_used}/{passive_max}（技能库 {known} 个）"

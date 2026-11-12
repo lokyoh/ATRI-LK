@@ -47,6 +47,10 @@ MD_MAX_CHARS = 3200
 #: 一行里最多排几个内联命令——纯排版考虑，多了会挤成一片看不清。
 MAX_INLINE_PER_LINE = 4
 
+#: 内联命令标记的开头。判断「正文里是否已经有可点命令」时用它，
+#: 而不是逐个比对拼接后的完整字符串（指令带 URL 编码，比不干净会漏判）。
+QQ_CMD_MARK = "<qqbot-cmd-input"
+
 
 @dataclass
 class Choice:
@@ -54,8 +58,20 @@ class Choice:
 
     :param label: 链接上显示的字
     :param command: 点下去实际发出的指令（完整、可执行）
-    :param enter: 是否直接发送（True）还是填进输入框让用户改（False）
+    :param enter: **预留，当前不生效**。见下方说明。
     :param style: 预留：内联命令没有样式，保留字段让调用方不必区分
+
+    ``enter`` 曾经被当成「点一下直接发送 / 只填入输入框」的开关，但 QQ 官方
+    协议里这两个能力是**两种不同的标记**：
+
+    * ``<qqbot-cmd-input>`` —— 只把文本**插入输入框**，由用户自己确认发送；
+    * ``<qqbot-cmd-enter>`` —— 点一下直接发送，但**群聊与文字子频道不支持**。
+
+    本插件全部是群聊场景，所以实际只有前者可用，``enter`` 无论真假都走
+    「插入输入框」。想「点一下就发出去」只能靠键盘按钮（``keyboard`` 段），
+    而那条路有 10 个按钮的总量上限，正文一长就整条发不出去——本插件明确不走。
+
+    字段保留是为了不破坏既有调用方与测试；新代码不要依赖它。
     """
 
     label: str
@@ -92,19 +108,28 @@ def _clamp_markdown(text: str) -> str:
 
 
 def inline_links(choices: Iterable[Choice]) -> str:
-    """把选项拼成一行可点的内联命令。
+    """把选项拼成可点的内联命令，每行最多 :data:`MAX_INLINE_PER_LINE` 个。
 
     用 ``<qqbot-cmd-input>``：QQ 客户端会把它渲染成一个小按钮，点一下就把
-    ``command`` 发出去。相比 ``keyboard`` 段，它没有数量上限，也不会和正文
+    ``command`` 插进输入框。相比 ``keyboard`` 段，它没有数量上限，也不会和正文
     重复。
 
     **只在真没法内嵌时用**（例如正文只是一句提示、没有可挂靠的行），否则优先
     用 :func:`cmd_at` 把命令贴到对应那一行上——底部堆一排同样占地方。
+
+    必须**主动换行**：``<qqbot-cmd-input>`` 是不可折行的原子组件，一行塞五六个
+    会横向撑出屏幕，用户得左右滑动才看得全。``MAX_INLINE_PER_LINE`` 就是为此
+    存在的上限（此前它是个没被使用的常量）。
     """
     items = list(choices)
     if not items:
         return ""
-    return " ".join(QQMessage.cmd(c.command, c.label, reference=False) for c in items)
+    per_line = max(1, int(MAX_INLINE_PER_LINE))
+    links = [QQMessage.cmd(c.command, c.label, reference=False) for c in items]
+    return "\n".join(
+        " ".join(links[start : start + per_line])
+        for start in range(0, len(links), per_line)
+    )
 
 
 def cmd_at(label: str, command: str) -> str:
@@ -125,12 +150,20 @@ def md_with_choices(text: str, choices: Iterable[Choice]) -> str:
 
     优先用 :func:`cmd_at` 把命令内嵌进对应的行。这个函数是给「正文只是一句
     提示、没有可挂靠的行」的情形兜底，不要当成默认做法。
+
+    **正文里已经内嵌过命令就不再追加**：肉鸽的楼层/事件/商店渲染会把每一条
+    选项做成整行链接，渲染完成后正文里已经有一批 ``<qqbot-cmd-input>``；
+    此时再把同一批 ``choices`` 贴到末尾，等于同一件事在一屏里出现两遍，
+    还要用户去末尾重找一遍。
     """
     body = _clamp_markdown(text)
+    if QQ_CMD_MARK in body:
+        return body
     links = inline_links(choices)
     if not links:
         return body
-    return f"{body}\n\n> {links}"
+    # 多行按钮时每行都要带引用前缀，否则第二行起会左对齐、看起来像散落的标记。
+    return f"{body}\n\n> " + links.replace("\n", "\n> ")
 
 
 def plain_with_choices(text: str, choices: Iterable[Choice]) -> str:

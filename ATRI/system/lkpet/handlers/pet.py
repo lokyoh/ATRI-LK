@@ -16,7 +16,6 @@ from random import choice
 from nonebot.adapters import Bot, Event
 from nonebot.adapters import Message as BaseMessage
 from nonebot.adapters.onebot.v11 import Bot as OneBot11
-from nonebot.adapters.onebot.v11.helpers import Cooldown
 from nonebot.params import CommandArg, Depends
 
 from ATRI.log import log
@@ -69,7 +68,9 @@ from ..matchers import (
     pet_train_matcher,
 )
 from ..utils import menus, reply, rogue_actions
+from ..utils.cooldown import cooldown
 from ..utils.formatters import (
+    format_action_result,
     format_biography,
     format_daily_logs,
     format_daily_report,
@@ -93,7 +94,11 @@ PAGE_SIZE = 20
 """Entries per message for the two pet-listing commands."""
 
 _COOLDOWN_NOTICES = text_list("cooldown.notices", ["冷静一下"])
-"""Prompts shown when a command is used faster than its cooldown allows."""
+"""Prompts shown when a command is used faster than its cooldown allows.
+
+**每次触发时随机取一句**——见 ``utils/cooldown.py``。不要在这里预先
+``choice()`` 出一个字符串交给装饰器，那会把选择固定在模块导入那一刻。
+"""
 
 _ROGUE_USAGE_HINT = "用法：/宠物.肉鸽 开始｜继续｜进度｜撤退"
 
@@ -183,13 +188,18 @@ def _never_empty(message: str, fallback: str) -> str:
     """
     if message and message.strip():
         return message
-    if "qqbot-cmd-input" in fallback:
+    if reply.QQ_CMD_MARK in fallback:
         return fallback
     return apply_command_start(fallback)
 
 
 def _cooldown_notice() -> str:
-    return choice(_COOLDOWN_NOTICES)
+    """保留的兼容入口：返回**全部**候选里随机的一句。
+
+    真正的冷却依赖在 ``utils/cooldown.py``，它在触发时才随机取值。这个函数
+    只给仍按旧写法调用的人用，避免再次出现「装饰器求值时就把句子定死」。
+    """
+    return choice(_COOLDOWN_NOTICES) if _COOLDOWN_NOTICES else "冷静一下"
 
 
 async def _guard(matcher) -> None:
@@ -211,17 +221,33 @@ async def _load_pet(matcher, player_id: str):
 
 
 def _create_shortcut() -> str:
-    """「创建宠物」的半成品命令（仅 QQ 端有内容）。
+    """「还没有宠物」时的创建入口（仅 QQ 端有内容）。
 
-    ``enter=False`` 让指令**填进输入框**而不是直接发出——创建需要性格和名字，
-    直接发一条缺参数的指令只会报用法错误。用户点一下补完再发，比整条手打省事。
+    这里给的是**每个性格一个按钮**，点下去等于把 ``/宠物.创建 勇敢`` 插进输入框
+    （``<qqbot-cmd-input>`` 的语义就是「插入、由用户确认发送」），用户只需接着
+    打名字就能发出。之前是一个只填了一半的 ``/宠物.创建 `` 空命令，点完还是一样
+    要自己补性格——那等于没省事。
+
+    指令末尾刻意留一个空格：光标会落在参数区，接着敲名字即可。
     """
     from ..utils import reply
 
     if not reply.is_qq():
         return ""
-    command = menus.cmd("宠物.创建 ")
-    return "\n> " + reply.cmd_at("点这里填名字与性格", command)
+    try:
+        personalities = pet_core.describe_personalities()
+    except Exception:  # 配置缺失时退回不带性格的通用入口
+        personalities = []
+    if not personalities:
+        return "\n> " + reply.cmd_at("点这里填名字与性格", menus.cmd("宠物.创建 "))
+    choices = [
+        reply.choice(name, menus.cmd(f"宠物.创建 {name} ")) for name in personalities
+    ]
+    # 结尾用「引用块」形状（`> ` 开头）而不是裸标记：QQ 端按钮不会把整条消息
+    # 拖到纯文本样式，OneBot 端这几行在 formatters 之外也不会被误当成指令。
+    return "\n> 选一个性格（点一下填入输入框，再补名字）：\n> " + reply.inline_links(
+        choices
+    ).replace("\n", "\n> ")
 
 
 async def _settle(matcher, pet, player_id: str) -> dict:
@@ -337,7 +363,7 @@ async def handle_status(event: Event):
     await reply.finish(
         pet_status_matcher,
         _compose(report, format_pet_status(pet), hint),
-        menus.status_menu(),
+        menus.care_menu(),
     )
 
 
@@ -358,7 +384,7 @@ async def handle_feed(event: Event):
     await pet_core.save_pet(pet)
     await reply.finish(
         pet_feed_matcher,
-        _compose(text("feed.ok", result["message"], **result), hint),
+        _compose(format_action_result("feed", result), hint),
         menus.action_menu(),
     )
 
@@ -379,7 +405,7 @@ async def handle_play(event: Event):
     await pet_core.save_pet(pet)
     await reply.finish(
         pet_play_matcher,
-        _compose(text("play.ok", result["message"], **result), hint),
+        _compose(format_action_result("play", result), hint),
         menus.action_menu(),
     )
 
@@ -399,7 +425,7 @@ async def handle_bathe(event: Event):
     await pet_core.save_pet(pet)
     await reply.finish(
         pet_bathe_matcher,
-        text("bathe.ok", result["message"], **result),
+        format_action_result("bathe", result),
         menus.action_menu(),
     )
 
@@ -419,7 +445,7 @@ async def handle_rest(event: Event):
     await pet_core.save_pet(pet)
     await reply.finish(
         pet_rest_matcher,
-        text("rest.ok", result["message"], **result),
+        format_action_result("rest", result),
         menus.action_menu(),
     )
 
@@ -770,7 +796,7 @@ async def handle_perks(event: Event, args: BaseMessage = CommandArg()):
 
 @pet_chat_matcher.handle(
     [
-        Cooldown(10, prompt=_cooldown_notice()),
+        cooldown(10, notices=_COOLDOWN_NOTICES),
         Depends(is_chat_switch_on),
         Depends(not_safe_mode),
         Depends(is_lk_user),
@@ -811,7 +837,7 @@ async def handle_chat(event: Event, args: BaseMessage = CommandArg()):
     await reply.finish(pet_chat_matcher, answer, menus.status_menu())
 
 
-@pet_love_matcher.handle([Cooldown(30, prompt=_cooldown_notice())])
+@pet_love_matcher.handle([cooldown(30, notices=_COOLDOWN_NOTICES)])
 async def handle_love(event: Event):
     """``/宠物.好感度`` — merged from the legacy 好感度查询, now reading ``affection``."""
     await _guard(pet_love_matcher)
@@ -837,7 +863,7 @@ async def handle_love(event: Event):
     )
 
 
-@pet_rename_matcher.handle([Cooldown(300, prompt=_cooldown_notice())])
+@pet_rename_matcher.handle([cooldown(300, notices=_COOLDOWN_NOTICES)])
 async def handle_rename(event: Event, args: BaseMessage = CommandArg()):
     """``/宠物.改名`` — merged from the legacy 改名."""
     await _guard(pet_rename_matcher)
@@ -861,7 +887,7 @@ async def handle_rename(event: Event, args: BaseMessage = CommandArg()):
     )
 
 
-@pet_instruction_matcher.handle([Cooldown(300, prompt=_cooldown_notice())])
+@pet_instruction_matcher.handle([cooldown(300, notices=_COOLDOWN_NOTICES)])
 async def handle_instruction(event: Event, args: BaseMessage = CommandArg()):
     """``/宠物.设定`` — merged from the legacy 更改设定; feeds the chat persona."""
     await _guard(pet_instruction_matcher)
@@ -1079,6 +1105,6 @@ async def handle_train(event: Event):
     await pet_core.save_pet(pet)
     await reply.finish(
         pet_train_matcher,
-        text("train.ok", result["message"], **result),
+        format_action_result("train", result),
         menus.train_menu(),
     )

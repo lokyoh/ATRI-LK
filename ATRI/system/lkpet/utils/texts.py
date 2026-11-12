@@ -83,3 +83,20 @@ def text_list(path: str, default: list[str] | None = None) -> list[str]:
     if isinstance(value, list) and all(isinstance(item, str) for item in value):
         return list(value)
     return list(default or [])
+
+
+def template(path: str, default: str = "") -> str:
+    """返回**未填充**的原始模板（只做指令前缀替换）。
+
+    给需要在 ```` 之外自行拼装、或占位符太多不宜一次 ``format`` 的场合用。
+    与 :func:`text` 的区别只在「填不填占位符」：
+
+    * :func:`text` 缺字段时会把**带占位符的原文**吐出来，紧接再 ``format``
+      一次的人会看到 ``{message}`` 这样的字面量——那是刻意保留的降级行为，
+      但调用方必须知道自己在拿什么；
+    * 本函数明确只负责取原文，占位符由调用方自己处理。
+    """
+    value = _lookup(path)
+    if not isinstance(value, str):
+        value = default
+    return apply_command_start(value)

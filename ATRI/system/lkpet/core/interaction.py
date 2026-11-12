@@ -356,7 +356,7 @@ async def rest(
         "fatigue": pet.fatigue,
         "affection": pet.affection,
         "affection_gain": roll,
-        # rest.ok 模板含 {action_points}：生产者必须带上扣点后的当前值。
+        # rest 模板含 {action_points}：生产者必须带上扣点后的当前值。
         "action_points": pet.action_points,
         "message": text("messages.rest", f"{pet.name}美美地睡了一觉", name=pet.name),
     }

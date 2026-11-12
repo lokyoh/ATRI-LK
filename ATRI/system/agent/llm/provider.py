@@ -372,6 +372,14 @@ class ProviderManager:
 
         load_models_from_config()
         _apply_model_preferences()
+        try:
+            from ATRI.system.agent.agent.model_health import log_health
+
+            log_health()
+        except Exception as exc:
+            from ATRI.log import log
+
+            log.warning(f"检查 Agent 模型健康状态失败：{exc}")
 
 
 default_provider = LLMProvider(
@@ -383,19 +391,28 @@ default_provider = LLMProvider(
             name="siliconflow/DeepSeek-V4-Flash",
             model="deepseek-ai/DeepSeek-V4-Flash",
             temperature=0.7,
-            type="chat",
+            type=["chat", "atri-think", "atri-chat"],
         ),
         LLMModel(
             name="siliconflow/qwen3-vl-30",
             model="Qwen/Qwen3-VL-30B-A3B-Instruct",
             temperature=0.7,
-            type="image",
+            type=["image", "atri-vision"],
         ),
         LLMModel(
             name="siliconflow/qwen3-30B",
             model="Qwen/Qwen3-30B-A3B-Instruct-2507",
             temperature=0.3,
-            type="tool",
+            type=[
+                "tool",
+                "atri-judge",
+                "atri-memory",
+                "atri-profile",
+                "atri-schedule",
+                "atri-outfit",
+                "atri-home",
+                "atri-summary",
+            ],
         ),
     ],
 )

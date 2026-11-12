@@ -8,6 +8,10 @@ from ATRI.exceptions import str_traceback
 from ATRI.log import log
 
 from .llm.provider import LLMProvider, ProviderManager, default_provider
+from .permission_defaults import (
+    DEFAULT_PERMISSION_OVERRIDES,
+    DEFAULT_USER_PERMISSION_ITEM,
+)
 from .service import plugin
 
 PROVIDER_CONFIG_FILE = SYS_CONFIG_DIR / "provider.yml"
@@ -38,6 +42,9 @@ def _model_options(model_type: str) -> list[dict]:
         if model_type == "embedding"
         else _MODEL_OPTION_DEFAULT
     )
+    if model_type.startswith("atri-"):
+        # Agent 类型不允许「留空 = 随机分配」：留空意味着缺失，必须显式告警。
+        default_label = "（未配置，将告警）"
     options: list[dict] = [{"label": default_label, "value": ""}]
     for m in models:
         label = m.name if m.name == m.model else f"{m.name}（{m.model}）"
@@ -45,45 +52,172 @@ def _model_options(model_type: str) -> list[dict]:
     return options
 
 
+def _validate_permission_users(value) -> str | None:
+    """个人权限表的结构校验。
+
+    值本身是 ``category-collection``，分类键是用户 ID；这里只检查每个
+    条目内部的字段，分类键是否合法由分类集合统一处理。
+    """
+    if not isinstance(value, dict):
+        return "必须是对象"
+    for user_id, item in value.items():
+        if not str(user_id).strip():
+            return "用户 ID 不能为空"
+        if not isinstance(item, dict):
+            return f"{user_id}: 必须是对象"
+        downgrade = str(item.get("downgrade_to") or "").strip().lower()
+        if downgrade and downgrade not in {"admin", "user"}:
+            return f"{user_id}: downgrade_to 只能是 admin 或 user"
+        for key in ("allow", "deny"):
+            patterns = item.get(key, [])
+            if not isinstance(patterns, list) or not all(
+                isinstance(pattern, str) for pattern in patterns
+            ):
+                return f"{user_id}: {key} 必须是字符串列表"
+    return None
+
+
 class AgentConfig(PluginConfig):
+    _schema_version = "2.0"
+    """配置版本；P0~P5 引入 atri-* 类型、三级权限、生活系统后升级到 2.0。"""
+
+    def _migrate_saved(self, saved: dict) -> dict:
+        """把 1.x 的配置迁移成 2.0 的形状。
+
+        1.x 的 ``permission`` 是一张「按等级列出的功能清单」：``admin.allow``
+        是 ``["*"]``、``user.allow`` 是一串旧名、``admin.deny`` 是一串混合了
+        旧名与新名的条目。2.0 改成「默认由功能自己声明作用域、配置只记覆盖」，
+        这张旧清单会让**群管理莫名失去**默认允许的生活/关系功能（例如
+        ``go`` / ``love`` / ``rel_set``），与新模型正好相反。
+
+        所以这里只保留 ``label``，把旧的 ``allow`` / ``deny`` 清空；同时删掉
+        1.x 遗留、2.0 已不存在的等级键（旧版本曾有过 ``guest`` 之类的分类，
+        留着会让整份配置每次保存都因「不允许新增分类」被拒）。
+        迁移后的差异会被 ``PluginConfig.load`` 认出来并立即落盘，同时写一条
+        说明日志。``model_tool`` 保留原值——它已不再生效，但要在
+        ``_apply_model_preferences`` 里据此给出「请改配 atri-*」的告警。
+
+        **只在真正的旧配置上执行一次**：用配置内的 ``schema_version`` 做标记。
+        没有标记 = 1.x，执行迁移并写入标记；已经是 2.0 就原样返回，
+        否则用户此后在 WebUI 填的每条覆盖都会在下次启动时被清空。
+        """
+        if not isinstance(saved, dict):
+            return saved
+        current = AgentConfig._schema_version
+        version = str(saved.get("schema_version") or "").strip()
+        if version == current:
+            return saved
+
+        changed = False
+        permission = saved.get("permission")
+        if isinstance(permission, dict):
+            for key in list(permission):
+                if key not in {"master", "admin", "user"}:
+                    permission.pop(key, None)
+                    changed = True
+            for item in permission.values():
+                if not isinstance(item, dict):
+                    continue
+                for key in ("allow", "deny"):
+                    if item.get(key):
+                        item[key] = []
+                        changed = True
+        saved["schema_version"] = current
+        if changed:
+            log.info(
+                "Agent 配置已迁移到 v2：旧版按等级列出的权限清单已清空，"
+                "默认权限改由每个功能自己声明的作用域决定；"
+                "如需额外收紧或放宽，请到 WebUI 重新填写覆盖项"
+            )
+        return saved
+
     # ---- 模型选择（最常改：决定用哪个模型跑哪类任务）----
+    # Agent 只认 atri-* 类型，绝不回退到 chat / tool 等通用类型。
+    model_think = Field(
+        str,
+        "",
+        "思考模型（atri-think）",
+        "必填。负责决策、选工具、产出说话意图。缺失时 Agent 无法工作。",
+        options_provider=lambda: _model_options("atri-think"),
+        required=True,
+    )
     model_chat = Field(
         str,
         "",
-        "聊天模型",
-        "指定用于思考与回复的模型。留空 = 按默认分配：同类型注册了多个时随机挑一个",
-        options_provider=lambda: _model_options("chat"),
+        "聊天模型（atri-chat）",
+        "负责把意图变成自然聊天文本。留空时链路仍可运行，但 say/md 会降级为"
+        "意图直发、face 跳过；建议配置。",
+        options_provider=lambda: _model_options("atri-chat"),
     )
-    model_tool = Field(
+    model_judge = Field(
         str,
         "",
-        "工具模型",
-        "指定用于记忆总结、主动回复判断等辅助任务的模型。留空 = 按默认分配",
-        options_provider=lambda: _model_options("tool"),
+        "判断模型（atri-judge）",
+        "主动聊天时必填。负责判断这条消息要不要接。",
+        options_provider=lambda: _model_options("atri-judge"),
+    )
+    model_memory = Field(
+        str,
+        "",
+        "记忆模型（atri-memory）",
+        "记忆总结 / 抽取时必填。留空则记忆写入工具隐藏。",
+        options_provider=lambda: _model_options("atri-memory"),
+    )
+    model_profile = Field(
+        str,
+        "",
+        "画像模型（atri-profile）",
+        "用户画像生成 / 修改。留空则只能读画像，不能改。",
+        options_provider=lambda: _model_options("atri-profile"),
+    )
+    model_schedule = Field(
+        str,
+        "",
+        "日程模型（atri-schedule）",
+        "填入式日程。留空则 plan 的填入不可用；固定作息不受影响。",
+        options_provider=lambda: _model_options("atri-schedule"),
+    )
+    model_outfit = Field(
+        str,
+        "",
+        "着装模型（atri-outfit）",
+        "白天 / 晚上两套着装。留空则提示词显示未决定。",
+        options_provider=lambda: _model_options("atri-outfit"),
+    )
+    model_home = Field(
+        str,
+        "",
+        "家模型（atri-home）",
+        "首次生成 / 扩写家的内容。留空则使用预设模板。",
+        options_provider=lambda: _model_options("atri-home"),
+    )
+    model_summary = Field(
+        str,
+        "",
+        "总结模型（atri-summary）",
+        "转发消息 / 长文总结。留空则总结功能不可用。",
+        options_provider=lambda: _model_options("atri-summary"),
     )
     model_image = Field(
         str,
         "",
-        "图片模型",
-        "指定用于图片识别的模型。留空 = 按默认分配",
-        options_provider=lambda: _model_options("image"),
-    )
-    model_tts = Field(
-        str,
-        "",
-        "语音模型",
-        "指定用于把回复转成语音的 tts 模型。留空 = 按默认分配。"
-        "只有发送语音的通道（OneBot）会用到它；未配置 tts 模型时回复只发文字",
-        options_provider=lambda: _model_options("tts"),
+        "图片模型（atri-vision）",
+        "图片理解。留空则图片只记 [图片]。",
+        options_provider=lambda: _model_options("atri-vision"),
     )
     model_embedding = Field(
         str,
         "",
-        "向量模型",
-        "指定用于记忆检索的 embedding 模型。留空 = 取该类型下注册的第一个。"
-        "必须固定：向量只在同一模型的语义空间内可比，换成另一个模型会让"
-        "已有记忆的向量全部失效（检索不到，且不会报错）",
-        options_provider=lambda: _model_options("embedding"),
+        "向量模型（atri-embedding）",
+        "记忆检索。必须固定：换模型会让历史向量失效。",
+        options_provider=lambda: _model_options("atri-embedding"),
+    )
+    model_tts = Field(
+        str,
+        "",
+        "语音模型（atri-tts）",
+        "语音回复。留空只发文字。",
+        options_provider=lambda: _model_options("atri-tts"),
     )
     # ---- 上下文与思考（影响体验和 token 成本）----
     max_history = Field(
@@ -99,6 +233,75 @@ class AgentConfig(PluginConfig):
         "最大思考轮数",
         "允许Agent最高思考次数,当遇到需要大量思考情况可提高此值,默认值20",
         min=5,
+    )
+    max_side_effects_per_turn = Field(
+        int,
+        5,
+        "单轮副作用上限",
+        "一轮思考里最多执行多少次副作用调用（发消息、改好感、记记忆等）。"
+        "超出部分会被忽略，防止模型一轮刷屏，默认值5",
+        min=1,
+    )
+    skill_prompt_budget = Field(
+        int,
+        10000,
+        "技能提示词预算",
+        "技能目录 + 内嵌技能正文在提示词里的总字符预算。"
+        "超出时先保证技能目录，再截断内嵌正文，默认值10000",
+        min=1000,
+    )
+    outfit_night_hour = Field(
+        int,
+        20,
+        "晚上穿搭切换点",
+        "这个钟点之后显示晚上那套居家服/睡衣；凌晨 0-6 点同样按晚上算",
+        min=0,
+        max=23,
+    )
+    life_morning_plan = Field(
+        bool,
+        False,
+        "早上自己安排一天",
+        "开启后，每天早上 06:10 让她用 thinking 决定今天做什么、要不要说早安。"
+        "只在主动发起白名单群生效。默认关闭",
+    )
+    schedule_summary_budget = Field(
+        int,
+        800,
+        "日程提示词预算",
+        "日程摘要进入提示词的最大字符数；超出时只保留当前与未来几段",
+        min=100,
+    )
+    reply_max_chars = Field(
+        int,
+        300,
+        "单条最大字数",
+        "聊天输出单条上限；超出时按句子边界截断，默认值300",
+        min=50,
+        max=1000,
+    )
+    reply_inter_message_delay = Field(
+        float,
+        0.4,
+        "条间延迟（秒）",
+        "一次 say 分多条时，每条之间的自然停顿，避免像机器人连发；0-2 秒",
+        min=0.0,
+        max=2.0,
+    )
+    chat_parallel_render = Field(
+        bool,
+        False,
+        "并行渲染",
+        "默认关闭。开启后 outbox 的 worker 会把队列里的多条 say 同时交给"
+        "聊天模型渲染，发送仍严格保序；渲染仍需调用模型，建议只在小群里开",
+    )
+    max_parallel_render = Field(
+        int,
+        2,
+        "并行渲染上限",
+        "并行渲染同时进行的条数上限（1-3）。关闭并行渲染时该值不生效",
+        min=1,
+        max=3,
     )
     agent_chat_whitelist = Field(
         list,
@@ -217,6 +420,73 @@ class AgentConfig(PluginConfig):
         "列表中的技能正文直接嵌入思考提示词，且不可被 agent 查询",
         item_type=str,
     )
+    # ---- 三级权限 ----
+    permission = Field(
+        dict,
+        DEFAULT_PERMISSION_OVERRIDES,
+        "权限覆盖",
+        "三级权限的**例外**配置。留空表示按每个功能自己声明的作用域执行；"
+        "只有需要收紧或放宽时才在这里填功能名。能力上限由代码固定："
+        "主人 bot / 管理 group / 用户 chat。",
+        ui_type="category-collection",
+        category_label="label",
+        item_field=Field(
+            dict,
+            {},
+            "等级覆盖",
+            children={
+                "label": Field(str, "", "显示名"),
+                "allow": Field(
+                    list,
+                    [],
+                    "额外允许",
+                    "默认权限由功能自己声明；这里只填需要额外放行的功能名或插件名",
+                    item_type=str,
+                ),
+                "deny": Field(
+                    list,
+                    [],
+                    "额外禁止",
+                    "优先于 allow；功能名或插件名；支持 * 通配与 插件名.*",
+                    item_type=str,
+                ),
+            },
+        ),
+        fixed_keys=["master", "admin", "user"],
+        validation_hint="默认权限由功能自己声明；这里只记录例外，能力上限不可配置",
+    )
+    permission_users = Field(
+        dict,
+        {},
+        "个人权限覆盖",
+        "按用户 ID 覆盖默认行为。留空表示不覆盖；只能在上限内收紧或放宽，"
+        "不能提权；downgrade_to 只能向下（admin / user）。",
+        ui_type="category-collection",
+        item_field=Field(
+            dict,
+            DEFAULT_USER_PERMISSION_ITEM,
+            "个人覆盖",
+            children={
+                "downgrade_to": Field(
+                    str,
+                    "",
+                    "降级为",
+                    "留空 = 不降级；只能填 admin 或 user",
+                ),
+                "allow": Field(
+                    list,
+                    [],
+                    "额外允许",
+                    "默认权限由功能自己声明；这里只填需要额外放行的功能名或插件名",
+                    item_type=str,
+                ),
+                "deny": Field(list, [], "额外禁止", "优先于 allow", item_type=str),
+            },
+        ),
+        key_label="用户 ID",
+        validator=_validate_permission_users,
+        validation_hint="分类键就是用户 ID；主人身份始终以运行时解析为准",
+    )
     # ---- 行为数据收集（一次性开关）----
     telemetry_enabled = Field(
         bool,
@@ -265,13 +535,56 @@ def apply_runtime_config() -> None:
 
     _apply_model_preferences()
 
+    _report_schema_upgrade()
+
+    try:
+        from .agent.model_health import log_health
+
+        log_health()
+    except Exception as e:
+        log.warning(f"检查 Agent 模型健康状态失败：{e}")
+
+
+def _report_schema_upgrade() -> None:
+    """配置版本升级提示。
+
+    `PluginConfig` 的合并逻辑会保留旧键、新增字段用默认值；这里只负责把
+    「升级后该检查什么」说清楚，避免用户以为 Agent 坏了。
+    """
+    try:
+        from .service import plugin
+
+        version_file = plugin.get_path() / "config_schema_version.txt"
+        seen = ""
+        if version_file.is_file():
+            seen = version_file.read_text(encoding="utf-8").strip()
+        current = AgentConfig._schema_version
+        if seen == current:
+            return
+        plugin.get_path().mkdir(parents=True, exist_ok=True)
+        version_file.write_text(current, encoding="utf-8")
+        if seen:
+            log.info(
+                f"Agent 配置已从 v{seen} 升级到 v{current}；"
+                "请检查模型设置（atri-* 类型）、三级权限与生活数据"
+            )
+    except Exception as e:
+        log.debug(f"写入 Agent 配置版本提示失败（忽略）：{e}")
+
 
 MODEL_PREFERENCE_FIELDS: tuple[tuple[str, str], ...] = (
-    ("model_chat", "chat"),
-    ("model_image", "image"),
-    ("model_tool", "tool"),
-    ("model_tts", "tts"),
-    ("model_embedding", "embedding"),
+    ("model_think", "atri-think"),
+    ("model_chat", "atri-chat"),
+    ("model_judge", "atri-judge"),
+    ("model_memory", "atri-memory"),
+    ("model_profile", "atri-profile"),
+    ("model_schedule", "atri-schedule"),
+    ("model_outfit", "atri-outfit"),
+    ("model_home", "atri-home"),
+    ("model_summary", "atri-summary"),
+    ("model_image", "atri-vision"),
+    ("model_embedding", "atri-embedding"),
+    ("model_tts", "atri-tts"),
 )
 
 
@@ -294,12 +607,30 @@ def _apply_model_preferences() -> None:
             ok = llm_manager.set_preferred(type_key, wanted)
             if wanted and not ok:
                 effective = kept or (
-                    "该类型注册的第一个" if type_key == "embedding" else "按默认分配"
+                    "该类型注册的第一个"
+                    if type_key.endswith("embedding")
+                    else "按注册顺序第一个"
                 )
                 log.warning(
                     f"配置项 {field} 指定的模型 '{wanted}' 不存在或未注册为 "
                     f"{type_key} 类型，已忽略；{type_key} 当前仍使用 {effective}"
                 )
+        legacy_tool = str(config.get("model_tool") or "").strip()
+        if legacy_tool and not any(
+            str(config.get(f) or "").strip()
+            for f in (
+                "model_judge",
+                "model_memory",
+                "model_profile",
+                "model_schedule",
+                "model_summary",
+            )
+        ):
+            log.warning(
+                f"旧配置 model_tool='{legacy_tool}' 已不再生效；"
+                "请分别配置 atri-judge / atri-memory / atri-profile / "
+                "atri-schedule / atri-summary"
+            )
     except Exception as e:
         log.warning(f"应用模型指定配置失败，沿用默认分配：{e}")
 

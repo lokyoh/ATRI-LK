@@ -68,14 +68,14 @@ def create_tts_model(
 async def generate_audio(text: str) -> Path | None:
     from . import llm_manager
 
-    if not llm_manager.has_type(ModelType.TTS):
-        log.warning("没有配置 tts 类型的模型")
+    if not llm_manager.has_type(ModelType.ATRI_TTS):
+        log.warning("没有配置 atri-tts 类型的模型")
         return None
 
     text = re.sub(r"[(（][^)）]*[)）]", "", text)
     try:
         response = await llm_manager.call_model_by_type(
-            ModelType.TTS, text, "文本转语音"
+            ModelType.ATRI_TTS, text, "文本转语音"
         )
     except ModelRequestError as exc:
         log.warning(f"文本转语音失败：{exc}")

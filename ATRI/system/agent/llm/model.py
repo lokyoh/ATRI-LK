@@ -20,10 +20,37 @@ ALL_MODEL_RESP_ERR = "所有模型请求失败"
 
 
 class ModelType(Enum):
-    """预定义的模型类型常量"""
+    """预定义的模型类型常量。
 
-    ATRI = "atri"
-    """ATRIAgent专用模型"""
+    前缀 ``atri-`` 的类型只给 ATRIAgent 使用；其余通用类型继续供
+    ``lkpet`` / ``trpg`` / ``feed`` 等非 Agent 服务使用。Agent **只认
+    atri-*，绝不回退到通用类型**。
+    """
+
+    ATRI_THINK = "atri-think"
+    """Agent 思考：读上下文、选工具、产出说话意图"""
+    ATRI_CHAT = "atri-chat"
+    """Agent 聊天：把意图变成自然文本 / 卡片 / 表情"""
+    ATRI_JUDGE = "atri-judge"
+    """Agent 主动聊天判断"""
+    ATRI_MEMORY = "atri-memory"
+    """Agent 记忆抽取与总结"""
+    ATRI_PROFILE = "atri-profile"
+    """Agent 用户画像生成与修改"""
+    ATRI_SCHEDULE = "atri-schedule"
+    """Agent 填入式日程生成"""
+    ATRI_OUTFIT = "atri-outfit"
+    """Agent 白天 / 晚上着装生成"""
+    ATRI_HOME = "atri-home"
+    """Agent 家的内容生成与扩写"""
+    ATRI_SUMMARY = "atri-summary"
+    """Agent 转发消息 / 长文总结"""
+    ATRI_VISION = "atri-vision"
+    """Agent 图片理解"""
+    ATRI_EMBEDDING = "atri-embedding"
+    """Agent 记忆检索向量"""
+    ATRI_TTS = "atri-tts"
+    """Agent 语音合成"""
     CHAT = "chat"
     """聊天通用模型"""
     WORK = "work"
@@ -205,7 +232,26 @@ class LLMModel:
                 ) from e
 
 
-DETERMINISTIC_TYPES: frozenset[str] = frozenset({ModelType.EMBEDDING.value})
+AGENT_TYPES: frozenset[str] = frozenset(
+    mt.value for mt in ModelType if mt.value.startswith("atri-")
+)
+
+DETERMINISTIC_TYPES: frozenset[str] = frozenset(
+    {ModelType.EMBEDDING.value, ModelType.ATRI_EMBEDDING.value}
+)
+
+
+class AgentModelMissingError(ModelRequestError):
+    """Agent 必需模型类型缺失。
+
+    与「所有模型请求失败」区分开：这是配置问题，应该在入口就变成
+    用户可见提示 + 主人告警，而不是让模型调用在深层抛一个笼统异常。
+    """
+
+    def __init__(self, model_type: ModelType, label: str = ""):
+        self.model_type = model_type
+        self.label = label or model_type.value
+        super().__init__(f"未配置 {self.label}（{model_type.value}）模型")
 
 
 class LLMManager:
@@ -217,6 +263,9 @@ class LLMManager:
         self._models: dict[str, LLMModel] = {}
         self._typed_models: dict[str, list[str]] = {}
         self._preferred: dict[str, str] = {}
+        #: 已提示过「多模型未指定」的类型；这类告警只该出现一次，
+        #: 否则每轮思考都会刷一条。
+        self._multi_model_warned: set[str] = set()
 
     def set_preferred(self, model_type: str, model_name: str) -> bool:
         """指定某类型优先使用的模型。空串 = 清除指定、回到默认分配。
@@ -399,8 +448,17 @@ class LLMManager:
 
         if head:
             candidates = head + rest
-        elif type_key in DETERMINISTIC_TYPES:
+        elif type_key in DETERMINISTIC_TYPES or type_key in AGENT_TYPES:
             candidates = rest
+            if not preferred and len(rest) > 1:
+                if type_key not in self._multi_model_warned:
+                    self._multi_model_warned.add(type_key)
+                    log.warning(
+                        f"类型 '{type_key}' 注册了多个模型但未指定，"
+                        f"按注册顺序默认使用 {rest[0].name}（后续同类提示只记 debug）"
+                    )
+                else:
+                    log.debug(f"类型 '{type_key}' 仍按注册顺序使用 {rest[0].name}")
         else:
             candidates = random.sample(rest, len(rest))
 
@@ -417,7 +475,7 @@ class LLMManager:
         raise ModelRequestError(ALL_MODEL_RESP_ERR)
 
     def embedding_identity(self) -> tuple[str, str]:
-        """当前 embedding 的 (注册名, 真实模型 id)；没有配置时返回空串对。
+        """当前 Agent embedding 的 (注册名, 真实模型 id)；没有配置时返回空串对。
 
         记忆写入时要把这个标识存进 metadata：换模型后据此判断历史向量
         能不能拿来比（不同空间的余弦值不可比）。
@@ -425,7 +483,7 @@ class LLMManager:
         **解析顺序必须与 ``call_model_by_type`` 一致**，否则会出现
         「写入时用 A 的向量、记录成 B 的标识」这种更隐蔽的错误。
         """
-        type_key = ModelType.EMBEDDING.value
+        type_key = ModelType.ATRI_EMBEDDING.value
         names = self._typed_models.get(type_key) or []
         if not names:
             return "", ""
@@ -443,6 +501,33 @@ class LLMManager:
         self._models.clear()
         self._typed_models.clear()
         self._preferred.clear()
+        self._multi_model_warned.clear()
 
     def has_type(self, model_type: ModelType) -> bool:
         return model_type.value in self._typed_models
+
+    def require(self, model_type: ModelType, label: str = "") -> LLMModel:
+        """返回 Agent 类型的首选模型；缺失时抛 ``AgentModelMissingError``。
+
+        选择规则与 ``call_model_by_type`` 一致：有 preferred 用 preferred，
+        否则按注册顺序取第一个。调用方通常只需要「检查是否存在」，
+        但返回模型可以让健康检查 / 日志直接拿到名字。
+        """
+        models = self.get_models(model_type.value)
+        if not models:
+            raise AgentModelMissingError(model_type, label)
+        preferred = self._preferred.get(model_type.value)
+        for model in models:
+            if model.name == preferred:
+                return model
+        return models[0]
+
+    async def call_agent(
+        self,
+        model_type: ModelType,
+        content: str | LLMContents | list | Any,
+        event: str = "Agent",
+    ) -> LLMResponse:
+        """Agent 专用调用入口：先 ``require``，再按类型确定性选择。"""
+        self.require(model_type)
+        return await self.call_model_by_type(model_type, content, event)

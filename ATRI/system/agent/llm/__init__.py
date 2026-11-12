@@ -12,8 +12,10 @@ from .contents import (
 from .embedding import create_embedding_model
 from .gemini import create_gemini_model
 from .model import (
+    AGENT_TYPES,
     ALL_MODEL_RESP_ERR,
     NO_MODEL_ERR,
+    AgentModelMissingError,
     LLMManager,
     LLMResponse,
     ModelRequestError,
@@ -55,6 +57,12 @@ def load_models_from_config():
                     logger.warning(f"{m.name}没有配置模型类型，已跳过")
                     continue
                 for t in type_:
+                    if t == "atri":
+                        logger.warning(
+                            f"{m.name} 使用了已废弃的模型类型 'atri'，已跳过；"
+                            "请改为 atri-think / atri-chat 等具体类型"
+                        )
+                        continue
                     if t in {model_type.value for model_type in ModelType}:
                         try:
                             selected_keys = _provider.keys_for_model(m)
@@ -86,8 +94,10 @@ def load_models_from_config():
 
 
 __all__ = [
+    "AGENT_TYPES",
     "ALL_MODEL_RESP_ERR",
     "NO_MODEL_ERR",
+    "AgentModelMissingError",
     "LLMContent",
     "LLMContents",
     "LLMManager",

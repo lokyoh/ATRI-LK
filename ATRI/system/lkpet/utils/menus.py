@@ -75,21 +75,27 @@ def main_menu() -> list[Choice]:
 
 
 def status_menu() -> list[Choice]:
-    """看完状态后最可能接着点的几个。"""
+    """通用入口：状态 / 照护 / 配置。
+
+    **不再作为「某张卡看完之后」的默认底部**——那种场合该用
+    :func:`care_menu`（照护动作）或 :func:`detail_menu`（看别的卡）。
+    这里保留是给「创建成功」「轮回完成」这类**没有明确下一步**的场合当总入口。
+    """
     return list(
         Menu()
-        .add("喂食", cmd("宠物.喂食"), style=1)
-        .add("玩耍", cmd("宠物.玩耍"), style=1)
+        .add("状态", cmd("宠物.状态"))
+        .add("喂食", cmd("宠物.喂食"))
         .add("技能", cmd("宠物.技能"), style=0)
         .add("商店", cmd("宠物.商店"), style=0)
     )
 
 
 def care_menu() -> list[Choice]:
-    """``/宠物.状态`` 底部的照护动作：当天所有会消耗行动点的事。
+    """照护卡（状态 / 四种互动 / 训练）底部的统一动作组。
 
     列的是「玩家看完这张卡最可能想干的一件照护工作」——喂食 / 玩耍 / 洗澡 /
     休息 / 训练，正好覆盖 ``daily.yaml`` 里那五个行动点消耗项。
+
     技能与商店属于**配置与购买**，不是照护动作，放进来只会把五行挤出两个与
     当下无关的入口；它们仍可从各自的指令进入。
 
@@ -98,12 +104,39 @@ def care_menu() -> list[Choice]:
     """
     return list(
         Menu()
-        .add("喂食", cmd("宠物.喂食"), style=1)
-        .add("玩耍", cmd("宠物.玩耍"), style=1)
+        .add("喂食", cmd("宠物.喂食"))
+        .add("玩耍", cmd("宠物.玩耍"))
         .add("洗澡", cmd("宠物.洗澡"))
         .add("休息", cmd("宠物.休息"))
         .add("训练", cmd("宠物.训练"))
     )
+
+
+CARD_ENTRIES = (
+    ("状态", "宠物.状态"),
+    ("技能", "宠物.技能"),
+    ("天赋", "宠物.天赋"),
+    ("传记", "宠物.传记"),
+    ("日志", "宠物.日志"),
+)
+"""配置 / 记录类卡片的互相入口。"""
+
+
+def detail_menu(exclude: str | None = None) -> list[Choice]:
+    """配置 / 记录类卡片（技能 / 天赋 / 传记 / 日志 / 好感度）底部的统一导航。
+
+    这些卡看完之后玩家通常想「去看另一张卡」，而不是立刻喂食：技能看天赋、
+    天赋看技能、传记看日志。所以它们共用同一份出口表，只是**去掉当前这张**
+    ——在一张卡底下摆一个指向自己的按钮是最没用的按钮。
+
+    ``exclude`` 取 ``状态`` / ``技能`` / ``天赋`` / ``传记`` / ``日志``；
+    取别的值（例如好感度卡传 ``好感度``）等于不排除，给全部五项（会折成 4+1 两行）。
+
+    **上限是 4**：``reply.inline_links`` 每行最多排 4 个按钮，正好是排除当前卡
+    之后的项数；只有好感度那种不在表里的卡才会折成第二行。
+    """
+    entries = [item for item in CARD_ENTRIES if item[0] != exclude]
+    return [Choice(label=label, command=cmd(path), style=0) for label, path in entries]
 
 
 def create_menu() -> list[Choice]:
@@ -123,25 +156,35 @@ def train_menu() -> list[Choice]:
 
 
 def action_menu() -> list[Choice]:
-    """喂食/玩耍/洗澡之后的「再来一次」。"""
-    return list(
-        Menu()
-        .add("状态", cmd("宠物.状态"))
-        .add("玩耍", cmd("宠物.玩耍"))
-        .add("休息", cmd("宠物.休息"), style=0)
-    )
+    """四种互动（喂食 / 玩耍 / 洗澡 / 休息）回执底部的统一动作组。
+
+    与 :func:`care_menu` 同一套：互动完最顺手的就是接着做另一项照护，
+    所以直接复用，不再维护第二份「只有状态/玩耍/休息」的短名单——
+    那份名单会让玩家喂完食想洗澡时只能手打。
+    """
+    return care_menu()
+
+
+def skill_menu() -> list[Choice]:
+    """技能卡底部的出口：与其它记录卡同一套（见 :func:`detail_menu`）。
+
+    技能正文里每个技能已自带「装备 / 卸下」，底部只放导航，不重复操作。
+    """
+    return detail_menu(exclude="技能")
 
 
 def talent_menu() -> list[Choice]:
-    return list(
-        Menu()
-        .add("看技能", cmd("宠物.技能"), style=0)
-        .add("看传记", cmd("宠物.传记"), style=0)
-    )
+    """天赋卡底部：同上，去掉指向自己的「天赋」。"""
+    return detail_menu(exclude="天赋")
 
 
 def shop_overview_menu(categories: list[dict] | None = None) -> list[Choice]:
-    """商店概览：直接给分类入口，省得手打编号。"""
+    """商店概览：直接给分类入口，省得手打编号。
+
+    最多 4 个分类 + 洗点，正好是 ``reply.MAX_INLINE_PER_LINE`` 的 4 个——再多
+    就会折成第二行，把「概览」挤成半屏按钮。分类超出 4 个时其余仍可用编号进入，
+    正文里的分类行本身也已经是可点的。
+    """
     result: list[Choice] = []
     for cat in (categories or [])[:4]:
         order = cat.get("order")
@@ -198,15 +241,13 @@ def reincarnation_menu(*, ready: bool) -> list[Choice]:
 
 
 def log_menu() -> list[Choice]:
-    return list(
-        Menu().add("传记", cmd("宠物.传记")).add("状态", cmd("宠物.状态"), style=0)
-    )
+    """日志卡底部：与其它记录卡同一套出口（见 :func:`detail_menu`）。"""
+    return detail_menu(exclude="日志")
 
 
 def bio_menu() -> list[Choice]:
-    return list(
-        Menu().add("日志", cmd("宠物.日志")).add("轮回", cmd("宠物.轮回"), style=0)
-    )
+    """传记卡底部：同上。"""
+    return detail_menu(exclude="传记")
 
 
 def list_menu() -> list[Choice]:

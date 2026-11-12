@@ -349,7 +349,7 @@ async def handle_create(event: Event, args: BaseMessage = CommandArg()):
             text("create.ok", "🎉 宠物创建成功！", **create_fields),
             await _tutorial_prompt(pet, "welcome"),
         ),
-        menus.status_menu(),
+        menus.care_menu(),
     )
 
 
@@ -463,8 +463,10 @@ async def handle_skill(event: Event, args: BaseMessage = CommandArg()):
 
     raw = _text_of(args)
     if not raw:
-        # 装备/卸下的命令已内嵌在每条技能行末，底部不再重复
-        await reply.finish(pet_skill_matcher, format_skill_list(pet))
+        # 装备/卸下的命令已内嵌在每条技能行末，底部只放导航
+        await reply.finish(
+            pet_skill_matcher, format_skill_list(pet), menus.skill_menu()
+        )
 
     action, _, rest = raw.partition(" ")
     rest = rest.strip()
@@ -501,6 +503,7 @@ async def handle_skill(event: Event, args: BaseMessage = CommandArg()):
             text(key, default, name=skills.skill_name(skill_id)),
             format_skill_list(pet),
         ),
+        menus.skill_menu(),
     )
 
 
@@ -600,10 +603,11 @@ async def handle_reincarnate(event: Event, args: BaseMessage = CommandArg()):
         await reply.finish(pet_reincarnate_matcher, f"❌ {exc}")
 
     await pet_core.save_pet(pet)
+    # 轮回完成 = 新的一世刚开局，最该做的是照护与成长，不是配技能/逛商店。
     await reply.finish(
         pet_reincarnate_matcher,
         format_reincarnation_result(result),
-        menus.status_menu(),
+        menus.care_menu(),
     )
 
 
@@ -831,11 +835,11 @@ async def handle_chat(event: Event, args: BaseMessage = CommandArg()):
     if len(answer) > 100:
         # QQ 端用 md：长文本本来就能排版，不必转图（转图反而看不到可点的按钮）
         if reply.is_qq(event):
-            await reply.finish(pet_chat_matcher, answer, menus.status_menu())
+            await reply.finish(pet_chat_matcher, answer, menus.care_menu())
         await reply.finish(
-            pet_chat_matcher, img_msg(await text_to_pic(answer)), menus.status_menu()
+            pet_chat_matcher, img_msg(await text_to_pic(answer)), menus.care_menu()
         )
-    await reply.finish(pet_chat_matcher, answer, menus.status_menu())
+    await reply.finish(pet_chat_matcher, answer, menus.care_menu())
 
 
 @pet_love_matcher.handle([cooldown(30, notices=_COOLDOWN_NOTICES)])
@@ -862,7 +866,7 @@ async def handle_love(event: Event):
             ),
             text("love.bonus", "", bonus_pct=f"{bonus_pct:g}"),
         ),
-        menus.status_menu(),
+        menus.detail_menu(),
     )
 
 

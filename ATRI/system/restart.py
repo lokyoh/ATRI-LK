@@ -14,7 +14,7 @@ from ATRI.permission import MASTER
 from ATRI.service import Service
 
 plugin = Service(
-    "重启", "重新启动ATRI", "0.3.0", Service.ServiceType.SYSTEM
+    "重启", "重新启动ATRI", "0.4.0", Service.ServiceType.SYSTEM
 ).permission(MASTER)
 
 PLUGIN_DIR = Path(".") / "data" / "plugins" / "restart"

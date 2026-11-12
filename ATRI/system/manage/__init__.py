@@ -52,10 +52,7 @@ def handle_command(
                 else:
                     result = await func(target)
             else:
-                if func_argcount == 3:
-                    result = func(target, event)
-                else:
-                    result = func(target)
+                result = func(target, event) if func_argcount == 3 else func(target)
             msg = success_msg.format(target)
             if type(result) is bool:
                 msg += "启用" if result else "禁用"
@@ -105,7 +102,7 @@ def _ban_message(kind: str, target: str, minutes: float, reason: str) -> str:
 
 
 plugin = (
-    Service("管理", "控制 ATRI 的各项服务", "1.1.0", Service.ServiceType.SYSTEM)
+    Service("管理", "控制 ATRI 的各项服务", "1.2.0", Service.ServiceType.SYSTEM)
     .permission(MASTER)
     .allow_switch(False)
 )
@@ -499,9 +496,9 @@ async def _(event: MessageEvent):
     await upgrade_nonebot_plugin.finish(msg)
 
 
-from ATRI import driver
+from ATRI import driver  # noqa: E402
 
-from .listener import init_listener
+from .listener import init_listener  # noqa: E402
 
 driver().on_startup(init_listener)
 driver().on_startup(NonebotPluginManager().get_store_list)

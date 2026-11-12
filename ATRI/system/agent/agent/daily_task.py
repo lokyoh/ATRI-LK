@@ -69,4 +69,9 @@ async def agent_cleanup_task():
 
 
 def init():
-    pass
+    from .life import get_life_system
+
+    try:
+        get_life_system().ensure()
+    except Exception as exc:
+        log.warning(f"生活数据初始化失败：{exc}")

@@ -164,7 +164,7 @@ def _save_spoken(spoken: list[str], keep: int = 40) -> None:
 def pick_opening() -> Opening | None:
     """挑一条「值得说」的经历。没有就返回 None。
 
-    素材**只**来自自我记忆（`self_memory`）——她自己的经历，有前因、有上下文。
+    素材**只**来自自我记忆（`self_note`）——她自己的经历，有前因、有上下文。
 
     曾经还从 `memories` 表里挑本群的高情绪条目当素材，但那批记忆是**过去某天**
     的总结，日期一久，冷不丁提起来就是「突然说起八百年前的事」，比不说话更怪。
@@ -397,7 +397,14 @@ def _ensure_fallback_history(chat_id: str, chat_history) -> None:
     chat_history.fallback_history_loaded = True
 
 
-def build_agent_context(chat_id: str, bot, cue: str, user_id: str = ""):
+def build_agent_context(
+    chat_id: str,
+    bot,
+    cue: str,
+    user_id: str = "",
+    level: str = "",
+    group_id: str = "",
+):
     """构造「没有人当场发言」的思考上下文。
 
     供**非用户消息触发**的链路共用：主动开口、定时任务到点。
@@ -405,7 +412,7 @@ def build_agent_context(chat_id: str, bot, cue: str, user_id: str = ""):
     - `ChatArgs`：给了 ``user_id`` 就用它（定时任务的委托人），
       否则用占位符——主动开口确实没有对话人；
     - `History`：一条代表触发语境的虚拟消息；
-    - `ChatMessage`：空队列，避免误读真实待处理消息。
+    - `ChatMessage`：带上真实队列快照作为已读基线，下一轮思考只取之后的新消息。
 
     合成对象**不进历史队列**，也不写盘——它只是一次性上下文。
 
@@ -414,12 +421,26 @@ def build_agent_context(chat_id: str, bot, cue: str, user_id: str = ""):
         主动开口留空。有对话人时提示词里才会带上
         「和这个人的关系 / 关于他的记忆 / 用户画像」——
         否则她只能在一个没有对象的空上下文里说话。
+    :param level: 定时任务委托人创建任务时的权限等级。
+    :param group_id: 委托人所在的群。
     """
     from .history import ChatHistoryManager, History, LLMMessage, MessageSegment
     from .model import ChatArgs
     from .temp_his import ChatMessage
 
-    args = ChatArgs(bot, chat_id, user_id or _PLACEHOLDER_USER, False, True)
+    args = ChatArgs(
+        bot,
+        chat_id,
+        user_id or _PLACEHOLDER_USER,
+        False,
+        True,
+        level=level,
+        group_id=group_id or (chat_id if user_id else ""),
+        is_private=not bool(user_id),
+    )
+    if not user_id and not level:
+        # 主动开口没有真实对话人：按内部 system 求值，保留完整工具能力。
+        args.level = "system"
 
     synthetic = History(None, chat_id)
     synthetic.sender = None
@@ -428,10 +449,12 @@ def build_agent_context(chat_id: str, bot, cue: str, user_id: str = ""):
     # 「你在回复 mid:<合成id>」这种指向不存在消息的记录。
     synthetic.synthetic = True
 
-    chat_msg = ChatMessage(synthetic, [], "", [], args)
-
     chat_history = ChatHistoryManager.get_history(chat_id)
     history_list = chat_history.get_history()
+    # 队列快照只用于标记「哪些消息已经出现过」，不参与本次提示词拼装，
+    # 这样思考途中新到的消息能被当作及时消息注入，而旧消息不会重复出现。
+    chat_msg = ChatMessage(synthetic, history_list, "", [], args)
+
     _ensure_fallback_history(chat_id, chat_history)
     fallback = chat_history.fallback_history
 
@@ -444,20 +467,16 @@ def _build_initiative_context(chat_id: str, bot, opening: Opening):
 
 
 def has_dialog_model() -> bool:
-    """是否有可用于思考链路的对话模型。
+    """是否有可用于思考链路的 Agent 模型。
 
-    优先 ATRI 专用模型，退化到通用 CHAT——与 `ThinkingModel.thinking`
-    内部的选择顺序一致。只检查 CHAT 会让「只配了 atri 类型」的部署
-    永远不触发（而那正是推荐配置，专用模型能提高缓存命中率）。
-
-    主动开口与定时任务共用这一判断，避免两处各写一遍、慢慢发散。
+    Agent 只认 ``atri-think`` / ``atri-chat``，不再看旧 ``ATRI`` 或通用
+    ``CHAT``。**只要求思考模型**：缺 ``atri-chat`` 时链路会自动降级为
+    意图直发（见 ``chat_chain``），主动开口不该因此完全不触发。
     """
     from ..llm import ModelType, llm_manager
 
     try:
-        return bool(
-            llm_manager.has_type(ModelType.ATRI) or llm_manager.has_type(ModelType.CHAT)
-        )
+        return bool(llm_manager.has_type(ModelType.ATRI_THINK))
     except Exception:
         return False
 
@@ -470,6 +489,8 @@ async def run_agent_once(
     *,
     mode: str = "initiative",
     user_id: str = "",
+    level: str = "",
+    group_id: str = "",
 ) -> None:
     """用一次完整思考回应「非用户消息触发」的语境。
 
@@ -477,6 +498,7 @@ async def run_agent_once(
 
     - ``initiative``：她自己想开口（无人触发，主动搭话）
     - ``scheduled``：定时任务到点（她之前给自己定的提醒）
+    - ``life``：早上自己安排一天（先调 plan，再决定要不要说早安）
 
     之前两者都传「主动开口」，于是定时任务的提示词里出现了
     「这个群没有人在跟你说话」「没有人 @ 你」——那是搭话的语气，
@@ -486,11 +508,13 @@ async def run_agent_once(
     :param cue: 给模型看的触发语（「你想起了一件事」/「定时提醒：xxx」）
     :param sender: 怎么把话发出去（先捕获后校验 / 直接发）
     :param user_id: 这次思考的对话人；定时任务是委托人，主动开口留空
+    :param level: 定时任务委托人创建任务时的权限等级
+    :param group_id: 委托人所在的群
     """
     from ..brain import ThinkingModel
 
     args, synthetic, history_list, fallback, chat_msg = build_agent_context(
-        chat_id, bot, cue, user_id
+        chat_id, bot, cue, user_id, level=level, group_id=group_id
     )
     await ThinkingModel().thinking(
         args,
@@ -546,7 +570,7 @@ def _group_id(chat_id: str):
 def readable_history_text(text: str) -> str:
     """把可能含 CQ 码的文本转成历史里能读的样子。
 
-    她调用 `send_md_message` 时发出去的是图片段，`str()` 之后是
+    她调用 `md` 时发出去的是图片段，`str()` 之后是
     `[CQ:image,file=xxx.png]` 或一长串 base64。这种内容进历史毫无意义，
     模型读不懂，还占掉大量上下文。
     """
@@ -778,3 +802,68 @@ def register_patrol(service) -> None:
         log.info("已注册主动发起巡检（每 30 分钟）")
     except Exception as exc:
         log.warning(f"注册主动发起巡检跳过：{exc}")
+
+    try:
+        service.scheduler_jobs().add_job(
+            morning_life_plan,
+            name="agent-morning-life",
+            trigger="cron",
+            hour=6,
+            minute=10,
+            misfire_grace_time=600,
+            use_log=True,
+        )
+    except Exception as exc:
+        log.warning(f"注册早间生活计划跳过：{exc}")
+
+
+async def morning_life_plan() -> bool:
+    """早上 06:10 让她自己安排一天；配置关闭时直接返回。"""
+    try:
+        from ..config import config
+
+        if not config.get("life_morning_plan"):
+            return False
+    except Exception:
+        return False
+    groups = whitelisted_groups()
+    if not groups:
+        return False
+    bots = _available_bots()
+    if not bots:
+        return False
+    bot, why = _pick_bot(bots)
+    if bot is None:
+        log.warning(f"早间生活计划：{why}")
+        return False
+    chat_id = groups[0]
+    from .sender import BotChatSender
+
+    # 与主动开口一致：早安也是「无人触发的发言」，说得不得体代价同样高，
+    # 所以逐条过 clean_opening_text。
+    sender = BotChatSender(bot, chat_id, cleaner=clean_opening_text)
+    try:
+        await run_agent_once(
+            chat_id,
+            bot,
+            "（新的一天）天亮了。先决定今天怎么过，再决定要不要跟群里说早安。",
+            sender,
+            mode="life",
+        )
+    except Exception as exc:
+        log.warning(f"早间生活计划失败：{exc}")
+        return False
+    if not sender.sent_count:
+        return False
+
+    # 写历史：否则她下一轮不知道自己早上说过什么（add_response 对合成
+    # 上下文是 no-op，主动链路的记账必须在这里补）。
+    from .history import log_bot_message
+
+    for text in sender.sent:
+        plain = readable_history_text(text)
+        if plain:
+            log_bot_message(chat_id, plain)
+    for md_file, _ in sender.md_refs:
+        log_bot_message(chat_id, f"[md:{md_file}]")
+    return True

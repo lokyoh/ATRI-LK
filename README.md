@@ -6,10 +6,9 @@
 
 アトリは、高性能ですから！
 
-ATRI-LK 致力于在 QQ/OneBot 即时聊天平台中复现一只功能丰富、表现稳定的机器人。项目基于原 ATRI 开发，并加入更多扩展功能。
-
-> 本项目新版部分功能依赖 [napcatAPI](https://napcat.apifox.cn/)。在非 [NapCatQQ](https://napneko.github.io/) 机器人环境下可能会出现兼容性问题。  
-> 新增QQ适配器,部分功能已适配。
+ATRI-LK 是一个基于 [NoneBot 2](https://v2.nonebot.dev/) 的 QQ 聊天机器人项目，在原 ATRI 的基础上补齐了完整的内置服务、智能体系统、Web 管理界面与插件生态。支持 OneBot v11（NapCatQQ、SnowLuma 等）与 QQ 官方机器人两种接入方式。
+ 
+> QQ 官方机器人适配器已覆盖部分功能，两套适配器可在同一实例中同时运行。
 
 ## 📌 声明 | Declarations
 
@@ -22,83 +21,60 @@ ATRI-LK 致力于在 QQ/OneBot 即时聊天平台中复现一只功能丰富、�
 
 ## ✨ 特性概览 | Features
 
-- 使用 [NoneBot 2](https://v2.nonebot.dev/) 作为底层框架
-- 在原 ATRI 基础上增加更多功能和插件支持
-- 遵循 [OneBot v11](https://onebot.dev/) 标准
-- 支持可扩展插件系统，便于二次开发与个性化配置
+- 使用 [NoneBot 2](https://v2.nonebot.dev/) 作为底层框架，遵循 [OneBot v11](https://onebot.dev/) 标准
+- 同时支持 OneBot v11 与 QQ 官方机器人，同一套内置服务尽量保持两端一致
+- 自研智能体：长期记忆、用户画像、技能、功能调用与主动开口
+- 独立的 Web 管理界面：配置编辑、服务与插件管理、Agent 调试、实时日志
+- 完整的内置服务与插件商店，支持扩展插件的安装、更新与卸载
+- 分群、分人、全局的服务控制，支持禁用、解禁、封禁与白名单
 
 ## 📱 功能概览 | Services Overview
 
-<details markdown='1'><summary>系统插件</summary>
+<details markdown='1'><summary>系统服务</summary>
 
-- 帮助
-- 管理
-- 基础
-- 状态
-- 反馈
-- 广播
-- 更新
-- 插件商店
+- 帮助、管理、状态、反馈、广播
+- 更新、重启、插件商店
+- 备份、调度管理、图库、年终总结
 
 </details>
 
-<details markdown='1'><summary>LK系列插件</summary>
+<details markdown='1'><summary>LK 系列服务</summary>
 
-- [x] 用户系统
-- [x] 物品商店系统
-- [x] 群聊模式对策
-- [x] 附属-图库
-
-</details>
-
-<details markdown='1'><summary>内置 LK 附属插件</summary>
-
-> 已勾选的功能已基本完成，仍可能继续优化。
-> 未勾选的内容已在项目中加入但仍在补充中。
-> 计划中表示未来将继续开发。
-> 划线项目暂时不再更新。
-
-- [x] 签到
-- [x] 投喂
-- [x] 运势
-- [x] 聊天
-  - [x] AI聊天包含记忆、词语解释
-  - [x] 戳一戳ATRI
-- [ ] 宠物(Demo)
-  - [ ] 养成(Demo)
-  - [ ] 爬塔(Demo)
-- [ ] 农场
-  - [x] 新农场
-  - [x] 锄地、浇水、种植、收获、移除
-  - [x] 品质
-  - [x] 肥料
-  - [x] 天气
-  - [x] 耕种等级
-  - [x] 幸运值
-- [ ] 钓鱼
-  - [x] 钓鱼
-  - [x] 鱼竿,鱼饵
-  - [x] 鱼具
-  - [x] 35种鱼,4种非鱼钓鱼战利品
-  - [x] 成就
-  - [x] 宝藏
-- [ ] ~~探险~~
+- 用户：账号绑定、背包、物品、商店、排行榜
+- 群管 / 主人：群聊管理与主人专用指令
+- 聊天：@ 触发、主动聊天，接入智能体
+- 智能体：长期记忆、用户画像、技能、功能调用、主动开口
+- 农场：种植、品质、肥料、天气、耕种等级、幸运值
+- 钓鱼：鱼竿鱼饵、35 种鱼、成就、宝藏
+- 宠物：养成、技能、好感度、轮回、肉鸽爬塔（Demo）
+- 签到、投喂、运势、RSS 订阅
 
 </details>
 
-请在 [ATRI-LK-plugin](https://github.com/lokyoh/ATRI-LK-plugin) 或插件商店下载更多扩展插件
+除内置服务外，可在 [ATRI-LK-plugin](https://github.com/lokyoh/ATRI-LK-plugin) 或插件商店安装更多扩展插件。
 
 ## 🤖 ATRI 智能体 | ATRI Agent
 
-本项目自研的智能体系统，支持：
+本项目自研的智能体系统，为聊天服务提供底层能力：
 
-- 好感度管理
-- 用户记忆与画像
+- 带遗忘的长期记忆与自我记忆
+- 用户画像、别名与关系查询
 - 自定义词语解释
-- 表情发送
-- 网络搜索
-- 亚托莉日程
-- 带遗忘的长期记忆
+- 技能系统：按需查阅玩法与操作说明
+- 功能调用：网络搜索、图片识别、日程管理、文件操作等
+- 主动开口与内心状态
+- 好感度、表情发送与回复风格约束
+
+## 🖥️ Web 管理界面 | WebUI
+
+配套的 [ATRI-LK-WebUI](https://github.com/lokyoh/ATRI-LK-WebUI) 会在启动时自动下载并保持更新，浏览器访问机器人的 `host:port` 即可打开：
+
+- 仪表盘与运行状态总览
+- 服务、插件与配置的可视化编辑
+- Agent 模型、功能调用、技能与 Token 用量管理
+- 实时日志查看与版本更新
+
+登录账号与密码保存在 `config.yml` 的 `WebUIConfig` 中。
 
 ## 🚀 开始部署 | Getting Started
 

@@ -1,5 +1,5 @@
 import time
-from asyncio import Future, Lock, gather, get_running_loop
+from asyncio import Lock
 from typing import ClassVar
 
 from nonebot.adapters import Bot
@@ -22,8 +22,9 @@ class ChatMessage:
         self.history = history
         self.image_history = image_history
         self.fallback_history = fallback_history
-        self.messages_during_processing: list[Future[History | None]] = []
-        self.processing_message_ids: set[int] = set()
+        # 本次处理开始时队列里已有的消息。之后的每一轮思考
+        # 都从这里往后取，避免把已经写进提示词的历史再喂一遍。
+        self.seen_mids: set[int] = {h.mid for h in history}
         self.user_id = args.user_id
         self.force_chat = args.is_force_chat()
         self.time_stamp = time.time()
@@ -31,40 +32,45 @@ class ChatMessage:
     def check_time(self) -> bool:
         return time.time() - self.time_stamp <= 180
 
-    async def get_processing_messages_prompt(self, bot: Bot) -> str:
-        pending_messages = self.messages_during_processing
-        histories = (
-            await gather(*pending_messages, return_exceptions=True)
-            if pending_messages
-            else []
-        )
+    async def get_timely_messages_prompt(self, bot: Bot) -> str:
+        """从本会话的消息队列里取出「处理开始后新到」的消息。
+
+        队列由 `add_message` 统一写入，是消息进入 Agent 的**唯一入口**；
+        这里不再维护单独的待处理列表，避免两条链路各存一份、出现
+        「已经回过了又被当成新消息」的重复注入。
+        """
+        if self.message is None:
+            return ""
+        chat_id = self.message.chat_id
+        try:
+            queue = ChatHistoryManager.get_history(chat_id).get_history()
+        except Exception as e:
+            history_logger.warning(f"get_timely_messages_prompt: 读取队列失败: {e!r}")
+            return ""
+
         messages: list[str] = []
-        consumed: set[int] = set()
-        for future, history in zip(pending_messages, histories):
-            if isinstance(history, BaseException):
-                history_logger.warning(
-                    f"get_processing_messages_prompt: future failed: {history!r}"
-                )
+        for history in queue:
+            if history.mid in self.seen_mids:
                 continue
-            if history is None or history.mid in self.processing_message_ids:
-                consumed.add(id(future))
+            self.seen_mids.add(history.mid)
+            # sender 为 None 是她自己发出的消息（回复 / 主动开口），不是新输入
+            if history.sender is None:
                 continue
-            self.processing_message_ids.add(history.mid)
             if str(history.sender) == str(bot.self_id):
-                consumed.add(id(future))
+                continue
+            if history.message is None:
                 continue
             try:
                 messages.append(await history.get_message(bot))
             except BaseException as e:
-                self.processing_message_ids.discard(history.mid)
                 history_logger.warning(
-                    f"get_processing_messages_prompt: get_message failed: {e!r}"
+                    f"get_timely_messages_prompt: get_message failed: {e!r}"
                 )
-                continue
-            consumed.add(id(future))
-        self.messages_during_processing = [
-            f for f in pending_messages if id(f) not in consumed
-        ]
+
+        # 队列淘汰掉的 mid 不必继续占着集合；剩下的都是当前队列里的。
+        queue_mids = {h.mid for h in queue}
+        self.seen_mids &= queue_mids
+
         if not messages:
             return ""
         content = "\n".join(messages)
@@ -77,29 +83,15 @@ class ChatMessage:
 
 class TempHisManager:
     temp_lock: ClassVar[dict[str, Lock]] = {}
-    processing_messages: ClassVar[dict[str, ChatMessage]] = {}
 
     @classmethod
     async def add_message(cls, message, args: ChatArgs) -> ChatMessage:
         if args.chat_id not in cls.temp_lock:
             cls.temp_lock[args.chat_id] = Lock()
         async with cls.temp_lock[args.chat_id]:
-            active_message = cls.processing_messages.get(args.chat_id)
-            pending_history = (
-                get_running_loop().create_future() if active_message else None
+            history = await History.create(
+                args.bot.self_id, args.user_id, args.chat_id, message
             )
-            if active_message and pending_history:
-                active_message.messages_during_processing.append(pending_history)
-            try:
-                history = await History.create(
-                    args.bot.self_id, args.user_id, args.chat_id, message
-                )
-            except BaseException:
-                if pending_history and not pending_history.done():
-                    pending_history.set_result(None)
-                raise
-            if pending_history:
-                pending_history.set_result(history)
             if history is None:
                 return ChatMessage(None, [], "", [], args)
             chat_history = ChatHistoryManager.get_history(args.chat_id)
@@ -119,17 +111,3 @@ class TempHisManager:
                 chat_history.fallback_history,
                 args,
             )
-
-    @classmethod
-    def start_processing(cls, chat_message: ChatMessage) -> None:
-        if chat_message.message is not None:
-            cls.processing_messages[chat_message.message.chat_id] = chat_message
-
-    @classmethod
-    def stop_processing(cls, chat_message: ChatMessage) -> None:
-        if (
-            chat_message.message is not None
-            and cls.processing_messages.get(chat_message.message.chat_id)
-            is chat_message
-        ):
-            del cls.processing_messages[chat_message.message.chat_id]

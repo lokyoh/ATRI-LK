@@ -110,7 +110,7 @@ class JudgmentModel:
 
     @classmethod
     async def analyze(cls, bot, this_msg, history_list, chat_message) -> bool:
-        if not llm_manager.has_type(ModelType.TOOL):
+        if not llm_manager.has_type(ModelType.ATRI_JUDGE):
             return False
         chat_content = await this_msg.get_message(bot)
         messages = await get_history_messages(
@@ -128,7 +128,7 @@ class JudgmentModel:
         reason: str | None = None
         try:
             response = await llm_manager.call_model_by_type(
-                ModelType.TOOL,
+                ModelType.ATRI_JUDGE,
                 cls.prompt.format(
                     role=f"{ATRI.role_name}:{ATRI.personality}",
                     state=state_text,

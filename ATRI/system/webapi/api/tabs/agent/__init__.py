@@ -4,10 +4,11 @@ from fastapi import APIRouter
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel
 
-from ATRI.configs import Field
+from ATRI.configs import ConfigValidationError, Field
 from ATRI.exceptions import str_traceback
 from ATRI.log import log
 from ATRI.system.agent.agent.function_calling import FunctionCallingManager
+from ATRI.system.agent.agent.model_health import health_snapshot
 from ATRI.system.agent.config import apply_runtime_config, config
 from ATRI.system.agent.llm import (
     LLMModel,
@@ -26,6 +27,7 @@ from ....base_model import Result
 from ....utils import authentication
 from .function_calling import router as function_calling_router
 from .function_plugin import router as function_plugin_router
+from .schedule import router as schedule_router
 from .skills import router as skills_router
 from .tasks import router as tasks_router
 
@@ -34,6 +36,7 @@ router.include_router(function_plugin_router)
 router.include_router(function_calling_router)
 router.include_router(skills_router)
 router.include_router(tasks_router)
+router.include_router(schedule_router)
 
 
 class ModelPricingInfo(BaseModel):
@@ -72,6 +75,31 @@ def _flatten_config_updates(
             raise ValueError(f"配置字段不可编辑: {prefix}{key}")
 
         field_path = f"{prefix}{key}"
+        if field.infer_ui_type() == "category-collection":
+            if value is None:
+                # 分类集合不允许整体清空，交给 config.update() 统一报错。
+                updates[field_path] = None
+                continue
+            if not isinstance(value, dict):
+                raise ValueError(f"配置字段必须是对象: {field_path}")
+            item_field = field.item_field
+            item_children = item_field.children if isinstance(item_field, Field) else {}
+            for category_key, category_value in value.items():
+                category_path = f"{field_path}.{category_key}"
+                if category_value is None:
+                    updates[category_path] = None
+                    continue
+                if not isinstance(category_value, dict):
+                    raise ValueError(f"配置字段必须是对象: {category_path}")
+                updates.update(
+                    _flatten_config_updates(
+                        category_value,
+                        item_children,
+                        f"{category_path}.",
+                    )
+                )
+            continue
+
         if field.children:
             if not isinstance(value, dict):
                 raise ValueError(f"配置字段必须是对象: {field_path}")
@@ -134,6 +162,21 @@ async def _() -> Result[dict]:
         return Result.fail(f"发生了一点错误捏 {type(e)}: {e}")
 
 
+@router.get(
+    "/get_model_health",
+    dependencies=[authentication()],
+    response_model=Result[dict],
+    response_class=JSONResponse,
+    description="获取 Agent 模型类型健康状态",
+)
+async def _() -> Result[dict]:
+    try:
+        return Result.ok(health_snapshot(), "拿到信息啦!")
+    except Exception as e:
+        log.error(f"{router.prefix}/get_model_health 调用错误:{str_traceback(e)}")
+        return Result.fail(f"发生了一点错误捏 {type(e)}: {e}")
+
+
 @router.post(
     "/set_settings",
     dependencies=[authentication()],
@@ -149,6 +192,7 @@ async def _(settings: dict[str, object]) -> Result:
         )
         config.update(updates)
         apply_runtime_config()
+        filled = list(getattr(config, "last_filled_keys", []) or [])
         if "function_calling_disable" in updates:
             kept = FunctionCallingManager.purge_essential_disables()
             dropped = [
@@ -158,9 +202,16 @@ async def _(settings: dict[str, object]) -> Result:
             ]
             if dropped:
                 return Result.warning_(f"{'、'.join(dropped)} 是核心功能，已自动忽略")
+        if filled:
+            return Result.ok(
+                data={"filled_keys": filled},
+                info=f"设置成功，已自动补齐 {len(filled)} 个固定分类",
+            )
         return Result.ok(info="设置成功!")
+    except ConfigValidationError as e:
+        return Result.fail("；".join(e.errors), code=400)
     except ValueError as e:
-        return Result.fail(str(e))
+        return Result.fail(str(e), code=400)
     except Exception as e:
         log.error(f"{router.prefix}/set_settings 调用错误:{str_traceback(e)}")
         return Result.fail(f"发生了一点错误捏 {type(e)}: {e}")

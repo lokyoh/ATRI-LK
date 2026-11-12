@@ -25,7 +25,7 @@ class FaceManager:
     def get_face(cls, meme: str) -> Optional:
         """
         根据 meme 类型获取随机表情图片消息
-        
+
         :param meme: 表情类型（如 "amused", "distress" 等）
         :return: MessageSegment 对象，如果表情不存在则返回 None
         """
@@ -40,7 +40,7 @@ class FaceManager:
             return None
         # 获取文件夹中的所有图片文件
         image_files = []
-        for ext in ['*.png', '*.jpg', '*.jpeg', '*.gif']:
+        for ext in ["*.png", "*.jpg", "*.jpeg", "*.gif"]:
             image_files.extend(face_folder.glob(ext))
         # 如果没有图片，返回 None
         if not image_files:
@@ -54,7 +54,7 @@ class FaceManager:
     def get_meme_description(cls, meme: str) -> Optional[str]:
         """
         获取 meme 类型的描述信息
-        
+
         :param meme: 表情类型
         :return: 描述信息，如果不存在则返回 None
         """
@@ -65,7 +65,7 @@ class FaceManager:
     def get_all_memes(cls) -> list[str]:
         """
         获取所有可用的 meme 类型列表
-        
+
         :return: meme 类型列表
         """
         manager = cls()
@@ -75,7 +75,7 @@ class FaceManager:
     def has_meme(cls, meme: str) -> bool:
         """
         检查指定的 meme 类型是否存在
-        
+
         :param meme: 表情类型
         :return: 如果存在返回 True，否则返回 False
         """

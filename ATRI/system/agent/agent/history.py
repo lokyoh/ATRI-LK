@@ -35,8 +35,8 @@ class ImageHistory:
         from ..llm import ModelType, llm_manager
         from ..llm.contents import LLMContents
 
-        if not llm_manager.has_type(ModelType.IMAGE):
-            log.warning("没有配置image类型的模型")
+        if not llm_manager.has_type(ModelType.ATRI_VISION):
+            log.warning("没有配置 atri-vision 模型")
             return "[图片]"
 
         text = None
@@ -106,7 +106,7 @@ class ImageHistory:
                 contents.image(image_base64)
                 try:
                     result = await llm_manager.call_model_by_type(
-                        ModelType.IMAGE, contents, "Agent-图片识别"
+                        ModelType.ATRI_VISION, contents, "Agent-图片识别"
                     )
                     text = result.content
                     if file_name and image_size and text:
@@ -270,7 +270,9 @@ class LLMMessage:
                     json_data = (
                         json.loads(raw_json) if isinstance(raw_json, str) else raw_json
                     )
-                    meta = json_data.get("meta", {}) if isinstance(json_data, dict) else {}
+                    meta = (
+                        json_data.get("meta", {}) if isinstance(json_data, dict) else {}
+                    )
                     detail = next(
                         (
                             meta[key]
@@ -288,9 +290,7 @@ class LLMMessage:
                     )
                     if title == "哔哩哔哩":
                         title = detail.get("desc") or detail.get("qqdocurl") or "视频"
-                        instance.message.append(
-                            MessageSegment(f"[B站分享:{title}]")
-                        )
+                        instance.message.append(MessageSegment(f"[B站分享:{title}]"))
                     elif title:
                         suffix = f" {url}" if url else ""
                         instance.message.append(
@@ -344,7 +344,7 @@ class LLMMessage:
                     from ..llm import ModelType, llm_manager
 
                     forward_history = "\n".join(msg_his)
-                    if llm_manager.has_type(ModelType.TOOL):
+                    if llm_manager.has_type(ModelType.ATRI_SUMMARY):
                         try:
                             summary_prompt = (
                                 "请总结以下转发消息，保留主要人物、事件和结论，"
@@ -352,7 +352,7 @@ class LLMMessage:
                                 f"{forward_history}"
                             )
                             summary = await llm_manager.call_model_by_type(
-                                ModelType.TOOL, summary_prompt, "Agent-转发总结"
+                                ModelType.ATRI_SUMMARY, summary_prompt, "Agent-转发总结"
                             )
                             instance.message.append(
                                 MessageSegment(f"[转发消息摘要:{summary.content}]")
@@ -367,7 +367,9 @@ class LLMMessage:
                 url = data.get("url", "")
                 suffix = f" {url}" if url else ""
                 instance.message.append(
-                    MessageSegment(f"[链接分享:{title}{suffix}]" if title else "[链接分享]")
+                    MessageSegment(
+                        f"[链接分享:{title}{suffix}]" if title else "[链接分享]"
+                    )
                 )
             elif segment.type == "music":
                 title = data.get("title", "")
@@ -471,9 +473,7 @@ class LLMMessage:
             else:
                 log.info(f"未支持的消息类型：{segment.type}")
                 log.debug(f"消息内容：{segment.data}")
-                instance.message.append(
-                    MessageSegment(f"[消息类型:{segment.type}]")
-                )
+                instance.message.append(MessageSegment(f"[消息类型:{segment.type}]"))
         return instance
 
     async def get_message(self, bot) -> str:

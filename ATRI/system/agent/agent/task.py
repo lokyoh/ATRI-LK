@@ -247,7 +247,7 @@ async def _send(task: dict) -> None:
     而不是「到点念一句录音」。让她重新思考一次，能结合当下的心情、日程、
     刚发生的事来说——「该提醒主人喝水了」和「主人你三小时没喝水了诶」是两种东西。
 
-    真正发送由 `BotChatSender` 完成：思考链路里的 `send_message` 会经它落到群里，
+    真正发送由 `BotChatSender` 完成：思考链路里的 `say` 会经它落到群里，
     并自动写入聊天历史（与正常对话同一条路径）。
     """
     chat_id = str(task.get("chat_id") or "")
@@ -302,6 +302,8 @@ async def _send(task: dict) -> None:
             cue,
             task.get("name") or "",
             user_id=str(task.get("user_id") or ""),
+            level=str(task.get("level") or ""),
+            group_id=str(task.get("group_id") or ""),
         )
     except Exception as exc:
         log.warning(f"定时任务「{task.get('name')}」唤起 Agent 失败：{exc}")
@@ -323,13 +325,21 @@ async def _send(task: dict) -> None:
 
 
 async def _run_agent(
-    chat_id: str, bot, cue: str, name: str = "", user_id: str = ""
+    chat_id: str,
+    bot,
+    cue: str,
+    name: str = "",
+    user_id: str = "",
+    level: str = "",
+    group_id: str = "",
 ) -> None:
     """用一次完整的思考来回应定时任务的提醒。
 
     :param user_id: 委托这条提醒的人。传进去之后，提示词里会带上
         「和这个人的关系 / 关于他的记忆 / 用户画像」——
         定时任务本来就是对某个人说的，不该当成「没有目标用户」。
+    :param level: 委托人创建任务时的权限等级。
+    :param group_id: 委托人所在的群。
     """
     if not has_dialog_model():
         log.debug("没有可用的对话模型，定时任务跳过唤起 Agent")
@@ -340,7 +350,14 @@ async def _run_agent(
     trigger = f"（定时提醒）{cue}"
     sender = BotChatSender(bot, chat_id, cleaner=clean_opening_text)
     await run_agent_once(
-        chat_id, bot, trigger, sender, mode="scheduled", user_id=user_id
+        chat_id,
+        bot,
+        trigger,
+        sender,
+        mode="scheduled",
+        user_id=user_id,
+        level=level,
+        group_id=group_id,
     )
     if sender.sent_count:
         from .history import log_bot_message
@@ -361,6 +378,8 @@ async def create_once(
     name: str = "",
     bot_id: str = "",
     user_id: str = "",
+    level: str = "",
+    group_id: str = "",
 ) -> str:
     """创建一个「N 秒后说这句话」的任务。返回任务 id。
 
@@ -369,6 +388,8 @@ async def create_once(
     :param user_id: 委托这条提醒的人。到点时把它当作对话人，
         这样她能带着「和这个人的关系、关于他的记忆」来说话，
         而不是在一个没有对象的空上下文里硬找话。
+    :param level: 委托人当时的权限等级，到点按同一等级求值。
+    :param group_id: 委托人所在的群，用于定时任务里的管理判定。
     :raises ValueError: 参数不合法或超出数量上限。
     """
     bot_id = str(bot_id or "").strip()
@@ -393,6 +414,8 @@ async def create_once(
             "created_at": _now(),
             "bot_id": bot_id,
             "user_id": str(user_id or ""),
+            "level": str(level or ""),
+            "group_id": str(group_id or ""),
         }
     )
     if not await _register(task):
@@ -409,12 +432,16 @@ async def create_recurring(
     name: str = "",
     bot_id: str = "",
     user_id: str = "",
+    level: str = "",
+    group_id: str = "",
 ) -> str:
     """创建一个周期性任务（每天/每隔多久说固定的话）。
 
     :param kind: ``cron`` 或 ``interval``
     :param spec: 触发器参数，如 ``{"hour": 8, "minute": 0}``
     :param bot_id: 任务的**去向**，必填（同 `create_once`）。
+    :param level: 委托人当时的权限等级。
+    :param group_id: 委托人所在的群。
     """
     bot_id = str(bot_id or "").strip()
     if not bot_id:
@@ -440,6 +467,8 @@ async def create_recurring(
             "created_at": _now(),
             "bot_id": bot_id,
             "user_id": str(user_id or ""),
+            "level": str(level or ""),
+            "group_id": str(group_id or ""),
         }
     )
     if not await _register(task):

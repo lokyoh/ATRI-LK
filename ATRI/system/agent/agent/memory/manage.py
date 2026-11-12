@@ -53,7 +53,7 @@ _EMOTION_RE = re.compile(r"\[情绪\s*:\s*(-?\d+(?:\.\d+)?)\]")
 
 
 def _has_embedding_model() -> bool:
-    return llm_manager.has_type(ModelType.EMBEDDING)
+    return llm_manager.has_type(ModelType.ATRI_EMBEDDING)
 
 
 class MemoryManager:
@@ -75,7 +75,7 @@ class MemoryManager:
         try:
             vectors = (
                 await llm_manager.call_model_by_type(
-                    ModelType.EMBEDDING, query, "查询记忆"
+                    ModelType.ATRI_EMBEDDING, query, "查询记忆"
                 )
             ).content
             vector = vectors[0]
@@ -141,7 +141,7 @@ class MemoryManager:
             try:
                 vectors = (
                     await llm_manager.call_model_by_type(
-                        ModelType.EMBEDDING, memory, "添加记忆"
+                        ModelType.ATRI_EMBEDDING, memory, "添加记忆"
                     )
                 ).content
                 vector = vectors[0]
@@ -171,8 +171,8 @@ class MemoryManager:
         if not _has_embedding_model():
             log.info("没有配置 embedding 模型，跳过记忆总结")
             return 0
-        if not llm_manager.has_type(ModelType.TOOL):
-            log.info("没有配置tool类型的模型，跳过记忆总结")
+        if not llm_manager.has_type(ModelType.ATRI_MEMORY):
+            log.info("没有配置 atri-memory 模型，跳过记忆总结")
             return 0
         history_text = "\n".join(
             f"[人物ID:{node.sender if node.sender is not None else 'bot'}] "
@@ -181,7 +181,7 @@ class MemoryManager:
         )
         prompt = MEMORY_PROMPT.format(chat_id=chat_id, history=history_text)
         response = await llm_manager.call_model_by_type(
-            ModelType.TOOL, prompt, "Agent-记忆总结"
+            ModelType.ATRI_MEMORY, prompt, "Agent-记忆总结"
         )
         count = 0
         seen = set()
@@ -260,8 +260,8 @@ async def summarize_memories():
         memory_manager.database.decay_all()
     except (OSError, RuntimeError, ValueError) as exc:
         log.warning(f"记忆遗忘失败：{exc}")
-    if not llm_manager.has_type(ModelType.TOOL):
-        log.info("没有配置tool类型的模型，跳过记忆总结")
+    if not llm_manager.has_type(ModelType.ATRI_MEMORY):
+        log.info("没有配置 atri-memory 模型，跳过记忆总结")
         return
     paths = history_logger.path
     log.info("开始总结记忆")

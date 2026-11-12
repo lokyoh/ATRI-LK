@@ -147,6 +147,57 @@ async def cmd_clear_tasks(bot: Bot, event: Event):
     await agent_clear_tasks.finish(f"已清空我在本会话的 {cleared} 个定时任务")
 
 
+agent_status = plugin.on_command(
+    "agent.状态",
+    "查看 Agent 模型健康与三级权限摘要",
+    aliases={"agent.健康"},
+    permission=MASTER,
+)
+
+
+@agent_status.handle()
+async def cmd_status():
+    from .agent.function_permission import LEVEL_CAPABILITY, PermissionLevel
+    from .agent.model_health import health_snapshot
+    from .config import config
+
+    snapshot = health_snapshot()
+    lines = ["【模型】"]
+    for group in snapshot["groups"]:
+        items = group["items"]
+        ok = sum(1 for item in items if item["ok"])
+        lines.append(f"{group['label']}：{ok}/{len(items)} 可用")
+        for item in items:
+            if item["ok"]:
+                continue
+            suffix = f"（{item['reason']}）" if item["reason"] else ""
+            lines.append(f"  - {item['label']}（{item['type']}）不可用{suffix}")
+    if snapshot["ok"]:
+        lines.append("必需模型齐全。")
+    else:
+        lines.append("缺少必需模型：" + "、".join(snapshot["missingRequired"]))
+
+    permission = config.get("permission")
+    permission = permission if isinstance(permission, dict) else {}
+    lines.append("【权限】")
+    for level in (
+        PermissionLevel.MASTER,
+        PermissionLevel.ADMIN,
+        PermissionLevel.USER,
+    ):
+        item = permission.get(level.value)
+        item = item if isinstance(item, dict) else {}
+        allow = item.get("allow") or []
+        deny = item.get("deny") or []
+        lines.append(
+            f"{item.get('label') or level.value}："
+            f"允许覆盖 {len(allow)} 项 / 禁止覆盖 {len(deny)} 项，"
+            f"能力上限 {LEVEL_CAPABILITY[level].value}"
+        )
+    lines.append("默认权限由各功能自己声明的作用域决定，上表只统计例外。")
+    await agent_status.finish("\n".join(lines))
+
+
 async def init():
     from ATRI.log import log
 

@@ -207,7 +207,16 @@ async def call_agent(event: GroupMessageEvent, matcher: Matcher, bot: Bot):
         if event.reply:
             msg_seg = MessageSegment("atri_reply", event.reply)
             message.append(msg_seg)
-        args = ChatArgs(bot, group_id, sender_id, skip_chat, skip_judgment)
+        role = str(getattr(getattr(event, "sender", None), "role", "") or "")
+        args = ChatArgs(
+            bot,
+            group_id,
+            sender_id,
+            skip_chat,
+            skip_judgment,
+            group_id=group_id,
+            role=role,
+        )
         await ATRIAgent.chat(sender, message, args)
     except FinishedException:
         raise
@@ -233,7 +242,17 @@ async def qq_call_agent(event: GroupMessageCreateEvent, matcher: Matcher, bot: Q
         skip_judgment = True
     try:
         sender = QQChatSender(matcher)
-        args = ChatArgs(bot, group_id, sender_id, skip_chat, skip_judgment)
+        author = getattr(event, "author", None)
+        role = str(getattr(author, "member_role", "") or "")
+        args = ChatArgs(
+            bot,
+            group_id,
+            sender_id,
+            skip_chat,
+            skip_judgment,
+            group_id=group_id,
+            role=role,
+        )
         await ATRIAgent.chat(sender, message, args)
     except FinishedException:
         raise

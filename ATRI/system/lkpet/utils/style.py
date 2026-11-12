@@ -42,6 +42,23 @@ BAR_EMPTY = "▱"
 BAR_WIDTH = 10
 
 
+#: 标签列宽（按汉字计）。所有数值条共用这一列，条才会左右对齐。
+LABEL_CELLS = 3
+
+_FULLWIDE = "\u3000"
+"""全角空格：与汉字等宽，用来把不足 3 字的标签补齐。"""
+
+
+def pad_label(label: str) -> str:
+    """把标签补到 :data:`LABEL_CELLS` 个字宽。
+
+    「饱食」是 2 个字、「行动点」是 3 个字，直接拼条会让最后一条比上面几条
+    缩进 1 个字宽（真机截图量出来是 14px）。补齐后所有条的起点落在同一列。
+    """
+    text = label or ""
+    return text + _FULLWIDE * max(0, LABEL_CELLS - len(text))
+
+
 def bar(value: int | float, maximum: int | float, width: int = BAR_WIDTH) -> str:
     """画一条 ``▰▰▰▰▱▱`` 进度条。
 
@@ -73,8 +90,14 @@ def meter(
     suffix: str = "",
     width: int = BAR_WIDTH,
 ) -> str:
-    """``饱食 ▰▰▰▰▰▰▱▱▱▱ 62/100`` —— 标签 + 条 + 精确值（可选后缀）。"""
-    return f"{label} {bar(value, maximum, width)} {int(value)}/{int(maximum)}{suffix}"
+    """``饱食 ▰▰▰▰▰▰▱▱▱▱ 62/100`` —— 标签 + 条 + 精确值（可选后缀）。
+
+    标签一律经 :func:`pad_label` 补齐，所以同一张卡里的条起点必然对齐。
+    """
+    return (
+        f"{pad_label(label)} {bar(value, maximum, width)} "
+        f"{int(value)}/{int(maximum)}{suffix}"
+    )
 
 
 @dataclass(frozen=True)

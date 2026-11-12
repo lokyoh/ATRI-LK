@@ -51,13 +51,20 @@ def _load_config(name: str) -> dict[str, Any]:
 
 
 def format_days(days: int) -> str:
-    """Render a day count as 天 / 个月 / 年."""
+    """Render a day count as 天 / 个月 / 年，零余项省略。
+
+    ``130`` 天不该写成「4个月0天」——零余项会让玩家以为还有隐藏精度。
+    只剩一个单位时直接给那个单位。
+    """
     days = max(0, int(days))
     if days < 30:
         return f"{days}天"
     if days < 365:
-        return f"{days // 30}个月{days % 30}天"
-    return f"{days // 365}年{(days % 365) // 30}个月"
+        months, rest = divmod(days, 30)
+        return f"{months}个月{rest}天" if rest else f"{months}个月"
+    years, rest = divmod(days, 365)
+    months = rest // 30
+    return f"{years}年{months}个月" if months else f"{years}年"
 
 
 def _max_action_points() -> int:
@@ -128,17 +135,13 @@ def format_pet_status(pet, pet_config: dict[str, Any] | None = None) -> str:
             style.meter(
                 text("status.cleanliness_label", "清洁"), pet.cleanliness, STATUS_MAX
             ),
+            style.meter(
+                text("status.affection_label", "亲密"),
+                pet.affection,
+                AFFECTION_MAX,
+                suffix=f"（{affection_level}）",
+            ),
         ]
-    )
-    lines.append(
-        text(
-            "status.meter_affection",
-            "亲密 {bar} {affection}/{affection_max}（{affection_level}）",
-            bar=style.bar(pet.affection, AFFECTION_MAX),
-            affection=pet.affection,
-            affection_max=AFFECTION_MAX,
-            affection_level=affection_level,
-        )
     )
 
     lines.append(s.label(text("status.section_attr", "属性")))
@@ -161,16 +164,15 @@ def format_pet_status(pet, pet_config: dict[str, Any] | None = None) -> str:
     lines.append(
         text(
             "status.state_line",
-            "健康 {health} ｜ 情绪 {emotion} ｜ {rarity} ｜ {personality}",
+            "体况 {health} ｜ 情绪 {emotion} ｜ 稀有 {rarity} ｜ 性格 {personality}",
             **fields,
         )
     )
     lines.append(
-        text(
-            "status.ap_line",
-            "行动点 {bar} {action_points}/{action_points_max}",
-            bar=style.bar(pet.action_points, _max_action_points()),
-            **fields,
+        style.meter(
+            text("status.ap_label", "行动点"),
+            pet.action_points,
+            _max_action_points(),
         )
     )
 

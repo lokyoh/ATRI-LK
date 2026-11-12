@@ -1,14 +1,19 @@
+import asyncio
 import time
 from typing import Any
 
 from ATRI.exceptions import str_traceback
 from ATRI.utils.datetime import now
 
+from ..agent.action_executor import ActionExecutor
 from ..agent.explanations import get_top_explanations
 from ..agent.function_calling import FunctionCallingData, FunctionCallingManager
+from ..agent.function_permission import PermissionContext
 from ..agent.history import History, get_history_messages
+from ..agent.life import get_life_system
 from ..agent.memory.persona import render_memories, render_self_memories
 from ..agent.model import ChatArgs
+from ..agent.outbox import ChatOutbox
 from ..agent.role import ATRI
 from ..agent.schedule import ATRISchedule
 from ..agent.skills import skill_manager
@@ -37,7 +42,7 @@ from ..llm import (
     llm_manager,
 )
 from ..utils import log
-from .action_parser import normalize_args, parse_calls, split_response
+from .action_parser import parse_calls, split_response
 
 
 def _sync_attention(current_activity: str) -> None:
@@ -123,15 +128,11 @@ def get_state_prompt() -> str:
     return f"#你此刻的状态\n{text}\n"
 
 
-class StopThinkingError(Exception):
-    pass
-
-
 #: 模型的正文被当成「想说但忘了发」时，回填给它的话。
 FORGOT_TO_SEND_HINT = (
-    "你刚才写的正文不会发送给任何人，只有调用 send_message 才会真的说出来。"
-    '如果那是想说的话，请调用 send_message(msg="...") 重新发一次；'
-    "如果只是思考，请调用 stop_thinking() 结束。"
+    "你刚才写的正文不会发送给任何人，只有调用 say 才会真的说出来。"
+    '如果那是想说的话，请调用 say(intent="...") 重新发一次；'
+    "如果只是思考，这一轮不要再输出任何功能调用即可结束。"
 )
 
 #: 连续几次「只写正文不调用」就放弃。已提醒过仍不改，再循环只是白烧 token。
@@ -156,9 +157,15 @@ def should_remind_forgot_send(
     functions_data: list,
     issues: list,
     reminded: int,
+    already_sent: bool = False,
 ) -> bool:
-    """这一轮要不要提醒模型「你忘了调用 send_message」。"""
-    if functions_data or issues:
+    """这一轮要不要提醒模型「你忘了调用 say」。
+
+    ``already_sent``：本轮已经真的发出过消息时不再提醒——没有功能调用的
+    收尾轮是正常结束，不该被当成「忘了发」。没有它的话，每次发言后的
+    收尾轮都会被追问两遍，白烧 token 还可能让她重复说话。
+    """
+    if functions_data or issues or already_sent:
         return False
     if reminded >= MAX_FORGOT_SEND:
         return False
@@ -186,10 +193,16 @@ class ThinkingModel:
             "# 现在轮到你行动，你与外界交互只能通过功能调用实现\n"
             "输出格式：\n"
             "我该怎么做的思考内容。\n"
-            'send_message(msg="想要说的话")\n'
+            'say(intent="想表达的意思", tone="语气")\n'
+            'md(intent="这张卡片要说明什么", image="")\n'
+            'face(intent="想表达的情绪")\n'
             "...\n"
-            "# 如果不需要调用结果或不想说就在最后调用 stop_thinking 结束本次思考，如果需要继续思考则不要调用。\n"
-            "stop_thinking()"
+            "# 功能调用返回了数据，你会看到结果并继续思考；"
+            "没有返回数据的调用（例如发送消息）只会显示「调用完成」，"
+            "本次思考随即结束。\n"
+            "想继续说或继续做事，就调用会返回数据的功能；"
+            "不需要继续时，调用完不需要结果的功能、或不再输出任何功能调用即可。\n"
+            "注意：正文不会发出去，想说话必须调用 say。"
         )
 
     @classmethod
@@ -202,6 +215,7 @@ class ThinkingModel:
         lst_history: History,
         sender=None,
         mode: str = "chat",
+        permission: PermissionContext | None = None,
     ):
         """拼装思考提示词。
 
@@ -213,15 +227,34 @@ class ThinkingModel:
         """
         lst_msg = await lst_history.message.get_message(bot) if lst_history else ""
         prompt = cls.get_function_prompt(
-            FunctionCallingManager.get_available(sender, user_id)
+            FunctionCallingManager.get_available(sender, user_id, permission),
+            FunctionCallingManager.hidden_available(sender, user_id, permission),
         )
-        # 内嵌技能正文
-        embedded = skill_manager.get_embedded_prompt()
-        if embedded:
-            prompt += f"#你的技能\n{embedded}\n\n"
-        now_schedule = await ATRISchedule().get_schedule()
-        prompt += f"#今日穿搭\n{now_schedule.outfit}\n"
-        _sync_attention(now_schedule.now_schedule)
+        # 技能目录 + 内嵌技能正文
+        prompt += skill_manager.get_prompt_block(
+            int(config.get("skill_prompt_budget") or 10000)
+        )
+        # 生活系统：位置 / 日程 / 穿搭 / 家
+        try:
+            life = get_life_system()
+            parts = life.prompt_parts()
+            prompt += f"#你现在在哪里\n{parts['location']}\n\n"
+            if parts["schedule"]:
+                prompt += f"#今天的安排\n{parts['schedule']}\n\n"
+            else:
+                prompt += (
+                    "#今天的安排\n今天还没有安排。"
+                    '想安排的话，调用 plan(action="fill", hint="...")。\n\n'
+                )
+            prompt += f"#今日穿搭\n{parts['outfit']}\n\n"
+            if parts["home"]:
+                prompt += f"#你的家\n{parts['home']}\n\n"
+            _sync_attention(life.location().activity)
+        except Exception as exc:
+            log.warning(f"生活提示词生成失败，已跳过：{exc}")
+            now_schedule = await ATRISchedule().get_schedule()
+            prompt += f"#今日穿搭\n{now_schedule.outfit}\n"
+            _sync_attention(now_schedule.now_schedule)
         state_text = get_state_prompt()
         if state_text:
             prompt += state_text
@@ -230,7 +263,7 @@ class ThinkingModel:
                 "#你现在的任务\n"
                 "现在到时间了，这件是你之前给自己定下的提醒：\n"
                 f"{lst_msg}\n"
-                "要不要为此说点什么、说什么，由你决定；不合适就 stop_thinking。\n"
+                "要不要为此说点什么、说什么，由你决定；不合适就什么都不调用，结束本次思考。\n"
             )
             people = await _describe_addressee(bot, chat_id, user_id, user_info)
             if people:
@@ -240,7 +273,15 @@ class ThinkingModel:
                 "#你现在的情况\n"
                 "这个群现在没有人在跟你说话。\n"
                 f"{lst_msg}\n"
-                "你可以选择主动说点什么，也可以什么都不说（直接调用 stop_thinking）。\n"
+                "你可以选择主动说点什么，也可以什么都不说（本轮不调用任何功能即可结束）。\n"
+            )
+        elif mode == "life":
+            prompt += (
+                "#新的一天\n"
+                f"{lst_msg}\n"
+                "现在是早上，你可以先看看今天想怎么过：要出门就安排前往与回到，"
+                "想待在家就写清活动。决定好后调用 "
+                'plan(action="fill", hint="今天的打算")，再决定要不要说早安。\n'
             )
         else:
             # 对话人信息
@@ -266,13 +307,21 @@ class ThinkingModel:
             prompt += (
                 f"现在是{now_text}。\n"
                 "这不需要有人叫你——时间到了，你自己定的提醒该兑现了。\n"
-                "想说什么就调用 send_message；觉得现在说这个不合适，调用 stop_thinking。\n\n"
+                "想说什么就调用 say；觉得现在说这个不合适，就不要再调用任何功能。\n\n"
             )
         elif mode == "initiative":
             prompt += (
                 f"现在时间是{now_text}，没有人 @ 你，也没有可以回应的消息。\n"
-                "如果你想说话，就直接调用 send_message 把话说出来；"
-                "如果此刻没什么想说的，调用 stop_thinking。\n\n"
+                "如果你想说话，就直接调用 say 把话说出来；"
+                "如果此刻没什么想说的，本轮不要调用任何功能。\n\n"
+            )
+        elif mode == "life":
+            # 早间计划同样是「无人触发」：不能走 chat 分支，那条分支会拼出
+            # 「XX[None]的消息引起了你的注意」，而这里根本没有对话人。
+            prompt += (
+                f"现在是{now_text}，没有人叫你，也没有需要回应的消息。\n"
+                "这是新的一天开始，先安排今天怎么过；安排完再决定要不要说早安，"
+                "不想说就不调用任何功能。\n\n"
             )
         else:
             prompt += f"现在{await get_name(bot, lst_history.sender, chat_id)}[id:{user_id}]在{lst_history.time}的消息引起了你的注意\n"
@@ -280,17 +329,29 @@ class ThinkingModel:
         return prompt
 
     @staticmethod
-    def get_function_prompt(available: dict[str, type] | None = None):
+    def get_function_prompt(
+        available: dict[str, type] | None = None,
+        hidden: dict[str, type] | None = None,
+    ):
         if available is None:
             available = FunctionCallingManager.get_available()
-        return f"""你可以调用以下功能，禁止调用未列出的功能:
-{
-            "\n".join(
-                f'''{f.function_name}:
-    说明: {f.description}{f"\n    参数:\n{'\n'.join(f'        -{arg.name} {arg.type}: {arg.description}' for arg in f.args)}" if f.args else ""}'''
-                for f in available.values()
+        if hidden is None:
+            hidden = FunctionCallingManager.hidden_available()
+        body = "\n".join(
+            f"""{f.function_name}:
+    说明: {f.description}{f"\n    参数:\n{'\n'.join(f'        -{arg.name} {arg.type}: {arg.description}' for arg in f.args)}" if f.args else ""}"""
+            for f in available.values()
+        )
+        extras = ""
+        if hidden:
+            extras = (
+                "\n\n以下功能不进常规清单，但允许直接调用（按需使用）：\n"
+                + "\n".join(
+                    f"- {f.function_name}：{f.description}" for f in hidden.values()
+                )
             )
-        }
+        return f"""你可以调用以下功能，禁止调用未列出的功能:
+{body}{extras}
 
 功能调用格式：
 功能名(参数名=参数值, ...)
@@ -305,7 +366,8 @@ class ThinkingModel:
             head
             + """
 要求：
-- 要说话就调用 send_message；怎么说话写在它的参数说明里，这里不再重复
+- 要说话就调用 say；怎么说话写在它的参数说明里，这里不再重复
+- 需要逐字发送代码/命令/引用原文时用 say_exact；普通聊天不要用它
 - 调用之前可以写一两句"为什么这样调用"，但不要写情绪描写、不要写最终回复、不要写无关解释
 - 每行一个调用，直接写在正文里，不要用代码块包裹
 - 禁止使用 XML / DSML 等其它调用格式
@@ -340,6 +402,7 @@ class ThinkingModel:
             `args.user_id` 也是占位——这样既有完整上下文，
             又不会污染对话历史（见 `initiative_start`）。
         """
+        permission = PermissionContext.from_chat_args(args)
         user_info = get_user_info(args.user_id)
         prompt = self.get_system_prompt(ATRI.get_role_prompt()) + "\n\n"
         prompt += await self.get_prompt(
@@ -350,6 +413,7 @@ class ThinkingModel:
             current_history,
             sender,
             mode=mode,
+            permission=permission,
         )
         prompt += await self.get_history_prompt(
             args.bot,
@@ -364,37 +428,70 @@ class ThinkingModel:
         forgot_send = 0
         limit = config.get("max_thinking_times")
         failed = False
+        # Chat 渲染需要的不可变上下文快照：角色 / 状态 / 关系 / 最近对话
+        from .chat_model import build_context
+
+        render_ctx = build_context(
+            role_name=ATRI.role_name,
+            personality=ATRI.personality,
+            state=get_state_prompt().strip(),
+            relation=describe_relation(user_info),
+            history=await get_history_messages(
+                args.bot, history_list, fallback_history
+            ),
+            chat_id=str(args.chat_id),
+        )
+        outbox = ChatOutbox(
+            ctx=render_ctx,
+            inter_message_delay=float(config.get("reply_inter_message_delay") or 0.4),
+            parallel_render=bool(config.get("chat_parallel_render")),
+            max_parallel_render=int(config.get("max_parallel_render") or 2),
+        )
+        executor = ActionExecutor(
+            outbox=outbox,
+            max_side_effects=int(config.get("max_side_effects_per_turn") or 5),
+        )
+        action_ctx = FunctionCallingData(
+            args.user_id,
+            args.chat_id,
+            sender,
+            {},
+            current_history,
+            bot=args.bot,
+            permission=permission,
+        )
         try:
             while thinking_times <= limit:
-                processing_messages_prompt = (
-                    await chat_message.get_processing_messages_prompt(args.bot)
+                timely_messages_prompt = await chat_message.get_timely_messages_prompt(
+                    args.bot
                 )
-                if processing_messages_prompt:
+                if timely_messages_prompt:
                     self.messages.add_message(
                         LLMMessage(
                             "user",
-                            LLMContents().text(processing_messages_prompt),
+                            LLMContents().text(timely_messages_prompt),
                         )
                     )
-                if llm_manager.has_type(ModelType.ATRI):
-                    m_type = ModelType.ATRI
-                else:
-                    m_type = ModelType.CHAT
-                resp = await llm_manager.call_model_by_type(
-                    m_type, self.messages, "主Agent思考"
+                resp = await llm_manager.call_agent(
+                    ModelType.ATRI_THINK, self.messages, "主Agent思考"
                 )
                 _, functions_data, issues = await self.process_resp(resp.content)
                 if not functions_data and not issues:
-                    # 有正文、没调用：这句话发不出去。提醒模型补一次 send_message，
+                    # 有正文、没调用：这句话发不出去。提醒模型补一次 say，
                     # 否则聊天里就是「她突然不理人」，而且日志里看不出任何异常。
                     content = str(getattr(resp, "content", "") or "").strip()
                     if should_remind_forgot_send(
-                        content, functions_data, issues, forgot_send
+                        content,
+                        functions_data,
+                        issues,
+                        forgot_send,
+                        already_sent=bool(getattr(sender, "sent_count", 0))
+                        or outbox.submitted_count > 0,
                     ):
                         forgot_send += 1
                         log.warning(
                             f"第 {thinking_times + 1} 轮只有正文没有调用，"
-                            f"已提醒模型改用 send_message（{len(content)} 字）"
+                            f"已提醒模型改用 say（{len(content)} 字）"
                         )
                         telemetry.record(
                             "forgot_send",
@@ -412,29 +509,36 @@ class ThinkingModel:
                         thinking_times += 1
                         continue
                     break
-                back = await self.do_action(
-                    functions_data,
-                    args.user_id,
-                    args.chat_id,
-                    sender,
-                    current_history,
-                    issues,
-                    bot=args.bot,
-                )
+                result = await executor.run(functions_data, action_ctx, issues)
                 self.messages.add_message(
                     LLMMessage("assistant", LLMContents().text(resp.content))
                 )
                 thinking_times += 1
-                msg = "\n".join(back)
+                # 发送失败的旁路反馈：不挤进本轮决策，只让下一轮知道
+                for note in outbox.poll_feedback():
+                    self.messages.add_message(
+                        LLMMessage("user", LLMContents().text(note))
+                    )
+                if not result.keep_thinking:
+                    # 本轮只做了「调用完成」这类无返回数据的动作（如发送消息），
+                    # 没有新信息需要消化，直接结束，不再多烧一轮 token。
+                    break
+                msg = "\n".join(result.feedback)
                 if thinking_times == limit:
                     msg += "\n调用次数达到上限,本次调用结束后直接结束本次任务"
                 self.messages.add_message(LLMMessage("user", LLMContents().text(msg)))
-        except StopThinkingError:
-            pass
         except Exception:
             failed = True
             raise
         finally:
+            drain_cancelled: asyncio.CancelledError | None = None
+            # 回合结束前排空队列：消息真的发出、sent_count 与历史落定。
+            try:
+                await outbox.drain(timeout=30.0)
+            except asyncio.CancelledError as exc:
+                drain_cancelled = exc
+            except Exception as exc:
+                log.warning(f"排空聊天队列失败:{str_traceback(exc)}")
             try:
                 settled = settle_from_turn(
                     replied=bool(getattr(sender, "sent_count", 0)),
@@ -462,6 +566,8 @@ class ThinkingModel:
                 proactive=mode != "chat",
                 mode=mode,
             )
+            if drain_cancelled is not None:
+                raise drain_cancelled
 
     @staticmethod
     def parse_dsl(text: str) -> list[dict[str, Any]]:
@@ -482,80 +588,23 @@ class ThinkingModel:
         current_history: History,
         issues: list[str] | None = None,
         bot=None,
-    ) -> list:
-        calling_back = []
-        if issues:
-            # 解析层的问题先回填：模型据此重写，而不是整轮静默失败
-            detail = "；".join(issues)
-            calling_back.append(
-                f"本次输出有 {len(issues)} 处调用无法解析：{detail}。"
-                "请严格按「功能名(参数名=参数值, ...)」格式重写：字符串用双引号，"
-                "需要换行写 \\n，每个调用独占一行，不要用代码块包裹"
-            )
-        for func in functions_data:
-            func_name = func["function"]
-            func_cls = FunctionCallingManager.function_calling.get(func_name)
-            if func_cls is None:
-                log.debug(f"未知的调用功能:{func_name}，已跳过")
-                known = "、".join(FunctionCallingManager.function_calling)
-                calling_back.append(f"未知的调用功能:{func_name}，可用功能:{known}")
-                continue
-            # 非 stop_thinking 的不可用功能，区分"环境/配置不可用"与"模型幻觉"
-            if not FunctionCallingManager.is_available(func_name, sender, user_id):
-                check = FunctionCallingManager.get_can_enable(func_name)
-                reason = check.reason or "该功能已被关闭"
-                log.debug(f"不可用的调用功能:{func_name}（{reason}），已跳过")
-                calling_back.append(f"功能 {func_name} 当前不可用：{reason}")
-                continue
-            # 不常用功能只能由 call 调用：直接写名字给了更明确的重写提示
-            if FunctionCallingManager.is_rare(func_name):
-                log.debug(f"不常用功能被直接调用:{func_name}，已引导改用 call")
-                calling_back.append(
-                    f"功能 {func_name} 是不常用功能，不能直接调用。"
-                    f'请改用 call(function="{func_name}", args={{...}})'
-                )
-                continue
-            # 按功能声明校验参数名与类型：问题直接回填给模型，
-            # 不必等 call() 抛 TypeError 才暴露（那样模型只看到「调用失败」）
-            args, arg_issues = normalize_args(func_cls, func["args"])
-            if arg_issues:
-                log.debug(f"功能 {func_name} 参数不合规:{arg_issues}")
-                detail = "；".join(arg_issues)
-                calling_back.append(
-                    f"功能 {func_name} 的参数不合规：{detail}。"
-                    "请对照上面的参数声明重写本次调用"
-                )
-                continue
-            tool_started = time.perf_counter()
-            try:
-                # 使用 FunctionCallingManager 统一处理功能调用
-                calling_data = FunctionCallingData(
-                    user_id, chat_id, sender, args, current_history, bot=bot
-                )
-                log.debug(f"调用功能 {func_name}")
-                result = await FunctionCallingManager.call(func_name, calling_data)
-                calling_back.append(f"调用{func_name}成功,返回:{result}")
-                telemetry.tool(
-                    name=func_name,
-                    ok=True,
-                    duration=time.perf_counter() - tool_started,
-                )
-            except StopThinkingError:
-                telemetry.tool(
-                    name=func_name,
-                    ok=True,
-                    duration=time.perf_counter() - tool_started,
-                )
-                raise
-            except Exception as e:
-                log.warning(
-                    f"用户 {user_id} 功能调用失败 {func_name}:\n{str_traceback(e)}"
-                )
-                calling_back.append(f"调用{func_name}失败,请勿再次调用")
-                telemetry.tool(
-                    name=func_name,
-                    ok=False,
-                    duration=time.perf_counter() - tool_started,
-                    error=str(e),
-                )
-        return calling_back
+        permission: PermissionContext | None = None,
+    ) -> tuple[list[str], bool]:
+        """执行本轮功能调用，返回（回填给模型的内容, 是否继续思考）。
+
+        这是 ``ActionExecutor`` 的兼容入口：不带 Outbox 时副作用按模型输出
+        顺序直接执行，数据调用仍按 ``parallel_safe`` 并发/串行。
+        """
+        from ..agent.action_executor import ActionExecutor
+
+        ctx = FunctionCallingData(
+            user_id,
+            chat_id,
+            sender,
+            {},
+            current_history,
+            bot=bot,
+            permission=permission,
+        )
+        result = await ActionExecutor().run(functions_data, ctx, issues)
+        return result.feedback, result.keep_thinking

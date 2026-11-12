@@ -122,10 +122,12 @@ class Telemetry:
         ok: bool,
         duration: float,
         error: str | None = None,
+        legacy_name: str | None = None,
     ) -> None:
         self.record(
             "tool",
             name=name,
+            legacy_name=legacy_name,
             ok=ok,
             duration=round(duration, 3),
             error=(str(error)[:200] if error else None),
@@ -203,6 +205,72 @@ class Telemetry:
                 round(float(top_similarity), 3) if top_similarity is not None else None
             ),
             degraded=degraded,
+        )
+
+    def chat_render(
+        self,
+        *,
+        kind: str,
+        degraded: bool,
+        seq: int = 0,
+        chat_id: str = "",
+        chars: int = 0,
+        duration: float | None = None,
+    ) -> None:
+        """一次 Chat 表达渲染的结果。
+
+        与 `tool` 分开：`tool` 记的是功能调用本身，这里记的是「表达」这一步；
+        `degraded=True` 表示 `ATRI_CHAT` 缺失或失败，最终用 intent 兜底。
+        """
+        self.record(
+            "chat_render",
+            kind=kind,
+            degraded=degraded,
+            seq=seq,
+            chat_id=chat_id,
+            chars=chars,
+            duration=round(float(duration), 3) if duration is not None else None,
+        )
+
+    def outbox(
+        self,
+        *,
+        action: str,
+        chat_id: str = "",
+        pending: int = 0,
+        sent: int = 0,
+        reason: str = "",
+    ) -> None:
+        """队列观察点：满、超时、失败、排空。"""
+        self.record(
+            "outbox",
+            action=action,
+            chat_id=chat_id,
+            pending=pending,
+            sent=sent,
+            reason=reason or None,
+        )
+
+    def life(
+        self,
+        *,
+        action: str,
+        ok: bool,
+        duration: float | None = None,
+        count: int = 0,
+        detail: str = "",
+    ) -> None:
+        """生活系统动作：``plan`` / ``outfit`` / ``go``。
+
+        单独成事件而不是塞进 `tool`：生活写入经常由提示词或每日任务触发，
+        不一定有对应的功能调用；分开才能看出「日程被改了几次、失败在哪」。
+        """
+        self.record(
+            f"life.{action}",
+            ok=ok,
+            duration=round(float(duration), 3) if duration is not None else None,
+            count=count,
+            detail=detail or None,
         )
 
 

@@ -41,7 +41,11 @@ from ..core import (
     talents,
     tutorial,
 )
-from ..core.affection import affection_bonus_ratio, get_affection_level
+from ..core.affection import (
+    AFFECTION_MAX,
+    affection_bonus_ratio,
+    get_affection_level,
+)
 from ..core.chat import chat_manager
 from ..database import load_pet_names
 from ..matchers import (
@@ -67,7 +71,7 @@ from ..matchers import (
     pet_talent_matcher,
     pet_train_matcher,
 )
-from ..utils import menus, reply, rogue_actions
+from ..utils import menus, reply, rogue_actions, style
 from ..utils.cooldown import cooldown
 from ..utils.formatters import (
     format_action_result,
@@ -507,21 +511,12 @@ async def handle_talent(event: Event, args: BaseMessage = CommandArg()):
     pet = await _load_pet(pet_talent_matcher, player_id)
 
     talent_id = args.extract_plain_text().strip()
-    if not talent_id:
-        from ..config_loader import load_config
+    from ..config_loader import load_config
 
-        cfg = load_config("talents")
+    cfg = load_config("talents")
+    if not talent_id:
         await reply.finish(
-            pet_talent_matcher,
-            _compose(
-                format_talent_list(pet, cfg),
-                text(
-                    "talent.usage",
-                    "用法：/宠物.天赋 <天赋名或ID>",
-                    talents=" / ".join(talents.describe_talents(cfg)),
-                ),
-            ),
-            menus.talent_menu(),
+            pet_talent_matcher, format_talent_list(pet, cfg), menus.talent_menu()
         )
 
     try:
@@ -533,13 +528,19 @@ async def handle_talent(event: Event, args: BaseMessage = CommandArg()):
         await reply.finish(pet_talent_matcher, f"❌ {exc}")
 
     await pet_core.save_pet(pet)
+    # 加完一点立刻重画整张卡：玩家下一步通常还是加点，让最新等级与剩下的
+    # 「加一点」按钮直接摆在眼前，省掉再发一次 /宠物.天赋。
     await reply.finish(
         pet_talent_matcher,
-        text(
-            "talent.allocated",
-            "{name} 提升到 Lv.{new_level}，剩余 {remaining_points} 点",
-            **result,
+        _compose(
+            text(
+                "talent.allocated",
+                "{name} 提升到 Lv.{new_level}，剩余 {remaining_points} 点",
+                **result,
+            ),
+            format_talent_list(pet, cfg),
         ),
+        menus.talent_menu(),
     )
 
 
@@ -850,11 +851,13 @@ async def handle_love(event: Event):
     await reply.finish(
         pet_love_matcher,
         _compose(
+            text("love.title", "💗 {name} 的好感度", name=pet.name),
             text(
                 "love.line",
-                "",
-                name=pet.name,
+                "亲密 {bar} {affection}/{affection_max}（{level}）",
+                bar=style.bar(pet.affection, AFFECTION_MAX),
                 affection=pet.affection,
+                affection_max=AFFECTION_MAX,
                 level=get_affection_level(pet.affection),
             ),
             text("love.bonus", "", bonus_pct=f"{bonus_pct:g}"),

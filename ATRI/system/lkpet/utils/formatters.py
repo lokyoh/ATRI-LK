@@ -327,6 +327,11 @@ def format_skill_list(pet, skills_config: dict[str, Any] | None = None) -> str:
     """Render the skill card: equipped slots first, then the collection pool.
 
     装备中的技能带威力 / **耗魔** / 熟练度；未装备的只列名字，并提示如何装备。
+
+    排版意图：技能卡本来就是「两条装备栏 + 一个未装备池」，用 ``**主动**`` /
+    ``**被动**`` / ``**技能库**`` 三段分节，比原来一行 ``【主动】装备 1/4`` 之后
+    紧跟一堆 ``·`` 更容易扫。装备中每行末尾内嵌「卸下」、技能库里内嵌「装备」——
+    两个动作都长在它描述的那个技能上，不用去文末对行号。
     """
     from ..core.skills import (
         SOURCE_LABELS,
@@ -338,69 +343,78 @@ def format_skill_list(pet, skills_config: dict[str, Any] | None = None) -> str:
         source_of,
     )
 
+    s = style.current()
     cfg = skills_config if skills_config is not None else _load_config("skills")
     specs = skill_specs(cfg)
     equipped = equipped_skills(pet)
     collection = known_skills(pet)
 
     lines = [
-        text(
-            "skill.title",
-            "📚 {name} 的技能",
-            name=pet.name,
-            active_used=len(equipped["active"]),
-            active_max=equipped_limit("active", cfg),
-            passive_used=len(equipped["passive"]),
-            passive_max=equipped_limit("passive", cfg),
-            known=len(collection["active"]) + len(collection["passive"]),
+        s.heading(
+            text(
+                "skill.title",
+                "📚 {name} 的技能",
+                name=pet.name,
+                active_used=len(equipped["active"]),
+                active_max=equipped_limit("active", cfg),
+                passive_used=len(equipped["passive"]),
+                passive_max=equipped_limit("passive", cfg),
+                known=len(collection["active"]) + len(collection["passive"]),
+            )
         )
     ]
 
     for slot in ("active", "passive"):
         label = "主动" if slot == "active" else "被动"
         lines.append(
-            text(
-                f"skill.section.{slot}",
-                "【{label}】装备 {used}/{max}",
-                label=label,
-                used=len(equipped[slot]),
-                max=equipped_limit(slot, cfg),
+            s.label(
+                text(
+                    f"skill.section.{slot}",
+                    "{label} {used}/{max}",
+                    label=label,
+                    used=len(equipped[slot]),
+                    max=equipped_limit(slot, cfg),
+                )
             )
         )
         if not equipped[slot]:
-            lines.append(text("skill.equip_empty", "· （空槽）"))
+            lines.append(text("skill.equip_empty", "（空槽）"))
             continue
         for skill_id in equipped[slot]:
             spec = specs.get(skill_id) or {}
             if slot == "active":
                 lines.append(
-                    text(
-                        "skill.equipped_line",
-                        "· {name}{scope}｜威力 {power}｜耗魔 {mp_cost}｜熟练度 {proficiency}",
-                        name=skill_name(skill_id, cfg),
-                        scope=_skill_scope_note(spec),
-                        power=spec.get("power", 0),
-                        mp_cost=_mp_cost_note(spec),
-                        proficiency=round(
-                            (getattr(pet, "skill_proficiency", None) or {}).get(
-                                skill_id, 0.0
+                    s.bullet(
+                        text(
+                            "skill.equipped_line",
+                            "{name}{scope}｜威力 {power}｜耗魔 {mp_cost}｜熟练度 {proficiency}",
+                            name=skill_name(skill_id, cfg),
+                            scope=_skill_scope_note(spec),
+                            power=spec.get("power", 0),
+                            mp_cost=_mp_cost_note(spec),
+                            proficiency=round(
+                                (getattr(pet, "skill_proficiency", None) or {}).get(
+                                    skill_id, 0.0
+                                ),
+                                2,
                             ),
-                            2,
-                        ),
-                        effect="",
+                            effect="",
+                        )
                     )
                     + _skill_action("卸下", skill_id, cfg)
                 )
             else:
                 lines.append(
-                    text(
-                        "skill.equipped_passive_line",
-                        "· {name}（{effect}）",
-                        name=skill_name(skill_id, cfg),
-                        effect=_passive_effect_note(spec.get("effect") or {})
-                        or "无加成",
-                        power=0,
-                        proficiency=0.0,
+                    s.bullet(
+                        text(
+                            "skill.equipped_passive_line",
+                            "{name}（{effect}）",
+                            name=skill_name(skill_id, cfg),
+                            effect=_passive_effect_note(spec.get("effect") or {})
+                            or "无加成",
+                            power=0,
+                            proficiency=0.0,
+                        )
                     )
                     + _skill_action("卸下", skill_id, cfg)
                 )
@@ -413,16 +427,26 @@ def format_skill_list(pet, skills_config: dict[str, Any] | None = None) -> str:
     ]
     if unused:
         lines.append(
-            text(
-                "skill.bench",
-                "🎒 技能库（未装备 {count} 个）：{names}",
-                count=len(unused),
-                names="、".join(
-                    f"{skill_name(skill_id, cfg)}[{SOURCE_LABELS.get(source_of(pet, skill_id, cfg), '常规')}]"
-                    for skill_id in unused
-                ),
+            s.label(
+                text(
+                    "skill.bench_title",
+                    "技能库（未装备 {count} 个）",
+                    count=len(unused),
+                )
             )
         )
+        for skill_id in unused:
+            lines.append(
+                s.bullet(
+                    text(
+                        "skill.bench_line",
+                        "{name}（{source}）",
+                        name=skill_name(skill_id, cfg),
+                        source=SOURCE_LABELS.get(source_of(pet, skill_id, cfg), "常规"),
+                    )
+                )
+                + _skill_action("装备", skill_id, cfg)
+            )
     if not any(collection[slot] for slot in ("active", "passive")):
         lines.append(text("skill.empty", "还没有学会任何技能"))
     lines.append(
@@ -434,54 +458,122 @@ def format_skill_list(pet, skills_config: dict[str, Any] | None = None) -> str:
     return "\n".join(line for line in lines if line)
 
 
+BIO_TYPE_LABELS = {
+    "milestone": "里程碑",
+    "key_choice": "抉择",
+    "battle_victory": "胜利",
+    "first_time": "初见",
+    "ending": "结局",
+}
+"""传记条目类型的展示名。
+
+库里存的是内部键（``milestone`` / ``key_choice`` …），直接 `[milestone]` 摆在
+玩家面前等于把数据库字段漏出去。未知类型原样回退，不吞掉信息。
+"""
+
+
 def format_talent_list(pet, talents_config: dict[str, Any] | None = None) -> str:
-    """List the pet's allocated talents."""
+    """天赋卡：可用点数 + 已分配的每项等级。
+
+    每条天赋带一个 5 格小条（满级就是 5 格满），并在 QQ 端内嵌「加一点」按钮——
+    这张卡出现的时候，玩家下一步几乎必然是加点，让他去抄 ``/宠物.天赋 力量强化``
+    没有道理。条宽固定为 5：天赋上限统一是 5 级，10 格的条会比正文还宽。
+    """
     cfg = talents_config if talents_config is not None else _load_config("talents")
     talents = cfg.get("talents", {})
+    s = style.current()
 
     lines = [
-        text(
-            "talent.title",
-            "✨ {name} 的天赋",
-            name=pet.name,
-            points=pet.talent_points,
-        )
+        s.heading(
+            text(
+                "talent.title",
+                "✨ {name} 的天赋",
+                name=pet.name,
+                points=pet.talent_points,
+            )
+        ),
+        text("talent.points_line", "可用天赋点 {points}", points=pet.talent_points),
     ]
+
     entries = []
     for talent_id, level in (pet.talents or {}).items():
         talent = talents.get(talent_id)
         if talent is None:
             continue
-        entries.append(
+        max_level = int(talent.get("max_level", 0) or 0)
+        line = s.bullet(
             text(
                 "talent.line",
-                "",
+                "{name} Lv.{level}/{max_level}",
                 name=talent.get("name", talent_id),
                 level=level,
-                max_level=talent.get("max_level", 0),
+                max_level=max_level,
+                bar=style.bar(level, max_level, width=5) if max_level else "",
+                effect=str(talent.get("description") or ""),
             )
         )
-    lines.extend(entries or [text("talent.empty", "还没有分配任何天赋")])
+        if pet.talent_points > 0 and level < max_level:
+            line += _talent_action(str(talent.get("name", talent_id)))
+        entries.append(line)
+
+    if entries:
+        lines.append(s.label(text("talent.section_allocated", "已分配")))
+        lines.extend(entries)
+    else:
+        lines.append(text("talent.empty", "还没有分配任何天赋"))
+
+    lines.append(
+        text(
+            "talent.usage",
+            "用法：/宠物.天赋 <天赋名或ID>，可选：{talents}",
+            talents=" / ".join(
+                str(item.get("name") or key) for key, item in talents.items()
+            ),
+        )
+    )
     return "\n".join(line for line in lines if line)
+
+
+def _talent_action(name: str) -> str:
+    """天赋行末的「加一点」按钮（仅 QQ 端有内容）。"""
+    from . import menus
+
+    return menus.inline("加一点", f"宠物.天赋 {name}")
 
 
 def format_biography(bio, name: str = "宠物", limit: int = 10) -> str:
     """Show the newest ``limit`` biography entries plus unlocked titles."""
+    s = style.current()
     entries = list(bio.entries or [])[-max(1, limit) :]
     lines = [
-        text("bio.title", "📖 {name} 的传记", name=name, count=len(bio.entries or []))
+        s.heading(
+            text(
+                "bio.title", "📖 {name} 的传记", name=name, count=len(bio.entries or [])
+            )
+        )
     ]
     if bio.titles_unlocked:
-        lines.append(text("bio.titles", "", titles="、".join(bio.titles_unlocked)))
+        lines.append(
+            s.label(
+                text(
+                    "bio.titles",
+                    "已获称号：{titles}",
+                    titles="、".join(bio.titles_unlocked),
+                )
+            )
+        )
     if not entries:
         lines.append(text("bio.empty", "传记还是空的"))
     for entry in entries:
+        raw_type = str(entry.get("type", ""))
         lines.append(
-            text(
-                "bio.line",
-                "",
-                type=entry.get("type", ""),
-                content=entry.get("content") or entry.get("title", ""),
+            s.bullet(
+                text(
+                    "bio.line",
+                    "「{type}」{content}",
+                    type=BIO_TYPE_LABELS.get(raw_type, raw_type),
+                    content=entry.get("content") or entry.get("title", ""),
+                )
             )
         )
     return "\n".join(line for line in lines if line)
@@ -489,17 +581,20 @@ def format_biography(bio, name: str = "宠物", limit: int = 10) -> str:
 
 def format_daily_logs(bio, limit: int = 10) -> str:
     """Show the newest ``limit`` daily logs."""
+    s = style.current()
     logs = list(bio.daily_logs or [])[-max(1, limit) :]
-    lines = [text("logs.title", "🗓 最近的每日日志")]
+    lines = [s.heading(text("logs.title", "🗓 最近的每日日志"))]
     if not logs:
         lines.append(text("logs.empty", "还没有日志"))
     for entry in logs:
         lines.append(
-            text(
-                "logs.line",
-                "",
-                day=entry.get("day", 0),
-                content=entry.get("content", ""),
+            s.bullet(
+                text(
+                    "logs.line",
+                    "第 {day} 天：{content}",
+                    day=entry.get("day", 0),
+                    content=entry.get("content", ""),
+                )
             )
         )
     return "\n".join(line for line in lines if line)

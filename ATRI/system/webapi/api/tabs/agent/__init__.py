@@ -82,22 +82,10 @@ def _flatten_config_updates(
                 continue
             if not isinstance(value, dict):
                 raise ValueError(f"配置字段必须是对象: {field_path}")
-            item_field = field.item_field
-            item_children = item_field.children if isinstance(item_field, Field) else {}
-            for category_key, category_value in value.items():
-                category_path = f"{field_path}.{category_key}"
-                if category_value is None:
-                    updates[category_path] = None
-                    continue
-                if not isinstance(category_value, dict):
-                    raise ValueError(f"配置字段必须是对象: {category_path}")
-                updates.update(
-                    _flatten_config_updates(
-                        category_value,
-                        item_children,
-                        f"{category_path}.",
-                    )
-                )
+            # 前端提交的永远是整块对象（含删除后的状态）。逐分类拍平会让
+            # 「被删掉的分类」根本不进 updates，config 里就删不掉；整块替换
+            # 才能同时表达新增、修改与删除，固定分类的补齐仍由 update() 负责。
+            updates[field_path] = value
             continue
 
         if field.children:

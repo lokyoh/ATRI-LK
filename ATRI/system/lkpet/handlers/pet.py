@@ -86,6 +86,7 @@ from ..utils.formatters import (
     format_shop_overview,
     format_shop_purchase,
     format_shop_respec,
+    format_skill_detail,
     format_skill_list,
     format_talent_list,
     format_train_shortage,
@@ -457,27 +458,42 @@ async def handle_rest(event: Event):
 
 @pet_skill_matcher.handle()
 async def handle_skill(event: Event, args: BaseMessage = CommandArg()):
-    """``/宠物.技能`` 列表；``装备|卸下 <技能名或ID>`` 调整装备槽。"""
+    """``/宠物.技能`` 列表；``装备|卸下|详情 <技能名或ID>``。"""
     await _guard(pet_skill_matcher)
     player_id = _player_id(event)
     pet = await _load_pet(pet_skill_matcher, player_id)
 
     raw = _text_of(args)
     if not raw:
-        # 装备/卸下的命令已内嵌在每条技能行末，底部只放导航
+        # 装备/卸下/详情的命令已内嵌在每条技能行末，底部只放导航
         await reply.finish(
             pet_skill_matcher, format_skill_list(pet), menus.skill_menu()
         )
 
     action, _, rest = raw.partition(" ")
     rest = rest.strip()
-    if action not in ("装备", "卸下") or not rest:
+    if action not in ("装备", "卸下", "详情") or not rest:
         await reply.finish(
             pet_skill_matcher,
             text(
                 "skill.usage",
-                "用法：/宠物.技能 装备 <技能名>｜/宠物.技能 卸下 <技能名>",
+                "用法：/宠物.技能 装备 <技能名>｜/宠物.技能 卸下 <技能名>｜/宠物.技能 详情 <技能名>",
             ),
+        )
+
+    if action == "详情":
+        # 只读，不落库：把技能卡与详情页并排发出去，看完可以就地装备。
+        try:
+            skill_id = skills.resolve_skill(rest)
+            detail = format_skill_detail(pet, skill_id)
+        except ValueError as exc:
+            await reply.finish(
+                pet_skill_matcher, text("skill.unknown", "❌ {msg}", msg=str(exc))
+            )
+        await reply.finish(
+            pet_skill_matcher,
+            _compose(detail, format_skill_list(pet)),
+            menus.skill_menu(),
         )
 
     try:

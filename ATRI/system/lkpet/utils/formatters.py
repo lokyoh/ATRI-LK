@@ -419,15 +419,214 @@ def _skill_action(label: str, skill_id: str, cfg: dict[str, Any]) -> str:
     return menus.inline_append(label, f"宠物.技能 {label} {name}")
 
 
+def _skill_detail_action(skill_id: str, cfg: dict[str, Any]) -> str:
+    """技能行末的「详情」按钮（仅 QQ 端有内容）。"""
+    from ..core.skills import skill_name
+    from . import menus
+
+    return menus.inline_append("详情", f"宠物.技能 详情 {skill_name(skill_id, cfg)}")
+
+
+def _cooldown_note(spec: dict[str, Any]) -> str:
+    """冷却展示值：``cooldown`` 是回合数，0 表示每回合都能放。"""
+    try:
+        rounds = int(spec.get("cooldown", 0) or 0)
+    except (TypeError, ValueError):
+        rounds = 0
+    return text("skill.detail.cooldown_none", "无") if rounds <= 0 else f"{rounds} 回合"
+
+
+def _aoe_factor() -> float:
+    """群体技能每个目标的伤害倍率（与 ``battle.aoe.factor`` 同源）。"""
+    try:
+        from ..core.roguelike._common import _load_rogue_config
+
+        battle = _load_rogue_config().get("battle") or {}
+        return float((battle.get("aoe") or {}).get("factor", 0.6))
+    except (FileNotFoundError, TypeError, ValueError, AttributeError):
+        return 0.6
+
+
+def _skill_target_note(spec: dict[str, Any]) -> str:
+    """作用范围的展示行：单体 / 群体（带衰减倍率）/ 自身。"""
+    target = str(spec.get("target", "single")).strip().lower()
+    if target in AOE_TARGETS:
+        return text(
+            "skill.detail.target_all",
+            "目标：全体（每个目标 ×{factor}）",
+            factor=_aoe_factor(),
+        )
+    if target == "self":
+        return text("skill.detail.target_self", "目标：自身（治疗类）")
+    return text("skill.detail.target_single", "目标：单体")
+
+
+def _skill_effect_notes(spec: dict[str, Any]) -> list[str]:
+    """``effects`` 里的回血 / 回蓝翻成人话；未知类型跳过。"""
+    notes: list[str] = []
+    for effect in spec.get("effects") or []:
+        kind = str(effect.get("type") or "")
+        amount = int(effect.get("amount", 0) or 0)
+        if kind == "heal":
+            notes.append(
+                text("skill.detail.effect_heal", "回血 {amount} 点", amount=amount)
+            )
+        elif kind == "mp":
+            notes.append(
+                text("skill.detail.effect_mp", "回蓝 {amount} 点", amount=amount)
+            )
+    return notes
+
+
+def format_skill_detail(
+    pet, skill_id: str, skills_config: dict[str, Any] | None = None
+) -> str:
+    """``/宠物.技能 详情 <技能名>`` —— 单个技能的完整数值卡。
+
+    未掌握的技能也能查：肉鸽奖励与轮回池里的名字，先看到才知道要不要。
+    """
+    from ..core.skills import (
+        RETAINED_SOURCES,
+        SLOT_LABELS,
+        SOURCE_LABELS,
+        get_skill_power,
+        is_equipped,
+        is_known,
+        skill_name,
+        skill_spec,
+        source_of,
+    )
+
+    cfg = skills_config if skills_config is not None else _load_config("skills")
+    spec = skill_spec(skill_id, cfg)
+    if spec is None:
+        raise ValueError(f"技能不存在：{skill_id}")
+
+    s = style.current()
+    slot = str(spec.get("type") or "active")
+    name = skill_name(skill_id, cfg)
+    source = source_of(pet, skill_id, cfg)
+
+    lines = [
+        s.heading(
+            text(
+                "skill.detail.title",
+                "{name} · {type}",
+                name=name,
+                type=SLOT_LABELS.get(slot, slot),
+            )
+        )
+    ]
+
+    lines.append(s.label(text("skill.detail.section_state", "状态")))
+    if is_equipped(pet, skill_id):
+        lines.append(
+            s.bullet(text("skill.detail.state_equipped", "已装备，战斗中生效"))
+        )
+    elif is_known(pet, skill_id):
+        lines.append(
+            s.bullet(text("skill.detail.state_bench", "已掌握，但没装备（不参与战斗）"))
+        )
+    else:
+        lines.append(s.bullet(text("skill.detail.state_unknown", "尚未掌握")))
+    lines.append(
+        s.bullet(
+            text(
+                "skill.detail.source_line",
+                "来源：{source}｜{retention}",
+                source=SOURCE_LABELS.get(source, source),
+                retention=text("skill.detail.retained", "轮回后保留")
+                if source in RETAINED_SOURCES
+                else text("skill.detail.dropped", "轮回后清空"),
+            )
+        )
+    )
+
+    lines.append(s.label(text("skill.detail.section_stats", "战斗数值")))
+    if slot == "passive":
+        lines.append(
+            s.bullet(
+                text(
+                    "skill.detail.passive_effect",
+                    "加成 {effect}",
+                    effect=_passive_effect_note(spec.get("effect") or {}) or "无加成",
+                )
+            )
+        )
+    else:
+        proficiency = float(
+            (getattr(pet, "skill_proficiency", None) or {}).get(skill_id, 0.0)
+        )
+        power = int(spec.get("power", 0) or 0)
+        if power > 0:
+            lines.append(
+                s.bullet(
+                    text(
+                        "skill.detail.active_power",
+                        "威力 {power}｜熟练度 {proficiency}（实际 {effective}）",
+                        power=power,
+                        proficiency=round(proficiency, 2),
+                        effective=round(get_skill_power(pet, skill_id, cfg), 1),
+                    )
+                )
+            )
+        lines.append(
+            s.bullet(
+                text(
+                    "skill.detail.active_cost",
+                    "耗魔 {mp_cost}｜冷却 {cooldown}",
+                    mp_cost=_mp_cost_note(spec),
+                    cooldown=_cooldown_note(spec),
+                )
+            )
+        )
+        lines.append(s.bullet(_skill_target_note(spec)))
+        strikes = max(1, int(spec.get("strikes", 1) or 1))
+        if strikes > 1:
+            lines.append(
+                s.bullet(
+                    text(
+                        "skill.detail.strikes",
+                        "段数 {strikes}（每段独立结算）",
+                        strikes=strikes,
+                    )
+                )
+            )
+        leech = float(spec.get("leech", 0) or 0)
+        if leech > 0:
+            lines.append(
+                s.bullet(
+                    text(
+                        "skill.detail.leech",
+                        "吸血 {leech}%（按造成的伤害回血）",
+                        leech=round(leech * 100),
+                    )
+                )
+            )
+        lines.extend(s.bullet(note) for note in _skill_effect_notes(spec))
+
+    if is_equipped(pet, skill_id):
+        hint = text(
+            "skill.detail.hint_equipped",
+            "战斗中自动施放；血量低于一半时优先用治疗类技能。",
+        )
+    elif is_known(pet, skill_id):
+        hint = text("skill.detail.hint_bench", "在技能库里，装进空槽才参与战斗。")
+    else:
+        hint = text(
+            "skill.detail.hint_unknown",
+            "还没掌握；等级里程碑、轮回抽取或肉鸽奖励都可能抽到它。",
+        )
+    lines.append(s.hr())
+    lines.append(hint)
+    return "\n".join(line for line in lines if line)
+
+
 def format_skill_list(pet, skills_config: dict[str, Any] | None = None) -> str:
     """Render the skill card: equipped slots first, then the collection pool.
 
-    装备中的技能带威力 / **耗魔** / 熟练度；未装备的只列名字，并提示如何装备。
-
-    排版意图：技能卡本来就是「两条装备栏 + 一个未装备池」，用 ``**主动**`` /
-    ``**被动**`` / ``**技能库**`` 三段分节，比原来一行 ``【主动】装备 1/4`` 之后
-    紧跟一堆 ``·`` 更容易扫。装备中每行末尾内嵌「卸下」、技能库里内嵌「装备」——
-    两个动作都长在它描述的那个技能上，不用去文末对行号。
+    装备中的技能带威力 / 耗魔 / 熟练度，未装备的只列名字；每行末尾内嵌
+    「卸下 / 装备」与「详情」，动作都长在它描述的那个技能上。
     """
     from ..core.skills import (
         SOURCE_LABELS,
@@ -498,6 +697,7 @@ def format_skill_list(pet, skills_config: dict[str, Any] | None = None) -> str:
                         )
                     )
                     + _skill_action("卸下", skill_id, cfg)
+                    + _skill_detail_action(skill_id, cfg)
                 )
             else:
                 lines.append(
@@ -513,6 +713,7 @@ def format_skill_list(pet, skills_config: dict[str, Any] | None = None) -> str:
                         )
                     )
                     + _skill_action("卸下", skill_id, cfg)
+                    + _skill_detail_action(skill_id, cfg)
                 )
 
     unused = [
@@ -542,13 +743,14 @@ def format_skill_list(pet, skills_config: dict[str, Any] | None = None) -> str:
                     )
                 )
                 + _skill_action("装备", skill_id, cfg)
+                + _skill_detail_action(skill_id, cfg)
             )
     if not any(collection[slot] for slot in ("active", "passive")):
         lines.append(text("skill.empty", "还没有学会任何技能"))
     lines.append(
         text(
             "skill.usage",
-            "用法：/宠物.技能 装备 <技能名>｜/宠物.技能 卸下 <技能名>",
+            "用法：/宠物.技能 装备 <技能名>｜/宠物.技能 卸下 <技能名>｜/宠物.技能 详情 <技能名>",
         )
     )
     return "\n".join(line for line in lines if line)

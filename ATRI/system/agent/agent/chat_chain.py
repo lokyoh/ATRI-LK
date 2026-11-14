@@ -19,7 +19,19 @@ _last_missing_model_notice = 0.0
 _last_empty_chat_notice = 0.0
 
 
-def _check_initiative(chat_id: str) -> tuple[bool, str]:
+def _chat_limits(bot, chat_id: str) -> tuple[int | None, float | None]:
+    """读取这个群自己的上限与冷却；读不到就返回 None，交给全局默认值。"""
+    try:
+        from ATRI.system.lkchat.config import proactive_limits
+
+        bot_id = str(getattr(bot, "self_id", "") or "")
+        return proactive_limits(bot_id, chat_id)
+    except Exception as exc:
+        log.debug(f"读取群 {chat_id} 的主动聊天参数失败，用全局默认值：{exc}")
+        return None, None
+
+
+def _check_initiative(bot, chat_id: str) -> tuple[bool, str]:
     """主动发言限流检查。状态读失败时**放行**——不能让状态模块的小故障
     变成「她永远不说话」。"""
     try:
@@ -28,7 +40,10 @@ def _check_initiative(chat_id: str) -> tuple[bool, str]:
         irritation = get_state().irritation
     except Exception:
         irritation = 0.0
-    return initiative_limiter.allow(chat_id, irritation=irritation)
+    max_per_hour, cooldown = _chat_limits(bot, chat_id)
+    return initiative_limiter.allow(
+        chat_id, irritation=irritation, max_per_hour=max_per_hour, cooldown=cooldown
+    )
 
 
 class ATRIAgent:
@@ -116,7 +131,7 @@ class ATRIAgent:
             return
         proactive = not args.skip_judgment
         if proactive:
-            allowed, reason = _check_initiative(args.chat_id)
+            allowed, reason = _check_initiative(args.bot, args.chat_id)
             telemetry.initiative(
                 chat_id=str(args.chat_id), allowed=allowed, reason=reason
             )

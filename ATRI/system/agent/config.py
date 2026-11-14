@@ -317,7 +317,7 @@ class AgentConfig(PluginConfig):
         "允许 Agent 聊天、并记录聊天历史的群号列表。"
         "实际生效范围是本列表与「聊天」插件白名单的**并集**："
         "聊天插件的「聊天白名单」在 chat_switch 打开时计入，"
-        "「主动聊天白名单」在 proactively_chat 打开时计入。"
+        "其「主动聊天」里启用了的群也计入。"
         "留空 = 不额外开启，仅依赖聊天插件的名单",
         item_type=str,
     )

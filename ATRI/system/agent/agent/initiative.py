@@ -56,8 +56,13 @@ class InitiativeLimiter:
         *,
         irritation: float = 0.0,
         now: float | None = None,
+        max_per_hour: int | None = None,
+        cooldown: float | None = None,
     ) -> tuple[bool, str]:
         """能否主动发言。返回 (是否允许, 原因)。
+
+        ``max_per_hour`` / ``cooldown`` 是这个群自己的参数，由调用方从聊天插件
+        配置里取；传 None 就用全局默认值。
 
         原因用于日志与调试——排查「她怎么不说话」时需要知道是哪条规则拦的。
         """
@@ -65,14 +70,17 @@ class InitiativeLimiter:
         bucket = self._bucket(chat_id)
         bucket.prune(now)
 
+        limit = self.max_per_hour if max_per_hour is None else max(1, int(max_per_hour))
+        wait = self.cooldown if cooldown is None else max(0.0, float(cooldown))
+
         if irritation >= IRRITATION_SILENCE_THRESHOLD:
             return False, f"烦躁度 {irritation:.2f} 过高，她不想说话"
 
-        if len(bucket.timestamps) >= self.max_per_hour:
-            return False, f"已达每小时上限 {self.max_per_hour} 次"
+        if len(bucket.timestamps) >= limit:
+            return False, f"已达每小时上限 {limit} 次"
 
         elapsed = now - bucket.last_at()
-        if bucket.last_at() and elapsed < self.cooldown:
+        if bucket.last_at() and elapsed < wait:
             return False, f"距上次主动发言仅 {elapsed:.0f}s，冷却中"
 
         return True, ""

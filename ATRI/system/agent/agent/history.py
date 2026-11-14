@@ -762,8 +762,7 @@ def effective_chat_whitelist() -> set[str]:
 
     1. Agent 自己的 `agent_chat_whitelist`——总是生效；
     2. `聊天` 插件的 `whit_list`——仅当 `chat_switch` 打开时计入；
-    3. `聊天` 插件的 `proactively_chat_whit_list`——仅当 `proactively_chat`
-       打开时计入。
+    3. `聊天` 插件按群配置里 `enabled=true` 的群——每个群自己的开关。
 
     **为什么要看开关**：开关关掉时那份名单本来就不会触发 Agent 聊天，
     若仍按名单记录，就会出现「开关关了、历史还在长」——用户以为关干净了，
@@ -782,8 +781,10 @@ def effective_chat_whitelist() -> set[str]:
         if lk_cfg is not None:
             if lk_cfg.get("chat_switch"):
                 allowed |= _as_name_set(lk_cfg.get("whit_list"))
-            if lk_cfg.get("proactively_chat"):
-                allowed |= _as_name_set(lk_cfg.get("proactively_chat_whit_list"))
+            # 主动接话的群写在按群结构里，总开关与每群开关都要满足。
+            from ATRI.system.lkchat.config import proactive_chat_ids
+
+            allowed |= proactive_chat_ids()
     except Exception as exc:
         log.debug(f"读取聊天插件白名单失败（按空处理）：{exc}")
     return allowed

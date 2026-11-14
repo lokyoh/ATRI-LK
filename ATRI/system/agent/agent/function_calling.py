@@ -2054,7 +2054,7 @@ def register_function_calling():
         returns_data = True
         parallel_safe = False
         description = (
-            "查看或修改你的家。家按章节保存（位置、外观、房间、周边、物品、衣柜、冰箱）。\n"
+            "查看或修改你的家。章节固定为位置、房间、周边、容器、习惯。\n"
             "show 读整篇或某一节；edit 替换某一节；add 在某一节末尾追加；"
             "generate 让家模型扩写；每次写入都会自动备份。"
         )
@@ -2067,7 +2067,7 @@ def register_function_calling():
             FunctionCallingArg(
                 name="section",
                 _type="str",
-                description="(show/edit/add) 章节名，如「客厅」「物品」",
+                description="(show/edit/add) 章节名，如「客厅」「衣柜」「习惯」",
             ),
             FunctionCallingArg(
                 name="content",

@@ -102,7 +102,7 @@ class OutfitStore:
         previous = self.load(
             (_now_local() - datetime.timedelta(days=1)).strftime("%Y-%m-%d")
         )
-        home = HomeStore(self.root).summary()
+        home = HomeStore(self.root).wardrobe()
         prompt = (
             "为亚托莉生成今天的白天与晚上两套穿搭。\n"
             f"角色：{ATRI.get_role_prompt()}\n"

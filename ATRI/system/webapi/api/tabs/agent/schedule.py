@@ -58,11 +58,30 @@ def _now_hour() -> int:
     return now().hour
 
 
+class HomeRoomInfo(BaseModel):
+    name: str
+    body: str
+
+
+class HomeContainerInfo(BaseModel):
+    name: str
+    items: list[str]
+    """每项是「名称：说明」或纯名称"""
+
+
 class HomeInfo(BaseModel):
     summary: str
-    """位置 + 房间 + 周边（提示词用的摘要）"""
+    """位置 + 房间 + 周边 + 习惯（提示词用的摘要）"""
     content: str
     """完整 home.md"""
+    sections: dict[str, str] = {}
+    """固定章节 → 正文（不含标题行）"""
+    rooms: list[HomeRoomInfo] = []
+    """房间与它的描述"""
+    containers: list[HomeContainerInfo] = []
+    """容器与它的物品"""
+    wardrobe: str = ""
+    """衣物清单，供穿搭生成的同一份数据"""
 
 
 def _night_hour() -> int:
@@ -95,9 +114,26 @@ class SetOutfitModel(BaseModel):
 
 class HomeEditModel(BaseModel):
     action: str = "show"
-    """show / edit / add / generate"""
+    """show / edit / add / replace / generate；replace 允许整块替换含子章节的父章节"""
     section: str = ""
     content: str = ""
+
+
+def _home_info(life, content: str) -> HomeInfo:
+    """家 + 解析结果：前端按节渲染，不必自己解析 Markdown。"""
+    home = life.home()
+    containers = home.containers()
+    return HomeInfo(
+        summary=life.home_summary(),
+        content=content,
+        sections=home.section_bodies(),
+        rooms=[HomeRoomInfo(name=name, body=body) for name, body in home.rooms()],
+        containers=[
+            HomeContainerInfo(name=name, items=items)
+            for name, items in containers.items()
+        ],
+        wardrobe=home.wardrobe(),
+    )
 
 
 def _entry_info(entry) -> ScheduleEntryInfo:
@@ -139,7 +175,7 @@ def _snapshot(date: str) -> LifeSnapshot:
             night=outfit.night,
             current=outfit.current_text(_now_hour(), night_hour=_night_hour()),
         ),
-        home=HomeInfo(summary=life.home_summary(), content=home.read()),
+        home=_home_info(life, home.read()),
     )
 
 
@@ -203,10 +239,12 @@ async def _(payload: HomeEditModel) -> Result[HomeInfo]:
         action = payload.action.strip().lower()
         if action == "show":
             text = home.show(payload.section)
-            return Result.ok(
-                HomeInfo(summary=life.home_summary(), content=text), "拿到信息啦!"
-            )
-        if action == "edit":
+            return Result.ok(_home_info(life, text), "拿到信息啦!")
+        if action == "replace":
+            if not payload.section or not payload.content:
+                return Result.fail("replace 需要 section 与 content", 400)
+            message = home.replace(payload.section, payload.content)
+        elif action == "edit":
             if not payload.section or not payload.content:
                 return Result.fail("edit 需要 section 与 content", 400)
             message = home.edit(payload.section, payload.content)
@@ -222,9 +260,7 @@ async def _(payload: HomeEditModel) -> Result[HomeInfo]:
             return Result.fail(f"未知的 action：{action}", 400)
         if message.startswith("家里没有") or message.startswith("写入失败"):
             return Result.fail(message, 400)
-        return Result.ok(
-            HomeInfo(summary=life.home_summary(), content=home.read()), message
-        )
+        return Result.ok(_home_info(life, home.read()), message)
     except Exception as e:
         log.error(f"{router.prefix}/set_home 调用错误:{str_traceback(e)}")
         return Result.fail(f"发生了一点错误捏 {type(e)}: {e}")

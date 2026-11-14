@@ -96,7 +96,15 @@ shop:
       order: 2
       name: 转世起点
       desc: 下一世，从哪里开始。
-    # order 3 = 技艺、order 4 = 生涯：留给后续期次，先占位不填。
+    - id: craft
+      order: 3
+      name: 技艺
+      desc: 有些东西买一次就永远是你的。
+    - id: career
+      order: 4
+      name: 生涯
+      desc: 让每一局都从更好的位置出发。
+    # order 5 = 荣誉：留给后续期次。
 
   items:
     # ---- 1 前世传承：百分比成长，无限等级 ----
@@ -162,3 +170,23 @@ shop:
       consume_on: reincarnation
       cost: { start: 3000, mult: 1.3 }
       effect: { start_level_bonus: 1 }
+
+    # ---- 3 技艺 ----
+    passive_slot:
+      name: 额外被动槽
+      category: craft
+      desc: 有一小块地方，专门用来放你不肯忘的东西。
+      level: capped
+      max_level: 2
+      cost: [25000, 50000]
+      effect: { passive_slot_bonus: 1 }
+
+    # ---- 4 生涯 ----
+    rogue_coins:
+      name: 商队本金
+      category: career
+      desc: 出门前口袋里就有点分量，看货的底气不一样。
+      level: infinite
+      cost: { start: 6000, mult: 1.4 }
+      effect: { rogue_start_coins: 10 }
+      base_value: 30   # 开局自带 30，每级再 +10

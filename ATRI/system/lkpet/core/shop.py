@@ -45,6 +45,11 @@ PERK_EFFECT_KEYS = frozenset(
         "spd_pct",
         "mp_pct",
         "exp_pct",
+        # 结构性解锁（一次买断，永久生效）
+        "passive_slot_bonus",
+        "active_slot_bonus",
+        # 局内资源（每局开局结算一次，不跨局累加）
+        "rogue_start_coins",
     }
 )
 """本模块认识的 ``effect`` 键白名单。
@@ -240,15 +245,10 @@ def recompute_bonuses(
     levels: dict[str, int],
     cfg: dict[str, Any] | None = None,
 ) -> dict[str, int | float]:
-    """从 ``{商品 id: 等级}`` 重算出完整的 ``permanent_bonuses``。
+    """从 ``{商品 id: 等级}`` 重算出 ``permanent_bonuses``。
 
-    这是 ``permanent_bonuses`` 的**唯一推导入口**：它是缓存而不是原始数据，
-    所以任何改动（买、洗点、改配置）都走"重算"而不是"累加"。好处是
-    改配置数值后玩家下次上线自动对齐，不需要再写一次数据迁移；
-    重复调用也不会有副作用（幂等）。
-
-    **配置里已不存在的商品 id 会被静默忽略**——下线一件商品不该让
-    玩家的整份加成消失，而应只是那一项不再贡献。
+    ``permanent_bonuses`` 是缓存而非原始数据，因此一律重算而非累加（幂等）。
+    配置里已不存在的商品会被忽略。
     """
     specs = catalog(cfg)
     if not specs or not levels:
@@ -270,6 +270,11 @@ def recompute_bonuses(
                 count = min(count, max(1, int(spec.get("max_level", 1))))
             except (TypeError, ValueError):
                 count = min(count, 1)
+        # ``base_value`` 在拥有至少 1 级时计入一次（如商队本金默认 30）。
+        base = spec.get("base_value")
+        if isinstance(base, int | float) and base:
+            for key in spec.get("effect") or {}:
+                bonus[f"{key}_base"] = bonus.get(f"{key}_base", 0) + float(base)
         for key, value in total_effect(spec, count, cfg).items():
             bonus[key] = bonus.get(key, 0) + value
     # 平值类保留 int、百分比类保留 float，与配置里的字面量类型一致。
@@ -322,6 +327,11 @@ def pending_reincarnation_bonus(
             continue
         if level_mode(spec) == LEVEL_CAPPED:
             count = min(count, spec_level_cap(spec))
+        # ``base_value`` 在拥有至少 1 级时计入一次（如商队本金默认 30）。
+        base = spec.get("base_value")
+        if isinstance(base, int | float) and base:
+            for key in spec.get("effect") or {}:
+                bonus[f"{key}_base"] = bonus.get(f"{key}_base", 0) + float(base)
         for key, value in total_effect(spec, count, cfg).items():
             bonus[key] = bonus.get(key, 0) + value
     return bonus

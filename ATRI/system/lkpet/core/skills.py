@@ -106,14 +106,38 @@ def skill_name(skill_id: str, skills_config: dict[str, Any] | None = None) -> st
     return str(spec.get("name") or skill_id)
 
 
-def equipped_limit(slot_type: str, skills_config: dict[str, Any] | None = None) -> int:
-    """某类型的装备槽数量（默认 4）。"""
+def base_equipped_limit(
+    slot_type: str, skills_config: dict[str, Any] | None = None
+) -> int:
+    """配置里的基础槽位数（默认 4）。"""
     cfg = skills_config if skills_config is not None else _load_skills_config()
     limits = cfg.get("limits", {}) or {}
     try:
         return max(0, int(limits.get(f"{slot_type}_slots", 4)))
     except (TypeError, ValueError):
         return 4
+
+
+def slot_bonus(pet, slot_type: str) -> int:
+    """商店买到的额外槽位数（``{slot}_slot_bonus``）。"""
+    if pet is None:
+        return 0
+    bonuses = getattr(pet, "permanent_bonuses", None)
+    if not isinstance(bonuses, dict):
+        return 0
+    try:
+        return max(0, int(bonuses.get(f"{slot_type}_slot_bonus", 0) or 0))
+    except (TypeError, ValueError):
+        return 0
+
+
+def equipped_limit(
+    slot_type: str,
+    skills_config: dict[str, Any] | None = None,
+    pet=None,
+) -> int:
+    """装备槽数量 = 基础值 + 商店加成；不传 ``pet`` 时只看基础值。"""
+    return base_equipped_limit(slot_type, skills_config) + slot_bonus(pet, slot_type)
 
 
 # ---------------------------------------------------------------------------
@@ -237,7 +261,7 @@ def ensure_skill_storage(pet, skills_config: dict[str, Any] | None = None) -> bo
     # 只保留定义存在、类型匹配、且在收集池里的装备；并裁剪到槽位上限。
     fixed_equipped: dict[str, list[str]] = {slot: [] for slot in SLOT_TYPES}
     for slot in SLOT_TYPES:
-        limit = equipped_limit(slot, cfg)
+        limit = equipped_limit(slot, cfg, pet)
         for skill_id in equipped[slot]:
             if len(fixed_equipped[slot]) >= limit:
                 break
@@ -318,7 +342,7 @@ def _equip_raw(pet, slot: str, skill_id: str, skills_config: dict) -> bool:
     equipped = _as_slot_map(getattr(pet, "skill_equipped", None))
     if skill_id in equipped[slot]:
         return False
-    if len(equipped[slot]) >= equipped_limit(slot, skills_config):
+    if len(equipped[slot]) >= equipped_limit(slot, skills_config, pet):
         return False
     equipped[slot].append(skill_id)
     pet.skill_equipped = equipped
@@ -341,7 +365,7 @@ def equip_skill(pet, skill_id: str, skills_config: dict[str, Any] | None = None)
     if is_equipped(pet, skill_id):
         raise ValueError(f"「{skill_name(skill_id, cfg)}」已经装备着了")
 
-    limit = equipped_limit(slot, cfg)
+    limit = equipped_limit(slot, cfg, pet)
     used = len(equipped_skills(pet, slot))
     if used >= limit:
         label = SLOT_LABELS.get(slot, slot)

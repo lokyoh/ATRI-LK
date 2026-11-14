@@ -452,9 +452,9 @@ def format_skill_list(pet, skills_config: dict[str, Any] | None = None) -> str:
                 "📚 {name} 的技能",
                 name=pet.name,
                 active_used=len(equipped["active"]),
-                active_max=equipped_limit("active", cfg),
+                active_max=equipped_limit("active", cfg, pet),
                 passive_used=len(equipped["passive"]),
-                passive_max=equipped_limit("passive", cfg),
+                passive_max=equipped_limit("passive", cfg, pet),
                 known=len(collection["active"]) + len(collection["passive"]),
             )
         )
@@ -469,7 +469,7 @@ def format_skill_list(pet, skills_config: dict[str, Any] | None = None) -> str:
                     "{label} {used}/{max}",
                     label=label,
                     used=len(equipped[slot]),
-                    max=equipped_limit(slot, cfg),
+                    max=equipped_limit(slot, cfg, pet),
                 )
             )
         )

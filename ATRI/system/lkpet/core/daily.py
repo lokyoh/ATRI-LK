@@ -22,16 +22,19 @@ def _load_daily_config() -> dict[str, Any]:
 
 def _daily_log(pet: Any, day: int, changes: dict[str, int]) -> str:
     parts = [f"第 {day} 天"]
-    for key, label in (
-        ("hunger", "饱食"),
-        ("mood", "心情"),
-        ("cleanliness", "清洁"),
-        ("fatigue", "疲劳"),
-        ("affection", "亲密"),
+    # 「体力」是疲劳的反向量：日志里报的是这一天的**净变化**，所以符号要反过来
+    # （疲劳 -5 = 体力 +5），否则玩家看到的是「体力 -5」却精神更好。
+    for key, label, invert in (
+        ("hunger", "饱食", False),
+        ("mood", "心情", False),
+        ("cleanliness", "清洁", False),
+        ("fatigue", "体力", True),
+        ("affection", "亲密", False),
     ):
         change = changes[key]
         if change:
-            parts.append(f"{label} {change:+d}")
+            shown = -change if invert else change
+            parts.append(f"{label} {shown:+d}")
     if pet.health_state != "healthy":
         parts.append(f"状态：{pet.health_state}")
     return "，".join(parts)

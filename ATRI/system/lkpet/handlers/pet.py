@@ -88,6 +88,7 @@ from ..utils.formatters import (
     format_shop_respec,
     format_skill_list,
     format_talent_list,
+    format_train_shortage,
 )
 from ..utils.texts import apply_command_start, text, text_list
 
@@ -1073,10 +1074,13 @@ async def handle_rogue(event: Event, args: BaseMessage = CommandArg()):
 
 
 def _shortage_actions(exc) -> str:
-    """资源不足提示后面的可点命令（仅 QQ 端有内容）。"""
+    """兼容入口：训练失败提示的行内补救命令（仅 QQ 端有内容）。
+
+    现在走的是 :func:`format_train_shortage` + :func:`menus.shortage_menu`——
+    正文不再拼指令，动作只出现在底部按钮里。这个函数保留给仍按旧写法调用的
+    地方，内部改为复用同一份结构化建议。
+    """
     hints = getattr(exc, "hints", None) or []
-    if not hints:
-        return ""
     parts = [
         menus.inline(str(h.get("label") or "去做"), str(h["path"]))
         for h in hints
@@ -1085,7 +1089,6 @@ def _shortage_actions(exc) -> str:
     ]
     parts = [p for p in parts if p]
     if not parts:
-        # OneBot 端：命令已经写在正文里了（core 层生成的文字），不必重复
         return ""
     return "\n> " + " ".join(parts)
 
@@ -1100,11 +1103,13 @@ async def handle_train(event: Event):
     try:
         result = await interaction.train(pet, player_id)
     except interaction.ResourceShortageError as exc:
-        # 资源不足时提示里带着「先喂食 / 先玩耍」这类指令。把命令内嵌到那一行，
-        # 用户点一下就能去做，不必照着文字手打。
+        # 训练失败不该「什么都不给」：正文说明差在哪，底部直接给出补救动作。
+        # 早先正文里混着「先 /宠物.喂食 +8 起步」这种纯文本指令，底部再给一遍
+        # 同样的按钮，等于同一句话说了两种做法。现在指令只在按钮里出现。
         await reply.finish(
             pet_train_matcher,
-            f"❌ {exc}" + _shortage_actions(exc),
+            format_train_shortage(exc),
+            menus.shortage_menu(getattr(exc, "hints", None)),
         )
     except ValueError as exc:
         await reply.finish(pet_train_matcher, f"❌ {exc}")

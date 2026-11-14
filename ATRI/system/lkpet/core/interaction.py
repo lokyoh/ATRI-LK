@@ -21,7 +21,12 @@ _STATUS_FLOOR = 0
 """Interaction effects clamp statuses into ``[0, 100]``."""
 
 _TRAIN_STATUS_FIELDS = ("hunger", "mood", "fatigue")
-"""训练前置校验要预演的三项状态（饱食 / 心情 / 疲劳）。"""
+"""训练前置校验要预演的三项状态（饱食 / 心情 / 疲劳）。
+
+注意：**对外展示**的第三项是「体力」= ``100 - fatigue``（越大越好）；内部字段
+仍叫 ``fatigue``（越大越累），因为存量数据、衰减配置、健康判定全都按疲劳的
+方向定义。两者只在 :func:`_display_value` 这一处换算，别在别处再做一次反算。
+"""
 
 _DEFAULT_TRAIN_REQUIREMENTS: dict[str, int] = {
     "hunger_min": 30,
@@ -88,9 +93,48 @@ def consume_action_point(
 _TRAIN_LABELS = {
     "hunger": "饱食",
     "mood": "心情",
-    "fatigue": "疲劳",
+    "fatigue": "体力",
 }
-"""训练门槛提示用的中文名，与 ``texts.yaml`` 的状态文案保持一致。"""
+"""训练门槛提示用的中文名。
+
+``fatigue`` 对外叫**体力**：内部是「越大越累」的疲劳值，展示时反算成
+「越大越好」的体力（见 :func:`_display_value`）。名字换、方向也换，两者必须
+一起改——只换名字会出现「体力 84/100（需 ≤80）」这种读不通的提示。
+"""
+
+_DISPLAY_INVERTED = frozenset({"fatigue"})
+"""展示方向与内部方向相反的状态字段。"""
+
+_TRAIN_BUTTONS = {
+    "hunger": "喂食",
+    "mood": "玩耍",
+    "fatigue": "休息",
+}
+"""训练失败时每个不足项对应的**动作名**。
+
+按钮只写动作、不写数值：数值已经在正文的对照行里，按钮再写一遍会让它随每次
+状态变化抖动，也更容易让人以为「点一下就能精确补这么多」。
+"""
+
+STATUS_MAX = 100
+"""状态量程上限（与 ``core.status.STATUS_MAX`` 同值）。"""
+
+
+def _display_value(field: str, value: int) -> int:
+    """把内部状态值换算成**对外展示值**。
+
+    ``fatigue`` 内部 0 = 精神饱满、100 = 精疲力竭；玩家看到的「体力」正好相反。
+    """
+    return STATUS_MAX - value if field in _DISPLAY_INVERTED else value
+
+
+def _display_limit(field: str, limit: int) -> int:
+    """把内部门槛换算成对外展示的门槛（``fatigue_max`` → 体力下限）。
+
+    换算之后，三项门槛的语义统一成「展示值不得低于这个数」——体力 16 低于
+    20，与饱食 22 低于 30 是同一种「不足」，展示层不需要再区分方向。
+    """
+    return STATUS_MAX - limit if field in _DISPLAY_INVERTED else limit
 
 
 def _care_thresholds() -> dict[str, int]:
@@ -154,14 +198,27 @@ def _train_status_after(pet, effects: dict[str, Any]) -> dict[str, int]:
 class ResourceShortageError(ValueError):
     """训练前的资源不足。
 
-    除了给人看的文字，还带上**结构化的建议动作**（``hint`` / ``command``）：
-    QQ 端可以把命令内嵌成可点的一行，OneBot 端照旧显示纯文本指令。
-    core 层不碰渲染，只把「该做什么」说清楚。
+    除了给人看的文字，还带上**结构化数据**，让展示层自己决定怎么排：
+
+    * ``hints``：建议动作 ``[{label, path}]``——QQ 端做成行内/底部按钮，
+      OneBot 端由 :func:`reply.plain_with_choices` 渲染成指令清单；
+    * ``details``：每一项的实际数值 ``[{label, value, limit, need, over}]``，
+      用来画「练后 22/30，还差 8」这种带数值条的对照行。
+
+    **文字里不再写指令**。早先 core 把 ``/宠物.喂食`` 拼进提示语，而底部又给
+    一遍同样的按钮，同一句话把「手打」和「点一下」说了两次；现在指令只由
+    展示层按适配器生成。
     """
 
-    def __init__(self, message: str, hints: list[dict[str, str]] | None = None):
+    def __init__(
+        self,
+        message: str,
+        hints: list[dict[str, str]] | None = None,
+        details: list[dict[str, Any]] | None = None,
+    ):
         super().__init__(message)
         self.hints = hints or []
+        self.details = details or []
 
 
 def check_train_resources(
@@ -171,42 +228,50 @@ def check_train_resources(
 ) -> None:
     """Raise ``ValueError`` when the pet lacks the resources a training needs.
 
-    训练不是「有行动点就能点」的动作：它要吃掉饱食、压心情、抬疲劳。
+    训练不是「有行动点就能点」的动作：它要吃掉饱食、压心情、耗体力。
     这里按**训练之后**的值判定，任何一项会越界就整体拒绝，并把缺什么、
-    该先做什么写进提示，而不是先扣完行动点再说「状态太差」。
+    该先做什么写进结构化数据，而不是先扣完行动点再说「状态太差」。
+
+    判定用的是「练完之后」的数值——所以展示层必须标明这一点：玩家当前
+    饱食 32 看着够，练完只剩 22，不写清楚会以为门槛算错了。
+
+    ``details`` / ``hints`` 里的数值一律是**对外展示值**（体力方向），内部字段
+    仍是 ``fatigue``；换算只在 :func:`_display_value` / :func:`_display_limit`。
     """
     after = _train_status_after(pet, effects)
-    problems: list[str] = []
+    details: list[dict[str, Any]] = []
     hints: list[dict[str, str]] = []
 
-    if after["hunger"] < requirements["hunger_min"]:
-        need = requirements["hunger_min"] - after["hunger"]
-        problems.append(
-            f"{_TRAIN_LABELS['hunger']}不足（训练后 {after['hunger']}，"
-            f"至少要 {requirements['hunger_min']}），先 /宠物.喂食 +{need} 起步"
+    def add(field: str, path: str, limit: int) -> None:
+        value = _display_value(field, after[field])
+        shown_limit = _display_limit(field, limit)
+        # 换算成展示值之后三项语义统一：**展示值不得低于门槛**。
+        # 体力 16 低于 20 与饱食 22 低于 30 是同一种「不足」，展示层不必再分方向。
+        details.append(
+            {
+                "label": _TRAIN_LABELS[field],
+                "value": value,
+                "limit": shown_limit,
+                "need": max(0, shown_limit - value),
+            }
         )
-        hints.append({"label": f"喂食 +{need}", "path": "宠物.喂食"})
-    if after["mood"] < requirements["mood_min"]:
-        need = requirements["mood_min"] - after["mood"]
-        problems.append(
-            f"{_TRAIN_LABELS['mood']}不足（训练后 {after['mood']}，"
-            f"至少要 {requirements['mood_min']}），先 /宠物.玩耍 +{need} 起步"
-        )
-        hints.append({"label": "玩耍", "path": "宠物.玩耍"})
-    if after["fatigue"] > requirements["fatigue_max"]:
-        need = after["fatigue"] - requirements["fatigue_max"]
-        problems.append(
-            f"{_TRAIN_LABELS['fatigue']}过高（训练后 {after['fatigue']}，"
-            f"至多 {requirements['fatigue_max']}），先 /宠物.休息 -{need} 起步"
-        )
-        hints.append({"label": "休息", "path": "宠物.休息"})
-    if problems:
-        # 提示里带指令，必须走统一的前缀替换（command_start 可能是 ！ 等）。
-        from ..utils.texts import apply_command_start
+        # 按钮只写「做什么」，不带数值——数值在正文的对照行里已经有了，
+        # 按钮上再写一遍会随每次状态变化抖动，也容易让人以为能精确补这么多。
+        hints.append({"label": _TRAIN_BUTTONS[field], "path": path})
 
+    if after["hunger"] < requirements["hunger_min"]:
+        add("hunger", "宠物.喂食", requirements["hunger_min"])
+    if after["mood"] < requirements["mood_min"]:
+        add("mood", "宠物.玩耍", requirements["mood_min"])
+    if after["fatigue"] > requirements["fatigue_max"]:
+        # 体力 = 100 - 疲劳；疲劳超上限等价于体力跌破下限。
+        add("fatigue", "宠物.休息", requirements["fatigue_max"])
+
+    if details:
         raise ResourceShortageError(
-            apply_command_start("训练会把它累垮：" + "；".join(problems)),
+            "训练还没开始：状态不够，练完会掉出照护线。",
             hints,
+            details,
         )
 
 

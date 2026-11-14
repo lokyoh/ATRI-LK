@@ -210,6 +210,28 @@ def shop_item_menu(number: str, *, affordable: bool = True) -> list[Choice]:
     return result
 
 
+def shortage_menu(hints: list[dict[str, str]] | None = None) -> list[Choice]:
+    """训练失败后的补救动作：把结构化建议直接变成按钮。
+
+    标签自带数值（``喂食 +8`` / ``休息 -3``），所以点之前就知道这一步能补多少；
+    末尾固定跟一个「状态」，方便补完再看一眼还差什么。
+
+    **这里不重新挑动作**：做什么由 ``core.interaction`` 判定，展示层只负责把它的
+    结论排成可点的样子——两处各判一次必然漂移。
+    """
+    result: list[Choice] = []
+    seen: set[str] = set()
+    for item in hints or []:
+        path = str(item.get("path") or "").strip()
+        if not path or path in seen:
+            continue
+        seen.add(path)
+        result.append(Choice(label=str(item.get("label") or "去做"), command=cmd(path)))
+    if "宠物.状态" not in seen:
+        result.append(Choice(label="看状态", command=cmd("宠物.状态")))
+    return result
+
+
 def rogue_menu(*, running: bool) -> list[Choice]:
     """肉鸽：没开局给「开始」，局内给「继续 / 进度 / 撤退」。"""
     if not running:

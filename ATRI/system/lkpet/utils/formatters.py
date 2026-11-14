@@ -20,6 +20,17 @@ STATUS_MAX = 100
 AFFECTION_MAX = 1000
 """好感量表上限（与 ``core.affection.AFFECTION_MAX`` 同值）。"""
 
+
+def stamina_of(fatigue: int) -> int:
+    """把内部疲劳值换算成对外展示的**体力**。
+
+    ``fatigue`` 越大越累，玩家看到的「体力」正好相反（越大越精神）。换算只在
+    这一处做：状态卡、互动回执、训练失败提示全部走它，避免某个地方漏改出现
+    「体力 84」这种反着的数字。
+    """
+    return max(0, min(STATUS_MAX, STATUS_MAX - int(fatigue or 0)))
+
+
 RARITY_LABELS = {
     "common": "普通",
     "rare": "稀有",
@@ -131,7 +142,11 @@ def format_pet_status(pet, pet_config: dict[str, Any] | None = None) -> str:
                 STATUS_MAX,
             ),
             style.meter(text("status.mood_label", "心情"), pet.mood, STATUS_MAX),
-            style.meter(text("status.fatigue_label", "疲劳"), pet.fatigue, STATUS_MAX),
+            style.meter(
+                text("status.stamina_label", "体力"),
+                stamina_of(pet.fatigue),
+                STATUS_MAX,
+            ),
             style.meter(
                 text("status.cleanliness_label", "清洁"), pet.cleanliness, STATUS_MAX
             ),
@@ -179,6 +194,68 @@ def format_pet_status(pet, pet_config: dict[str, Any] | None = None) -> str:
     return "\n".join(line for line in lines if line)
 
 
+def format_train_shortage(exc) -> str:
+    """训练因状态不足而失败时的回执。
+
+    早先这条消息是「一句话把三项不足全塞进去」：
+
+        训练会把它累垮：饱食不足（训练后 22，至少要 30），先 /宠物.喂食 +8 起步
+
+    三个问题夹在逗号里、指令混在解释里，读起来像报错日志而不是给玩家的提示。
+    现在拆成：
+
+    * 一句标题式结论（``**训练未开始**``）——先回答「到底练没练」；
+    * 逐条对照行（``饱食 ▰▰▱▱▱ 22/100（需 ≥30，还差 8）``）——数值条 + 精确值，
+      直接看出差多少；
+    * 一句兜底说明（为什么按练完的数值算），避免玩家以为门槛算错。
+
+    指令**不写进正文**：底部由 handler 挂可点的动作组，OneBot 端由
+    ``reply.plain_with_choices`` 列出同样的命令。
+
+    三项数值都已经是**展示值**（体力而非疲劳），统一用「不低于门槛」这一种句式，
+    所以这里不再区分「不足 / 过高」。
+    """
+    s = style.current()
+    details = list(getattr(exc, "details", None) or [])
+    message = str(exc) or "训练未开始。"
+
+    lines = [s.label(text("train.failed_title", "❌ 训练未开始"))]
+    lines.append(s.quote(message))
+
+    for item in details:
+        label = str(item.get("label") or "")
+        value = int(item.get("value", 0) or 0)
+        limit = int(item.get("limit", 0) or 0)
+        need = int(item.get("need", 0) or 0)
+        need_text = text(
+            "train.failed_need",
+            "需 ≥{limit}，还差 {need}",
+            limit=limit,
+            need=need,
+        )
+        lines.append(
+            s.bullet(
+                text(
+                    "train.failed_line",
+                    "{label} {bar} {value}/{max}（{need_text}）",
+                    label=label,
+                    bar=style.bar(value, STATUS_MAX),
+                    value=value,
+                    max=STATUS_MAX,
+                    need_text=need_text,
+                )
+            )
+        )
+
+    lines.append(
+        text(
+            "train.failed_hint",
+            "以上是练完之后的状态；先补上再练，行动点还没扣。",
+        )
+    )
+    return "\n".join(line for line in lines if line)
+
+
 def format_action_result(kind: str, result: dict[str, Any]) -> str:
     """喂食 / 玩耍 / 洗澡 / 休息 / 训练的回执卡。
 
@@ -195,10 +272,11 @@ def format_action_result(kind: str, result: dict[str, Any]) -> str:
     # 用 text() 会把「缺字段」误判成未填完的模板，拿到的其实是同一份原文，但语义模糊。
     line = template(f"{kind}.line", "") or template(f"{kind}.ok", "")
 
+    stamina = stamina_of(result.get("fatigue", 0))
     bars = {
         "bar_hunger": style.bar(result.get("hunger", 0), STATUS_MAX),
         "bar_mood": style.bar(result.get("mood", 0), STATUS_MAX),
-        "bar_fatigue": style.bar(result.get("fatigue", 0), STATUS_MAX),
+        "bar_stamina": style.bar(stamina, STATUS_MAX),
         "bar_cleanliness": style.bar(result.get("cleanliness", 0), STATUS_MAX),
     }
     if not line:
@@ -209,6 +287,7 @@ def format_action_result(kind: str, result: dict[str, Any]) -> str:
     fields = dict(result.items())
     fields.setdefault("max", STATUS_MAX)
     fields.setdefault("action_points_max", _max_action_points())
+    fields["stamina"] = stamina
     fields.update(bars)
     body = line.format(**fields)
 

@@ -53,7 +53,7 @@ status:
   section_growth: "成长"
   hunger_label: "饱食"
   mood_label: "心情"
-  fatigue_label: "疲劳"
+  stamina_label: "体力"
   cleanliness_label: "清洁"
   affection_label: "亲密"
   ap_label: "行动点"
@@ -83,7 +83,7 @@ feed:
 
 play:
   title: "🎾 玩耍完成"
-  line: "{message}\n心情 {bar_mood} {mood}/{max} ｜ 疲劳 {bar_fatigue} {fatigue}/{max}\n亲密 {affection}（+{affection_gain}）｜ 行动点 {action_points}"
+  line: "{message}\n心情 {bar_mood} {mood}/{max} ｜ 体力 {bar_stamina} {stamina}/{max}\n亲密 {affection}（+{affection_gain}）｜ 行动点 {action_points}"
 
 bathe:
   title: "🛁 洗澡完成"
@@ -91,11 +91,16 @@ bathe:
 
 rest:
   title: "😴 休息完成"
-  line: "{message}\n疲劳 {bar_fatigue} {fatigue}/{max}\n亲密 {affection}（+{affection_gain}）｜ 行动点 {action_points}"
+  line: "{message}\n体力 {bar_stamina} {stamina}/{max}\n亲密 {affection}（+{affection_gain}）｜ 行动点 {action_points}"
 
 train:
   title: "🏋 训练完成"
-  line: "{message}\n经验 +{exp}（Lv.{level}）\n饱食 {bar_hunger} {hunger}/{max} ｜ 疲劳 {bar_fatigue} {fatigue}/{max} ｜ 心情 {bar_mood} {mood}/{max}\n行动点 {action_points}"
+  line: "{message}\n经验 +{exp}（Lv.{level}）\n饱食 {bar_hunger} {hunger}/{max} ｜ 体力 {bar_stamina} {stamina}/{max} ｜ 心情 {bar_mood} {mood}/{max}\n行动点 {action_points}"
+  failed_title: "❌ 训练未开始"
+  failed_line: "{label} {bar} {value}/{max}（{need_text}）"
+  failed_need: "需 ≥{limit}，还差 {need}"
+  failed_hint: "以上是「练完之后」的状态；先补上再练，行动点还没扣。"
+
 
 skill:
   title: "📚 {name} 的技能｜主动 {active_used}/{active_max} ｜ 被动 {passive_used}/{passive_max}"

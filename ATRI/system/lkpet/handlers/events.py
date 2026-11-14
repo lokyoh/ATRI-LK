@@ -35,15 +35,13 @@ def lkpet_item_loading():
 
 @sign_in_events.handle()
 def lkpet_sign_in(event: SignInEvent):
-    """签到赠送肉鸽入场券，让「每天一次入场」与签到挂钩。"""
+    """签到赠送肉鸽入场券；不写签到提示，券直接进背包。"""
     count = int(plugin_config.get("rogue_ticket_per_sign", 1) or 0)
     if count <= 0:
         return
     item_name = rogue_ticket_name()
     if not lk_util.item_change_func(event.user_data, item_name, count):
         log.warning(f"签到发放入场券失败：{item_name} ×{count}")
-        return
-    event.add_result(f"获得{count}张{item_name}（凭券入场不消耗行动点）")
 
 
 @user_info_events.handle()

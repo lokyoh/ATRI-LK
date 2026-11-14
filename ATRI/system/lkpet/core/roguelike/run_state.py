@@ -104,8 +104,7 @@ class RogueRun:
 
     @classmethod
     def create(cls, pet, cfg: dict[str, Any], rogue=None) -> RogueRun:
-        """开一局：局内生命取养成 HP 上限（+被动 max_hp +遗物 max_hp_mult），
-        局内魔力取 :func:`rogue_mp_max` 并**满蓝入场**，从第 1 层开始。"""
+        """开一局：生命取 HP 上限，魔力满蓝入场，金币见 :func:`_starting_coins`。"""
         from ._common import rogue_mp_max
         from .relics import relic_multipliers
 
@@ -119,6 +118,7 @@ class RogueRun:
             mults = relic_multipliers(rogue)
             hp_max = max(1, round(hp_max * mults.get("max_hp_mult", 1.0)))
         mp_max = rogue_mp_max(pet, [], cfg)
+        coins = _starting_coins(pet)
         return cls(
             seed=random.randint(1, 10**9),
             floor=1,
@@ -126,9 +126,24 @@ class RogueRun:
             hp_max=hp_max,
             mp=mp_max,
             mp_max=mp_max,
-            coins=0,
+            coins=coins,
             started_at=datetime.now().isoformat(timespec="seconds"),
         )
+
+
+def _starting_coins(pet) -> int:
+    """开局金币：``base_value`` + 每级 ``rogue_start_coins``。"""
+    if pet is None:
+        return 0
+    bonuses = getattr(pet, "permanent_bonuses", None)
+    if not isinstance(bonuses, dict):
+        return 0
+    try:
+        base = int(bonuses.get("rogue_start_coins_base", 0) or 0)
+        per_level = int(bonuses.get("rogue_start_coins", 0) or 0)
+    except (TypeError, ValueError):
+        return 0
+    return max(0, base + per_level)
 
 
 # ---------------------------------------------------------------------------

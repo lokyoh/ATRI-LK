@@ -7,6 +7,7 @@ from dataclasses import asdict, dataclass, field
 from typing import Any
 
 from ATRI.log import log
+from ATRI.utils.datetime import fromtimestamp
 
 #: 状态一半复位所需的时间（秒）。mood / irritation 都按这个节奏回归。
 #: 30 分钟：够长到能延续一整段对话，够短到不会「记仇一整天」。
@@ -242,7 +243,58 @@ def fatigue_for_hour(hour: int) -> float:
     return 0.75  # 23:00–02:00 深夜
 
 
+#: 睡眠占位不算「正在做什么」。
+_ATTENTION_SKIP = {"Null", "睡眠中。", "睡眠中"}
+
+
+def current_activity(now_ts: float | None = None) -> str:
+    """此刻在做什么（来自日程）。读不到返回空串。"""
+    try:
+        from .life import get_life_system
+
+        return str(get_life_system().location().activity or "").strip()
+    except Exception:
+        return ""
+
+
+def sync_state(now_ts: float | None = None) -> InnerState:
+    """把状态推进到此刻：疲劳按作息重算、注意力跟日程、情绪按半衰期回归。
+
+    思考链路与插话判断都走这里，否则判断读到的是上一轮对话留下的旧值。
+    """
+    ts = _now() if now_ts is None else now_ts
+    state = state_store.load()
+    state.settle(ts)
+    before = (state.fatigue, state.attention)
+    state.fatigue = fatigue_for_hour(fromtimestamp(ts).hour)
+    activity = current_activity(ts)
+    if activity and activity not in _ATTENTION_SKIP:
+        state.attention = activity
+    # 每条消息都调一次，没变就不写库；情绪回退只留内存，由回合结算落盘。
+    if (state.fatigue, state.attention) != before:
+        state_store.save(state)
+    return state
+
+
+def state_prompt(now_ts: float | None = None) -> str:
+    """渲染成提示词片段；读不出来返回空串。"""
+    try:
+        return sync_state(now_ts).describe()
+    except Exception as exc:
+        log.debug(f"读取内心状态失败，按无状态处理：{exc}")
+        return ""
+
+
 SETTLE_BLEND = 0.25
+
+#: 同一个人连着发这么多条就算「被追着问」。
+BURST_MESSAGES = 3
+
+#: 连发带来的烦躁目标值。必须高过闸门（0.5 / 0.6），否则闸门够不到。
+BURST_IRRITATION = 0.55
+
+#: 疲倦时被叫到的额外烦躁。单独一条到不了闸门，与连发叠加才会。
+TIRED_IRRITATION = 0.25
 
 
 def settle_from_turn(
@@ -250,6 +302,7 @@ def settle_from_turn(
     replied: bool,
     rounds: int,
     user_was_master: bool = False,
+    burst: int = 0,
     now_ts: float | None = None,
 ) -> InnerState:
     """每轮对话结束后**被动结算**情绪——不依赖模型主动调 ``feel``。
@@ -275,7 +328,15 @@ def settle_from_turn(
     if user_was_master and replied:
         target_mood += 0.05
 
+    target_irritation = 0.0
+    if burst >= BURST_MESSAGES:
+        target_irritation += BURST_IRRITATION
+    if state.fatigue >= 0.6:
+        target_irritation = min(MAX_MAGNITUDE, target_irritation + TIRED_IRRITATION)
+
     state.mood += (target_mood - state.mood) * SETTLE_BLEND
+    state.irritation += (target_irritation - state.irritation) * SETTLE_BLEND
     state.mood = max(-MAX_MAGNITUDE, min(MAX_MAGNITUDE, state.mood))
+    state.irritation = max(0.0, min(MAX_MAGNITUDE, state.irritation))
     state_store.save(state)
     return state

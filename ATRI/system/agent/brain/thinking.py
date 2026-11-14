@@ -17,13 +17,7 @@ from ..agent.outbox import ChatOutbox
 from ..agent.role import ATRI
 from ..agent.schedule import ATRISchedule
 from ..agent.skills import skill_manager
-from ..agent.state import (
-    fatigue_for_hour,
-    get_state,
-    set_fatigue,
-    settle_from_turn,
-    state_store,
-)
+from ..agent.state import get_state, settle_from_turn, state_prompt, state_store
 from ..agent.telemetry import telemetry
 from ..agent.temp_his import ChatMessage
 from ..agent.user import (
@@ -60,6 +54,20 @@ def _sync_attention(current_activity: str) -> None:
             state_store.save(state)
     except Exception:
         pass
+
+
+def _burst_count(history_list: list[History], user_id: str) -> int:
+    """同一个人从队尾起连着发了几条：烦躁度的真实输入来源。"""
+    uid = str(user_id or "")
+    if not uid:
+        return 0
+    count = 0
+    for node in reversed(history_list or []):
+        sender = getattr(node, "sender", None)
+        if sender is None or str(sender) != uid:
+            break
+        count += 1
+    return count
 
 
 async def _describe_addressee(bot, chat_id, user_id, user_info) -> str:
@@ -110,19 +118,8 @@ async def _describe_addressee(bot, chat_id, user_id, user_info) -> str:
 
 
 def get_state_prompt() -> str:
-    """把内心状态渲染成提示词片段。
-
-    疲劳每轮按当前时段**自动重算**：它由作息决定，不是模型能自由决定的，
-    也不该只在模型主动调 ``feel`` 时才更新。
-    """
-    try:
-        hour = now().hour
-        current = get_state()
-        if abs(current.fatigue - fatigue_for_hour(hour)) > 0.05:
-            current = set_fatigue(fatigue_for_hour(hour))
-        text = current.describe()
-    except Exception:
-        return ""
+    """把内心状态渲染成提示词片段（与插话判断同一份）。"""
+    text = state_prompt()
     if not text:
         return ""
     return f"#你此刻的状态\n{text}\n"
@@ -249,7 +246,7 @@ class ThinkingModel:
             prompt += f"#今日穿搭\n{parts['outfit']}\n\n"
             if parts["home"]:
                 prompt += f"#你的家\n{parts['home']}\n\n"
-            _sync_attention(life.location().activity)
+
         except Exception as exc:
             log.warning(f"生活提示词生成失败，已跳过：{exc}")
             now_schedule = await ATRISchedule().get_schedule()
@@ -544,6 +541,7 @@ class ThinkingModel:
                     replied=bool(getattr(sender, "sent_count", 0)),
                     rounds=thinking_times,
                     user_was_master=(get_user_group(args.user_id) == "主人"),
+                    burst=_burst_count(history_list, args.user_id),
                 )
                 telemetry.feel(
                     mood=settled.mood,

@@ -5,7 +5,7 @@ from ATRI.log import log
 
 from ..agent.history import get_history_messages
 from ..agent.role import ATRI
-from ..agent.state import get_state
+from ..agent.state import state_prompt
 from ..agent.telemetry import telemetry
 from ..llm import ModelType, llm_manager
 
@@ -22,6 +22,47 @@ ALLOWED_TAGS = (
 
 #: 匹配 `标签:xxx`（中英文冒号都接受，前后允许空白）
 _TAG_RE = re.compile(r"标签\s*[:：]\s*([^\s，,。；;]+)")
+
+#: 行首的列表符号与强调标记。
+_LINE_NOISE_RE = re.compile(r"^[\s*#>`\-\d.、)）]+")
+
+#: 结论的正负说法。「不需要回复」含「需要回复」，靠否定词区分。
+_VERDICT_RE = re.compile(r"(不需要回复|需要回复|不回复|回复)")
+_POSITIVE_WORDS = frozenset({"需要回复", "回复"})
+_NEGATED_RE = re.compile(r"(不|没|无|未|别|莫)[^，。；,;]{0,3}$")
+#: 设问（「是否需要回复」）不是结论。
+_QUESTION_RE = re.compile(r"(是否|要不要|该不该|需不需要)")
+
+
+def _parse_verdict(content: str) -> bool | None:
+    """抽出「回不回」；抽不出返回 None（约 8% 的输出是整段散文）。
+
+    先认独占一行的结论，认不出只看最后一行：中间的「是否需要回复」是设问，
+    拿它当结论等于替模型把话说完。
+    """
+    body = content or ""
+    for raw in body.splitlines():
+        line = _LINE_NOISE_RE.sub("", raw).strip()
+        if line.startswith(("不需要回复", "不回复")):
+            return False
+        if line.startswith(("需要回复", "回复")):
+            return True
+
+    # 退回：只看最后一行，别把设问当结论。
+    tail = next((line for line in reversed(body.splitlines()) if line.strip()), "")
+    last: tuple[int, bool] | None = None
+    for match in _VERDICT_RE.finditer(tail):
+        word = match.group(1)
+        lead = tail[max(0, match.start() - 10) : match.start()]
+        if _QUESTION_RE.search(lead):
+            continue
+        positive = word in _POSITIVE_WORDS
+        if positive and _NEGATED_RE.search(lead):
+            positive = False
+        last = (match.start(), positive)
+    if last is None:
+        return None
+    return last[1]
 
 
 def _parse_tag(content: str) -> str | None:
@@ -119,13 +160,12 @@ class JudgmentModel:
         msg_his = "\n".join(messages) if messages else "无历史聊天记录"
         img_his = chat_message.image_history
         history = f"{img_his}\n\n{msg_his}"
-        try:
-            state_text = get_state().describe() or "（状态平常）"
-        except Exception:
-            state_text = "（状态平常）"
+        state_text = state_prompt() or "（状态平常）"
         started = time.perf_counter()
         replied = False
         reason: str | None = None
+        tag: str | None = None
+        parsed: bool | None = None
         try:
             response = await llm_manager.call_model_by_type(
                 ModelType.ATRI_JUDGE,
@@ -138,7 +178,9 @@ class JudgmentModel:
                 "Agent-主动回复判断",
             )
             content = response.content
-            replied = bool(content.startswith(("回复", "需要回复")))
+            verdict = _parse_verdict(content)
+            parsed = verdict is not None
+            replied = bool(verdict)
             for line in content.splitlines():
                 if "原因" in line:
                     reason = line.strip()[:120]
@@ -155,5 +197,6 @@ class JudgmentModel:
                 duration=time.perf_counter() - started,
                 reason=reason,
                 tag=tag,
+                parsed=parsed,
                 text=chat_content,
             )

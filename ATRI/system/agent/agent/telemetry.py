@@ -141,6 +141,7 @@ class Telemetry:
         duration: float,
         reason: str | None = None,
         tag: str | None = None,
+        parsed: bool | None = None,
         text: Any = None,
     ) -> None:
         self.record(
@@ -150,6 +151,7 @@ class Telemetry:
             duration=round(duration, 3),
             reason=reason,
             tag=tag,
+            parsed=parsed,
             content_preview=self.preview(text),
         )
 

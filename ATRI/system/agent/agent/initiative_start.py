@@ -162,20 +162,67 @@ def _save_spoken(spoken: list[str], keep: int = 40) -> None:
 
 
 def pick_opening() -> Opening | None:
-    """挑一条「值得说」的经历。没有就返回 None。
+    """挑一条「值得说」的素材：自我记忆优先，当天日程兜底。没有就返回 None。
 
-    素材**只**来自自我记忆（`self_note`）——她自己的经历，有前因、有上下文。
-
-    曾经还从 `memories` 表里挑本群的高情绪条目当素材，但那批记忆是**过去某天**
-    的总结，日期一久，冷不丁提起来就是「突然说起八百年前的事」，比不说话更怪。
-    检索场景里「用户问起才想起来」是合理的，主动说出来是另一回事。
-
-    代价是素材有限（默认 8 条）：讲完就暂时没有可说的，`try_speak` 会安静跳过。
-    这比硬凑一句突兀的话好。
+    刻意不碰 `memories` 表：那是过去某天的总结，翻旧账比不说话更怪。
     """
-    spoken = _load_spoken()
-    spoken_set = set(spoken)
-    return _pick_from_self(spoken_set)
+    spoken_set = set(_load_spoken())
+    return _pick_from_self(spoken_set) or _pick_from_life(spoken_set)
+
+
+#: 这些活动当话题太琐碎，说出来像流水账。
+_LOW_SIGNAL_ACTIVITY = ("睡觉", "起床", "洗漱", "空闲")
+
+
+def _tellable(entry) -> bool:
+    """这段日程值不值得当话题。"""
+    activity = str(getattr(entry, "activity", "") or "").strip()
+    if not activity:
+        return False
+    return not any(word in activity for word in _LOW_SIGNAL_ACTIVITY)
+
+
+def _schedule_entries():
+    """当天日程（固定作息 + 填入层）。读不到返回空列表。"""
+    try:
+        from .life import get_life_system
+
+        return list(get_life_system().plan())
+    except Exception as exc:
+        log.debug(f"读取当天日程失败，主动开口跳过：{exc}")
+        return []
+
+
+def _pick_from_life(spoken_set: set[str], *, minute: int | None = None) -> Opening | None:
+    """从今天的日程里挑一段已经开始的事。
+
+    自己填的条目优先，固定作息只作兜底。
+    :param minute: 当天窗口内的分钟数；None 表示此刻。
+    """
+    from .life.model import EntryKind, format_time, now_minutes
+
+    entries = _schedule_entries()
+    if minute is None:
+        minute = now_minutes()
+    candidates = [
+        entry
+        for entry in entries
+        if entry.kind is EntryKind.STAY
+        and entry.start_min <= minute
+        and _tellable(entry)
+    ]
+    if not candidates:
+        return None
+
+    candidates.sort(key=lambda e: (e.source != "routine", e.end_min))
+    entry = candidates[-1]
+    text = (
+        f"今天{format_time(entry.start)}到{format_time(entry.end)}"
+        f"我在{entry.place}，{entry.activity}"
+    )
+    if _key_of(text) in spoken_set:
+        return None
+    return Opening(text=text, reason=f"当天日程：{entry.place}/{entry.activity}")
 
 
 def _pick_from_self(spoken_set: set[str]) -> Opening | None:
@@ -637,22 +684,14 @@ async def try_speak(chat_id: str, bot) -> str | None:
 
     try:
         ok, reason = should_speak_now(chat_id)
-        # 拒绝也要记：真实数据里 305 条 initiative 全是插话判断，
-        # 主动开口的拒绝（时段/冷却/冷群）一条都没留，
-        # 于是「她为什么一整天不开口」只能靠猜。
+        opening = pick_opening() if ok else None
+        if ok and opening is None:
+            ok, reason = False, "没有值得说的素材（或都已说过）"
+        # 拒绝也要记，否则「她为什么不开口」查不出来；一次尝试只记一条，
+        # 先记放行再记没素材会让放行数翻倍。
         telemetry.initiative(chat_id=chat_id, allowed=ok, reason=reason, kind="start")
         if not ok:
             log.debug(f"群 {chat_id} 不主动开口：{reason}")
-            return None
-
-        opening = pick_opening()
-        if opening is None:
-            telemetry.initiative(
-                chat_id=chat_id,
-                allowed=False,
-                reason="没有值得说的素材（或都已说过）",
-                kind="start",
-            )
             return None
 
         sender, spoke = await compose_opening(chat_id, bot, opening)

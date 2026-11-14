@@ -374,7 +374,7 @@ async def _buy(pet, rogue, cfg: dict[str, Any], number: int) -> str:
     if spec.get("id") in _run_relics(rogue):
         return _text("relic_owned", "这件遗物本局已经拥有了。")
 
-    price = _final_price(spec, cfg, _run_discount(run))
+    price = _final_price(spec, cfg, _run_discount(run), run.floor)
     if run.coins < price:
         return _text(
             "shop_poor",

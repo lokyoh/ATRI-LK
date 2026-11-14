@@ -645,6 +645,7 @@ def _stock_preview_text(
 
     discount = _run_discount(run)
     owned = set(run.relics) if run is not None else set()
+    floor = run.floor if run is not None else None
     names = []
     for relic_id in stock:
         spec = relic_specs().get(relic_id)
@@ -652,13 +653,17 @@ def _stock_preview_text(
             note = relic_effect_note(spec.get("effect") or {})
             label = f"{spec['name']}（{note}，" if note else f"{spec['name']}（"
             names.append(
-                f"{label}{_final_price(spec, cfg, discount)}金{_tags(relic_id, owned)}）"
+                f"{label}{_final_price(spec, cfg, discount, floor)}金"
+                f"{_tags(relic_id, owned)}）"
             )
     return "、".join(names) or _text("shop_empty", "空空如也")
 
 
 def _relic_price(spec: dict[str, Any], cfg: dict[str, Any]) -> int:
-    """遗物**基础价**（按 rarity 落在 shop.tier_price）。"""
+    """遗物基础价：优先自身 price，漏填退回 shop.tier_price。"""
+    own = spec.get("price")
+    if isinstance(own, int | float) and own > 0:
+        return int(own)
     tier_price = cfg.get("shop", {}).get("tier_price") or {}
     return int(tier_price.get(spec.get("rarity", "normal"), 25))
 
@@ -672,9 +677,29 @@ def _run_discount(run: RogueRun | None) -> float:
     return float(relic_multipliers_from_ids(list(run.relics)).get("shop_discount", 1.0))
 
 
-def _final_price(spec: dict[str, Any], cfg: dict[str, Any], discount: float) -> int:
-    """成交价 = 基础价 × 折扣乘积，最低 1 金（展示与购买共用）。"""
-    return max(1, round(_relic_price(spec, cfg) * discount))
+def _region_price_mult(floor: int | None, cfg: dict[str, Any]) -> float:
+    """区域价格系数（``region.shop.price_mult``），抵消后期金币收入膨胀。"""
+    if floor is None:
+        return 1.0
+    from .tower import region_of
+
+    return float(
+        (region_of(floor, cfg).get("shop") or {}).get("price_mult", 1.0) or 1.0
+    )
+
+
+def _shop_base_price(
+    spec: dict[str, Any], cfg: dict[str, Any], floor: int | None
+) -> int:
+    """货架原价 = 自身价值 × 区域系数（未打折）。"""
+    return max(1, round(_relic_price(spec, cfg) * _region_price_mult(floor, cfg)))
+
+
+def _final_price(
+    spec: dict[str, Any], cfg: dict[str, Any], discount: float, floor: int | None = None
+) -> int:
+    """成交价 = 原价 × 折扣乘积，最低 1 金（展示与购买共用）。"""
+    return max(1, round(_shop_base_price(spec, cfg, floor) * discount))
 
 
 def _tags(relic_id: str, owned: set[str]) -> str:
@@ -710,8 +735,8 @@ def _shop_text_from_run(run: RogueRun, stock: list[str], cfg: dict[str, Any]) ->
         spec = relic_specs().get(relic_id)
         if not spec:
             continue
-        base = _relic_price(spec, cfg)
-        price = _final_price(spec, cfg, discount)
+        base = _shop_base_price(spec, cfg, run.floor)
+        price = _final_price(spec, cfg, discount, run.floor)
         if relic_id in owned:
             extra = _text("shop_owned_tag", "，已购买")
         elif price < base:
@@ -728,7 +753,7 @@ def _shop_text_from_run(run: RogueRun, stock: list[str], cfg: dict[str, Any]) ->
                 spec.get("rarity", "normal"),
             ),
             stat=relic_effect_note(spec.get("effect") or {}),
-            price=_final_price(spec, cfg, discount),
+            price=price,
             extra=extra,
         )
         lines.append(line_link(body, f"宠物.肉鸽 {idx}"))

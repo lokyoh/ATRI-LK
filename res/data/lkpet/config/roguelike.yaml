@@ -54,7 +54,7 @@ tower:
         - { name: 稻草人新郎, traits: [strong], desc: 穿着不合身的礼服，手里攥着一束枯花。, archetype: brute, stats: { hp: 1.2, atk: 1.35, spd: 0.85 } }
         - { name: 晚归的牧童, traits: [leech, crit], desc: 天都黑了还站在坡上，数着不该数的东西。, archetype: caster, stats: { atk: 1.3, spd: 1.1 } }
       rewards: { coins: 2, coins_per_floor: 1, exp: 20, exp_per_floor: 2 }
-      shop: { heal_mult: 1 }
+      shop: { heal_mult: 1, price_mult: 1.4 }
       elites:  # 每区域 7 个精英备选（战斗路线按区域 seed 抽，遭遇次数受 elite.max_per_region 限制）
         - { name: 铁角原牛, desc: 低头犁地的巨牛，一对铁角能掀翻货车。, archetype: brute, preset: charger, passive: bulwark }
         - { name: 疾风隼王, traits: [swift], desc: 循风而猎的巨隼，俯冲时像一支白羽箭。, archetype: swift, stats: { atk: 1.15, spd: 1.35, hp: 0.85 }, skills: ["e_dive", "e_haste"], passive: rage }
@@ -103,7 +103,7 @@ tower:
         - { name: 湿苔爬行者, traits: [slow, thorns], desc: 贴在潮湿岩面上移动的一层绿。, archetype: tank, stats: { hp: 1.2, def: 1.35, spd: 0.5 } }
         - { name: 林中低语群, traits: [swarm, thin], desc: 听不清在说什么，但明显在叫你的名字。, archetype: swift, stats: { hp: 0.55, spd: 1.35 } }
       rewards: { coins: 5, coins_per_floor: 1, exp: 60, exp_per_floor: 4 }
-      shop: { heal_mult: 2.5 }
+      shop: { heal_mult: 2.5, price_mult: 2.0 }
       elites:
         - { name: 苔皮巨熊, desc: 背上生满青苔，一掌能拍断百年树干。, archetype: brute, preset: guardian, passive: bulwark }
         - { name: 织网女巫蛛, desc: 腹部的纹路像一张皱眉的人脸。, archetype: caster, preset: summoner, passive: siphon }
@@ -152,7 +152,7 @@ tower:
         - { name: 熔金史莱姆, traits: [leech, tough, regen], desc: 吞过太多矿物，表面浮着一层金属光。, archetype: tank, stats: { hp: 1.4, def: 1.2, spd: 0.6 } }
         - { name: 火种幼体, traits: [fragile, swarm, unstable], desc: 一小团还没长开的东西，见了风就炸。, archetype: caster, stats: { hp: 0.6, atk: 1.25, spd: 1.2 } }
       rewards: { coins: 10, coins_per_floor: 2, exp: 140, exp_per_floor: 7 }
-      shop: { heal_mult: 5 }
+      shop: { heal_mult: 5, price_mult: 3.8 }
       elites:
         - { name: 赤甲火蝎, traits: [tough], desc: 尾钩滴落的毒液在石头上烧出小洞。, archetype: tank, stats: { hp: 1.15, def: 1.5, spd: 0.7 }, skills: ["e_crit_stab", "e_inferno_mark"], passive: erode }
         - { name: 熔岩蟒, desc: 体内流动着岩浆，爬过的地方留下火痕。, archetype: brute, preset: undying, passive: erode }
@@ -201,7 +201,7 @@ tower:
         - { name: 冻土掘手, traits: [tough], desc: 从雪下伸出来的手，抓住脚踝就不松。, archetype: tank, stats: { hp: 1.2, def: 1.3, spd: 0.55 } }
         - { name: 碎冰傀儡, traits: [fragile, thorns, volatile], desc: 拼得很粗，一碰就散，散的时候扎人。, archetype: tank, stats: { hp: 0.85, def: 1.35, spd: 0.9 } }
       rewards: { coins: 18, coins_per_floor: 3, exp: 300, exp_per_floor: 12 }
-      shop: { heal_mult: 9 }
+      shop: { heal_mult: 9, price_mult: 6.0 }
       elites:
         - { name: 冰棘猛犸, traits: [thorns], desc: 象牙结满冰棱，吼一声能冻住呼吸。, archetype: tank, stats: { hp: 1.5, def: 1.45, spd: 0.45 }, skills: ["e_quake", "e_frost_bind"], phase: ph_bulwark, passive: bulwark }
         - { name: 霜翼巨鹰, desc: 爪下抓着整块浮冰在空中巡弋。, archetype: swift, preset: duelist, passive: rage }
@@ -250,7 +250,7 @@ tower:
         - { name: 塔底守望者, traits: [strong, tough], desc: 从第一层就站在那儿，一直没换过姿势。, archetype: brute, stats: { hp: 1.35, atk: 1.4, def: 1.35, spd: 0.55 } }
         - { name: 沉星祭坛兽, traits: [thick, strong], desc: 趴在祭坛上的东西，祭坛早被它压塌了。, archetype: brute, stats: { hp: 1.5, atk: 1.3, spd: 0.55 } }
       rewards: { coins: 30, coins_per_floor: 4, exp: 560, exp_per_floor: 20 }
-      shop: { heal_mult: 15 }
+      shop: { heal_mult: 15, price_mult: 9.0 }
       elites:
         - { name: 虚空之眼, traits: [crit], desc: 悬浮的巨眼，瞳孔里倒转着星光。, archetype: caster, stats: { hp: 0.9, atk: 1.4 }, skills: ["e_void_gaze", "e_mana_burn"], phase: ph_awaken, passive: siphon }
         - { name: 星坠猎犬, desc: 由陨屑拼成的猎犬，奔跑时拖出火尾。, archetype: swift, preset: evasive, passive: rage }
@@ -831,7 +831,8 @@ bosses:
 #   · 可刷商店的层按 chance 逐层判定（区域级 seed，可复现），不再每层必出；
 #     区域前 5 层（no_before_gap）不刷
 #   · 一旦本层刷出，商店必定占三选一的第 1 个名额（不参与事件概率抽取）
-#   · 遗物只在本局生效；价格按 rarity 由 tier_price 统一定
+#   · 遗物只在本局生效；价格**逐件独立**（rogue_relics.yaml 每件的 price，
+#     按效果折算），再乘各区域的 shop.price_mult——同级的廉价品与贵重品差 2~4 倍
 #   · **可刷层按楼层构成算**：遗物层 / 补给层 / 首领层这三种固定内容层不刷商店；
 #     精英守门层（exclude_elite_gate，默认第 18 层）默认也不刷——那一层的职责是
 #     打首领前的最后一道精英消耗，再叠一个商店会让单层里出现互相冲突的决策。
@@ -844,7 +845,10 @@ shop:
   gap_guarantee: 0        # 段内间隔保底：同一连续段内距上个商店超过 N 层就强制补（0 = 关）
   min_per_region: 1       # 每区域至少刷出的商店数（0 = 关）；消灭「整区一个商店都没有」
   stock_tiers: [normal, rare, shop]
+  # 遗物漏填 price 时的兜底价（正常走 rogue_relics.yaml 的逐件 price）
   tier_price: { normal: 25, rare: 60, shop: 50 }
+  # 区域价格系数见各区域 shop.price_mult（1.4 → 9），对冲后期金币收入膨胀；
+  # 按「每店只买得起 1.3~1.5 件」调出来的，改 rewards 时一起调。
 
 # 普通层三选一的生成规则（首领层 / 补给层 / 遗物层不适用，它们各自只有唯一内容）：
 #   1. 商店规则优先：允许出现的层（shop.no_before_gap 之后）按 shop.chance（0.25）

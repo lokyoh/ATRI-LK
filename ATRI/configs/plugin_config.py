@@ -6,6 +6,7 @@ import json
 import os
 import tempfile
 from collections.abc import Callable
+from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, ClassVar
 
@@ -123,6 +124,22 @@ class Field:
         return "string"
 
 
+@dataclass(frozen=True)
+class Section:
+    """配置分节标记。放在类体里，声明之后直到下一个 Section 的字段都归它。
+
+    可选：不声明就没分节，:meth:`PluginConfig.describe` 也不会导出 ``sections``。
+    """
+
+    key: str
+    label: str = ""
+    description: str = ""
+
+    def __post_init__(self) -> None:
+        if not self.key:
+            raise ValueError("Section 的 key 不能为空")
+
+
 class PluginConfig:
     _store_dir: ClassVar[Path] = PLUGIN_CONFIG_DIR
     _schema_version: ClassVar[str] = "1.0"
@@ -136,13 +153,23 @@ class PluginConfig:
         cls._schema_version = schema_version
 
     def __init_subclass__(cls, **kwargs):
-        """子类定义时，收集所有 Field 属性"""
+        """子类定义时，收集所有 Field 属性，并记下分节归属"""
         super().__init_subclass__(**kwargs)
         cls._fields: dict[str, Field] = {}
-        for base in cls.__mro__:
+        cls._sections: list[Section] = []
+        cls._field_section: dict[str, str] = {}
+        current: Section | None = None
+        # 基类在前：字段顺序保持声明顺序，子类只覆盖值不抢位置。
+        for base in reversed(cls.__mro__):
             for name, value in vars(base).items():
-                if isinstance(value, Field):
+                if isinstance(value, Section):
+                    if value.key not in {item.key for item in cls._sections}:
+                        cls._sections.append(value)
+                    current = value
+                elif isinstance(value, Field):
                     cls._fields[name] = value
+                    if current is not None:
+                        cls._field_section[name] = current.key
 
     def __init__(self, service: str, auto_save: bool = True):
         self.service = service
@@ -585,13 +612,34 @@ class PluginConfig:
         return json.loads(json.dumps(self._data))
 
     def describe(self) -> dict:
-        """导出 schema + value 合一的描述"""
-        return {
+        """导出 schema + value 合一的描述。
+
+        声明了 :class:`Section` 时额外导出 ``sections``（分节顺序 + 字段归属），
+        ``fields`` 仍是按声明顺序的平铺列表，不改变已有调用方的读法。
+        """
+        schema = {
             "schemaVersion": self._schema_version,
             "type": type(self).__name__,
             "service": self.service,
             "fields": self._describe_fields(type(self)._fields, self._data),
         }
+        sections = type(self)._sections
+        if sections:
+            ownership = type(self)._field_section
+            schema["sections"] = [
+                {
+                    "key": section.key,
+                    "label": section.label or section.key,
+                    "description": section.description,
+                    "keys": [
+                        name
+                        for name in type(self)._fields
+                        if ownership.get(name) == section.key
+                    ],
+                }
+                for section in sections
+            ]
+        return schema
 
     @classmethod
     def _describe_fields(cls, fields: dict[str, Field], data: dict) -> list:

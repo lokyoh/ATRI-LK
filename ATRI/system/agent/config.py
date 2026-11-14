@@ -2,7 +2,7 @@ import os
 
 import yaml
 
-from ATRI.configs import Field, PluginConfig
+from ATRI.configs import Field, PluginConfig, Section
 from ATRI.dir import SYS_CONFIG_DIR
 from ATRI.exceptions import str_traceback
 from ATRI.log import log
@@ -131,8 +131,11 @@ class AgentConfig(PluginConfig):
             )
         return saved
 
-    # ---- 模型选择（最常改：决定用哪个模型跑哪类任务）----
-    # Agent 只认 atri-* 类型，绝不回退到 chat / tool 等通用类型。
+    section_models = Section(
+        "models",
+        "模型选择",
+        "决定用哪个模型跑哪类任务。Agent 只认 atri-* 类型，不回退到通用类型",
+    )
     model_think = Field(
         str,
         "",
@@ -219,7 +222,11 @@ class AgentConfig(PluginConfig):
         "语音回复。留空只发文字。",
         options_provider=lambda: _model_options("atri-tts"),
     )
-    # ---- 上下文与思考（影响体验和 token 成本）----
+    section_context = Section(
+        "context",
+        "上下文与思考",
+        "影响体验和 token 成本：历史长度、思考轮数、输出节奏",
+    )
     max_history = Field(
         int,
         30,
@@ -314,7 +321,11 @@ class AgentConfig(PluginConfig):
         "留空 = 不额外开启，仅依赖聊天插件的名单",
         item_type=str,
     )
-    # ---- 主动行为（她主动插话的频率）----
+    section_proactive = Section(
+        "proactive",
+        "主动行为",
+        "她主动插话与主动开口的频率、时段与目标群",
+    )
     proactive_max_per_hour = Field(
         int,
         3,
@@ -381,7 +392,11 @@ class AgentConfig(PluginConfig):
         min=1,
         max=24,
     )
-    # ---- 联网搜索 ----
+    section_search = Section(
+        "search",
+        "联网搜索",
+        "让她能查实时信息的搜索服务配置",
+    )
     search = Field(
         dict,
         "搜索API配置",
@@ -391,7 +406,11 @@ class AgentConfig(PluginConfig):
             "api_key": Field(str, "", "搜索 API 密钥"),
         },
     )
-    # ---- 能力开关（只记例外：列表里是禁用的）----
+    section_capabilities = Section(
+        "capabilities",
+        "能力开关",
+        "只记例外：列表里是被禁用的功能/插件/技能",
+    )
     function_calling_disable = Field(
         list,
         [],
@@ -420,7 +439,11 @@ class AgentConfig(PluginConfig):
         "列表中的技能正文直接嵌入思考提示词，且不可被 agent 查询",
         item_type=str,
     )
-    # ---- 三级权限 ----
+    section_permission = Section(
+        "permission",
+        "三级权限",
+        "默认由每个功能自己声明作用域，这里只记例外",
+    )
     permission = Field(
         dict,
         DEFAULT_PERMISSION_OVERRIDES,
@@ -487,10 +510,14 @@ class AgentConfig(PluginConfig):
         validator=_validate_permission_users,
         validation_hint="分类键就是用户 ID；主人身份始终以运行时解析为准",
     )
-    # ---- 行为数据收集（一次性开关）----
+    section_telemetry = Section(
+        "telemetry",
+        "行为数据收集",
+        "记录指标用于评估改动效果，默认不落正文",
+    )
     telemetry_enabled = Field(
         bool,
-        True,
+        False,
         "行为数据收集",
         "记录思考轮数/工具耗时/主动发言判断等指标到插件数据目录下的 telemetry/，"
         "用于评估改进效果。默认不记录消息正文",

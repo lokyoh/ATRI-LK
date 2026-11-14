@@ -37,7 +37,7 @@ tower:
         - { name: 落单的牧羊犬, traits: [swift, crit], desc: 项圈上还挂着半截绳子，它已经分不清谁是羊群了。, archetype: swift, stats: { atk: 1.15, spd: 1.25 } }
         - { name: 麦田乌鸦群, traits: [swarm], desc: 一整片麦子忽然黑了一下，然后才听见翅膀声。, archetype: swift, stats: { hp: 0.6, spd: 1.35 } }
         - { name: 鼹鼠掘工, traits: [thick], desc: 前爪像两把小铲，一晚上能把整条田埂翻过来。, archetype: tank, stats: { hp: 1.35, def: 1.2, spd: 0.7 } }
-        - { name: 迷路的商队骡, traits: [strong, dull], desc: 驮货的骡子被什么吓疯了，包里的锅碗一路响。, archetype: brute, stats: { hp: 1.3, atk: 1.2, spd: 0.8 } }
+        - { name: 迷路的商队骡, traits: [strong], desc: 驮货的骡子被什么吓疯了，包里的锅碗一路响。, archetype: brute, stats: { hp: 1.3, spd: 0.8 } }
         - { name: 花粉团, traits: [thin, crit, volatile], desc: 一团浓得看不清的花粉，吸进去就开始打喷嚏。, archetype: caster, stats: { hp: 0.7, atk: 1.25 } }
         - { name: 石磨精, traits: [tough], desc: 废弃磨坊的石盘自己转了起来，碾碎的东西没人想知道。, archetype: tank, stats: { hp: 1.35, def: 1.5, spd: 0.45 } }
         - { name: 田埂土蛇, traits: [thin, crit], desc: 藏在干草里的一截会动的东西，咬完就溜。, archetype: swift, stats: { hp: 0.8, atk: 1.2, spd: 1.25 } }
@@ -61,7 +61,7 @@ tower:
         - { name: 毒刺巨蜂, desc: 尾针有小指长，振翅声像锯木头。, archetype: swift, preset: selfdestruct, passive: erode }
         - { name: 老田鼠王, desc: 肥得像一袋谷子，牙齿却能咬穿铁锹。, archetype: tank, preset: undying, passive: erode }
         - { name: 走失的战马, traits: [strong, swift], desc: 鞍上没人，蹄铁却还是新的。, archetype: brute, stats: { hp: 1.2, atk: 1.3, spd: 1.2 }, skills: ["e_roll", "e_mirror_edge"], passive: bulwark }
-        - { name: 断牙头狼, traits: [swarm], desc: 狼群的王，左犬齿断了一半，从不落单。, archetype: brute, stats: { hp: 1.15, atk: 1.25 }, skills: ["e_summon_wolf", "e_blood_whirl"], phase: ph_frenzy, passive: rage }
+        - { name: 断牙头狼, traits: [crit], desc: 狼群的王，左犬齿断了一半，从不落单。, archetype: brute, stats: { hp: 1.15, atk: 1.25 }, skills: ["e_summon_wolf", "e_blood_whirl"], phase: ph_frenzy, passive: rage }
         - { name: 禾田稻魔, traits: [thick], desc: 稻草束成的人形，夜里在田里自己走路。, archetype: tank, stats: { hp: 1.4, def: 1.3, spd: 0.35 }, skills: ["e_root", "e_plague"], phase: ph_plague, passive: siphon }
     - id: forest
       name: 迷雾森林
@@ -127,7 +127,7 @@ tower:
         - { name: 岩浆史莱姆, traits: [leech, regen], desc: 吞下石块后体内会亮起橘红的光，贴着它就会被烫掉一层。, archetype: tank, stats: { hp: 1.35, spd: 0.65 } }
         - { name: 烈焰秃鹫, traits: [swift, crit], desc: 俯冲时拖出的火尾，能在地面烧出一道焦线。, archetype: swift, stats: { atk: 1.25, spd: 1.3, hp: 0.85 } }
         - { name: 赤鳞蜥, traits: [thorns, volatile], desc: 鳞片边缘全是凝固的熔渣，抓上去比抓刺猬还糟。, archetype: tank, stats: { def: 1.45, hp: 1.1, spd: 0.7 } }
-        - { name: 硫磺喷兽, traits: [strong, dull], desc: 鼓胀的囊袋里全是硫磺气，喷出来时连石头都在冒烟。, archetype: caster, stats: { hp: 1.2, atk: 1.35, spd: 0.75 } }
+        - { name: 硫磺喷兽, traits: [strong], desc: 鼓胀的囊袋里全是硫磺气，喷出来时连石头都在冒烟。, archetype: caster, stats: { hp: 1.2, spd: 0.75 } }
         - { name: 黑曜傀儡, traits: [thick, slow], desc: 黑曜石拼成的巨块，转身很慢，但碰一下就是满手血。, archetype: tank, stats: { hp: 1.5, def: 1.45, spd: 0.4 } }
         - { name: 火苗精灵, traits: [fragile, dodgy], desc: 一小簇活着的火苗，呼吸就能吹得它摇晃，也最会烧人。, archetype: caster, stats: { hp: 0.6, atk: 1.3, spd: 1.25 } }
         - { name: 熔岩蟹, traits: [thick, tough], desc: 壳缝里嵌着冷却的岩浆，横着走过来时像一堵移动的矮墙。, archetype: tank, stats: { hp: 1.3, def: 1.5, spd: 0.55 } }
@@ -158,7 +158,7 @@ tower:
         - { name: 熔岩蟒, desc: 体内流动着岩浆，爬过的地方留下火痕。, archetype: brute, preset: undying, passive: erode }
         - { name: 灰烬骑士, traits: [thick], desc: 甲胄里空无一人，灰烬从缝隙不断漏出。, archetype: tank, stats: { hp: 1.45, def: 1.4, spd: 0.55 }, skills: ["e_quake", "e_harden"], phase: ph_awaken, passive: bulwark }
         - { name: 火山凶豚, traits: [strong], desc: 拱起的背像一块烧红的铁砧。, archetype: brute, stats: { hp: 1.25, atk: 1.4, spd: 0.9 }, skills: ["e_slam", "e_charge_horn", "e_phoenix"], phase: ph_berserk, passive: rage }
-        - { name: 焰翅蝠王, traits: [swarm], desc: 翅膜上跳动着细小的火苗。, archetype: swift, stats: { atk: 1.3, spd: 1.35, hp: 0.85 }, skills: ["e_summon_bat", "e_blood_whirl"], phase: ph_swift, passive: siphon }
+        - { name: 焰翅蝠王, traits: [crit], desc: 翅膜上跳动着细小的火苗。, archetype: swift, stats: { atk: 1.3, spd: 1.35, hp: 0.85 }, skills: ["e_summon_bat", "e_blood_whirl"], phase: ph_swift, passive: siphon }
         - { name: 熔核守卫, desc: 守着一扇早就烧化的门，姿势还没变过。, archetype: tank, preset: juggernaut, passive: bulwark }
         - { name: 硫火妖僧, desc: 念的是经文，吐出来的是火。, archetype: caster, preset: plaguebearer, passive: siphon }
     - id: frost
@@ -206,7 +206,7 @@ tower:
         - { name: 冰棘猛犸, traits: [thorns], desc: 象牙结满冰棱，吼一声能冻住呼吸。, archetype: tank, stats: { hp: 1.5, def: 1.45, spd: 0.45 }, skills: ["e_quake", "e_frost_bind"], phase: ph_bulwark, passive: bulwark }
         - { name: 霜翼巨鹰, desc: 爪下抓着整块浮冰在空中巡弋。, archetype: swift, preset: duelist, passive: rage }
         - { name: 冻原食人魔, traits: [strong], desc: 肩上扛着半截结冰的路牌。, archetype: brute, stats: { hp: 1.45, atk: 1.4, spd: 0.6 }, skills: ["e_maul", "e_blood_whirl"], phase: ph_berserk, passive: rage }
-        - { name: 雪腹巨蛛, traits: [swarm], desc: 白色绒毛与雪地融为一体。, archetype: brute, preset: summoner, passive: erode }
+        - { name: 雪腹巨蛛, desc: 白色绒毛与雪地融为一体。, archetype: brute, preset: summoner, passive: erode }
         - { name: 冰镜魅影, desc: 从冰面里坐起来的另一个"你"。, archetype: caster, preset: evasive, passive: siphon }
         - { name: 极寒守夜人, desc: 提着一盏早就冻灭的灯，还在按时巡夜。, archetype: tank, preset: undying, passive: bulwark }
         - { name: 霜语女巫, traits: [crit], desc: 说出的每个字都在半空结成冰锥。, archetype: caster, stats: { hp: 0.85, atk: 1.4, spd: 1.05 }, skills: ["e_ice_lance", "e_frost_bind"], phase: ph_awaken, passive: siphon }

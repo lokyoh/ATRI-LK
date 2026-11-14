@@ -327,6 +327,8 @@ rogue:
   # 战斗详情：怪物描述（小怪/精英/首领统一按 desc 渲染）与特点单列。
   monster_desc: "—— {desc}"
   monster_trait_line: "🔹 特点：{traits}"
+  # 路线预告里的行为提示（从技能表派生，不是特点）
+  summon_tag: 会召唤
   # 时间单位：对外一律用「回合」，内部帧（轮）不外显。
   log_mp_turn: "回合{round} 魔力回复 {gain} 点（{mp}/{mp_max}）。"
   mp_floor: "🔵 前进整备：魔力 +{gain}（{mp}/{mp_max}）"

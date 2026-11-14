@@ -358,18 +358,34 @@ def elite_passive_lines(monster: dict[str, Any], cfg: dict[str, Any]) -> list[st
 
 
 def _monster_label(monster: dict[str, Any]) -> str:
-    """展示名：``名称 Lv.N（特点）``；没有特点时省略括号。
+    """展示名：``名称 Lv.N（特点，会召唤）``；括号内全空时省略括号。
 
-    **用于楼层三选一的路线预告**（``FloorChoiceState.render`` /
-    ``BattleState.render``）：选项行必须让人一眼看出「这条路线打的是什么、
-    多少级、有什么特点」，所以等级与特点都内嵌在同一行。
+    用于楼层路线预告。``会召唤`` 从技能表派生（见 :func:`_has_summon`），
+    不是特点——群袭是「入场拆成群」，与「打到一半叫援军」不同。
 
-    战斗详情**不要**用它——战报里的标题/胜利行/失败行用 :func:`_monster_name`，
-    特点另起一行（:func:`_monster_trait_line`），否则会与玩家技能括号混在一起。
+    战斗详情不要用它，那边用 :func:`_monster_name` + :func:`_monster_trait_line`。
     """
     name = _monster_name(monster)
-    note = monster_trait_text(monster.get("traits") or [])
+    notes: list[str] = []
+    traits_note = monster_trait_text(monster.get("traits") or [])
+    if traits_note:
+        notes.append(traits_note)
+    if monster.get("summons"):
+        from ...utils.texts import text
+
+        notes.append(text("rogue.summon_tag", "会召唤"))
+    note = "，".join(notes)
     return f"{name}（{note}）" if note else name
+
+
+def _has_summon(skills: list[Any], cfg: dict[str, Any]) -> bool:
+    """技能表里是否有召唤类技能。派生而非手写标签，避免与技能表脱节。"""
+    skill_cfg = cfg.get("enemy_skills") or {}
+    for skill_id in skills or []:
+        skill = skill_cfg.get(str(skill_id))
+        if isinstance(skill, dict) and skill.get("summon"):
+            return True
+    return False
 
 
 def _monster_name(monster: dict[str, Any]) -> str:
@@ -857,4 +873,7 @@ def _gen_monster(
     # 事件触发的强化精英：在群怪拆分之后再加成，因为强化针对的是**单只精英**本体。
     if elite_fight and boss_index is None:
         _apply_elite_fight(monster, cfg, elite_fight, region, rng)
+
+    # 派生标记：必须在所有加技能的步骤之后（预设/首领/强化精英）。
+    monster["summons"] = _has_summon(monster.get("skills") or [], cfg)
     return monster

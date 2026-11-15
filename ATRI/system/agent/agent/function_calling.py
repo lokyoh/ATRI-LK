@@ -1885,11 +1885,6 @@ def register_function_calling():
                 _type="bool",
                 description="(fill) 为 true 时清掉新计划之后的旧填入条目",
             ),
-            FunctionCallingArg(
-                name="force",
-                _type="bool",
-                description="(fill) 仅主人可用：允许覆盖固定作息条目",
-            ),
         ]
 
         @staticmethod
@@ -1918,18 +1913,11 @@ def register_function_calling():
             if action != "fill":
                 return f"未知的 action：{action}，可用 show / fill / clear"
 
-            force = _as_bool(data.data.get("force"))
-            if force and PermissionResolver.effective_level(
-                data.permission
-            ).value not in {"master", "system"}:
-                return "只有主人可以覆盖固定作息"
-
             hint = str(data.data.get("hint") or "").strip()
             if not hint:
                 return "请用 hint 说明你想怎么安排"
 
             from ..llm import ModelType, llm_manager
-            from .life.routine import describe_gaps
             from .life.system import extract_json
             from .role import ATRI
 
@@ -1942,13 +1930,13 @@ def register_function_calling():
             prompt = (
                 "为亚托莉填入今天的日程片段。\n"
                 f"角色：{ATRI.get_role_prompt()}\n"
-                f"固定作息（不可覆盖）：\n"
+                f"固定作息（撞上会自动挪动或拆段）：\n"
                 + "\n".join(
                     f"- {slot.start.strftime('%H:%M')}-{slot.end.strftime('%H:%M')} "
                     f"{slot.place}：{slot.activity}"
                     for slot in routine.slots
                 )
-                + f"\n可用空档：{describe_gaps(routine) or '无'}\n"
+                + "\n"
                 f"现在的位置：{state.describe()}\n"
                 f"现有安排：\n{current or '无'}\n"
                 f"家的位置与周边：{home or '无'}\n"
@@ -1975,7 +1963,6 @@ def register_function_calling():
                 start=str(data.data.get("start") or ""),
                 end=str(data.data.get("end") or ""),
                 truncate_after=_as_bool(data.data.get("truncate_after")),
-                force=force,
             )
             if not result.ok:
                 return f"日程没有更新：{result.message}"

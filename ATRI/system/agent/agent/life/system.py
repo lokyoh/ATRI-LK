@@ -83,7 +83,7 @@ class LifeSystem:
         start: str = "",
         end: str = "",
         truncate_after: bool = False,
-        force: bool = False,
+        moment=None,
     ) -> FillResult:
         from ...agent.telemetry import telemetry
 
@@ -94,7 +94,7 @@ class LifeSystem:
             start=start,
             end=end,
             truncate_after=truncate_after,
-            force=force,
+            moment=moment,
         )
         telemetry.life(
             action="plan",
@@ -138,6 +138,11 @@ class LifeSystem:
 
     def clear(self, date: str | None = None) -> bool:
         return self.schedules.clear(date or get_now_date())
+
+    def remove_entry(
+        self, date: str, *, start: str, end: str, activity: str = ""
+    ) -> bool:
+        return self.schedules.remove_entry(date, start, end, activity)
 
     def save_plan(self, plan: DayPlan) -> None:
         self.schedules.save(plan)
@@ -223,12 +228,12 @@ def describe_entries(entries: list[ScheduleEntry]) -> str:
     for entry in entries:
         if entry.kind is EntryKind.TRAVEL:
             lines.append(
-                f"{format_time(entry.start)}-{format_time(entry.end)} "
+                f"{entry.shown_start}-{format_time(entry.end)} "
                 f"从{entry.from_place}前往{entry.to_place}"
             )
         else:
             lines.append(
-                f"{format_time(entry.start)}-{format_time(entry.end)} "
+                f"{entry.shown_start}-{format_time(entry.end)} "
                 f"在{entry.place}：{entry.activity or '空闲'}"
             )
     return "\n".join(lines)

@@ -1,7 +1,7 @@
 """生活系统的数据模型与时间工具。
 
-一天的口径固定为 **06:00 到次日 06:00**：凌晨 0-6 点归前一天，
-这样「02:00-06:00 睡觉」仍然是同一天日程的尾巴，而不是第二天开头。
+一天的口径是 **00:00 到 24:00**：任何时刻都能填入。
+跨零点的条目记在开始那天，结束分钟按 +24h 累加。
 """
 
 from __future__ import annotations
@@ -13,9 +13,12 @@ from dataclasses import dataclass, field
 from enum import StrEnum
 from typing import Any
 
-#: 当天的时间窗口（分钟，从 00:00 起算；凌晨按 +24h 归入前一天）
-DAY_START_MIN = 6 * 60
-DAY_END_MIN = 30 * 60
+#: 当天的时间窗口（00:00 -> 24:00），任何时刻都能填入
+DAY_START_MIN = 0
+DAY_END_MIN = 24 * 60
+
+#: 跨零点条目允许的结束上限（次日 06:00）；它们的结束分钟按 +24h 累加
+DAY_LAST_END_MIN = 30 * 60
 
 #: 固定作息允许的最大条数
 MAX_ROUTINE_SLOTS = 32
@@ -43,9 +46,8 @@ def clock_minutes(value: datetime.time) -> int:
 
 
 def day_minutes(value: datetime.time) -> int:
-    """把钟点映射到当天窗口；凌晨 0-6 点算作 24 点以后。"""
-    minutes = clock_minutes(value)
-    return minutes + 24 * 60 if minutes < DAY_START_MIN else minutes
+    """钟点在当天窗口里的分钟数（0-1439）。"""
+    return clock_minutes(value)
 
 
 def parse_time(value: Any) -> datetime.time:
@@ -83,20 +85,15 @@ def _now_local() -> datetime.datetime:
 
 
 def get_now_date(now: datetime.datetime | None = None) -> str:
-    """06:00 前仍算前一天，与旧 `ATRISchedule.get_now_date()` 一致。"""
+    """当前的日历日。"""
     current = now or _now_local()
-    if current.hour < 6:
-        current -= datetime.timedelta(days=1)
     return current.strftime("%Y-%m-%d")
 
 
 def now_minutes(now: datetime.datetime | None = None) -> int:
-    """当前分钟在「当天窗口」里的位置。"""
+    """当前分钟在当天窗口里的位置。"""
     current = now or _now_local()
-    minutes = current.hour * 60 + current.minute
-    if minutes < DAY_START_MIN:
-        minutes += 24 * 60
-    return minutes
+    return int(current.hour) * 60 + int(current.minute)
 
 
 @dataclass
@@ -112,6 +109,10 @@ class ScheduleEntry:
     to_place: str = ""
     source: str = "fill"
     note: str = ""
+    #: 遗留条目 start 是当天那段的 00:00，这里记真实起点
+    origin_start: str = ""
+    #: 这条副本同步自哪一天，用于反向清理
+    cross_from: str = ""
 
     @property
     def start_min(self) -> int:
@@ -127,6 +128,11 @@ class ScheduleEntry:
     @property
     def duration(self) -> int:
         return max(0, self.end_min - self.start_min)
+
+    @property
+    def shown_start(self) -> str:
+        """展示用开始时间：跨天遗留条目返回活动的真实起点。"""
+        return self.origin_start or format_time(self.start_min)
 
     def contains(self, minute: int) -> bool:
         return self.start_min <= minute < self.end_min
@@ -150,6 +156,10 @@ class ScheduleEntry:
             payload["to"] = self.to_place
         if self.note:
             payload["note"] = self.note
+        if self.origin_start:
+            payload["origin_start"] = self.origin_start
+        if self.cross_from:
+            payload["cross_from"] = self.cross_from
         return payload
 
     @classmethod
@@ -168,25 +178,35 @@ class ScheduleEntry:
             to_place=str(data.get("to") or data.get("to_place") or "").strip(),
             source=str(data.get("source") or "fill"),
             note=str(data.get("note") or ""),
+            origin_start=str(data.get("origin_start") or "").strip(),
+            cross_from=str(data.get("cross_from") or "").strip(),
         )
 
 
 @dataclass
 class DayPlan:
-    """某一天的填入层；固定作息不写进来，读取时实时合并。"""
+    """某一天的日程。
+
+    固定作息默认不落盘；只有当天的骨架被挪动或拆段时才写进 routine，
+    为空表示「照 routine.md 原样」。
+    """
 
     date: str
     entries: list[ScheduleEntry] = field(default_factory=list)
+    routine: list[ScheduleEntry] = field(default_factory=list)
     version: int = 1
     updated_at: float = 0.0
 
     def to_dict(self) -> dict[str, Any]:
-        return {
+        payload: dict[str, Any] = {
             "date": self.date,
             "version": self.version,
             "updated_at": self.updated_at,
             "entries": [entry.to_dict() for entry in self.entries],
         }
+        if self.routine:
+            payload["routine"] = [entry.to_dict() for entry in self.routine]
+        return payload
 
     def to_json(self) -> str:
         return json.dumps(self.to_dict(), ensure_ascii=False, indent=2)
@@ -200,6 +220,11 @@ class DayPlan:
             entries=[
                 ScheduleEntry.from_dict(item)
                 for item in (data.get("entries") or [])
+                if isinstance(item, dict)
+            ],
+            routine=[
+                ScheduleEntry.from_dict(item)
+                for item in (data.get("routine") or [])
                 if isinstance(item, dict)
             ],
         )

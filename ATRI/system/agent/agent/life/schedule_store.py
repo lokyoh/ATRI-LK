@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import datetime
 import itertools
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -9,8 +10,10 @@ from pathlib import Path
 from ATRI.log import log
 from ATRI.utils.datetime import now
 
+from .conflict import resolve as resolve_conflicts
 from .model import (
     DAY_END_MIN,
+    DAY_LAST_END_MIN,
     DAY_START_MIN,
     HOME_PLACE,
     MAX_ACTIVITY_CHARS,
@@ -31,6 +34,17 @@ from .store import read_json, write_json
 TRAVEL_MIN_MINUTES = 5
 TRAVEL_DEFAULT_MINUTES = 15
 TRAVEL_MAX_MINUTES = 45
+
+#: 跨零点条目平移到当天后的标记
+CARRIED_NOTE = "carried"
+
+
+def _shift_date(date: str, days: int) -> str:
+    try:
+        cur = datetime.datetime.strptime(date, "%Y-%m-%d")
+    except ValueError:
+        return ""
+    return (cur + datetime.timedelta(days=days)).strftime("%Y-%m-%d")
 
 
 @dataclass
@@ -69,11 +83,65 @@ class ScheduleStore:
         write_json(self.path_for(plan.date), plan.to_dict())
 
     def clear(self, date: str) -> bool:
-        """只清填入层；固定作息不落盘，因此无需处理。"""
+        """清掉填入层与当天挪动过的骨架，并收回去同步到次日的副本。"""
         plan = self.load(date)
-        if not plan.entries:
-            return False
+        changed = bool(plan.entries or plan.routine)
         plan.entries = []
+        plan.routine = []
+        if changed:
+            self.save(plan)
+        # 跨天条目在次日留了副本：源头没了，副本也要撤掉。
+        next_date = _shift_date(date, 1)
+        if next_date and self._drop_synced(self.load(next_date), date):
+            pass
+        return changed
+
+    def remove_entry(
+        self, date: str, start: str, end: str, activity: str = ""
+    ) -> bool:
+        """删掉匹配的一条填入条目；骨架不受影响。"""
+        plan = self.load(date)
+        low = day_minutes(parse_time(start))
+        high = day_minutes(parse_time(end))
+        if high <= low:
+            high += 24 * 60
+        target = [
+            entry
+            for entry in plan.entries
+            if entry.start_min == low
+            and entry.end_min == high
+            and (not activity or entry.activity == activity)
+        ]
+        if not target:
+            return False
+        plan.entries = [entry for entry in plan.entries if entry not in target]
+        self.save(plan)
+        next_date = _shift_date(date, 1)
+        if next_date:
+            next_plan = self.load(next_date)
+            for entry in target:
+                if entry.end_min <= 24 * 60:
+                    continue
+                piece_low = max(0, entry.start_min - 24 * 60)
+                piece_high = entry.end_min - 24 * 60
+                next_plan.entries = [
+                    item
+                    for item in next_plan.entries
+                    if not (
+                        item.start_min == piece_low
+                        and item.end_min == piece_high
+                        and item.activity == entry.activity
+                    )
+                ]
+            self.save(next_plan)
+        return True
+
+    def _drop_synced(self, plan: DayPlan, source_date: str) -> bool:
+        """删掉「同步自 source_date」的副本条目；有改动返回 True。"""
+        kept = [entry for entry in plan.entries if entry.cross_from != source_date]
+        if len(kept) == len(plan.entries):
+            return False
+        plan.entries = kept
         self.save(plan)
         return True
 
@@ -82,11 +150,52 @@ class ScheduleStore:
     def routine(self) -> Routine:
         return load_routine(self.user_dir)
 
+    def routine_slots(self, date: str | None = None) -> list[ScheduleEntry]:
+        """这一天的骨架：当天被挪动过就用存档里的，否则读 routine.md。"""
+        plan = self.load(date or get_now_date())
+        return list(plan.routine or self.routine().slots)
+
+    def carried_entries(self, date: str | None = None) -> list[ScheduleEntry]:
+        """前一天跨过零点的尾巴，平移到当天时间轴（可能为空）。"""
+        today = date or get_now_date()
+        prev = _shift_date(today, -1)
+        if not prev:
+            return []
+        prev_plan = self.load(prev)
+        own = self.load(today).entries
+        carried: list[ScheduleEntry] = []
+        for entry in list(prev_plan.entries) + list(
+            prev_plan.routine or self.routine().slots
+        ):
+            if entry.end_min <= 24 * 60:
+                continue
+            start = max(0, entry.start_min - 24 * 60)
+            end = entry.end_min - 24 * 60
+            if end <= start:
+                continue
+            origin = entry.origin_start or format_time(entry.start_min)
+            item = self._clone(
+                entry, start=format_time(start), end=format_time(end)
+            )
+            item.note = CARRIED_NOTE
+            item.origin_start = origin
+            # 写入时已经同步到次日的，不再重复补一条。
+            same = any(
+                x.start_min == item.start_min
+                and x.end_min == item.end_min
+                and x.activity == item.activity
+                for x in own
+            )
+            if same:
+                continue
+            carried.append(item)
+        return carried
+
     def merged(self, date: str | None = None) -> list[ScheduleEntry]:
-        """固定作息 + 填入层，按开始时间排序。填入层优先（`go` 可暂时压过作息）。"""
+        """固定作息 + 填入层 + 前一天的遗留尾巴，按开始时间排序。"""
         date = date or get_now_date()
         plan = self.load(date)
-        entries = list(plan.entries) + list(self.routine().slots)
+        entries = list(plan.entries) + self.routine_slots(date) + self.carried_entries(date)
         return sorted(entries, key=lambda entry: entry.start_min)
 
     def display_entries(self, date: str | None = None) -> list[ScheduleEntry]:
@@ -94,11 +203,22 @@ class ScheduleStore:
         merged = self.merged(date)
         result: list[ScheduleEntry] = []
         for entry in merged:
-            if entry.source == "routine":
+            if entry.source == "routine" and entry.note == CARRIED_NOTE:
+                # 骨架每天重读，跨零点那条今天还会出现，副本不必重复。
+                recurring = any(
+                    x.activity == entry.activity
+                    and x.place == entry.place
+                    and x.start_min >= entry.end_min
+                    for x in merged
+                    if x.source == "routine" and x.note != CARRIED_NOTE
+                )
+                if recurring:
+                    continue
+            if entry.source == "routine" and entry.note != CARRIED_NOTE:
                 covered = any(
                     fill.start_min <= entry.start_min and entry.end_min <= fill.end_min
                     for fill in merged
-                    if fill.source != "routine"
+                    if fill.source != "routine" or fill.note == CARRIED_NOTE
                 )
                 if covered:
                     continue
@@ -115,11 +235,11 @@ class ScheduleStore:
         start: str = "",
         end: str = "",
         truncate_after: bool = False,
-        force: bool = False,
+        moment=None,
     ) -> FillResult:
-        date = date or get_now_date()
-        routine = self.routine()
-        normalized, warnings = self._validate(entries, routine, force=force)
+        date = date or get_now_date(moment)
+        now_min = now_minutes(moment) if date == get_now_date(moment) else None
+        normalized, warnings = self._validate(entries)
         if not normalized:
             return FillResult(
                 ok=False,
@@ -127,6 +247,24 @@ class ScheduleStore:
                 warnings=warnings,
             )
 
+        # 昨天跨零点的尾巴已经发生，不许挪动，也不落盘。
+        carried = self.carried_entries(date)
+        base = self.routine_slots(date)
+        carried_index = set(range(len(base), len(base) + len(carried)))
+        # 撞上骨架时先把当天的骨架整体挪开/拆段，再落盘填入层。
+        slots, normalized, hints, problems = resolve_conflicts(
+            list(normalized),
+            base + carried,
+            now_min,
+            frozen_extra=carried_index,
+        )
+        if problems:
+            return FillResult(ok=False, message="；".join(problems))
+        warnings.extend(hints)
+        # 出门了要安排回家：骨架挪过之后要按新的骨架算空档。
+        normalized = self._ensure_return(normalized, Routine(slots=slots), warnings)
+
+        # 覆盖窗口按**最终条目**算：自动补的返程也算在被替换的范围里。
         if start:
             window_start = day_minutes(parse_time(start))
         else:
@@ -158,15 +296,15 @@ class ScheduleStore:
                 )
 
         plan = self.load(date)
-        existing = list(plan.entries)
-        kept = self._subtract(existing, window_start, window_end)
-        # 只有显式要求截断时才丢掉窗口之后的旧条目。之前写成
-        # ``truncate_after or not end``，导致不带 end 的常规 fill（例如
-        # 「下午去海边」）会把当天剩余的安排整段删掉。
+        kept = self._subtract(list(plan.entries), window_start, window_end)
+        # 只有显式 truncate_after 才清掉窗口之后的旧条目。
         if truncate_after:
             kept = [entry for entry in kept if entry.end_min <= window_end]
         plan.entries = sorted(kept + normalized, key=lambda entry: entry.start_min)
+        # 填入时把当天的骨架一并定型：之后改 routine.md 不会让已排好的日子错位。
+        plan.routine = [x for x in slots if x.note != CARRIED_NOTE]
         self.save(plan)
+        self._sync_cross_day(date, normalized)
 
         return FillResult(
             ok=True,
@@ -178,6 +316,38 @@ class ScheduleStore:
 
     def _parse_time(self, value: str):
         return parse_time(value)
+
+    def _sync_cross_day(self, date: str, entries: list[ScheduleEntry]) -> None:
+        """把跨零点的条目同步到次日：先撤回旧的副本，再按当前内容重写。"""
+        next_date = _shift_date(date, 1)
+        if not next_date:
+            return
+        plan = self.load(next_date)
+        # 无论这次还有没有跨天条目，上次同步过去的副本都先撤掉。
+        self._drop_synced(plan, date)
+        overflow = [entry for entry in entries if entry.end_min > 24 * 60]
+        if not overflow:
+            return
+        pieces = []
+        for entry in overflow:
+            start = max(0, entry.start_min - 24 * 60)
+            end = entry.end_min - 24 * 60
+            if end <= start:
+                continue
+            piece = self._clone(
+                entry, start=format_time(start), end=format_time(end)
+            )
+            piece.origin_start = entry.origin_start or format_time(entry.start_min)
+            piece.cross_from = date
+            pieces.append(piece)
+        if not pieces:
+            return
+        kept = list(plan.entries)
+        for piece in pieces:
+            # 逐段挖，避免把落在两段之间的无关条目一并删掉。
+            kept = self._subtract(kept, piece.start_min, piece.end_min)
+        plan.entries = sorted(kept + pieces, key=lambda entry: entry.start_min)
+        self.save(plan)
 
     def _subtract(
         self, entries: list[ScheduleEntry], start: int, end: int
@@ -208,10 +378,12 @@ class ScheduleStore:
             to_place=entry.to_place,
             source=entry.source,
             note=entry.note,
+            origin_start=entry.origin_start,
+            cross_from=entry.cross_from,
         )
 
     def _validate(
-        self, entries: list[ScheduleEntry], routine: Routine, *, force: bool
+        self, entries: list[ScheduleEntry]
     ) -> tuple[list[ScheduleEntry], list[str]]:
         warnings: list[str] = []
         if len(entries) > MAX_FILL_ENTRIES:
@@ -224,9 +396,10 @@ class ScheduleStore:
                 warnings.append(
                     f"活动「{entry.activity}」已截断到 {MAX_ACTIVITY_CHARS} 字"
                 )
-            if entry.start_min < DAY_START_MIN or entry.end_min > DAY_END_MIN:
+            if entry.start_min < DAY_START_MIN or entry.end_min > DAY_LAST_END_MIN:
                 return [], [
-                    f"{format_time(entry.start)}-{format_time(entry.end)} 超出当天时间范围"
+                    f"{format_time(entry.start)}-{format_time(entry.end)} "
+                    f"超出可填范围 {format_time(DAY_START_MIN)}-{format_time(DAY_LAST_END_MIN)}"
                 ]
             if entry.end_min <= entry.start_min:
                 return [], [
@@ -248,18 +421,7 @@ class ScheduleStore:
                     f"{format_time(right.start)}-{format_time(right.end)} 重叠"
                 ]
 
-        if not force:
-            for entry in cleaned:
-                for slot in routine.protected_slots():
-                    if entry.overlaps(slot.start_min, slot.end_min):
-                        return [], [
-                            f"{format_time(entry.start)}-{format_time(entry.end)} "
-                            f"撞上了固定作息「{slot.activity}」"
-                            f"（{format_time(slot.start)}-{format_time(slot.end)}）"
-                        ]
-
         cleaned = self._ensure_travel(cleaned, warnings)
-        cleaned = self._ensure_return(cleaned, routine, warnings)
         return cleaned, warnings
 
     def _ensure_travel(
@@ -356,12 +518,12 @@ class ScheduleStore:
         for entry in entries:
             if entry.kind is EntryKind.TRAVEL:
                 lines.append(
-                    f"- {format_time(entry.start)}-{format_time(entry.end)} "
+                    f"- {entry.shown_start}-{format_time(entry.end)} "
                     f"从{entry.from_place}前往{entry.to_place}"
                 )
             else:
                 lines.append(
-                    f"- {format_time(entry.start)}-{format_time(entry.end)} "
+                    f"- {entry.shown_start}-{format_time(entry.end)} "
                     f"在{entry.place}：{entry.activity or '（无描述）'}"
                 )
         lines.extend(f"- 注意：{item}" for item in warnings)
@@ -377,12 +539,23 @@ class ScheduleStore:
         for entry in plan.entries:
             if entry.contains(minute):
                 return self._state_from_entry(entry, minute)
-        routine = self.routine()
-        slot = routine.slot_at(minute)
+        # 昨天跨过零点的尾巴也参与定位。
+        carried = self.carried_entries(date)
+        slot = next((x for x in carried if x.contains(minute)), None)
+        slots = plan.routine or self.routine().slots
+        if slot is None:
+            slot = next((x for x in slots if x.contains(minute)), None)
         if slot is not None:
             return self._state_from_entry(slot, minute)
+        # 空档期也给结束时间。
+        upcoming = sorted(
+            x.start_min
+            for x in list(slots) + carried
+            if x.start_min > minute
+        )
+        until = format_time(upcoming[0]) if upcoming else ""
         return LocationState(
-            place=HOME_PLACE, activity="空闲", since=format_time(minute)
+            place=HOME_PLACE, activity="空闲", since=format_time(minute), until=until
         )
 
     @staticmethod
@@ -480,10 +653,10 @@ def describe_day(entries: list[ScheduleEntry], limit: int = 800) -> str:
     truncated = False
     for index, entry in enumerate(entries):
         if entry.kind is EntryKind.TRAVEL:
-            text = f"{format_time(entry.start)}-{format_time(entry.end)} 前往{entry.to_place}"
+            text = f"{entry.shown_start}-{format_time(entry.end)} 前往{entry.to_place}"
         else:
             text = (
-                f"{format_time(entry.start)}-{format_time(entry.end)} "
+                f"{entry.shown_start}-{format_time(entry.end)} "
                 f"{entry.place}：{entry.activity or '空闲'}"
             )
         if used + len(text) + 1 > limit and lines:

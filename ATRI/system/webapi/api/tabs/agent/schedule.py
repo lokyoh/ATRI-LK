@@ -29,6 +29,8 @@ class ScheduleEntryInfo(BaseModel):
     to_place: str = ""
     source: str = ""
     note: str = ""
+    origin_start: str = ""
+    """跨天遗留条目显示 00:00 起，这里记活动的真实开始时间"""
 
 
 class LocationInfo(BaseModel):
@@ -119,6 +121,23 @@ class HomeEditModel(BaseModel):
     content: str = ""
 
 
+class RemovePlanEntryModel(BaseModel):
+    """按「开始 + 结束 + 活动」定位要删的那条。"""
+    date: str = ""
+    start: str
+    end: str
+    activity: str = ""
+
+
+class FillPlanModel(BaseModel):
+    """与 agent 的 plan(fill) 同参数；entries 的字段同 ScheduleEntry。"""
+    date: str = ""
+    entries: list[dict]
+    start: str = ""
+    end: str = ""
+    truncate_after: bool = False
+
+
 def _home_info(life, content: str) -> HomeInfo:
     """家 + 解析结果：前端按节渲染，不必自己解析 Markdown。"""
     home = life.home()
@@ -147,6 +166,7 @@ def _entry_info(entry) -> ScheduleEntryInfo:
         to_place=entry.to_place,
         source=entry.source,
         note=entry.note,
+        origin_start=entry.origin_start,
     )
 
 
@@ -263,6 +283,59 @@ async def _(payload: HomeEditModel) -> Result[HomeInfo]:
         return Result.ok(_home_info(life, home.read()), message)
     except Exception as e:
         log.error(f"{router.prefix}/set_home 调用错误:{str_traceback(e)}")
+        return Result.fail(f"发生了一点错误捏 {type(e)}: {e}")
+
+
+@router.post(
+    "/fill_life_plan",
+    dependencies=[authentication()],
+    response_model=Result[LifeSnapshot],
+    response_class=JSONResponse,
+    description="写入某天的日程条目（与 agent 的 plan(fill) 同语义）",
+)
+async def _(payload: FillPlanModel) -> Result[LifeSnapshot]:
+    try:
+        target = payload.date or get_now_date()
+        life = get_life_system()
+        entries, issues = life.parse_entries(payload.entries)
+        if issues:
+            return Result.fail("；".join(issues), 400)
+        result = life.fill_schedule(
+            entries,
+            date=target,
+            start=payload.start,
+            end=payload.end,
+            truncate_after=payload.truncate_after,
+        )
+        if not result.ok:
+            return Result.fail(result.message, 400)
+        return Result.ok(_snapshot(target), result.message)
+    except Exception as e:
+        log.error(f"{router.prefix}/fill_life_plan 调用错误:{str_traceback(e)}")
+        return Result.fail(f"发生了一点错误捏 {type(e)}: {e}")
+
+
+@router.post(
+    "/remove_life_plan_entry",
+    dependencies=[authentication()],
+    response_model=Result[LifeSnapshot],
+    response_class=JSONResponse,
+    description="删除某天的单条填入安排（固定作息不受影响）",
+)
+async def _(payload: RemovePlanEntryModel) -> Result[LifeSnapshot]:
+    try:
+        target = payload.date or get_now_date()
+        life = get_life_system()
+        removed = life.remove_entry(
+            target, start=payload.start, end=payload.end, activity=payload.activity
+        )
+        if not removed:
+            return Result.fail("没找到这条安排", 400)
+        return Result.ok(_snapshot(target), "已删除这条安排")
+    except ValueError as e:
+        return Result.fail(str(e), 400)
+    except Exception as e:
+        log.error(f"{router.prefix}/remove_life_plan_entry 调用错误:{str_traceback(e)}")
         return Result.fail(f"发生了一点错误捏 {type(e)}: {e}")
 
 

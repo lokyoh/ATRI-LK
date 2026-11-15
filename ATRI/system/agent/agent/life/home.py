@@ -88,6 +88,13 @@ MAX_HISTORY_FILES = 20
 HOME_SUMMARY_BUDGET = 320
 MAX_SECTION_LEVEL = 4
 
+#: 摘要每一项的上限；超预算时按条目边界截断，不切半个词。
+MAX_LOCATION_CHARS = 100
+MAX_NEARBY_IN_SUMMARY = 3
+MAX_HABITS_IN_SUMMARY = 8
+_MIN_TAIL = 12
+_ELLIPSIS = "…"
+
 _SECTION_RE = re.compile(rf"^(#{{2,{MAX_SECTION_LEVEL}}})\s+(.+?)\s*$")
 _BULLET_RE = re.compile(r"^\s*[-*+]\s+")
 
@@ -141,6 +148,32 @@ def _bullets(block: str) -> list[str]:
     ]
 
 
+def _clip(text: str, limit: int) -> str:
+    """截断并补省略号，避免出现半句话。"""
+    text = str(text or "")
+    if len(text) <= limit:
+        return text
+    return text[: max(0, limit - 1)] + _ELLIPSIS
+
+
+def _pack(prefix: str, items: list[str], budget: int) -> str:
+    """把条目拼进一行，放不下就在条目边界停下。"""
+    body = ""
+    for item in items:
+        piece = ("、" + item) if body else item
+        if len(prefix) + len(body) + len(piece) > budget:
+            if not body:
+                room = budget - len(prefix) - 1
+                if room < _MIN_TAIL:
+                    return ""
+                body = _clip(item, room)
+            else:
+                body += _ELLIPSIS
+            break
+        body += piece
+    return f"{prefix}{body}" if body else ""
+
+
 class HomeStore:
     def __init__(self, root: Path):
         self.root = root
@@ -178,11 +211,8 @@ class HomeStore:
 
     @classmethod
     def _is_legacy(cls, text: str) -> bool:
-        """旧格式：含旧章节，或缺少任一固定章节。"""
-        titles = cls._top_titles(text)
-        if any(name in titles for name in LEGACY_SECTIONS):
-            return True
-        return any(name not in titles for name in FIXED_SECTIONS)
+        """旧格式只看旧章节名：缺节由 write() 拦，不该反过来覆盖整个家。"""
+        return any(name in cls._top_titles(text) for name in LEGACY_SECTIONS)
 
     def read(self) -> str:
         """读 home.md；文件还没落盘时返回模板（不写盘）。"""
@@ -222,8 +252,36 @@ class HomeStore:
             return f"缺少 `## {SECTION_LOCATION}`"
         if SECTION_ROOMS not in titles:
             return f"缺少 `## {SECTION_ROOMS}`"
-        if not any(level == 3 for level, _, _, _ in sections):
+        room = next(item for item in sections if item[1] == SECTION_ROOMS)
+        if not any(
+            item[0] == 3 and room[2] < item[2] < room[3] for item in sections
+        ):
             return f"`## {SECTION_ROOMS}` 下至少要有一个 `###` 房间"
+        return HomeStore._container_problem(sections)
+
+    @staticmethod
+    def _container_problem(sections: list[tuple[int, str, int, int]]) -> str:
+        """容器层额外两条：名字不能重、不能再用 #### 分组（会丢物品）。"""
+        holder = next(
+            (item for item in sections if item[1] == SECTION_CONTAINERS), None
+        )
+        if holder is None:
+            return ""
+        _, _, start, end = holder
+        names: list[str] = []
+        current = ""
+        for level, title, item_start, _ in sections:
+            if not start < item_start < end:
+                continue
+            if level == 3:
+                if title in names:
+                    return f"`## {SECTION_CONTAINERS}` 下有重名容器「{title}」，会互相覆盖"
+                names.append(title)
+                current = title
+            elif level > 3:
+                return (
+                    f"容器「{current}」里不要再分「{title}」：物品请写成「- 名称：说明」"
+                )
         return ""
 
     def _backup(self) -> None:
@@ -370,7 +428,10 @@ class HomeStore:
             return f"写入失败：{problem}"
         if not self.write(new_text):
             return "写入失败：章节校验未通过"
-        return f"已更新「{title}」"
+        note = ""
+        if title == SECTION_CONTAINERS and not self.containers():
+            note = "；注意：容器已清空，生成穿搭时没有衣物可参考"
+        return f"已更新「{title}」{note}"
 
     def _find(self, text: str, section: str) -> tuple[int, str, int, int] | None:
         """先精确匹配标题，再退回标题包含关键字。"""
@@ -413,23 +474,35 @@ class HomeStore:
             span = spans.get(name)
             return _strip_heading(text[span[0] : span[1]]) if span else ""
 
-        location = " ".join(body_of(SECTION_LOCATION).split())[:100]
+        location = _clip(" ".join(body_of(SECTION_LOCATION).split()), MAX_LOCATION_CHARS)
         room_span = spans.get(SECTION_ROOMS)
         rooms = [
             title
             for level, title, start, _ in sections
             if level == 3 and room_span and room_span[0] < start < room_span[1]
         ]
-        parts = [f"位置：{location or '未记录'}"]
-        if rooms:
-            parts.append("房间：" + "、".join(rooms))
-        nearby = _bullets(body_of(SECTION_NEARBY))[:3]
-        if nearby:
-            parts.append("周边：" + "、".join(nearby))
-        habits = _bullets(body_of(SECTION_HABITS))
-        if habits:
-            parts.append("习惯：" + "、".join(habits))
-        return "\n".join(parts)[:HOME_SUMMARY_BUDGET]
+        nearby_all = _bullets(body_of(SECTION_NEARBY))
+        habits_all = _bullets(body_of(SECTION_HABITS))
+        nearby = nearby_all[:MAX_NEARBY_IN_SUMMARY]
+        habits = habits_all[:MAX_HABITS_IN_SUMMARY]
+
+        lines = [f"位置：{location or '未记录'}"]
+        used = len(lines[0])
+        # 条目被上限截掉时补省略号，否则看不出还有没写下的内容
+        for prefix, items, dropped in (
+            ("房间：", rooms, False),
+            ("周边：", nearby, len(nearby_all) > len(nearby)),
+            ("习惯：", habits, len(habits_all) > len(habits)),
+        ):
+            room = HOME_SUMMARY_BUDGET - used - 1
+            line = _pack(prefix, items, room)
+            if line and dropped and len(line) < room - 1:
+                line += _ELLIPSIS
+            if not line:
+                continue
+            lines.append(line)
+            used += len(line) + 1
+        return "\n".join(lines)
 
     async def generate(self) -> tuple[bool, str]:
         """用 `ATRI_HOME` 扩写；缺模型时返回降级提示。"""
@@ -441,9 +514,10 @@ class HomeStore:
         prompt = (
             "根据下面的模板与角色设定，扩写亚托莉的家。\n"
             f"章节固定为 {'、'.join(FIXED_SECTIONS)}，不要改名也不要新增；\n"
-            f"`## {SECTION_ROOMS}` 用 `###` 罗列房间，`## {SECTION_CONTAINERS}` "
-            "用 `###` 罗列容器（衣柜、冰箱、相册这类能装东西的实体或虚拟物件），",
-            "容器下列「- 名称：说明」；`## 习惯` 列她的居家小规矩。\n"
+            f"`## {SECTION_ROOMS}` 用 `###` 罗列房间；`## {SECTION_CONTAINERS}` "
+            "用 `###` 罗列容器（衣柜、冰箱、相册这类能装东西的实体或虚拟物件），"
+            "容器名不能重复、容器下不再分 `####`，物品一律写成「- 名称：说明」；"
+            "`## 习惯` 列她的居家小规矩。\n"
             "只输出 Markdown 正文。\n\n"
             f"角色：{ATRI.get_role_prompt()}\n\n模板：\n{self.read()}"
         )

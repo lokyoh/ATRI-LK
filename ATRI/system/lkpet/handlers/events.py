@@ -42,6 +42,8 @@ def lkpet_sign_in(event: SignInEvent):
     item_name = rogue_ticket_name()
     if not lk_util.item_change_func(event.user_data, item_name, count):
         log.warning(f"签到发放入场券失败：{item_name} ×{count}")
+        return
+    event.add_result(f"获得{count}张{item_name}")
 
 
 @user_info_events.handle()

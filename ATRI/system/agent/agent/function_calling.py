@@ -2039,14 +2039,14 @@ def register_function_calling():
         parallel_safe = False
         description = (
             "查看或修改你的家。章节固定为位置、房间、周边、容器、习惯。\n"
-            "show 读整篇或某一节；edit 替换某一节；add 在某一节末尾追加；"
-            "generate 让家模型扩写；每次写入都会自动备份。"
+            "show 读整篇或某一节；edit / add 只需要说清楚想怎么改，由家模型按格式写好，"
+            "add 是在原有内容后面追加；每次写入都会自动备份。"
         )
         args: ClassVar[list[FunctionCallingArg]] = [
             FunctionCallingArg(
                 name="action",
                 _type="str",
-                description="show / edit / add / generate，默认 show",
+                description="show / edit / add，默认 show",
             ),
             FunctionCallingArg(
                 name="section",
@@ -2056,7 +2056,7 @@ def register_function_calling():
             FunctionCallingArg(
                 name="content",
                 _type="str",
-                description="(edit/add) 要写入或追加的内容",
+                description="(edit/add) 想怎么改，用自然语言说即可",
             ),
         ]
 
@@ -2070,18 +2070,11 @@ def register_function_calling():
             content = str(data.data.get("content") or "").strip()
             if action == "show":
                 return store.show(section)
-            if action == "edit":
+            if action in {"edit", "add"}:
                 if not section or not content:
-                    return "edit 需要 section 与 content"
-                return store.edit(section, content)
-            if action == "add":
-                if not section or not content:
-                    return "add 需要 section 与 content"
-                return store.add(section, content)
-            if action == "generate":
-                ok, message = await store.generate()
-                return message
-            return f"未知的 action：{action}，可用 show / edit / add / generate"
+                    return f"{action} 需要 section 与 content（content 写你想怎么改，不必写格式）"
+                return await store.rewrite(section, content, append=action == "add")
+            return f"未知的 action：{action}，可用 show / edit / add"
 
     FunctionCallingManager.register(HomeFunctionCalling)
 

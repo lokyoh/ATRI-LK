@@ -67,7 +67,7 @@ ATRI/system/agent/
 | `atri-profile` | 用户画像生成与修改 | 画像功能 | `profile` 只能读，不能改 |
 | `atri-schedule` | 填入式日程 | 生活系统 | `plan(fill)` 不可用；固定作息仍可读 |
 | `atri-outfit` | 白天 / 晚上两套着装 | 生活系统 | 显示「还没决定今天穿什么」 |
-| `atri-home` | 家的生成 / 扩写 | 可选 | 使用仓库自带模板 |
+| `atri-home` | 按意图改写家的某一节（`home` 的 edit / add） | 改家 | `home(edit)` / `home(add)` 拒绝改动 |
 | `atri-summary` | 转发 / 长文总结 | 可选 | 总结功能隐藏 |
 | `atri-vision` | 图片理解 | 图片功能 | 图片统一记 `[图片]` |
 | `atri-embedding` | 记忆检索向量 | 记忆功能 | 检索 / 写入工具隐藏 |
@@ -198,7 +198,7 @@ Provider 的 `api_key` 列表项必须是 `name` / `key` 对象。模型上的 `
 | `read` | `read_file` | 读文件（`file_ops` rare） |
 | `plan` | — | 日程 show / fill / clear |
 | `wear` | — | 穿搭 show / generate / set |
-| `home` | — | 家 show / edit / add / generate |
+| `home` | — | 家 show / edit / add |
 | `where` | — | 当前位置 |
 | `go` | — | 立即前往 |
 | `call` | — | 调用不常用功能 |
@@ -245,7 +245,10 @@ data/plugins/agent/life/      # 运行时
 
 - `plan(fill)` 只替换它覆盖的时间窗口，**不传 `truncate_after` 不会清掉当天后续安排**；
 - 填入可以落在任意时间：撞上固定作息时先整体挪骨架（≤60 分钟），挪不动就拆段绕开；挪过的骨架只写进当天的 `schedule/<date>.json`，`routine.md` 不改；
-- `home(edit)` 会拒绝整体替换带 `###` 子章节的父章节（如 `## 房间`），请指定子章节或用 `add`；
+- `home(edit)` / `home(add)` 不是直接落笔：她只给「想怎么改」，由 `atri-home` 按格式重写该节正文后再写入；`add` 是在原有内容后追加；
+- 家模型只返回该节正文，其它章节原样保留；产出超过 800 字、房间超过 12 个、容器超过 12 个时拒绝写入（容器内物品不限量）；
+- 家模型输出不合格（非 JSON / body 为空 / 违反上面任一条）时，把具体原因回传给它重试，最多 3 次；仍不合格则整次放弃、家保持不变；
+- WebUI 的 `set_home(edit/add/replace)` 不经模型，管理员手写的内容直接落盘，只走章节与容器校验；
 - `home.md` 固定五节：`## 位置`、`## 房间`、`## 周边`、`## 容器`、`## 习惯`；`## 位置` 与 `## 房间`（至少一个 `###`）缺失时写入被拒；
 - `## 容器` 下每个 `###` 是一个容器，物品写成「- 名称：说明」；容器名不可重复，容器下不再分 `####`；
 - 提示词只读「位置 + 房间名 + 周边前三条 + 习惯」，容器要看内容得 `home(show)`；穿搭生成读 `### 衣柜`。

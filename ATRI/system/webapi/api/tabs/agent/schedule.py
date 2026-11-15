@@ -116,7 +116,7 @@ class SetOutfitModel(BaseModel):
 
 class HomeEditModel(BaseModel):
     action: str = "show"
-    """show / edit / add / replace / generate；replace 允许整块替换含子章节的父章节"""
+    """show / edit / add / replace；replace 允许整块替换含子章节的父章节"""
     section: str = ""
     content: str = ""
 
@@ -272,10 +272,6 @@ async def _(payload: HomeEditModel) -> Result[HomeInfo]:
             if not payload.section or not payload.content:
                 return Result.fail("add 需要 section 与 content", 400)
             message = home.add(payload.section, payload.content)
-        elif action == "generate":
-            ok, message = await home.generate()
-            if not ok:
-                return Result.fail(message, 400)
         else:
             return Result.fail(f"未知的 action：{action}", 400)
         if message.startswith("家里没有") or message.startswith("写入失败"):

@@ -88,6 +88,14 @@ MAX_HISTORY_FILES = 20
 HOME_SUMMARY_BUDGET = 320
 MAX_SECTION_LEVEL = 4
 
+#: 家模型改一节的产出上限，避免越写越长挤占提示词。
+MAX_SECTION_CHARS = 800
+MAX_ROOMS = 12
+MAX_CONTAINERS = 12
+
+#: 家模型改写的最多尝试次数（含首次）；每次都把上一次的问题回传给它。
+MAX_HOME_ATTEMPTS = 3
+
 #: 摘要每一项的上限；超预算时按条目边界截断，不切半个词。
 MAX_LOCATION_CHARS = 100
 MAX_NEARBY_IN_SUMMARY = 3
@@ -412,6 +420,88 @@ class HomeStore:
             return "写入失败：章节校验未通过"
         return f"已更新「{title}」"
 
+    async def rewrite(self, section: str, intent: str, *, append: bool = False) -> str:
+        """让家模型按意图重写某一节；她只给意图，格式由模型保证。"""
+        from ...agent.role import ATRI
+        from ...llm import ModelType, llm_manager
+        from .system import extract_json
+
+        title = str(section or "").strip()
+        hint = str(intent or "").strip()
+        if not title or not hint:
+            return "需要 section 与想要怎么改的说明"
+        if not llm_manager.has_type(ModelType.ATRI_HOME):
+            return "未配置家模型（atri-home），暂时不能改家的内容"
+        found = self._find(self.read(), title)
+        if found is None:
+            names = "、".join(t for _, t, _, _ in _split_sections(self.read()))
+            return f"家里没有「{title}」这一节。现有章节：{names}"
+        current = _strip_heading(self.read()[found[2] : found[3]])
+        mode = "在现有内容后追加，不要删掉已有的" if append else "按意图改写这一节"
+        base = (
+            f"你在改写「亚托莉的家」中的「{found[1]}」这一节。\n"
+            f"要做什么：{hint}\n"
+            f"写法：{mode}；房间写成「### 房间名」+ 一行描述，"
+            "容器写成「### 容器名」+「- 名称：说明」；容器名不能重复，容器内不再分 ####。\n"
+            f"整节不超过 {MAX_SECTION_CHARS} 字，不要输出节标题，也不要输出其它章节。\n"
+            '只输出 JSON：{"body": "..."}\n\n'
+            f"角色：{ATRI.get_role_prompt()}\n\n"
+            f"现有内容：\n{current or '（空）'}"
+        )
+
+        # 每次失败都把具体问题回传给模型，最多试 MAX_HOME_ATTEMPTS 次
+        feedback = ""
+        problem = ""
+        for attempt in range(MAX_HOME_ATTEMPTS):
+            prompt = base + feedback
+            try:
+                response = await llm_manager.call_agent(
+                    ModelType.ATRI_HOME, prompt, "Agent-家改写"
+                )
+                payload = extract_json(response.content)
+                body = str(payload.get("body") or "").strip()
+            except Exception as exc:
+                problem = f"输出不是可解析的 JSON（{exc}）"
+            else:
+                if not body:
+                    problem = "body 为空"
+                else:
+                    problem = self._budget_problem(found[1], body) or self._apply_problem(
+                        found[1], body
+                    )
+                if not problem:
+                    return self.replace(found[1], body)
+            log.warning(
+                f"家模型第 {attempt + 1} 次改写未通过（{found[1]}）：{problem}"
+            )
+            feedback = (
+                f"\n\n上一次的输出有问题：{problem}。"
+                "请修正后重新输出，只给 JSON，不要解释。"
+            )
+        return f"家没有改：{problem}（已尝试 {MAX_HOME_ATTEMPTS} 次，内容保持原样）"
+
+    @staticmethod
+    def _budget_problem(section: str, body: str) -> str:
+        """单节字数与条目数上限：防止反复追加把家写胖。"""
+        text = str(body or "").strip()
+        if len(text) > MAX_SECTION_CHARS:
+            return f"「{section}」超过 {MAX_SECTION_CHARS} 字，请精简后再写"
+        if section == SECTION_ROOMS and text.count("### ") > MAX_ROOMS:
+            return f"房间超过 {MAX_ROOMS} 个"
+        if section == SECTION_CONTAINERS and text.count("### ") > MAX_CONTAINERS:
+            return f"容器超过 {MAX_CONTAINERS} 个"
+        return ""
+
+    def _apply_problem(self, section: str, body: str) -> str:
+        """预演这次写入能不能过章节校验，不改文件。"""
+        text = self.read()
+        found = self._find(text, section)
+        if found is None:
+            return f"家里没有「{section}」这一节"
+        level, title, start, end = found
+        draft = text[:start] + f"{'#' * level} {title}\n{body}\n\n" + text[end:]
+        return self._section_problem(draft)
+
     def replace(self, section: str, content: str) -> str:
         """整块替换，含子章节。`edit` 拒绝父章节，WebUI 编辑房间/容器时用这个。"""
         text = self.read()
@@ -503,38 +593,6 @@ class HomeStore:
             lines.append(line)
             used += len(line) + 1
         return "\n".join(lines)
-
-    async def generate(self) -> tuple[bool, str]:
-        """用 `ATRI_HOME` 扩写；缺模型时返回降级提示。"""
-        from ...agent.role import ATRI
-        from ...llm import ModelType, llm_manager
-
-        if not llm_manager.has_type(ModelType.ATRI_HOME):
-            return False, "未配置家模型，已使用预设"
-        prompt = (
-            "根据下面的模板与角色设定，扩写亚托莉的家。\n"
-            f"章节固定为 {'、'.join(FIXED_SECTIONS)}，不要改名也不要新增；\n"
-            f"`## {SECTION_ROOMS}` 用 `###` 罗列房间；`## {SECTION_CONTAINERS}` "
-            "用 `###` 罗列容器（衣柜、冰箱、相册这类能装东西的实体或虚拟物件），"
-            "容器名不能重复、容器下不再分 `####`，物品一律写成「- 名称：说明」；"
-            "`## 习惯` 列她的居家小规矩。\n"
-            "只输出 Markdown 正文。\n\n"
-            f"角色：{ATRI.get_role_prompt()}\n\n模板：\n{self.read()}"
-        )
-        try:
-            response = await llm_manager.call_agent(
-                ModelType.ATRI_HOME, prompt, "Agent-家设定"
-            )
-        except Exception as exc:
-            log.warning(f"家生成失败，保留当前内容：{exc}")
-            return False, "家生成失败，保留当前内容"
-        text = str(response.content or "").strip()
-        problem = self._section_problem(text)
-        if problem:
-            return False, f"家模型输出有问题：{problem}，保留当前内容"
-        if not self.write(text):
-            return False, "写入失败：章节校验未通过"
-        return True, "家已更新"
 
 
 __all__ = [

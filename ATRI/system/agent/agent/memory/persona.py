@@ -13,6 +13,10 @@ _TS_PREFIX = re.compile(
 #: 情绪标记：写在 `USERDATA` 纯文本记忆的**末尾**，形如 `\u200b[emo:0.8]`。
 _EMO_TAG = re.compile(r"\u200b\[emo:(-?\d+(?:\.\d+)?)\]$")
 
+#: 写入时的来源标记，形如 `[人物ID:123] [群ID:456]`。它们只用于归属判断，
+#: 渲染成人话时要去掉——留着就是让模型读日志。
+_SOURCE_TAG = re.compile(r"\[(?:人物|聊天|群)ID\s*:[^\]]*\]")
+
 #: 时间质感的分档：(秒, 措辞)。刻意模糊——人不会记得精确时间戳。
 _AGE_BUCKETS = (
     (60 * 60 * 6, "刚刚"),
@@ -60,9 +64,11 @@ def strip_timestamp(text: str, keep_emotion: bool = False) -> str:
     前缀是写入时为了排序加的，对读者是噪声；时间感由 `time_text` 用
     相对措辞重建，比绝对时间戳更像回忆。情绪标记同理——它是给
     `pick_weighted` 用的元数据，不该显示给用户或模型看。
+    来源标记（人物/聊天/群 ID）只用于归属判断，同样要剥掉。
     """
     body = str(text or "").strip()
     body = _TS_PREFIX.sub("", body, count=1).strip() or body
+    body = _SOURCE_TAG.sub("", body).strip() or body
     if not keep_emotion:
         body = _EMO_TAG.sub("", body).strip() or body
     return body
@@ -168,6 +174,7 @@ def render_memories(
     *,
     limit: int = 11,
     budget: int = 500,
+    heading: str | None = None,
 ) -> str:
     """渲染成第一人称的回忆段落；没有可用内容时返回空串。
 
@@ -197,7 +204,9 @@ def render_memories(
         return ""
 
     remaining = len(entries) - len(lines)
-    head = f"关于{user_name}，你记得这些事（用第一人称自然地想起，不要逐条复述）："
+    head = heading or (
+        f"关于{user_name}，你记得这些事（用第一人称自然地想起，不要逐条复述）："
+    )
     body = "\n".join(f"- {line}" for line in lines)
     tail = (
         f"\n（还有 {remaining} 件更早的事，需要时可以再回想）" if remaining > 0 else ""

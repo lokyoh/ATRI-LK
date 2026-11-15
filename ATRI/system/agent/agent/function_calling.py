@@ -1566,9 +1566,8 @@ def register_function_calling():
         @classmethod
         def can_enable(cls) -> EnableCheck:
             if not llm_manager.has_type(ModelType.ATRI_EMBEDDING):
-                return EnableCheck(
-                    available=False, reason="未配置 atri-embedding 类型模型"
-                )
+                # 无向量时走关键词检索，仍可用，只是精度有限。
+                return EnableCheck(reason="未配置 atri-embedding，使用关键词检索")
             return EnableCheck()
 
         @staticmethod
@@ -1686,9 +1685,8 @@ def register_function_calling():
         @classmethod
         def can_enable(cls) -> EnableCheck:
             if not llm_manager.has_type(ModelType.ATRI_EMBEDDING):
-                return EnableCheck(
-                    available=False, reason="未配置 atri-embedding 类型模型"
-                )
+                # 无向量时走关键词检索，仍可用，只是精度有限。
+                return EnableCheck(reason="未配置 atri-embedding，使用关键词检索")
             return EnableCheck()
 
         @staticmethod
@@ -1727,9 +1725,8 @@ def register_function_calling():
         @classmethod
         def can_enable(cls) -> EnableCheck:
             if not llm_manager.has_type(ModelType.ATRI_EMBEDDING):
-                return EnableCheck(
-                    available=False, reason="未配置 atri-embedding 类型模型"
-                )
+                # 无向量时走关键词检索，仍可用，只是精度有限。
+                return EnableCheck(reason="未配置 atri-embedding，使用关键词检索")
             return EnableCheck()
 
         @staticmethod

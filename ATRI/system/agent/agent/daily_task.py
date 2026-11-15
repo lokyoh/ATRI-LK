@@ -6,10 +6,14 @@ IMAGE_CLEANUP_TIME = 30 * 24 * 60 * 60
 
 @daily_update(priority=Priority.LOW)
 async def agent_daily_task():
-    from .memory.manage import summarize_memories
+    from .memory.manage import backfill_vectors, consolidate_memories, summarize_memories
     from .schedule import generate_schedule
 
     await summarize_memories()
+    # 归并放在总结之后、补算之前：先压掉旧的，再给剩下的补向量，
+    # 免得给即将退出检索的原记忆白算一次嵌入。
+    await consolidate_memories()
+    await backfill_vectors()
     await generate_schedule()
 
 

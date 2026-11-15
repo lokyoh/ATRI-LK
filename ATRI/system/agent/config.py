@@ -321,6 +321,13 @@ class AgentConfig(PluginConfig):
         "留空 = 不额外开启，仅依赖聊天插件的名单",
         item_type=str,
     )
+    memory_prefetch_enabled = Field(
+        bool,
+        False,
+        "自动回忆",
+        "每轮按当前消息自动检索一次长期记忆，取最相关的 3 条注入提示词；"
+        "没有向量模型时走关键词检索。默认关闭——开启后每轮多一次嵌入调用。",
+    )
     section_proactive = Section(
         "proactive",
         "主动行为",

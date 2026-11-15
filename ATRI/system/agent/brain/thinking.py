@@ -70,6 +70,39 @@ def _burst_count(history_list: list[History], user_id: str) -> int:
     return count
 
 
+async def _prefetch_memory(chat_id: str, user_id: str, message: str) -> str:
+    """按当前消息预取几条相关记忆，返回渲染后的段落。
+
+    失败一律静默：自动回忆是锦上添花，不该让这一轮的思考失败。
+    """
+    if not config.get("memory_prefetch_enabled"):
+        return ""
+    text = (message or "").strip()
+    if not text:
+        return ""
+    try:
+        from ATRI.system.lkapi.entity.user import user_manager
+
+        from ..agent.memory.manage import memory_manager
+        from ..agent.memory.persona import render_memories
+
+        who = str(user_manager.resolve_user_id(user_id) or "") or None
+        rows = await memory_manager.recall_for_turn(text, chat_id, who)
+    except Exception as exc:
+        log.debug(f"预取记忆失败，跳过：{exc}")
+        return ""
+    if not rows:
+        return ""
+    rendered = render_memories(
+        "",
+        [row["content"] for row in rows],
+        limit=len(rows),
+        budget=300,
+        heading="刚才聊到的事让你想起了这些（自然地想起，不要逐条复述）：",
+    )
+    return f"\n{rendered}\n" if rendered else ""
+
+
 async def _describe_addressee(bot, chat_id, user_id, user_info) -> str:
     """渲染「这次是对谁说话」——身份、关系、关于他的记忆。
 
@@ -291,6 +324,11 @@ class ThinkingModel:
             self_text = render_self_memories(self_memories)
             if self_text:
                 prompt += f"\n{self_text}\n"
+        # 自动回忆：按当前消息检索一次长期记忆。默认关闭——
+        # 开启后每轮多一次嵌入调用，所以由配置决定而不是无条件跑。
+        prefetched = await _prefetch_memory(chat_id, user_id, lst_msg)
+        if prefetched:
+            prompt += f"\n{prefetched}\n"
         # 对话中词语解释（只对真实消息有意义）
         exp = get_top_explanations(lst_msg) if lst_msg else []
         if exp:

@@ -691,8 +691,22 @@ def _region_price_mult(floor: int | None, cfg: dict[str, Any]) -> float:
 def _shop_base_price(
     spec: dict[str, Any], cfg: dict[str, Any], floor: int | None
 ) -> int:
-    """货架原价 = 自身价值 × 区域系数（未打折）。"""
-    return max(1, round(_relic_price(spec, cfg) * _region_price_mult(floor, cfg)))
+    """货架原价（未打折）：平值段按楼层衰减，百分比段不衰减，两段各乘区域系数。"""
+    from .relics import relic_flat_power, relic_floor_decay, relic_pct_power
+
+    effect = spec.get("effect") or {}
+    base = _relic_price(spec, cfg)
+    if floor is None:
+        return base
+    flat_ref = relic_flat_power(effect)
+    pct = relic_pct_power(effect)
+    if flat_ref + pct <= 0:
+        return base
+    share = flat_ref / (flat_ref + pct)
+    decay = relic_floor_decay(effect, floor, cfg)
+    mult = _region_price_mult(floor, cfg)
+    raw = base * (share * decay + (1.0 - share)) * mult
+    return max(1, round(raw))
 
 
 def _final_price(

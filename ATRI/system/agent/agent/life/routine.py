@@ -135,15 +135,12 @@ def load_routine(user_dir: Path | None = None) -> Routine:
             continue
         if slots:
             return Routine(slots=_normalize(slots), source=source)
-        log.warning(f"固定作息文件 {path} 没有有效条目，跳过")
+        log.info(f"固定作息文件 {path} 没有有效条目，跳过")
 
+    # 两份都没有时用代码内置的骨架：这是正常兜底，不是异常。
     slots = parse_routine(DEFAULT_ROUTINE)
-    log.warning("未找到可用的固定作息，使用代码内置默认作息")
     return Routine(slots=_normalize(slots), source="default")
 
 
 def _normalize(slots: list[ScheduleEntry]) -> list[ScheduleEntry]:
     return sorted(slots, key=lambda slot: slot.start_min)
-
-
-

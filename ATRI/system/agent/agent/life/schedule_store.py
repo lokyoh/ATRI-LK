@@ -12,6 +12,7 @@ from ATRI.utils.datetime import now
 
 from .conflict import resolve as resolve_conflicts
 from .model import (
+    CARRIED_NOTE,
     DAY_END_MIN,
     DAY_LAST_END_MIN,
     DAY_START_MIN,
@@ -34,9 +35,6 @@ from .store import read_json, write_json
 TRAVEL_MIN_MINUTES = 5
 TRAVEL_DEFAULT_MINUTES = 15
 TRAVEL_MAX_MINUTES = 45
-
-#: 跨零点条目平移到当天后的标记
-CARRIED_NOTE = "carried"
 
 
 def _shift_date(date: str, days: int) -> str:
@@ -96,9 +94,7 @@ class ScheduleStore:
             pass
         return changed
 
-    def remove_entry(
-        self, date: str, start: str, end: str, activity: str = ""
-    ) -> bool:
+    def remove_entry(self, date: str, start: str, end: str, activity: str = "") -> bool:
         """删掉匹配的一条填入条目；骨架不受影响。"""
         plan = self.load(date)
         low = day_minutes(parse_time(start))
@@ -174,9 +170,7 @@ class ScheduleStore:
             if end <= start:
                 continue
             origin = entry.origin_start or format_time(entry.start_min)
-            item = self._clone(
-                entry, start=format_time(start), end=format_time(end)
-            )
+            item = self._clone(entry, start=format_time(start), end=format_time(end))
             item.note = CARRIED_NOTE
             item.origin_start = origin
             # 写入时已经同步到次日的，不再重复补一条。
@@ -195,7 +189,9 @@ class ScheduleStore:
         """固定作息 + 填入层 + 前一天的遗留尾巴，按开始时间排序。"""
         date = date or get_now_date()
         plan = self.load(date)
-        entries = list(plan.entries) + self.routine_slots(date) + self.carried_entries(date)
+        entries = (
+            list(plan.entries) + self.routine_slots(date) + self.carried_entries(date)
+        )
         return sorted(entries, key=lambda entry: entry.start_min)
 
     def display_entries(self, date: str | None = None) -> list[ScheduleEntry]:
@@ -334,9 +330,7 @@ class ScheduleStore:
             end = entry.end_min - 24 * 60
             if end <= start:
                 continue
-            piece = self._clone(
-                entry, start=format_time(start), end=format_time(end)
-            )
+            piece = self._clone(entry, start=format_time(start), end=format_time(end))
             piece.origin_start = entry.origin_start or format_time(entry.start_min)
             piece.cross_from = date
             pieces.append(piece)
@@ -549,9 +543,7 @@ class ScheduleStore:
             return self._state_from_entry(slot, minute)
         # 空档期也给结束时间。
         upcoming = sorted(
-            x.start_min
-            for x in list(slots) + carried
-            if x.start_min > minute
+            x.start_min for x in list(slots) + carried if x.start_min > minute
         )
         until = format_time(upcoming[0]) if upcoming else ""
         return LocationState(

@@ -7,6 +7,11 @@ from pydantic import BaseModel
 from ATRI.exceptions import str_traceback
 from ATRI.log import log
 from ATRI.system.agent.agent.life import (
+    ENTRY_KIND_LABELS,
+    ENTRY_NOTE_COLORS,
+    ENTRY_NOTE_LABELS,
+    ENTRY_SOURCE_COLORS,
+    ENTRY_SOURCE_LABELS,
     EntryKind,
     get_life_system,
     get_now_date,
@@ -100,12 +105,28 @@ def _night_hour() -> int:
         return 20
 
 
+class LifeOption(BaseModel):
+    value: str
+    label: str
+
+
+class LifeOptions(BaseModel):
+    """日程条目类型与来源文案；前端不再自己写死。"""
+
+    kinds: list[LifeOption] = []
+    note_labels: dict[str, str] = {}
+    note_colors: dict[str, str] = {}
+    source_labels: dict[str, str] = {}
+    source_colors: dict[str, str] = {}
+
+
 class LifeSnapshot(BaseModel):
     date: str
     location: LocationInfo
     schedule: list[ScheduleEntryInfo]
     outfit: OutfitInfo
     home: HomeInfo
+    options: LifeOptions
 
 
 class SetOutfitModel(BaseModel):
@@ -123,6 +144,7 @@ class HomeEditModel(BaseModel):
 
 class RemovePlanEntryModel(BaseModel):
     """按「开始 + 结束 + 活动」定位要删的那条。"""
+
     date: str = ""
     start: str
     end: str
@@ -131,6 +153,7 @@ class RemovePlanEntryModel(BaseModel):
 
 class FillPlanModel(BaseModel):
     """与 agent 的 plan(fill) 同参数；entries 的字段同 ScheduleEntry。"""
+
     date: str = ""
     entries: list[dict]
     start: str = ""
@@ -189,6 +212,16 @@ def _snapshot(date: str) -> LifeSnapshot:
             text=state.describe(),
         ),
         schedule=[_entry_info(entry) for entry in life.plan(date)],
+        options=LifeOptions(
+            kinds=[
+                LifeOption(value=value, label=label)
+                for value, label in ENTRY_KIND_LABELS.items()
+            ],
+            note_labels=dict(ENTRY_NOTE_LABELS),
+            note_colors=dict(ENTRY_NOTE_COLORS),
+            source_labels=dict(ENTRY_SOURCE_LABELS),
+            source_colors=dict(ENTRY_SOURCE_COLORS),
+        ),
         outfit=OutfitInfo(
             date=outfit.date,
             day=outfit.day,

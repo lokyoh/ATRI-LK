@@ -6,7 +6,7 @@ from typing import Any
 from ATRI.log import log
 from ATRI.utils.datetime import today
 
-from ...llm import ModelRequestError, ModelType, llm_manager
+from ...llm import ModelRequestError, llm_manager
 from ..history import history_logger
 from ..telemetry import telemetry
 from .database import (
@@ -130,7 +130,7 @@ def _subject_of(memory: str) -> str:
 
 
 def _has_embedding_model() -> bool:
-    return llm_manager.has_type(ModelType.ATRI_EMBEDDING)
+    return llm_manager.has_slot("embedding")
 
 
 class MemoryManager:
@@ -151,11 +151,13 @@ class MemoryManager:
             telemetry.memory(queried=False, hits=0, degraded=True)
             return []
         if not _has_embedding_model():
-            return self._lexical_memories(query, top_k, chat_id, subject, degraded=False)
+            return self._lexical_memories(
+                query, top_k, chat_id, subject, degraded=False
+            )
         try:
             vectors = (
-                await llm_manager.call_model_by_type(
-                    ModelType.ATRI_EMBEDDING, query, "查询记忆"
+                await llm_manager.call_agent(
+                    "embedding", query, "查询记忆", app_id="memoryquery"
                 )
             ).content
             vector = vectors[0]
@@ -276,8 +278,8 @@ class MemoryManager:
         if _has_embedding_model():
             try:
                 vectors = (
-                    await llm_manager.call_model_by_type(
-                        ModelType.ATRI_EMBEDDING, memory, "添加记忆"
+                    await llm_manager.call_agent(
+                        "embedding", memory, "添加记忆", app_id="memoryadd"
                     )
                 ).content
                 vector = vectors[0]
@@ -304,9 +306,9 @@ class MemoryManager:
         )
 
     async def summarize(self, chat_id, history):
-        # 只依赖 atri-memory：向量可缺席，记忆不该因此整条写不进。
-        if not llm_manager.has_type(ModelType.ATRI_MEMORY):
-            log.info("没有配置 atri-memory 模型，跳过记忆总结")
+        # 只依赖记忆模型：向量可缺席，记忆不该因此整条写不进。
+        if not llm_manager.has_slot("memory"):
+            log.info("没有配置记忆模型，跳过记忆总结")
             return 0
         history_text = "\n".join(
             f"[人物ID:{node.sender if node.sender is not None else 'bot'}] "
@@ -316,8 +318,8 @@ class MemoryManager:
         prompt = MEMORY_PROMPT.format(
             chat_id=chat_id, history=history_text, today=_today_stamp()
         )
-        response = await llm_manager.call_model_by_type(
-            ModelType.ATRI_MEMORY, prompt, "Agent-记忆总结"
+        response = await llm_manager.call_agent(
+            "memory", prompt, "Agent-记忆总结", app_id="memorysummary"
         )
         count = 0
         seen = set()
@@ -410,7 +412,7 @@ async def consolidate_memories() -> int:
     记忆「像人」不是记得多，而是记得概括；不压的话条数只会线性增长，
     挤占预算、稀释检索。原记忆不删，只标成已归并、退出检索。
     """
-    if not llm_manager.has_type(ModelType.ATRI_MEMORY):
+    if not llm_manager.has_slot("memory"):
         return 0
     groups = memory_manager.database.unconsolidated_groups(
         CONSOLIDATE_MIN_SIZE,
@@ -424,8 +426,8 @@ async def consolidate_memories() -> int:
             memories="\n".join(f"- {line}" for line in lines)
         )
         try:
-            response = await llm_manager.call_model_by_type(
-                ModelType.ATRI_MEMORY, prompt, "Agent-记忆归并"
+            response = await llm_manager.call_agent(
+                "memory", prompt, "Agent-记忆归并", app_id="memorymerge"
             )
         except (ModelRequestError, OSError, RuntimeError, ValueError) as exc:
             log.warning(f"记忆归并失败，本轮中止：{exc}")
@@ -481,8 +483,11 @@ async def backfill_vectors(limit: int = VECTOR_BACKFILL_PER_RUN) -> int:
     for item in pending:
         try:
             vectors = (
-                await llm_manager.call_model_by_type(
-                    ModelType.ATRI_EMBEDDING, item["content"], "补算记忆向量"
+                await llm_manager.call_agent(
+                    "embedding",
+                    item["content"],
+                    "补算记忆向量",
+                    app_id="memoryvector",
                 )
             ).content
             vector = vectors[0]
@@ -512,8 +517,8 @@ async def summarize_memories():
         memory_manager.database.decay_all()
     except (OSError, RuntimeError, ValueError) as exc:
         log.warning(f"记忆遗忘失败：{exc}")
-    if not llm_manager.has_type(ModelType.ATRI_MEMORY):
-        log.info("没有配置 atri-memory 模型，跳过记忆总结")
+    if not llm_manager.has_slot("memory"):
+        log.info("没有配置记忆模型，跳过记忆总结")
         return
     paths = history_logger.path
     log.info("开始总结记忆")

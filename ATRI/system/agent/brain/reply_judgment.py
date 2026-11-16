@@ -7,7 +7,7 @@ from ..agent.history import get_history_messages
 from ..agent.role import ATRI
 from ..agent.state import state_prompt
 from ..agent.telemetry import telemetry
-from ..llm import ModelType, llm_manager
+from ..llm import llm_manager
 
 #: 标签白名单。只接受这里面列出的词——模型偶尔会自创标签。
 ALLOWED_TAGS = (
@@ -151,9 +151,10 @@ class JudgmentModel:
 
     @classmethod
     async def analyze(cls, bot, this_msg, history_list, chat_message) -> bool:
-        if not llm_manager.has_type(ModelType.ATRI_JUDGE):
+        if not llm_manager.has_slot("judge"):
             return False
         chat_content = await this_msg.get_message(bot)
+        chat_id = str(getattr(this_msg, "chat_id", "") or "")
         messages = await get_history_messages(
             bot, history_list, chat_message.fallback_history
         )
@@ -167,8 +168,8 @@ class JudgmentModel:
         tag: str | None = None
         parsed: bool | None = None
         try:
-            response = await llm_manager.call_model_by_type(
-                ModelType.ATRI_JUDGE,
+            response = await llm_manager.call_agent(
+                "judge",
                 cls.prompt.format(
                     role=f"{ATRI.role_name}:{ATRI.personality}",
                     state=state_text,
@@ -176,6 +177,7 @@ class JudgmentModel:
                     chat_content=chat_content,
                 ),
                 "Agent-主动回复判断",
+                app_id="judge",
             )
             content = response.content
             verdict = _parse_verdict(content)
@@ -192,7 +194,7 @@ class JudgmentModel:
             return False
         finally:
             telemetry.judge(
-                chat_id=str(getattr(this_msg, "chat_id", "") or ""),
+                chat_id=chat_id,
                 replied=replied,
                 duration=time.perf_counter() - started,
                 reason=reason,

@@ -222,7 +222,7 @@ class Telemetry:
         """一次 Chat 表达渲染的结果。
 
         与 `tool` 分开：`tool` 记的是功能调用本身，这里记的是「表达」这一步；
-        `degraded=True` 表示 `ATRI_CHAT` 缺失或失败，最终用 intent 兜底。
+        `degraded=True` 表示聊天模型缺失或失败，最终用 intent 兜底。
         """
         self.record(
             "chat_render",

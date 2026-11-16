@@ -11,14 +11,18 @@ from ATRI.system.agent.agent.function_calling import FunctionCallingManager
 from ATRI.system.agent.agent.model_health import health_snapshot
 from ATRI.system.agent.config import apply_runtime_config, config
 from ATRI.system.agent.llm import (
+    CACHE_FIELD_OPTIONS,
+    MODEL_TYPE_COLORS,
+    MODEL_TYPE_LABELS,
+    PROVIDERS,
     LLMModel,
     LLMProvider,
     ModelPricing,
     ModelType,
     ProviderManager,
-    Sys1Content,
-    Sys1Question,
-    provider_type,
+    get_spec,
+    provider_keys,
+    resolve_factory,
 )
 from ATRI.system.agent.llm.provider import PRICING_UNIT_TOKENS
 from ATRI.system.agent.llm.token import MTYM, TokenUsageData
@@ -364,31 +368,21 @@ async def _(provider_name: str, model_name: str) -> Result:
     )
     if not model_config:
         return Result.fail(f"未找到模型: {model_name}", code=404)
-    model_factory = provider_type.get(provider.provider_type)
-    if not model_factory:
+    spec = get_spec(provider.provider_type)
+    if spec is None:
         return Result.fail(
             f"暂不支持的 Provider 类型: {provider.provider_type}", code=400
         )
     test_model = None
     response = None
-    test_content: str | Sys1Content = "请仅回复 OK。"
-    if provider.provider_type == "sys1":
-        test_content = Sys1Content(
-            state="ATRI 模型 API 连通性测试",
-            questions={
-                "connectivity": Sys1Question(
-                    type="noul",
-                    instructions="确认请求成功，并简短回复 OK。",
-                )
-            },
-        )
-    elif provider.provider_type == "embedding":
-        test_content = "ATRI model API connectivity test"
+    test_content = spec.probe
     try:
         selected_keys = provider.keys_for_model(model_config)
         key_values = [item.key for item in selected_keys if item.key]
         api_key = key_values[0] if len(key_values) == 1 else key_values or None
-        test_model = model_factory(
+        test_model = resolve_factory(provider.provider_type)(
+            cache_field=spec.cache_field or model_config.cache_field,
+            cache_field_locked=bool(spec.cache_field),
             name=model_config.name,
             model=model_config.model,
             endpoint=provider.url,
@@ -405,7 +399,7 @@ async def _(provider_name: str, model_name: str) -> Result:
         log.error(f"{router.prefix}/test_model 调用错误:{str_traceback(e)}")
         return Result.fail(f"API 测试失败: {e}")
     finally:
-        if provider.provider_type == "tts":
+        if spec.probe_cleanup:
             output_path = getattr(response, "content", None)
             if isinstance(output_path, Path):
                 try:
@@ -417,25 +411,61 @@ async def _(provider_name: str, model_name: str) -> Result:
 @router.post(
     "/get_provider_type",
     dependencies=[authentication()],
-    response_model=Result[list[str]],
+    response_model=Result[list[dict]],
     response_class=JSONResponse,
-    description="获取注册的模型供应商类型",
+    description="获取注册的模型供应商类型及其显示信息",
 )
-async def _() -> Result[list[str]]:
-    p_type = list(provider_type)
-    return Result.ok(info="拿到信息啦!", data=p_type)
+async def _() -> Result[list[dict]]:
+    """类型 / 显示名 / 官方默认地址一并给出，前端不再自己存一份。"""
+    items = [
+        {
+            "value": key,
+            "label": PROVIDERS[key].label,
+            "endpoint": PROVIDERS[key].endpoint,
+        }
+        for key in provider_keys()
+    ]
+    return Result.ok(info="拿到信息啦!", data=items)
 
 
 @router.post(
     "/get_model_type",
     dependencies=[authentication()],
-    response_model=Result[list[str]],
+    response_model=Result[list[dict]],
     response_class=JSONResponse,
-    description="获取注册的模型类型",
+    description="获取模型类型及其显示信息",
 )
-async def _() -> Result[list[str]]:
-    m_type = [type_.value for type_ in ModelType]
-    return Result.ok(info="拿到信息啦!", data=m_type)
+async def _() -> Result[list[dict]]:
+    items = [
+        {
+            "value": type_.value,
+            "label": MODEL_TYPE_LABELS.get(type_.value, type_.value),
+            "color": MODEL_TYPE_COLORS.get(type_.value, "info"),
+        }
+        for type_ in ModelType
+    ]
+    return Result.ok(info="拿到信息啦!", data=items)
+
+
+@router.post(
+    "/get_cache_field",
+    dependencies=[authentication()],
+    response_model=Result[list[dict]],
+    response_class=JSONResponse,
+    description="获取缓存标识可选的请求体字段",
+)
+async def _(provider_type_name: str = "") -> Result[list[dict]]:
+    """空值 = 供应商默认；供应商定死字段时只返回那一项。"""
+    spec = get_spec(provider_type_name)
+    locked = spec.cache_field if spec else ""
+    if locked:
+        items = [{"value": locked, "label": locked, "locked": True}]
+    else:
+        items = [
+            {"value": value, "label": label, "locked": False}
+            for value, label in CACHE_FIELD_OPTIONS
+        ]
+    return Result.ok(info="拿到信息啦!", data=items)
 
 
 @router.get(

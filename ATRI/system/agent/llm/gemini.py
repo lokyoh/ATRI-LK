@@ -1,6 +1,7 @@
 from ..utils import log, request
 from .contents import LLMContents, LLMMessages
 from .model import LLMModel, LLMResponse, ModelRequestError
+from .registry import ProviderSpec, register_provider
 from .token import TokenUsage
 
 
@@ -63,6 +64,7 @@ def create_gemini_model(
     api_key,
     temperature,
     data=None,
+    **kwargs,
 ):
     return LLMModel(
         name=name,
@@ -72,4 +74,14 @@ def create_gemini_model(
         temperature=temperature,
         data=data,
         call_func=call_func,
+        **kwargs,
     )
+
+
+register_provider(
+    ProviderSpec(
+        key="gemini",
+        label="Gemini",
+        factory=create_gemini_model,
+    )
+)

@@ -32,7 +32,6 @@ from ..llm import (
     LLMContents,
     LLMMessage,
     LLMMessages,
-    ModelType,
     llm_manager,
 )
 from ..utils import log
@@ -475,6 +474,7 @@ class ThinkingModel:
                 args.bot, history_list, fallback_history
             ),
             chat_id=str(args.chat_id),
+            user_id=str(args.user_id),
         )
         outbox = ChatOutbox(
             ctx=render_ctx,
@@ -508,7 +508,7 @@ class ThinkingModel:
                         )
                     )
                 resp = await llm_manager.call_agent(
-                    ModelType.ATRI_THINK, self.messages, "主Agent思考"
+                    "think", self.messages, "主Agent思考", app_id="think"
                 )
                 _, functions_data, issues = await self.process_resp(resp.content)
                 if not functions_data and not issues:

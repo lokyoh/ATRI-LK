@@ -22,7 +22,7 @@ from ..agent.reply_pipeline import (
     parse_markdown,
     parse_messages,
 )
-from ..llm import ModelType, llm_manager
+from ..llm import llm_manager
 
 RenderKind = Literal["text", "markdown", "face"]
 
@@ -49,6 +49,7 @@ class ChatContext:
     relation: str = ""
     history: list[str] = field(default_factory=list)
     chat_id: str = ""
+    user_id: str = ""
 
 
 @dataclass
@@ -80,17 +81,18 @@ class ChatModel:
         cls, request: ChatRenderRequest, ctx: ChatContext | None = None
     ) -> RenderedReply:
         ctx = ctx or ChatContext()
-        if not llm_manager.has_type(ModelType.ATRI_CHAT):
-            log.warning("ATRI_CHAT 未配置，已降级为 intent 直发")
+        if not llm_manager.has_slot("chat"):
+            log.warning("聊天模型未配置，已降级为 intent 直发")
             return cls._degrade(request)
         prompt = cls._build_prompt(request, ctx)
         last_error = ""
         for attempt in range(RETRIES + 1):
             try:
                 response = await llm_manager.call_agent(
-                    ModelType.ATRI_CHAT,
+                    "chat",
                     prompt,
                     f"Agent-Chat表达({request.kind})",
+                    app_id="chat",
                 )
             except Exception as exc:
                 last_error = str(exc)
@@ -232,6 +234,7 @@ def build_context(
     relation: str = "",
     history: list[str] | None = None,
     chat_id: str = "",
+    user_id: str = "",
 ) -> ChatContext:
     """从 thinking 侧收集渲染上下文；history 只保留最近 N 条。"""
     items = [str(item).strip() for item in (history or []) if str(item).strip()]
@@ -242,6 +245,7 @@ def build_context(
         relation=relation,
         history=items[-HISTORY_LIMIT:],
         chat_id=str(chat_id),
+        user_id=str(user_id),
     )
 
 

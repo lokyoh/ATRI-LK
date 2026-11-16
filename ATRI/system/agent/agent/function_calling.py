@@ -8,7 +8,7 @@ from ATRI.utils.datetime import now
 
 from ..config import config
 from ..event import AgentEventBus
-from ..llm import ModelType, llm_manager
+from ..llm import llm_manager
 from ..utils import log, request
 from .function_permission import (
     FunctionScope,
@@ -705,7 +705,8 @@ def register_function_calling():
 
     class CallFunctionCalling(FunctionCalling):
         function_name = "call"
-        scope = FunctionScope.BOT
+        # 任何等级都能调用；真正的权限由被调用的功能自己决定。
+        scope = FunctionScope.CHAT
         description = (
             "调用不常用功能。不常用功能不会出现在上面的功能列表里，"
             "它们的具体用法通常写在技能正文中，请按技能给出的功能名与参数调用"
@@ -1237,10 +1238,8 @@ def register_function_calling():
 
         @classmethod
         def can_enable(cls) -> EnableCheck:
-            if not llm_manager.has_type(ModelType.ATRI_PROFILE):
-                return EnableCheck(
-                    available=False, reason="未配置 atri-profile 类型模型"
-                )
+            if not llm_manager.has_slot("profile"):
+                return EnableCheck(available=False, reason="未配置画像模型")
             return EnableCheck()
 
         @staticmethod
@@ -1412,7 +1411,8 @@ def register_function_calling():
     class GetServiceListFunctionCalling(FunctionCalling):
         function_name = "services"
         aliases = ("get_service_list",)
-        scope = FunctionScope.BOT
+        # 只读查询，任何等级都该能用；若按 bot 作用域，admin/user 全部被拒。
+        scope = FunctionScope.CHAT
         description = (
             "查询当前可用服务列表及服务分类。需要了解自己支持哪些功能服务时调用。"
         )
@@ -1429,7 +1429,7 @@ def register_function_calling():
     class GetServiceInfoFunctionCalling(FunctionCalling):
         function_name = "service"
         aliases = ("get_service_info",)
-        scope = FunctionScope.BOT
+        scope = FunctionScope.CHAT
         description = "查询指定服务的说明、可用命令和启用状态。"
         args: ClassVar = [
             FunctionCallingArg(
@@ -1451,7 +1451,7 @@ def register_function_calling():
     class GetCommandInfoFunctionCalling(FunctionCalling):
         function_name = "command"
         aliases = ("get_command_info",)
-        scope = FunctionScope.BOT
+        scope = FunctionScope.CHAT
         description = "查询指定服务中某条命令的类型、说明和别名。"
         args: ClassVar = [
             FunctionCallingArg(
@@ -1565,9 +1565,9 @@ def register_function_calling():
 
         @classmethod
         def can_enable(cls) -> EnableCheck:
-            if not llm_manager.has_type(ModelType.ATRI_EMBEDDING):
+            if not llm_manager.has_slot("embedding"):
                 # 无向量时走关键词检索，仍可用，只是精度有限。
-                return EnableCheck(reason="未配置 atri-embedding，使用关键词检索")
+                return EnableCheck(reason="未配置向量模型，使用关键词检索")
             return EnableCheck()
 
         @staticmethod
@@ -1684,9 +1684,9 @@ def register_function_calling():
 
         @classmethod
         def can_enable(cls) -> EnableCheck:
-            if not llm_manager.has_type(ModelType.ATRI_EMBEDDING):
+            if not llm_manager.has_slot("embedding"):
                 # 无向量时走关键词检索，仍可用，只是精度有限。
-                return EnableCheck(reason="未配置 atri-embedding，使用关键词检索")
+                return EnableCheck(reason="未配置向量模型，使用关键词检索")
             return EnableCheck()
 
         @staticmethod
@@ -1724,9 +1724,9 @@ def register_function_calling():
 
         @classmethod
         def can_enable(cls) -> EnableCheck:
-            if not llm_manager.has_type(ModelType.ATRI_EMBEDDING):
+            if not llm_manager.has_slot("embedding"):
                 # 无向量时走关键词检索，仍可用，只是精度有限。
-                return EnableCheck(reason="未配置 atri-embedding，使用关键词检索")
+                return EnableCheck(reason="未配置向量模型，使用关键词检索")
             return EnableCheck()
 
         @staticmethod
@@ -1917,12 +1917,12 @@ def register_function_calling():
             if not hint:
                 return "请用 hint 说明你想怎么安排"
 
-            from ..llm import ModelType, llm_manager
+            from ..llm import llm_manager
             from .life.system import extract_json
             from .role import ATRI
 
-            if not llm_manager.has_type(ModelType.ATRI_SCHEDULE):
-                return "未配置 atri-schedule 类型模型，无法填入日程"
+            if not llm_manager.has_slot("schedule"):
+                return "未配置日程模型，无法填入日程"
             routine = life.routine()
             state = life.location(date)
             current = life.schedule_summary(date)
@@ -1947,7 +1947,7 @@ def register_function_calling():
             )
             try:
                 response = await llm_manager.call_agent(
-                    ModelType.ATRI_SCHEDULE, prompt, "Agent-日程填入"
+                    "schedule", prompt, "Agent-日程填入", app_id="schedule"
                 )
                 payload = extract_json(response.content)
             except Exception as exc:

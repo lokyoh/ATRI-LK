@@ -71,6 +71,8 @@ class FunctionCallingInfo(BaseModel):
     """不进入常规功能提示词，但仍可被模型直接调用"""
     permission: dict[str, PermissionDecisionInfo] = {}
     """三个等级对该功能的默认求值结果"""
+    rare: bool = False
+    """不常用功能：不进常规提示词，只能经 call 调用"""
 
 
 class FunctionCallingState(BaseModel):
@@ -128,6 +130,7 @@ def _describe(name: str, func: type) -> FunctionCallingInfo:
         returns_data=bool(getattr(func, "returns_data", True)),
         prompt_hidden=bool(getattr(func, "prompt_hidden", False)),
         permission=_permission_map(name),
+        rare=FunctionCallingManager.is_rare(name),
     )
 
 

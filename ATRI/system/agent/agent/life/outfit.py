@@ -6,7 +6,7 @@ from pathlib import Path
 
 from ATRI.log import log
 
-from ...llm import ModelType, llm_manager
+from ...llm import llm_manager
 from .model import OutfitPlan, get_now_date
 from .store import read_json, write_json
 
@@ -92,8 +92,8 @@ class OutfitStore:
         from .home import HomeStore
 
         date = date or get_now_date()
-        if not llm_manager.has_type(ModelType.ATRI_OUTFIT):
-            return False, "未配置 atri-outfit 类型模型，保留现有穿搭"
+        if not llm_manager.has_slot("outfit"):
+            return False, "未配置着装模型，保留现有穿搭"
         import datetime
 
         from ...agent.role import ATRI
@@ -115,7 +115,7 @@ class OutfitStore:
         )
         try:
             response = await llm_manager.call_agent(
-                ModelType.ATRI_OUTFIT, prompt, "Agent-今日穿搭"
+                "outfit", prompt, "Agent-今日穿搭", app_id="outfit"
             )
             data = _extract_json(response.content)
         except Exception as exc:

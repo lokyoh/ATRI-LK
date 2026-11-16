@@ -29,7 +29,7 @@ def validate_api_key(value: str) -> str:
 
 
 def normalize_model_type(value: str | list[str] | None) -> list[str]:
-    """规范化模型类型，兼容单值字符串与列表配置。"""
+    """规范化模型类型：单值/列表统一成列表。"""
     if value is None:
         return []
     if isinstance(value, str):
@@ -39,7 +39,9 @@ def normalize_model_type(value: str | list[str] | None) -> list[str]:
         for item in value:
             if isinstance(item, str):
                 item = item.strip()
-                if item:
+                if not item:
+                    continue
+                if item not in normalized:
                     normalized.append(item)
         return normalized
     return []
@@ -86,10 +88,7 @@ class LLMProviderKey(BaseModel):
 
 
 def normalize_provider_keys(value: Any) -> list[LLMProviderKey]:
-    """把 provider 的 api_key 统一成命名密钥列表。
-
-    兼容已提交版本的 ``api_key: "sk-xxx"``；新版列表输入必须是命名密钥对象。
-    """
+    """把 api_key 统一成命名密钥列表；字符串视为单个未命名密钥。"""
     if value is None or value == "":
         return []
     if isinstance(value, LLMProviderKey):
@@ -124,6 +123,26 @@ def ensure_key_names(keys: list[LLMProviderKey]) -> list[LLMProviderKey]:
         seen.add(name)
         item.name = name
     return keys
+
+
+CACHE_FIELDS: tuple[str, ...] = ("user_id", "user", "prompt_cache_key")
+"""可选的缓存标识字段。"""
+
+CACHE_FIELD_OPTIONS: tuple[tuple[str, str], ...] = (
+    ("", "不使用"),
+    ("user_id", "user_id"),
+    ("user", "user"),
+    ("prompt_cache_key", "prompt_cache_key"),
+)
+"""下拉项；空值 = 不发。"""
+
+
+def normalize_cache_field(value: Any) -> str:
+    """未知字段名一律退回空串。"""
+    if value is None:
+        return ""
+    field = str(value).strip()
+    return field if field in CACHE_FIELDS else ""
 
 
 def normalize_key_selectors(value: Any) -> list[str]:
@@ -211,6 +230,10 @@ class LLMModel(BaseModel):
     """选择的密钥名称；为空表示使用 provider 的第一个密钥"""
     pricing: ModelPricing | None = None
     """计费配置，None 表示未配置计费"""
+    cache_field: str = ""
+    """缓存标识落在请求体的哪个字段；留空 = 用供应商默认"""
+    stream: bool = False
+    """流式输出：只换传输方式，仍然等完整结果"""
     data: dict[str, Any] = Field(default_factory=dict)
 
     @field_validator("temperature", mode="before")
@@ -241,6 +264,11 @@ class LLMModel(BaseModel):
         if not normalized:
             return ""
         return normalized[0] if len(normalized) == 1 else normalized
+
+    @field_validator("cache_field", mode="before")
+    @classmethod
+    def validate_cache_field(cls, value: Any) -> str:
+        return normalize_cache_field(value)
 
 
 class LLMProvider(BaseModel):
@@ -391,28 +419,19 @@ default_provider = LLMProvider(
             name="siliconflow/DeepSeek-V4-Flash",
             model="deepseek-ai/DeepSeek-V4-Flash",
             temperature=0.7,
-            type=["chat", "atri-think", "atri-chat"],
+            type=["general"],
         ),
         LLMModel(
             name="siliconflow/qwen3-vl-30",
             model="Qwen/Qwen3-VL-30B-A3B-Instruct",
             temperature=0.7,
-            type=["image", "atri-vision"],
+            type=["image"],
         ),
         LLMModel(
             name="siliconflow/qwen3-30B",
             model="Qwen/Qwen3-30B-A3B-Instruct-2507",
             temperature=0.3,
-            type=[
-                "tool",
-                "atri-judge",
-                "atri-memory",
-                "atri-profile",
-                "atri-schedule",
-                "atri-outfit",
-                "atri-home",
-                "atri-summary",
-            ],
+            type=["general"],
         ),
     ],
 )

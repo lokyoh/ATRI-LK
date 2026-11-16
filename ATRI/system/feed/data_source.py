@@ -18,9 +18,10 @@ async def feed_func(user_id, food):
         if lk_config.get("chat_switch") and food:
             try:
                 response = await llm_manager.call_model_by_type(
-                    ModelType.TOOL,
+                    ModelType.GENERAL,
                     f'{atri}用户"{user_data.name}"(好感度:{user_data.love})向你投喂了:{food}',
                     "投喂",
+                    app_id="feed",
                 )
                 content = response.content
                 message.append(content.replace("\n", ""))

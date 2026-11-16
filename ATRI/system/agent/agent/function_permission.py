@@ -661,7 +661,8 @@ class PermissionResolver:
                 )
             except Exception:
                 pass
-        agent_log.debug(f"权限拒绝 {function_name}: {decision.explain()}")
+            # UI 预览（record=False）每页要跑几十次，不写日志。
+            agent_log.debug(f"权限拒绝 {function_name}: {decision.explain()}")
         return decision
 
 

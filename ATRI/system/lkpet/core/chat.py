@@ -93,7 +93,7 @@ class PetChat:
         )
         try:
             response = await llm_manager.call_model_by_type(
-                ModelType.CHAT, prompt, "宠物-聊天"
+                ModelType.GENERAL, prompt, "宠物-聊天", app_id="lkpet"
             )
         except ModelRequestError as exc:
             return f"调用模型时发生错误: {exc}"

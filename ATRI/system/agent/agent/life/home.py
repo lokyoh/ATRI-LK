@@ -251,7 +251,9 @@ class HomeStore:
         sections = _split_sections(body)
         titles = {title for level, title, _, _ in sections if level == 2}
         unknown = [
-            title for title in titles if title in LEGACY_SECTIONS or title not in FIXED_SECTIONS
+            title
+            for title in titles
+            if title in LEGACY_SECTIONS or title not in FIXED_SECTIONS
         ]
         if unknown:
             allowed = "、".join(FIXED_SECTIONS)
@@ -261,9 +263,7 @@ class HomeStore:
         if SECTION_ROOMS not in titles:
             return f"缺少 `## {SECTION_ROOMS}`"
         room = next(item for item in sections if item[1] == SECTION_ROOMS)
-        if not any(
-            item[0] == 3 and room[2] < item[2] < room[3] for item in sections
-        ):
+        if not any(item[0] == 3 and room[2] < item[2] < room[3] for item in sections):
             return f"`## {SECTION_ROOMS}` 下至少要有一个 `###` 房间"
         return HomeStore._container_problem(sections)
 
@@ -283,13 +283,13 @@ class HomeStore:
                 continue
             if level == 3:
                 if title in names:
-                    return f"`## {SECTION_CONTAINERS}` 下有重名容器「{title}」，会互相覆盖"
+                    return (
+                        f"`## {SECTION_CONTAINERS}` 下有重名容器「{title}」，会互相覆盖"
+                    )
                 names.append(title)
                 current = title
             elif level > 3:
-                return (
-                    f"容器「{current}」里不要再分「{title}」：物品请写成「- 名称：说明」"
-                )
+                return f"容器「{current}」里不要再分「{title}」：物品请写成「- 名称：说明」"
         return ""
 
     def _backup(self) -> None:
@@ -339,7 +339,9 @@ class HomeStore:
         text = self.read()
         spans = {title: (start, end) for _, title, start, end in _split_sections(text)}
         return {
-            name: _strip_heading(text[spans[name][0] : spans[name][1]]) if name in spans else ""
+            name: _strip_heading(text[spans[name][0] : spans[name][1]])
+            if name in spans
+            else ""
             for name in FIXED_SECTIONS
         }
 
@@ -361,9 +363,7 @@ class HomeStore:
         """`## 容器` 下的每个容器与它的清单。"""
         text = self.read()
         sections = _split_sections(text)
-        found = next(
-            (item for item in sections if item[1] == SECTION_CONTAINERS), None
-        )
+        found = next((item for item in sections if item[1] == SECTION_CONTAINERS), None)
         if found is None:
             return {}
         level, _, start, end = found
@@ -423,15 +423,15 @@ class HomeStore:
     async def rewrite(self, section: str, intent: str, *, append: bool = False) -> str:
         """让家模型按意图重写某一节；她只给意图，格式由模型保证。"""
         from ...agent.role import ATRI
-        from ...llm import ModelType, llm_manager
+        from ...llm import llm_manager
         from .system import extract_json
 
         title = str(section or "").strip()
         hint = str(intent or "").strip()
         if not title or not hint:
             return "需要 section 与想要怎么改的说明"
-        if not llm_manager.has_type(ModelType.ATRI_HOME):
-            return "未配置家模型（atri-home），暂时不能改家的内容"
+        if not llm_manager.has_slot("home"):
+            return "未配置家模型，暂时不能改家的内容"
         found = self._find(self.read(), title)
         if found is None:
             names = "、".join(t for _, t, _, _ in _split_sections(self.read()))
@@ -456,7 +456,7 @@ class HomeStore:
             prompt = base + feedback
             try:
                 response = await llm_manager.call_agent(
-                    ModelType.ATRI_HOME, prompt, "Agent-家改写"
+                    "home", prompt, "Agent-家改写", app_id="home"
                 )
                 payload = extract_json(response.content)
                 body = str(payload.get("body") or "").strip()
@@ -466,14 +466,12 @@ class HomeStore:
                 if not body:
                     problem = "body 为空"
                 else:
-                    problem = self._budget_problem(found[1], body) or self._apply_problem(
+                    problem = self._budget_problem(
                         found[1], body
-                    )
+                    ) or self._apply_problem(found[1], body)
                 if not problem:
                     return self.replace(found[1], body)
-            log.warning(
-                f"家模型第 {attempt + 1} 次改写未通过（{found[1]}）：{problem}"
-            )
+            log.warning(f"家模型第 {attempt + 1} 次改写未通过（{found[1]}）：{problem}")
             feedback = (
                 f"\n\n上一次的输出有问题：{problem}。"
                 "请修正后重新输出，只给 JSON，不要解释。"
@@ -564,7 +562,9 @@ class HomeStore:
             span = spans.get(name)
             return _strip_heading(text[span[0] : span[1]]) if span else ""
 
-        location = _clip(" ".join(body_of(SECTION_LOCATION).split()), MAX_LOCATION_CHARS)
+        location = _clip(
+            " ".join(body_of(SECTION_LOCATION).split()), MAX_LOCATION_CHARS
+        )
         room_span = spans.get(SECTION_ROOMS)
         rooms = [
             title

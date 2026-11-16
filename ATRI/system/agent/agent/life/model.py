@@ -32,6 +32,9 @@ MAX_ACTIVITY_CHARS = 60
 #: 默认「家」的地点名
 HOME_PLACE = "家"
 
+CARRIED_NOTE = "carried"
+"""前一天跨过零点、被搬到今天的条目。"""
+
 
 class EntryKind(StrEnum):
     STAY = "stay"
@@ -39,6 +42,33 @@ class EntryKind(StrEnum):
 
     TRAVEL = "travel"
     """从 A 到 B 的路上"""
+
+
+ENTRY_KIND_LABELS: dict[str, str] = {
+    EntryKind.STAY.value: "待在某地",
+    EntryKind.TRAVEL.value: "在路上",
+}
+"""类型的中文名；WebUI 的下拉直接用这一份，不自己写死。"""
+
+ENTRY_NOTE_LABELS: dict[str, str] = {
+    CARRIED_NOTE: "昨日遗留",
+    "auto": "自动补路程",
+}
+
+ENTRY_NOTE_COLORS: dict[str, str] = {CARRIED_NOTE: "warning"}
+
+ENTRY_SOURCE_LABELS: dict[str, str] = {
+    "routine": "固定作息",
+    "fill": "填入",
+    "go": "临时前往",
+}
+"""条目来源的中文名。"""
+
+ENTRY_SOURCE_COLORS: dict[str, str] = {
+    "routine": "info",
+    "fill": "success",
+    "go": "warning",
+}
 
 
 def clock_minutes(value: datetime.time) -> int:

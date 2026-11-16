@@ -11,29 +11,12 @@ from ATRI.log import log
 SPEAK_HOUR_START = 8
 SPEAK_HOUR_END = 24
 
-#: 主动发起的最小间隔（秒）**默认值**。
-#: 实际值来自配置 `proactive_start_interval`——用 2 小时作默认，
-#: 是因为主动发起比「插话」打扰得多，保守起步。
+#: 主动发起的最小间隔（秒）**默认值**；按群配置可覆盖。
 MIN_INTERVAL = 2 * 60 * 60
 
 
-def _min_interval() -> float:
-    """从配置读最小间隔；读不到时用默认值。
-
-    每次调用都读而不是缓存：配置改了应该立即生效，
-    不该因为进程没重启而继续用旧值。
-    """
-    try:
-        from ..config import config
-
-        minutes = int(config.get("proactive_start_interval") or 120)
-        return max(60.0, float(minutes) * 60.0)
-    except Exception:
-        return float(MIN_INTERVAL)
-
-
 def _enabled() -> bool:
-    """主动发起总开关。默认关——这个功能打扰性最强，必须显式打开。"""
+    """主动开口总开关。默认关——这个功能打扰性最强，必须显式打开。"""
     try:
         from ..config import config
 
@@ -42,38 +25,75 @@ def _enabled() -> bool:
         return False
 
 
-def _speak_hours() -> tuple[int, int]:
-    """当前配置的允许时段 (start, end)。读不到就用常量默认值。
-
-    每次调用都读配置：改了要立即生效，不该等重启。
-    """
+def _buckets() -> dict:
+    """机器人 ID → 群号 → 配置。读不到时按空处理。"""
     try:
         from ..config import config
 
-        start = int(config.get("proactive_start_hour_start"))
-        end = int(config.get("proactive_start_hour_end"))
-        return max(0, min(23, start)), max(1, min(24, end))
+        buckets = config.get("proactive_start")
+        return buckets if isinstance(buckets, dict) else {}
     except Exception:
+        return {}
+
+
+def group_settings(bot_id: str, chat_id: str) -> dict | None:
+    """某个群的实际配置；机器人 ID 与群号都精确匹配，查不到返回 None。"""
+    key = str(bot_id or "").strip()
+    chat = str(chat_id or "").strip()
+    if not key or not chat:
+        return None
+    entry = _buckets().get(key)
+    if not isinstance(entry, dict):
+        return None
+    chats = entry.get("chats")
+    if not isinstance(chats, dict):
+        return None
+    item = chats.get(chat)
+    return item if isinstance(item, dict) else None
+
+
+def proactive_groups(bot_id: str) -> list[str]:
+    """这个机器人下启用了主动开口的群号。"""
+    entry = _buckets().get(str(bot_id or "").strip())
+    if not isinstance(entry, dict):
+        return []
+    chats = entry.get("chats")
+    if not isinstance(chats, dict):
+        return []
+    return [
+        str(chat).strip()
+        for chat, item in chats.items()
+        if isinstance(item, dict) and item.get("enabled")
+    ]
+
+
+def _min_interval(item: dict | None) -> float:
+    """这个群的最小间隔（秒）；没配就用默认值。"""
+    try:
+        minutes = int((item or {}).get("interval") or 120)
+        return max(60.0, float(minutes) * 60.0)
+    except (TypeError, ValueError):
+        return float(MIN_INTERVAL)
+
+
+def _speak_hours(item: dict | None) -> tuple[int, int]:
+    """这个群的允许时段 (start, end)；读不到就用常量默认值。"""
+    try:
+        start = int((item or {}).get("hour_start", SPEAK_HOUR_START))
+        end = int((item or {}).get("hour_end", SPEAK_HOUR_END))
+        return max(0, min(23, start)), max(1, min(24, end))
+    except (TypeError, ValueError):
         return SPEAK_HOUR_START, SPEAK_HOUR_END
 
 
-def in_speak_window(now: float | None = None) -> tuple[bool, str]:
-    """现在是否在她的「醒着且适合说话」时段内。
+def in_speak_window(
+    now: float | None = None, item: dict | None = None
+) -> tuple[bool, str]:
+    """现在是否在这个群的允许时段内。
 
-    两个判据，任一不满足就沉默：
+    02:00–06:00 硬编码为睡眠时段，不受配置影响；其余看该群的 hour_start / hour_end。
 
-    1. **不在睡眠时段**（02:00–06:00）。与 `state.fatigue_for_hour` 的作息一致——
-       那段时间她「本该在睡觉」，在群里说话会直接破坏人设。
-       **这条是硬编码的**，不受配置影响：即使把时段设成 0-24，
-       也不会在睡眠时间开口。
-    2. **在配置的时段内**。`proactive_start_hour_start` ~ `_end` 之外一律不说：
-       凌晨一点没人想被机器人搭话。
-
-    用本地时区（`ATRI.utils.datetime.now`），与日程、疲劳曲线的口径一致，
-    不要用 `time.localtime` 或 UTC，否则跨时区部署时会错位。
-
-    ``now`` 是 Unix 时间戳（不是小时数）；传 None 表示「就是此刻」。
-    测试需要固定时间时传具体时间戳。
+    ``now`` 是 Unix 时间戳；None 表示「就是此刻」。
     """
     try:
         if now is None:
@@ -90,7 +110,7 @@ def in_speak_window(now: float | None = None) -> tuple[bool, str]:
     if 2 <= hour < 6:
         return False, f"现在是 {hour} 点，她在睡觉"
 
-    start_hour, end_hour = _speak_hours()
+    start_hour, end_hour = _speak_hours(item)
     if start_hour <= hour < end_hour:
         return True, ""
     return (
@@ -193,7 +213,9 @@ def _schedule_entries():
         return []
 
 
-def _pick_from_life(spoken_set: set[str], *, minute: int | None = None) -> Opening | None:
+def _pick_from_life(
+    spoken_set: set[str], *, minute: int | None = None
+) -> Opening | None:
     """从今天的日程里挑一段已经开始的事。
 
     自己填的条目优先，固定作息只作兜底。
@@ -258,19 +280,13 @@ def _pick_from_self(spoken_set: set[str]) -> Opening | None:
     return Opening(text=text, reason=f"自我记忆情绪强度 {charge:.2f}")
 
 
-def should_speak_now(chat_id: str, *, now: float | None = None) -> tuple[bool, str]:
-    """群层面是否适合开口。返回 (是否, 原因)。
+def should_speak_now(
+    chat_id: str, *, bot_id: str = "", now: float | None = None
+) -> tuple[bool, str]:
+    """这个群此刻是否适合开口。返回 (是否, 原因)。
 
-    五道检查按**代价从低到高**排列，任一不过就沉默：
-
-    1. 总开关是否打开（读配置，最便宜）；
-    2. 现在是否在允许的时段（读时钟）；
-    3. 距上次主动开口是否够久（读一次 DB）；
-    4. 她是否烦躁（读内存状态）；
-    5. 这个群最近是否还有人在说话（读历史文件，最贵）。
-
-    先跑便宜的检查是刻意的：巡检每 30 分钟一次、群多的时候，
-    没必要为每个群都去读历史文件。
+    检查按代价从低到高：总开关 → 这个群是否启用 → 是否在允许时段 →
+    距上次是否够久 → 她是否烦躁 → 群是否已经冷掉。
     """
     from .state import get_state
 
@@ -279,12 +295,15 @@ def should_speak_now(chat_id: str, *, now: float | None = None) -> tuple[bool, s
     if not _enabled():
         return False, "主动开口未开启（proactive_start_enabled）"
 
-    # 时段检查放在最前：如果现在是凌晨，后面的检查都没意义
-    in_window, window_reason = in_speak_window(now)
+    item = group_settings(bot_id, chat_id)
+    if item is None or not item.get("enabled"):
+        return False, "这个群没有启用主动开口"
+
+    in_window, window_reason = in_speak_window(now, item)
     if not in_window:
         return False, window_reason
 
-    interval = _min_interval()
+    interval = _min_interval(item)
     last = _last_spoken_at(chat_id)
     if last and (now - last) < interval:
         left = int((interval - (now - last)) / 60)
@@ -514,16 +533,15 @@ def _build_initiative_context(chat_id: str, bot, opening: Opening):
 
 
 def has_dialog_model() -> bool:
-    """是否有可用于思考链路的 Agent 模型。
+    """思考使用点是否有可用模型。
 
-    Agent 只认 ``atri-think`` / ``atri-chat``，不再看旧 ``ATRI`` 或通用
-    ``CHAT``。**只要求思考模型**：缺 ``atri-chat`` 时链路会自动降级为
-    意图直发（见 ``chat_chain``），主动开口不该因此完全不触发。
+    **只要求思考模型**：聊天使用点缺失时链路会自动降级为意图直发
+    （见 ``chat_chain``），主动开口不该因此完全不触发。
     """
-    from ..llm import ModelType, llm_manager
+    from ..llm import llm_manager
 
     try:
-        return bool(llm_manager.has_type(ModelType.ATRI_THINK))
+        return bool(llm_manager.has_slot("think"))
     except Exception:
         return False
 
@@ -682,8 +700,9 @@ async def try_speak(chat_id: str, bot) -> str | None:
     """
     from .telemetry import telemetry
 
+    bot_id = str(getattr(bot, "self_id", "") or "")
     try:
-        ok, reason = should_speak_now(chat_id)
+        ok, reason = should_speak_now(chat_id, bot_id=bot_id)
         opening = pick_opening() if ok else None
         if ok and opening is None:
             ok, reason = False, "没有值得说的素材（或都已说过）"
@@ -716,18 +735,6 @@ async def try_speak(chat_id: str, bot) -> str | None:
     except Exception as exc:
         log.warning(f"群 {chat_id} 主动发起失败：{exc}")
         return None
-
-
-def whitelisted_groups() -> list[str]:
-    """取允许**主动开口**的群。"""
-    try:
-        from ..config import config
-
-        groups = config.get("proactive_start_whitelist") or []
-        return [str(g).strip() for g in groups if str(g).strip()]
-    except Exception as exc:
-        log.warning(f"读取主动发起白名单失败（按空处理）：{exc}")
-        return []
 
 
 async def patrol_once() -> int:
@@ -782,44 +789,18 @@ def _available_bots() -> list:
     return bots
 
 
-def _pick_bot(bots: list):
-    """按配置挑一个 bot 用来发送。
-
-    :return: (选中的 bot, 说明)。没得选时 bot 为 None。
-    """
-    try:
-        from ..config import config
-
-        wanted = str(config.get("proactive_start_bot") or "").strip()
-    except Exception:
-        wanted = ""
-
-    if not wanted:
-        return (bots[0] if bots else None), ""
-
-    for b in bots:
-        if str(getattr(b, "self_id", "")) == wanted:
-            return b, ""
-    return None, f"配置的 bot {wanted} 未连接（当前已连接 {len(bots)} 个实例）"
-
-
 async def _patrol_body(nonebot_module) -> int:
-    groups = whitelisted_groups()
-    if not groups:
-        return 0
-
+    """逐个已连接的机器人跑一轮；某个群说成了就结束本轮。"""
     bots = _available_bots()
     if not bots:
         return 0
-    bot, why = _pick_bot(bots)
-    if bot is None:
-        log.warning(f"主动发起：{why}")
-        return 0
 
-    for group_id in groups:
-        spoken = await try_speak(group_id, bot)
-        if spoken:
-            return 1
+    for bot in bots:
+        bot_id = str(getattr(bot, "self_id", "") or "")
+        for group_id in proactive_groups(bot_id):
+            spoken = await try_speak(group_id, bot)
+            if spoken:
+                return 1
     return 0
 
 
@@ -865,17 +846,19 @@ async def morning_life_plan() -> bool:
             return False
     except Exception:
         return False
-    groups = whitelisted_groups()
-    if not groups:
-        return False
     bots = _available_bots()
     if not bots:
         return False
-    bot, why = _pick_bot(bots)
+    chat_id = ""
+    bot = None
+    for candidate in bots:
+        groups = proactive_groups(str(getattr(candidate, "self_id", "") or ""))
+        if groups:
+            bot, chat_id = candidate, groups[0]
+            break
     if bot is None:
-        log.warning(f"早间生活计划：{why}")
+        log.warning("早间生活计划：没有任何群启用主动开口")
         return False
-    chat_id = groups[0]
     from .sender import BotChatSender
 
     # 与主动开口一致：早安也是「无人触发的发言」，说得不得体代价同样高，

@@ -21,7 +21,7 @@ from ATRI.system.lkapi.bot import util as lk_util
 from ATRI.utils.datetime import now
 from ATRI.utils.event import AsyncBaseEvents, BaseEvent
 
-from .config import is_proactive_chat
+from . import config
 
 REPLY_MESSAGE = [
     "lsp你再戳？",
@@ -194,8 +194,9 @@ async def call_agent(event: GroupMessageEvent, matcher: Matcher, bot: Bot):
     group_id = str(event.group_id)
     sender_id = event.get_user_id()
     message = event.original_message
-    # 每个群自己的开关，按「机器人 → 群号」查；没配置就是不接话。
-    p_c = is_proactive_chat(str(getattr(bot, "self_id", "") or ""), group_id)
+    p_c = config.get("proactively_chat") and group_id in config.get(
+        "proactively_chat_whit_list"
+    )
     skip_chat = not p_c
     skip_judgment = not p_c
     if event.to_me or _mentions_bot_name(message.extract_plain_text()):
@@ -231,8 +232,9 @@ async def qq_call_agent(event: GroupMessageCreateEvent, matcher: Matcher, bot: Q
     message = event.original_message.extract_plain_text()
     if not message:
         return
-    # 每个群自己的开关，按「机器人 → 群号」查；没配置就是不接话。
-    p_c = is_proactive_chat(str(getattr(bot, "self_id", "") or ""), group_id)
+    p_c = config.get("proactively_chat") and group_id in config.get(
+        "proactively_chat_whit_list"
+    )
     skip_chat = not p_c
     skip_judgment = not p_c
     if event.to_me or _mentions_bot_name(message):

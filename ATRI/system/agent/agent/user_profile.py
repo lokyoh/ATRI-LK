@@ -1,6 +1,6 @@
 from ATRI.log import log
 
-from ..llm import ModelType, llm_manager
+from ..llm import llm_manager
 from .user import get_user_info, save_user_info
 
 
@@ -27,12 +27,12 @@ class UserProfile:
         user_info = get_user_info(user_id)
         o_profile = user_info.profile
         prompt = cls.prompt.format(o_profile=o_profile, profile_change=profile_change)
-        if not llm_manager.has_type(ModelType.ATRI_PROFILE):
-            log.warning("未配置 atri-profile 模型，跳过画像生成")
+        if not llm_manager.has_slot("profile"):
+            log.warning("未配置画像模型，跳过画像生成")
             return
         try:
-            profile = await llm_manager.call_model_by_type(
-                ModelType.ATRI_PROFILE, prompt, "Agent-用户画像生成"
+            profile = await llm_manager.call_agent(
+                "profile", prompt, "Agent-用户画像生成", app_id="profile"
             )
         except Exception:
             return

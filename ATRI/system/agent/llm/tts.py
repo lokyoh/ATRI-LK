@@ -6,7 +6,8 @@ from ATRI.log import log
 from ATRI.utils import gen_random_str
 
 from ..utils import request
-from .model import LLMModel, LLMResponse, ModelRequestError, ModelType
+from .model import LLMModel, LLMResponse, ModelRequestError
+from .registry import ProviderSpec, register_provider
 
 AGENT_TEMP_DIR = TEMP_DIR / "agent"
 
@@ -53,6 +54,7 @@ def create_tts_model(
     api_key,
     temperature,
     data=None,
+    **kwargs,
 ):
     return LLMModel(
         name=name,
@@ -62,20 +64,32 @@ def create_tts_model(
         temperature=temperature,
         data=data,
         call_func=call_func,
+        **kwargs,
     )
 
 
-async def generate_audio(text: str) -> Path | None:
+register_provider(
+    ProviderSpec(
+        key="tts",
+        label="语音合成",
+        factory=create_tts_model,
+        probe="ATRI 语音合成连通性测试",
+        probe_cleanup=True,
+    )
+)
+
+
+async def generate_audio(text: str, app_id: str = "tts") -> Path | None:
     from . import llm_manager
 
-    if not llm_manager.has_type(ModelType.ATRI_TTS):
-        log.warning("没有配置 atri-tts 类型的模型")
+    if not llm_manager.has_slot("tts"):
+        log.warning("没有配置语音模型")
         return None
 
     text = re.sub(r"[(（][^)）]*[)）]", "", text)
     try:
-        response = await llm_manager.call_model_by_type(
-            ModelType.ATRI_TTS, text, "文本转语音"
+        response = await llm_manager.call_agent(
+            "tts", text, "文本转语音", app_id=app_id
         )
     except ModelRequestError as exc:
         log.warning(f"文本转语音失败：{exc}")

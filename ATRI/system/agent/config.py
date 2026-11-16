@@ -1,4 +1,7 @@
 import os
+import re
+import secrets
+import string
 
 import yaml
 
@@ -7,6 +10,7 @@ from ATRI.dir import SYS_CONFIG_DIR
 from ATRI.exceptions import str_traceback
 from ATRI.log import log
 
+from .llm.model import DEVICE_ID_MAX, SLOT_SPECS
 from .llm.provider import LLMProvider, ProviderManager, default_provider
 from .permission_defaults import (
     DEFAULT_PERMISSION_OVERRIDES,
@@ -21,30 +25,27 @@ _MODEL_OPTION_DEFAULT = "（默认分配）"
 _MODEL_OPTION_DEFAULT_EMBEDDING = "（默认：取第一个）"
 
 
-def _model_options(model_type: str) -> list[dict]:
-    """把某类型下**已注册**的模型列成下拉选项。
+def _model_options(slot: str) -> list[dict]:
+    """把该使用点**能用的**模型列成下拉选项。
 
-    之所以要在运行时生成：模型清单来自 ``provider.yml``，类定义时还不知道。
-    前端只要看到 ``options`` 非空就渲染成 ``el-select``，不需要改前端。
+    可选范围由 ``SLOT_SPECS`` 里的能力列表决定（例如图片可接受图片模型或
+    通用模型）。清单来自 ``provider.yml``，类定义时还不知道，所以运行时生成。
 
-    第一项固定是「留空 = 默认」，这样用户有明确的「不指定」选项，
-    而不是只能从具体模型里挑——否则一旦选过就再也回不到默认行为。
+    第一项固定是「留空 = 默认」，让用户有明确的「不指定」选项。
     """
-    from .llm import llm_manager
+    from .llm import SLOTS, llm_manager
 
-    try:
-        models = llm_manager.get_models(model_type)
-    except Exception:
-        models = []
-
-    default_label = (
-        _MODEL_OPTION_DEFAULT_EMBEDDING
-        if model_type == "embedding"
-        else _MODEL_OPTION_DEFAULT
-    )
-    if model_type.startswith("atri-"):
-        # Agent 类型不允许「留空 = 随机分配」：留空意味着缺失，必须显式告警。
-        default_label = "（未配置，将告警）"
+    spec = SLOTS.get(slot)
+    capabilities = spec.capabilities if spec else ()
+    default_label = "（未配置，将告警）"
+    models = []
+    for capability in capabilities:
+        try:
+            models.extend(llm_manager.get_models(capability))
+        except Exception:
+            continue
+    if slot == "embedding" and not models:
+        default_label = _MODEL_OPTION_DEFAULT_EMBEDDING
     options: list[dict] = [{"label": default_label, "value": ""}]
     for m in models:
         label = m.name if m.name == m.model else f"{m.name}（{m.model}）"
@@ -78,149 +79,96 @@ def _validate_permission_users(value) -> str | None:
 
 
 class AgentConfig(PluginConfig):
-    _schema_version = "2.0"
-    """配置版本；P0~P5 引入 atri-* 类型、三级权限、生活系统后升级到 2.0。"""
-
-    def _migrate_saved(self, saved: dict) -> dict:
-        """把 1.x 的配置迁移成 2.0 的形状。
-
-        1.x 的 ``permission`` 是一张「按等级列出的功能清单」：``admin.allow``
-        是 ``["*"]``、``user.allow`` 是一串旧名、``admin.deny`` 是一串混合了
-        旧名与新名的条目。2.0 改成「默认由功能自己声明作用域、配置只记覆盖」，
-        这张旧清单会让**群管理莫名失去**默认允许的生活/关系功能（例如
-        ``go`` / ``love`` / ``rel_set``），与新模型正好相反。
-
-        所以这里只保留 ``label``，把旧的 ``allow`` / ``deny`` 清空；同时删掉
-        1.x 遗留、2.0 已不存在的等级键（旧版本曾有过 ``guest`` 之类的分类，
-        留着会让整份配置每次保存都因「不允许新增分类」被拒）。
-        迁移后的差异会被 ``PluginConfig.load`` 认出来并立即落盘，同时写一条
-        说明日志。``model_tool`` 保留原值——它已不再生效，但要在
-        ``_apply_model_preferences`` 里据此给出「请改配 atri-*」的告警。
-
-        **只在真正的旧配置上执行一次**：用配置内的 ``schema_version`` 做标记。
-        没有标记 = 1.x，执行迁移并写入标记；已经是 2.0 就原样返回，
-        否则用户此后在 WebUI 填的每条覆盖都会在下次启动时被清空。
-        """
-        if not isinstance(saved, dict):
-            return saved
-        current = AgentConfig._schema_version
-        version = str(saved.get("schema_version") or "").strip()
-        if version == current:
-            return saved
-
-        changed = False
-        permission = saved.get("permission")
-        if isinstance(permission, dict):
-            for key in list(permission):
-                if key not in {"master", "admin", "user"}:
-                    permission.pop(key, None)
-                    changed = True
-            for item in permission.values():
-                if not isinstance(item, dict):
-                    continue
-                for key in ("allow", "deny"):
-                    if item.get(key):
-                        item[key] = []
-                        changed = True
-        saved["schema_version"] = current
-        if changed:
-            log.info(
-                "Agent 配置已迁移到 v2：旧版按等级列出的权限清单已清空，"
-                "默认权限改由每个功能自己声明的作用域决定；"
-                "如需额外收紧或放宽，请到 WebUI 重新填写覆盖项"
-            )
-        return saved
-
     section_models = Section(
         "models",
         "模型选择",
-        "决定用哪个模型跑哪类任务。Agent 只认 atri-* 类型，不回退到通用类型",
+        "每个使用点单独选一个模型。模型只按能力分类：通用 / 图片 / 语音 / 向量",
     )
     model_think = Field(
         str,
         "",
-        "思考模型（atri-think）",
+        "思考模型",
         "必填。负责决策、选工具、产出说话意图。缺失时 Agent 无法工作。",
-        options_provider=lambda: _model_options("atri-think"),
+        options_provider=lambda: _model_options("think"),
         required=True,
     )
     model_chat = Field(
         str,
         "",
-        "聊天模型（atri-chat）",
+        "聊天模型",
         "负责把意图变成自然聊天文本。留空时链路仍可运行，但 say/md 会降级为"
         "意图直发、face 跳过；建议配置。",
-        options_provider=lambda: _model_options("atri-chat"),
+        options_provider=lambda: _model_options("chat"),
     )
     model_judge = Field(
         str,
         "",
-        "判断模型（atri-judge）",
+        "判断模型",
         "主动聊天时必填。负责判断这条消息要不要接。",
-        options_provider=lambda: _model_options("atri-judge"),
+        options_provider=lambda: _model_options("judge"),
     )
     model_memory = Field(
         str,
         "",
-        "记忆模型（atri-memory）",
+        "记忆模型",
         "记忆总结 / 抽取时必填。留空则记忆写入工具隐藏。",
-        options_provider=lambda: _model_options("atri-memory"),
+        options_provider=lambda: _model_options("memory"),
     )
     model_profile = Field(
         str,
         "",
-        "画像模型（atri-profile）",
+        "画像模型",
         "用户画像生成 / 修改。留空则只能读画像，不能改。",
-        options_provider=lambda: _model_options("atri-profile"),
+        options_provider=lambda: _model_options("profile"),
     )
     model_schedule = Field(
         str,
         "",
-        "日程模型（atri-schedule）",
+        "日程模型",
         "填入式日程。留空则 plan 的填入不可用；固定作息不受影响。",
-        options_provider=lambda: _model_options("atri-schedule"),
+        options_provider=lambda: _model_options("schedule"),
     )
     model_outfit = Field(
         str,
         "",
-        "着装模型（atri-outfit）",
+        "着装模型",
         "白天 / 晚上两套着装。留空则提示词显示未决定。",
-        options_provider=lambda: _model_options("atri-outfit"),
+        options_provider=lambda: _model_options("outfit"),
     )
     model_home = Field(
         str,
         "",
-        "家模型（atri-home）",
+        "家模型",
         "首次生成 / 扩写家的内容。留空则使用预设模板。",
-        options_provider=lambda: _model_options("atri-home"),
+        options_provider=lambda: _model_options("home"),
     )
     model_summary = Field(
         str,
         "",
-        "总结模型（atri-summary）",
+        "总结模型",
         "转发消息 / 长文总结。留空则总结功能不可用。",
-        options_provider=lambda: _model_options("atri-summary"),
+        options_provider=lambda: _model_options("summary"),
     )
     model_image = Field(
         str,
         "",
-        "图片模型（atri-vision）",
-        "图片理解。留空则图片只记 [图片]。",
-        options_provider=lambda: _model_options("atri-vision"),
+        "图片模型",
+        "图片理解。可选图片模型或通用模型；留空则图片只记 [图片]。",
+        options_provider=lambda: _model_options("vision"),
     )
     model_embedding = Field(
         str,
         "",
-        "向量模型（atri-embedding）",
+        "向量模型",
         "记忆检索。必须固定：换模型会让历史向量失效。",
-        options_provider=lambda: _model_options("atri-embedding"),
+        options_provider=lambda: _model_options("embedding"),
     )
     model_tts = Field(
         str,
         "",
-        "语音模型（atri-tts）",
+        "语音模型",
         "语音回复。留空只发文字。",
-        options_provider=lambda: _model_options("atri-tts"),
+        options_provider=lambda: _model_options("tts"),
     )
     section_context = Section(
         "context",
@@ -317,7 +265,7 @@ class AgentConfig(PluginConfig):
         "允许 Agent 聊天、并记录聊天历史的群号列表。"
         "实际生效范围是本列表与「聊天」插件白名单的**并集**："
         "聊天插件的「聊天白名单」在 chat_switch 打开时计入，"
-        "其「主动聊天」里启用了的群也计入。"
+        "「主动聊天白名单」在 proactively_chat 打开时计入。"
         "留空 = 不额外开启，仅依赖聊天插件的名单",
         item_type=str,
     )
@@ -351,53 +299,77 @@ class AgentConfig(PluginConfig):
     proactive_start_enabled = Field(
         bool,
         False,
-        "允许她主动开口",
-        "开启后，她会时不时自己说一句话（不需要有人@或叫她）。"
-        "只在「主动发起白名单」里的群生效，且仅当她想说一件有情绪的经历时才会开口。"
+        "主动开口总开关",
+        "关闭时任何群都不会主动开新话题，下面的按群配置一律不生效。"
         "默认关闭：这比被动回复打扰得多，确认需要再开",
     )
-    proactive_start_whitelist = Field(
-        list,
-        [],
-        "主动发起白名单",
-        "允许她**自己开口**的群号列表。与聊天插件的「主动聊天白名单」是两回事："
-        "那个允许她在有人说话时接话，这个允许她在没人说话时开新话题——"
-        "打扰程度差一个数量级，所以分开管。留空 = 任何群都不会主动开口",
-        item_type=str,
-    )
-    proactive_start_interval = Field(
-        int,
-        120,
-        "主动开口最小间隔",
-        "同一个群两次主动开口之间至少隔多少分钟。设太小会变成刷屏，建议 60-240",
-        min=10,
-    )
-    proactive_start_bot = Field(
-        str,
-        "",
-        "主动开口使用的机器人",
-        "填写机器人的 self_id（QQ 号）。机器人在多个账号下运行时，"
-        "必须指定**真正在这些群里**的那个实例，否则会发不出去。"
-        "留空 = 用第一个已连接的 OneBot 实例（单账号部署下没问题）",
-    )
-    proactive_start_hour_start = Field(
-        int,
-        8,
-        "主动开口起始小时",
-        "每天从几点开始允许她主动说话（0-23）。默认 8 点："
-        "她 6 点起床，但刚醒就找人搭话很突兀。"
-        "留 0 表示从零点就允许（不建议，深夜打扰）",
-        min=0,
-        max=23,
-    )
-    proactive_start_hour_end = Field(
-        int,
-        24,
-        "主动开口结束小时",
-        "每天到几点为止允许她主动说话（1-24，不含本小时）。默认 24 = 午夜前都行。"
-        "注意 02:00-06:00 是她的睡眠时段，即使把范围设成 0-24 也不会在那时开口",
-        min=1,
-        max=24,
+    proactive_start = Field(
+        dict,
+        {},
+        "主动开口（按群）",
+        "按「机器人 ID → 群号」两级分组，每个群单独设置是否开口与节流。"
+        "两级都按 ID 精确匹配，不做通配；留空 = 任何群都不会主动开口。"
+        "与「聊天」插件的主动聊天是两回事：那个让她在有人说话时接话，"
+        "这个让她在没人说话时开新话题——打扰程度差一个数量级",
+        ui_type="category-collection",
+        category_label="label",
+        key_label="机器人 ID",
+        allow_add=True,
+        allow_remove=True,
+        item_field=Field(
+            dict,
+            {},
+            "机器人",
+            children={
+                "label": Field(str, "", "备注", "只用于界面显示，不影响行为"),
+                "chats": Field(
+                    dict,
+                    {},
+                    "群配置",
+                    "群号与「聊天白名单」一致；不在其中的群不会主动开口",
+                    ui_type="category-collection",
+                    key_label="群号",
+                    allow_add=True,
+                    allow_remove=True,
+                    item_field=Field(
+                        dict,
+                        {},
+                        "群",
+                        children={
+                            "enabled": Field(
+                                bool,
+                                True,
+                                "启用主动开口",
+                                "关闭后这个群只在被叫到时才回话",
+                            ),
+                            "interval": Field(
+                                int,
+                                120,
+                                "最小间隔（分钟）",
+                                "同一个群两次主动开口之间至少隔多久，建议 60-240",
+                                min=10,
+                            ),
+                            "hour_start": Field(
+                                int,
+                                8,
+                                "起始小时",
+                                "每天从几点开始允许主动说话（0-23）",
+                                min=0,
+                                max=23,
+                            ),
+                            "hour_end": Field(
+                                int,
+                                24,
+                                "结束小时",
+                                "每天到几点为止允许主动说话（1-24，不含本小时）",
+                                min=1,
+                                max=24,
+                            ),
+                        },
+                    ),
+                ),
+            },
+        ),
     )
     section_search = Section(
         "search",
@@ -536,6 +508,17 @@ class AgentConfig(PluginConfig):
         "开启后会在数据文件里记录消息正文片段（截断 120 字）。"
         "涉及聊天隐私，非排查问题不建议开启",
     )
+    section_advanced = Section(
+        "advanced",
+        "高级",
+        "基本不用改的运行时标识；改动会影响缓存识别",
+    )
+    device_id = Field(
+        str,
+        "",
+        "设备标识",
+        "缓存标识的中间段，首次自动生成（英文数字，最多 8 字符）。改动会让已有缓存失效。",
+    )
 
 
 config: AgentConfig = plugin.add_plugin_config(AgentConfig)
@@ -569,8 +552,6 @@ def apply_runtime_config() -> None:
 
     _apply_model_preferences()
 
-    _report_schema_upgrade()
-
     try:
         from .agent.model_health import log_health
 
@@ -579,92 +560,45 @@ def apply_runtime_config() -> None:
         log.warning(f"检查 Agent 模型健康状态失败：{e}")
 
 
-def _report_schema_upgrade() -> None:
-    """配置版本升级提示。
-
-    `PluginConfig` 的合并逻辑会保留旧键、新增字段用默认值；这里只负责把
-    「升级后该检查什么」说清楚，避免用户以为 Agent 坏了。
-    """
-    try:
-        from .service import plugin
-
-        version_file = plugin.get_path() / "config_schema_version.txt"
-        seen = ""
-        if version_file.is_file():
-            seen = version_file.read_text(encoding="utf-8").strip()
-        current = AgentConfig._schema_version
-        if seen == current:
-            return
-        plugin.get_path().mkdir(parents=True, exist_ok=True)
-        version_file.write_text(current, encoding="utf-8")
-        if seen:
-            log.info(
-                f"Agent 配置已从 v{seen} 升级到 v{current}；"
-                "请检查模型设置（atri-* 类型）、三级权限与生活数据"
-            )
-    except Exception as e:
-        log.debug(f"写入 Agent 配置版本提示失败（忽略）：{e}")
-
-
-MODEL_PREFERENCE_FIELDS: tuple[tuple[str, str], ...] = (
-    ("model_think", "atri-think"),
-    ("model_chat", "atri-chat"),
-    ("model_judge", "atri-judge"),
-    ("model_memory", "atri-memory"),
-    ("model_profile", "atri-profile"),
-    ("model_schedule", "atri-schedule"),
-    ("model_outfit", "atri-outfit"),
-    ("model_home", "atri-home"),
-    ("model_summary", "atri-summary"),
-    ("model_image", "atri-vision"),
-    ("model_embedding", "atri-embedding"),
-    ("model_tts", "atri-tts"),
+MODEL_PREFERENCE_FIELDS: tuple[tuple[str, str], ...] = tuple(
+    (spec.config_field, spec.key) for spec in SLOT_SPECS
 )
+
+DEVICE_ID_RE = re.compile(r"[A-Za-z0-9]+")
+
+
+def _device_id() -> str:
+    """配置里的设备标识；缺失或非法时生成并写回。"""
+    current = str(config.get("device_id") or "").strip()
+    if DEVICE_ID_RE.fullmatch(current) and len(current) <= DEVICE_ID_MAX:
+        return current
+    generated = "".join(
+        secrets.choice(string.ascii_letters + string.digits)
+        for _ in range(DEVICE_ID_MAX)
+    )
+    try:
+        config.update({"device_id": generated})
+    except Exception as e:
+        log.warning(f"写入设备标识失败（将不发送缓存标识）：{e}")
+    return generated
 
 
 def _apply_model_preferences() -> None:
-    """把「指定模型」配置同步给 LLMManager。
-
-    必须在模型注册之后调用，否则查不到名字。启动流程里
-    ``load_models_from_config()`` 在前、``apply_runtime_config()`` 在后，满足这一点。
-    """
+    """把「指定模型」同步给 LLMManager；必须在模型注册之后调用。"""
     try:
         from .llm import llm_manager
-        from .llm.model import ModelType
 
-        valid = {mt.value for mt in ModelType}
-        for field, type_key in MODEL_PREFERENCE_FIELDS:
-            if type_key not in valid:
-                continue
+        llm_manager.device_id = _device_id()
+        for field, slot in MODEL_PREFERENCE_FIELDS:
             wanted = str(config.get(field) or "").strip()
-            kept = llm_manager.get_preferred(type_key)
-            ok = llm_manager.set_preferred(type_key, wanted)
+            kept = llm_manager.get_preferred(slot)
+            ok = llm_manager.set_preferred(slot, wanted)
             if wanted and not ok:
-                effective = kept or (
-                    "该类型注册的第一个"
-                    if type_key.endswith("embedding")
-                    else "按注册顺序第一个"
-                )
+                effective = kept or "按注册顺序第一个"
                 log.warning(
-                    f"配置项 {field} 指定的模型 '{wanted}' 不存在或未注册为 "
-                    f"{type_key} 类型，已忽略；{type_key} 当前仍使用 {effective}"
+                    f"配置项 {field} 指定的模型 '{wanted}' 不可用于「{slot}」，"
+                    f"已忽略；当前仍使用 {effective}"
                 )
-        legacy_tool = str(config.get("model_tool") or "").strip()
-        if legacy_tool and not any(
-            str(config.get(f) or "").strip()
-            for f in (
-                "model_judge",
-                "model_memory",
-                "model_profile",
-                "model_schedule",
-                "model_summary",
-            )
-        ):
-            log.warning(
-                f"旧配置 model_tool='{legacy_tool}' 已不再生效；"
-                "请分别配置 atri-judge / atri-memory / atri-profile / "
-                "atri-schedule / atri-summary"
-            )
     except Exception as e:
         log.warning(f"应用模型指定配置失败，沿用默认分配：{e}")
 

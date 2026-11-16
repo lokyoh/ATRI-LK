@@ -1,5 +1,8 @@
 from ..utils import log, request
 from .model import LLMModel, LLMResponse, ModelRequestError
+from .registry import ProviderSpec, register_provider
+
+PROBE = "ATRI model API connectivity test"
 
 
 async def call_func(model: LLMModel, content: str | list) -> LLMResponse:
@@ -30,6 +33,7 @@ def create_embedding_model(
     api_key,
     temperature,
     data=None,
+    **kwargs,
 ):
     return LLMModel(
         name=name,
@@ -39,4 +43,15 @@ def create_embedding_model(
         temperature=temperature,
         data=data,
         call_func=call_func,
+        **kwargs,
     )
+
+
+register_provider(
+    ProviderSpec(
+        key="embedding",
+        label="向量",
+        factory=create_embedding_model,
+        probe=PROBE,
+    )
+)

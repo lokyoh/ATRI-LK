@@ -32,11 +32,11 @@ class ImageHistory:
         from ATRI.log import log
         from ATRI.system.agent.utils import request
 
-        from ..llm import ModelType, llm_manager
+        from ..llm import llm_manager
         from ..llm.contents import LLMContents
 
-        if not llm_manager.has_type(ModelType.ATRI_VISION):
-            log.warning("没有配置 atri-vision 模型")
+        if not llm_manager.has_slot("vision"):
+            log.warning("没有配置图片模型")
             return "[图片]"
 
         text = None
@@ -105,8 +105,8 @@ class ImageHistory:
                 )
                 contents.image(image_base64)
                 try:
-                    result = await llm_manager.call_model_by_type(
-                        ModelType.ATRI_VISION, contents, "Agent-图片识别"
+                    result = await llm_manager.call_agent(
+                        "vision", contents, "Agent-图片识别", app_id="vision"
                     )
                     text = result.content
                     if file_name and image_size and text:
@@ -341,18 +341,21 @@ class LLMMessage:
                     else:
                         log.info(f"转发存在未支持的类型{msg_type}")
                 if msg_his:
-                    from ..llm import ModelType, llm_manager
+                    from ..llm import llm_manager
 
                     forward_history = "\n".join(msg_his)
-                    if llm_manager.has_type(ModelType.ATRI_SUMMARY):
+                    if llm_manager.has_slot("summary"):
                         try:
                             summary_prompt = (
                                 "请总结以下转发消息，保留主要人物、事件和结论，"
                                 "输出一段简洁的中文纯文本，不要分点：\n"
                                 f"{forward_history}"
                             )
-                            summary = await llm_manager.call_model_by_type(
-                                ModelType.ATRI_SUMMARY, summary_prompt, "Agent-转发总结"
+                            summary = await llm_manager.call_agent(
+                                "summary",
+                                summary_prompt,
+                                "Agent-转发总结",
+                                app_id="summary",
                             )
                             instance.message.append(
                                 MessageSegment(f"[转发消息摘要:{summary.content}]")
@@ -762,7 +765,8 @@ def effective_chat_whitelist() -> set[str]:
 
     1. Agent 自己的 `agent_chat_whitelist`——总是生效；
     2. `聊天` 插件的 `whit_list`——仅当 `chat_switch` 打开时计入；
-    3. `聊天` 插件按群配置里 `enabled=true` 的群——每个群自己的开关。
+    3. `聊天` 插件的 `proactively_chat_whit_list`——仅当 `proactively_chat`
+       打开时计入。
 
     **为什么要看开关**：开关关掉时那份名单本来就不会触发 Agent 聊天，
     若仍按名单记录，就会出现「开关关了、历史还在长」——用户以为关干净了，
@@ -781,10 +785,8 @@ def effective_chat_whitelist() -> set[str]:
         if lk_cfg is not None:
             if lk_cfg.get("chat_switch"):
                 allowed |= _as_name_set(lk_cfg.get("whit_list"))
-            # 主动接话的群写在按群结构里，总开关与每群开关都要满足。
-            from ATRI.system.lkchat.config import proactive_chat_ids
-
-            allowed |= proactive_chat_ids()
+            if lk_cfg.get("proactively_chat"):
+                allowed |= _as_name_set(lk_cfg.get("proactively_chat_whit_list"))
     except Exception as exc:
         log.debug(f"读取聊天插件白名单失败（按空处理）：{exc}")
     return allowed

@@ -324,13 +324,11 @@ class ChatOutbox:
         try:
             from ATRI.message import rec_msg_from_path
 
-            from ..llm import ModelType, llm_manager
+            from ..llm import llm_manager
 
-            if not llm_manager.has_type(ModelType.ATRI_TTS):
+            if not llm_manager.has_slot("tts"):
                 return
-            file = await llm_manager.call_model_by_type(
-                ModelType.ATRI_TTS, text, "Agent-语音"
-            )
+            file = await llm_manager.call_agent("tts", text, "Agent-语音", app_id="tts")
             await self._sender().send(rec_msg_from_path(file.content))
         except Exception as exc:
             log.debug(f"TTS 发送失败（忽略）：{exc}")

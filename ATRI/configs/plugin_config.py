@@ -718,7 +718,13 @@ class PluginConfig:
         elif field.item_type is not None:
             node["itemType"] = field.item_type.__name__
         if field.children:
-            node["children"] = cls._describe_fields(
-                field.children, field.default if isinstance(field.default, dict) else {}
-            )
+            # 子字段先按各自默认值铺底：新增分类时前端直接拿 child.value 渲染，
+            # 空字典会让新建的卡片显示成空白而不是默认值。
+            defaults = {
+                key: copy.deepcopy(child.default)
+                for key, child in field.children.items()
+            }
+            if isinstance(field.default, dict):
+                defaults.update(copy.deepcopy(field.default))
+            node["children"] = cls._describe_fields(field.children, defaults)
         return node

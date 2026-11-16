@@ -14,6 +14,9 @@ SPEAK_HOUR_END = 24
 #: 主动发起的最小间隔（秒）**默认值**；按群配置可覆盖。
 MIN_INTERVAL = 2 * 60 * 60
 
+#: 早间计划的默认整点。
+DEFAULT_MORNING_HOUR = 6
+
 
 def _enabled() -> bool:
     """主动开口总开关。默认关——这个功能打扰性最强，必须显式打开。"""
@@ -347,21 +350,22 @@ def _key_of(text: str) -> str:
 
 
 def mark_spoken(chat_id: str, opening: Opening, *, now: float | None = None) -> None:
-    """记录「这次真的说出口了」。
-
-    只在实际发送成功后调用——决定了没说却记成说过，那条经历就永远沉默了。
-    """
-    import json
-
-    from .database import user_table
-
-    now = time.time() if now is None else now
+    """记录「这条经历说出口了」并落冷却时间。只在真的发出后调用。"""
     spoken = _load_spoken()
     key = _key_of(opening.text)
     if key not in spoken:
         spoken.append(key)
     _save_spoken(spoken)
+    mark_spoken_at(chat_id, now=now)
 
+
+def mark_spoken_at(chat_id: str, *, now: float | None = None) -> None:
+    """只记「上次主动发言时间」，不碰经历去重表（早间计划说话用）。"""
+    import json
+
+    from .database import user_table
+
+    now = time.time() if now is None else now
     try:
         rows = user_table.select("DATA", "ID='__atri_last_speak__'")
         data = json.loads(rows[0][0]) if rows and rows[0][0] else {}
@@ -824,45 +828,55 @@ def register_patrol(service) -> None:
         log.warning(f"注册主动发起巡检跳过：{exc}")
 
     try:
+        # 整点巡检：每个群自己的「早间计划小时」由函数筛，改配置不必重排任务。
         service.scheduler_jobs().add_job(
             morning_life_plan,
             name="agent-morning-life",
             trigger="cron",
-            hour=6,
-            minute=10,
+            minute=0,
             misfire_grace_time=600,
-            use_log=True,
+            use_log=False,
         )
     except Exception as exc:
         log.warning(f"注册早间生活计划跳过：{exc}")
 
 
 async def morning_life_plan() -> bool:
-    """早上 06:10 让她自己安排一天；配置关闭时直接返回。"""
-    try:
-        from ..config import config
+    """整点巡检：只跑「早间计划小时 == 当前小时」的那些群。"""
+    if not _enabled() or not has_dialog_model():
+        # 主动开口关着就等于「她不主动开新话题」，早安也属于这一类。
+        return False
+    from ATRI.utils.datetime import now as _now
 
-        if not config.get("life_morning_plan"):
-            return False
-    except Exception:
+    hour = _now().hour
+    sent_any = False
+    for bot in _available_bots():
+        bot_id = str(getattr(bot, "self_id", "") or "")
+        for chat_id in proactive_groups(bot_id):
+            if await _morning_once(chat_id, bot, hour):
+                sent_any = True
+    return sent_any
+
+
+async def _morning_once(chat_id: str, bot, hour: int) -> bool:
+    """某个群安排今天并（可选地）说早安；只在它自己的计划整点执行。"""
+    bot_id = str(getattr(bot, "self_id", "") or "")
+    item = group_settings(bot_id, chat_id) or {}
+    if not item.get("morning_plan"):
         return False
-    bots = _available_bots()
-    if not bots:
+    try:
+        plan_hour = int(item.get("morning_hour", DEFAULT_MORNING_HOUR))
+    except (TypeError, ValueError):
+        plan_hour = DEFAULT_MORNING_HOUR
+    if hour != plan_hour:
         return False
-    chat_id = ""
-    bot = None
-    for candidate in bots:
-        groups = proactive_groups(str(getattr(candidate, "self_id", "") or ""))
-        if groups:
-            bot, chat_id = candidate, groups[0]
-            break
-    if bot is None:
-        log.warning("早间生活计划：没有任何群启用主动开口")
+    in_window, reason = in_speak_window(item=item)
+    if not in_window:
+        log.debug(f"群 {chat_id} 早间计划跳过：{reason}")
         return False
+
     from .sender import BotChatSender
 
-    # 与主动开口一致：早安也是「无人触发的发言」，说得不得体代价同样高，
-    # 所以逐条过 clean_opening_text。
     sender = BotChatSender(bot, chat_id, cleaner=clean_opening_text)
     try:
         await run_agent_once(
@@ -873,19 +887,13 @@ async def morning_life_plan() -> bool:
             mode="life",
         )
     except Exception as exc:
-        log.warning(f"早间生活计划失败：{exc}")
+        log.warning(f"早间生活计划失败（群 {chat_id}）：{exc}")
         return False
     if not sender.sent_count:
         return False
 
-    # 写历史：否则她下一轮不知道自己早上说过什么（add_response 对合成
-    # 上下文是 no-op，主动链路的记账必须在这里补）。
-    from .history import log_bot_message
-
-    for text in sender.sent:
-        plain = readable_history_text(text)
-        if plain:
-            log_bot_message(chat_id, plain)
+    _record_to_history(chat_id, list(sender.sent))
     for md_file, _ in sender.md_refs:
-        log_bot_message(chat_id, f"[md:{md_file}]")
+        _record_to_history(chat_id, f"[md:{md_file}]")
+    mark_spoken_at(chat_id)
     return True

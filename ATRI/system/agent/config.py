@@ -213,13 +213,7 @@ class AgentConfig(PluginConfig):
         min=0,
         max=23,
     )
-    life_morning_plan = Field(
-        bool,
-        False,
-        "早上自己安排一天",
-        "开启后，每天早上 06:10 让她用 thinking 决定今天做什么、要不要说早安。"
-        "只在主动发起白名单群生效。默认关闭",
-    )
+
     schedule_summary_budget = Field(
         int,
         800,
@@ -307,7 +301,7 @@ class AgentConfig(PluginConfig):
         dict,
         {},
         "主动开口（按群）",
-        "按「机器人 ID → 群号」两级分组，每个群单独设置是否开口与节流。"
+        "按「机器人 ID → 群号」两级分组，每个群单独设置是否开口、节流与早间计划。"
         "两级都按 ID 精确匹配，不做通配；留空 = 任何群都不会主动开口。"
         "与「聊天」插件的主动聊天是两回事：那个让她在有人说话时接话，"
         "这个让她在没人说话时开新话题——打扰程度差一个数量级",
@@ -364,6 +358,21 @@ class AgentConfig(PluginConfig):
                                 "每天到几点为止允许主动说话（1-24，不含本小时）",
                                 min=1,
                                 max=24,
+                            ),
+                            "morning_plan": Field(
+                                bool,
+                                False,
+                                "早上自己安排一天",
+                                "每天在「早间计划小时」让她自己安排今天，"
+                                "并决定要不要说早安。默认关闭",
+                            ),
+                            "morning_hour": Field(
+                                int,
+                                6,
+                                "早间计划小时",
+                                "每天几点（整点）执行早间计划，0-23",
+                                min=0,
+                                max=23,
                             ),
                         },
                     ),

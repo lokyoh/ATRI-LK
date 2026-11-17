@@ -507,22 +507,24 @@ gmpy2 = ["gmpy2"]
 
 [[package]]
 name = "edge-tts"
-version = "6.1.19"
+version = "7.3.1"
 description = "Microsoft Edge's TTS"
 optional = false
 python-versions = ">=3.7"
 groups = ["main"]
 files = [
-    {file = "edge_tts-6.1.19-py3-none-any.whl", hash = "sha256:af49ea0539f54b0d76a73bc76cefd9deb2010a11c5ee2a189967e15830a6ba37"},
-    {file = "edge_tts-6.1.19.tar.gz", hash = "sha256:52fdfbaef2b3afee98bbba5e5c6365b5a6156fe78fe4e81e55749f7a563add38"},
+    {file = "edge_tts-7.3.1-py3-none-any.whl", hash = "sha256:2a3c79d6235a7a736d681233823ce5492e829b43eb47beae49aa181237a8f9a4"},
+    {file = "edge_tts-7.3.1.tar.gz", hash = "sha256:ee1fabf911b9ea83b38ae93aee5619ee41eaf0b109fef6e65d797dc4ebf1f20f"},
 ]
 
 [package.dependencies]
-aiohttp = ">=3.8.0"
+aiohttp = ">=3.8.0,<4.0.0"
 certifi = ">=2023.11.17"
+tabulate = ">=0.4.4,<1.0.0"
+typing-extensions = ">=4.1.0,<5.0.0"
 
 [package.extras]
-dev = ["black", "isort", "mypy", "pylint"]
+dev = ["black", "isort", "mypy", "pylint", "types-tabulate"]
 
 [[package]]
 name = "exceptiongroup"
@@ -3002,4 +3004,4 @@ propcache = ">=0.2.1"
 [metadata]
 lock-version = "2.1"
 python-versions = "^3.12"
-content-hash = "40ed44773c86747d21b69e06fb456d2db0817212d84eac650ef2abbee779b5bb"
+content-hash = "5c357e5aaa234fffbb6e0345298729002bbae57b78a90a49e6826473203e4aa7"

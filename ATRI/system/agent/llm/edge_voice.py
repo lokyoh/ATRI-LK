@@ -11,6 +11,8 @@
 
 from __future__ import annotations
 
+import re
+
 from ATRI.utils import gen_random_str
 
 from .model import LLMModel, LLMResponse, ModelRequestError
@@ -41,6 +43,88 @@ DEFAULT_DATA: dict[str, object] = {
 #: 否则两层各重试几次，一次失败会占用十几秒。
 MAX_ATTEMPTS = 1
 
+#: 已经告警过的参数值，避免每次合成都刷同一条 warning。
+_WARNED: set[tuple[str, str]] = set()
+
+#: 音色的两种合法写法：短名 ``zh-CN-XiaoyiNeural``，或 Edge 内部使用的长名。
+_VOICE_SHORT_RE = re.compile(r"^[a-z]{2,}-[A-Z]{2,}-.+Neural$")
+_VOICE_LONG_RE = re.compile(r"^Microsoft Server Speech Text to Speech Voice \(.+,.+\)$")
+_PERCENT_RE = re.compile(r"^([+-]?)\s*(\d+(?:\.\d+)?)\s*[%％]?$")
+_HZ_RE = re.compile(r"^([+-]?)\s*(\d+(?:\.\d+)?)\s*(?:Hz|hz|HZ)?$")
+
+
+def _warn_once(field: str, value: str, message: str) -> None:
+    from ATRI.log import log
+
+    if (field, value) in _WARNED:
+        return
+    _WARNED.add((field, value))
+    log.warning(message)
+
+
+def normalize_voice(value: str) -> str:
+    """把音色收成 edge-tts 7.x 认的两种写法之一。
+
+    7.x 起 ``TTSConfig`` 会**严格校验**音色，写错一个字符直接 ValueError；
+    用户容易漏掉结尾的 ``Neural``（``zh-CN-Xiaoyi``），这里补上再校验。
+    """
+    voice = str(value or "").strip()
+    if _VOICE_LONG_RE.match(voice):
+        return voice
+    if _VOICE_SHORT_RE.match(voice):
+        return voice
+    if re.match(r"^[a-z]{2,}-[A-Z]{2,}-[A-Za-z0-9_]+$", voice):
+        patched = f"{voice}Neural"
+        if _VOICE_SHORT_RE.match(patched):
+            _warn_once(
+                "voice",
+                voice,
+                f"音色 {voice} 缺少 Neural 后缀，已按 {patched} 合成",
+            )
+            return patched
+    _warn_once(
+        "voice",
+        voice,
+        f"音色 {voice} 不是 Edge 认识的写法，已改用默认音色 {DEFAULT_VOICE}；"
+        "正确写法如 zh-CN-XiaoyiNeural",
+    )
+    return DEFAULT_VOICE
+
+
+def normalize_percent(value: str, default: str) -> str:
+    """语速 / 音量的百分比：``-10%``、``10%``、``-10`` 都收成 ``±N%``。
+
+    7.x 只接受 ``^[+-]\\d+%$``，少了符号或百分号会直接报错；没写符号按 ``+``。
+    """
+    body = str(value or "").strip()
+    match = _PERCENT_RE.match(body)
+    if match:
+        sign = match.group(1) or "+"
+        # 7.x 的正则只认整数，小数先取整再格式化。
+        number = int(float(match.group(2)))
+        return f"{sign}{number}%"
+    _warn_once(
+        "percent",
+        body,
+        f"语音参数 {body} 不是「±N%」写法，已改用默认值 {default}",
+    )
+    return default
+
+
+def normalize_hz(value: str, default: str) -> str:
+    """音调的频率值：``+30Hz``、``30`` 都收成 ``±NHz``。"""
+    body = str(value or "").strip()
+    match = _HZ_RE.match(body)
+    if match:
+        sign = match.group(1) or "+"
+        return f"{sign}{int(float(match.group(2)))}Hz"
+    _warn_once(
+        "hz",
+        body,
+        f"语音参数 {body} 不是「±NHz」写法，已改用默认值 {default}",
+    )
+    return default
+
 
 def _timeout(data: dict, key: str, default: int) -> int:
     try:
@@ -48,6 +132,35 @@ def _timeout(data: dict, key: str, default: int) -> int:
     except (TypeError, ValueError):
         return default
     return value if value > 0 else default
+
+
+def _coerce_params(data: dict) -> dict[str, str]:
+    """把附加配置里的合成参数收成 7.x 认的写法。"""
+    return {
+        "voice": normalize_voice(data.get("voice") or DEFAULT_VOICE),
+        "rate": normalize_percent(
+            data.get("rate") or DEFAULT_DATA["rate"], DEFAULT_DATA["rate"]
+        ),
+        "volume": normalize_percent(
+            data.get("volume") or DEFAULT_DATA["volume"], DEFAULT_DATA["volume"]
+        ),
+        "pitch": normalize_hz(
+            data.get("pitch") or DEFAULT_DATA["pitch"], DEFAULT_DATA["pitch"]
+        ),
+    }
+
+
+def _build_communicate(edge_tts, text: str, params: dict[str, str], proxy, data: dict):
+    return edge_tts.Communicate(
+        text=text,
+        voice=params["voice"],
+        rate=params["rate"],
+        volume=params["volume"],
+        pitch=params["pitch"],
+        proxy=proxy,
+        connect_timeout=_timeout(data, "connect_timeout", 10),
+        receive_timeout=_timeout(data, "receive_timeout", 60),
+    )
 
 
 async def call_func(model: LLMModel, content: str) -> LLMResponse:
@@ -65,22 +178,17 @@ async def call_func(model: LLMModel, content: str) -> LLMResponse:
     data.update({key: value for key, value in (model.data or {}).items() if value})
     proxy = str(data.get("proxy") or "").strip() or None
 
+    # 7.x 起 TTSConfig 会严格校验音色与语速/音量/音调，写错直接 ValueError；
+    # 用户手填的值先收成合法写法，再交给库。
+    params = _coerce_params(data)
+
     AGENT_TEMP_DIR.mkdir(parents=True, exist_ok=True)
     path = AGENT_TEMP_DIR / f"tts-{gen_random_str(6)}.mp3"
     last_error: Exception | None = None
     for _ in range(MAX_ATTEMPTS):
         try:
             # 必须用异步 save：同步版会堵住整个事件循环，这期间其它消息发不出去。
-            tts = edge_tts.Communicate(
-                text=text,
-                voice=str(data["voice"]),
-                rate=str(data["rate"]),
-                volume=str(data["volume"]),
-                pitch=str(data["pitch"]),
-                proxy=proxy,
-                connect_timeout=_timeout(data, "connect_timeout", 10),
-                receive_timeout=_timeout(data, "receive_timeout", 60),
-            )
+            tts = _build_communicate(edge_tts, text, params, proxy, data)
             await tts.save(str(path))
             if path.exists() and path.stat().st_size > 0:
                 return LLMResponse(content=path)
@@ -195,4 +303,7 @@ __all__ = [
     "call_func",
     "create_edge_tts_model",
     "ensure_default_provider",
+    "normalize_hz",
+    "normalize_percent",
+    "normalize_voice",
 ]

@@ -79,6 +79,8 @@ ATRI/system/agent/
 
 语音使用点开箱可用：`load_models_from_config()` 在没有用户语音模型时会在内存里补一个**内置 Edge 供应商**（`provider_type: edge-tts`，模型 `edge-tts/晓伊`，走 `zh-CN-XiaoyiNeural`）。它不写 `provider.yml`，若已经存在任何 `tts` 类型模型则不补；想改音色 / 语速，就在 WebUI 里编辑该供应商或模型的「附加配置」（`voice` / `rate` / `pitch` / `volume` / `proxy`），想换成本地服务就换成自己的 `tts` 模型。
 
+edge-tts 7.x 起会**严格校验**音色与语速/音量/音调，写错一个字符就直接 ValueError。附加配置里写的值会先经 `normalize_voice` / `normalize_percent` / `normalize_hz` 收成合法写法（`zh-CN-Xiaoyi` → 补 `Neural`、`-10` → `-10%`、`30` → `+30Hz`），收不回来的改用默认值并只告警一次，所以手填参数不会让整条语音失败。
+
 **要不要发语音由模型逐条决定**：`say` / `md` 都多了一个可选参数 `voice`（默认 `false`），提示词里写明只在短句、情绪明显的时刻用（撒娇、道谢、惊呼、轻声提醒）。`say_exact` 是逐字发送，不配语音。配置项「允许语音回复」（`tts_enabled`，默认开）是总闸，关掉后模型的 `voice=true` 一律不生效；「语音字数上限」（`tts_max_chars`，默认 60，0 = 不限）挡住长句——超了就只发文字。语音在后台合成，不阻塞后续消息，`drain()` 会等它收尾。
 
 ### 3.2 `LLMManager`

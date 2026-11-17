@@ -15,7 +15,7 @@ python = "^3.12"
 nonebot2 = {extras = ["fastapi"], version = "^2.5.0"}
 nonebot-adapter-onebot = "^2.4.6"
 nonebot-adapter-qq = "^1.7.4"
-edge-tts = "^6.1.19"
+edge-tts = "^7.3.1"
 tortoise-orm = "^0.21.7"
 httpx = "^0.28.1"
 scikit-image = "^0.24.0"

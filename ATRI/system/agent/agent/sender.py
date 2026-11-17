@@ -44,6 +44,26 @@ class ChatSender:
         """发送一个表情消息段。"""
         await self.send(face)
 
+    def can_send_record(self) -> bool:
+        """这个通道能否直接发语音段；要发语音的通道在这里声明。
+
+        默认不能：语音是可选能力，让通道显式声明比猜类型名可靠。
+        """
+        return False
+
+    def record_message(self, path):
+        """把音频路径包成该协议能发的消息段。默认按 OneBot ``record`` 处理。"""
+        from ATRI.message import rec_msg_from_path
+
+        return rec_msg_from_path(path)
+
+    async def send_record(self, path) -> bool:
+        """发送一条语音；不支持时返回 False（调用方只当没发过）。"""
+        if not self.can_send_record():
+            return False
+        await self.send(self.record_message(path))
+        return True
+
     async def finish(self, message=None):
         pass
 
@@ -205,6 +225,9 @@ class OneBotChatSender(ChatSender):
         super().__init__()
         self.matcher: Matcher = matcher
 
+    def can_send_record(self) -> bool:
+        return True
+
     async def send(self, message):
         await self.matcher.send(message)
         self.sent_count += 1
@@ -221,6 +244,15 @@ class QQChatSender(ChatSender):
     def __init__(self, matcher: Matcher):
         super().__init__()
         self.matcher: Matcher = matcher
+
+    def can_send_record(self) -> bool:
+        """QQ 官方群聊/C2C 支持语音，但它要先上传成文件。"""
+        return True
+
+    def record_message(self, path):
+        from ATRI.message import QQMessage
+
+        return QQMessage.rec_msg(path)
 
     async def send(self, message):
         await self.matcher.send(message)
@@ -264,6 +296,17 @@ class BotChatSender(ChatSender):
         self.sent: list[str] = []
         self.cleaner = cleaner
         self.mtype = bot_mtype(bot)
+
+    def can_send_record(self) -> bool:
+        """QQ 官方群聊/C2C 支持语音；频道与私信没有音频接口。"""
+        return self.mtype == 1
+
+    def record_message(self, path):
+        if self.mtype == 1:
+            from ATRI.message import QQMessage
+
+            return QQMessage.rec_msg(path)
+        return super().record_message(path)
 
     async def send(self, message):
         if not isinstance(message, str) and message is not None:

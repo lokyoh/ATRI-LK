@@ -350,6 +350,7 @@ class ActionExecutor:
                 legacy_name=legacy,
                 intent=str(args.get("intent") or "").strip(),
                 tone=str(args.get("tone") or "").strip(),
+                voice=_as_bool(args.get("voice")),
                 payload={
                     "image": str(args.get("image") or "").strip(),
                     "title": str(args.get("title") or "").strip(),
@@ -378,6 +379,7 @@ class ActionExecutor:
             tone=str(args.get("tone") or "").strip(),
             count=_safe_count(args.get("count")),
             at=_as_bool(args.get("at")),
+            voice=_as_bool(args.get("voice")),
             data=data,
             seq=item.index,
         )

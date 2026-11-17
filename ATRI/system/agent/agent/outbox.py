@@ -28,6 +28,17 @@ DEFAULT_MAX_QUEUE = 10
 DEFAULT_INTER_MESSAGE_DELAY = 0.4
 
 
+def _voice_enabled() -> bool:
+    """语音回复总开关；配置层未就绪时按默认允许。"""
+    try:
+        from ..config import config
+
+        value = config.get("tts_enabled")
+    except Exception:
+        return True
+    return True if value is None else bool(value)
+
+
 class OutboxFullError(RuntimeError):
     """队列已满，本轮发言过多。"""
 
@@ -43,6 +54,8 @@ class ReplyJob:
     tone: str = ""
     count: int = 1
     at: bool = False
+    voice: bool = False
+    """模型是否要求这条回复再配一条语音；由 `say` / `md` 的 `voice` 参数决定。"""
     payload: dict = field(default_factory=dict)
     exact_text: str = ""
     name: str = "say"
@@ -80,6 +93,8 @@ class ChatOutbox:
     _done: int = field(default=0, init=False)
     _closed: bool = field(default=False, init=False)
     _current_sender: Any = field(default=None, init=False)
+    _voice_tasks: set[asyncio.Task] = field(default_factory=set, init=False)
+    """在途的语音合成任务；文字先发，语音后台合成，`drain()` 统一收尾。"""
 
     def __post_init__(self) -> None:
         self._idle.set()
@@ -297,7 +312,6 @@ class ChatOutbox:
 
     async def _send_text(self, job: ReplyJob, messages: list[str]) -> None:
         from .function_calling import _with_mention
-        from .sender import OneBotChatSender
 
         data = job.data
         sender = data.sender
@@ -313,25 +327,48 @@ class ChatOutbox:
             self._feedback.append(f"你刚才对群里说：「{text}」")
             if history is not None:
                 history.add_response(text)
-            # 只对唯一的最终文本做 TTS；分多条时逐条语音会把消息条数翻倍
-            if len(messages) == 1 and isinstance(sender, OneBotChatSender):
-                await self._maybe_tts(text)
+            # 文字先发；语音是模型点名要的附加项，慢也不该拖住后面的消息。
+            last = index == len(messages) - 1
+            if last and job.voice:
+                self._schedule_tts(text, sender)
             if index < len(messages) - 1 and self.inter_message_delay > 0:
                 await asyncio.sleep(self.inter_message_delay)
 
-    async def _maybe_tts(self, text: str) -> None:
-        """TTS 失败不影响文字；表情不触发 TTS。"""
+    def _schedule_tts(self, text: str, sender: Any = None) -> None:
+        """把语音丢到后台：文字已经发出去了，合成慢不该拖住后续消息。
+
+        能不能发语音由通道自己声明（``can_send_record``）：OneBot 用
+        ``record`` 段，QQ 官方群聊/C2C 用 ``file_audio``（适配器上传成文件）。
+        回合结束时 `drain()` 会等这些任务收尾，所以在放音期间仍算「这一轮」。
+        """
+        body = str(text or "").strip()
+        if not body or body.startswith("[CQ:"):
+            return
+        sender = sender or self._sender()
+        if sender is None:
+            return
+        can_record = getattr(sender, "can_send_record", None)
+        if not callable(can_record) or not can_record():
+            return
+        if not _voice_enabled():
+            return
+        task = asyncio.create_task(self._speak(body, sender), name="atri-chat-voice")
+        self._voice_tasks.add(task)
+        task.add_done_callback(self._voice_tasks.discard)
+
+    async def _speak(self, text: str, sender: Any) -> None:
+        """合成并发送一条语音；任何失败都只记 debug，不影响已经发出的文字。"""
         try:
-            from ATRI.message import rec_msg_from_path
+            from ..llm.tts import generate_audio
 
-            from ..llm import llm_manager
-
-            if not llm_manager.has_slot("tts"):
+            file = await generate_audio(text)
+            if file is None:
                 return
-            file = await llm_manager.call_agent("tts", text, "Agent-语音", app_id="tts")
-            await self._sender().send(rec_msg_from_path(file.content))
+            await sender.send_record(file)
+        except asyncio.CancelledError:
+            raise
         except Exception as exc:
-            log.debug(f"TTS 发送失败（忽略）：{exc}")
+            log.debug(f"TTS 发送失败（忽略）：{str_traceback(exc)}")
 
     def _sender(self):
         return self._current_sender
@@ -350,7 +387,8 @@ class ChatOutbox:
         if history is not None:
             history.add_response(f"[md:{md_file}]")
         self._feedback.append(f"你刚才发了一张卡片：「{title or body[:20]}」")
-        await self._maybe_tts(body)
+        if job.voice:
+            self._schedule_tts(body, data.sender)
 
     async def _send_face(self, job: ReplyJob, payload: dict) -> None:
         from .memes import FaceManager
@@ -393,16 +431,25 @@ class ChatOutbox:
         self._feedback.append(f"你刚才对群里说：「{text}」")
         if history is not None:
             history.add_response(text)
-        await self._maybe_tts(text)
+        if job.voice:
+            self._schedule_tts(text, sender)
 
     # ---- 排空 / 收尾 ----
 
     async def drain(self, timeout: float = 30.0) -> None:
-        """等待队列排空；超时则取消剩余任务。"""
-        if self._worker is None:
+        """等待队列排空；超时则取消剩余任务。
+
+        语音是后台任务：文字发完可能语音还在合成，也要一起等，
+        否则回合结束后队列关闭，音频就永远发不出去。
+        """
+        if self._worker is None and not self._voice_tasks:
             return
         try:
             await asyncio.wait_for(self._idle.wait(), timeout)
+            if self._voice_tasks:
+                await asyncio.wait_for(
+                    asyncio.gather(*self._voice_tasks, return_exceptions=True), timeout
+                )
         except TimeoutError:
             log.warning(f"聊天输出队列排空超时（{timeout}s），取消剩余任务")
             self._feedback.append("上一条消息没有发出去")
@@ -423,6 +470,9 @@ class ChatOutbox:
     async def close(self) -> None:
         """关闭队列并取消未完成的 worker。可重复调用。"""
         self._closed = True
+        for task in list(self._voice_tasks):
+            task.cancel()
+        self._voice_tasks.clear()
         worker = self._worker
         self._worker = None
         if worker is None or worker.done():

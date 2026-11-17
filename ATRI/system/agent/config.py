@@ -167,7 +167,8 @@ class AgentConfig(PluginConfig):
         str,
         "",
         "语音模型",
-        "语音回复。留空只发文字。",
+        "语音回复用的合成模型。留空时自动使用内置 Edge 语音（无需密钥）；"
+        "想换音色或改成本地服务再在这里选。",
         options_provider=lambda: _model_options("tts"),
     )
     section_context = Section(
@@ -204,6 +205,22 @@ class AgentConfig(PluginConfig):
         "技能目录 + 内嵌技能正文在提示词里的总字符预算。"
         "超出时先保证技能目录，再截断内嵌正文，默认值10000",
         min=1000,
+    )
+    tts_enabled = Field(
+        bool,
+        True,
+        "允许语音回复",
+        "是否允许模型用 say / md 的 voice 参数附带语音。"
+        "是否发语音由模型逐条决定（默认不发），这里只做总开关；"
+        "关闭后该参数不再生效。",
+    )
+    tts_max_chars = Field(
+        int,
+        60,
+        "语音字数上限",
+        "模型要求配语音时，清洗后超过这个字数的回复不发语音、只发文字。0 表示不限制。",
+        min=0,
+        max=1000,
     )
     outfit_night_hour = Field(
         int,

@@ -12,6 +12,8 @@ from .contents import (
     Sys1Question,
 )
 from .deepseek import create_deepseek_model
+from .edge_voice import create_edge_tts_model
+from .edge_voice import ensure_default_provider as ensure_default_tts_provider
 from .embedding import create_embedding_model
 from .gemini import create_gemini_model
 from .model import (
@@ -60,6 +62,8 @@ def load_models_from_config():
     from ..config import load_provider_from_config
 
     load_provider_from_config()
+    # 内置 Edge 语音：没配语音模型时补一个，保证「语音回复」开箱可用。
+    ensure_default_tts_provider()
     for _provider in ProviderManager.providers.values():
         spec = get_spec(_provider.provider_type)
         if spec is None:
@@ -130,11 +134,13 @@ __all__ = [
     "Sys1Question",
     "SystemOneModel",
     "create_deepseek_model",
+    "create_edge_tts_model",
     "create_embedding_model",
     "create_gemini_model",
     "create_openai_model",
     "create_sys1_model",
     "create_tts_model",
+    "ensure_default_tts_provider",
     "get_spec",
     "llm_manager",
     "load_models_from_config",

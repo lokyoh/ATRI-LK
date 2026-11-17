@@ -231,6 +231,18 @@ class QQMessage:
         return QQMessageSegment.markdown(markdown)
 
     @staticmethod
+    def rec_msg(path: str | Path) -> QQMessageSegment:
+        """语音路径转 QQ 官方语音消息。
+
+        QQ 官方没有 OneBot 那种 ``record`` 段：本地音频要按「文件音频」
+        上传，由适配器在 ``send_to_group`` / ``send_to_c2c`` 里转成
+        ``msg_type=7`` 的媒体消息。**只支持群聊与 C2C**，频道与私信目前
+        没有音频接口。
+        """
+        audio = Path(path)
+        return QQMessageSegment.file_audio(audio.read_bytes(), audio.name)
+
+    @staticmethod
     def cmd(text: str, show: str | None = None, reference: bool = False) -> str:
         safe_text = quote(text, safe="")
         if show is not None:

@@ -622,6 +622,13 @@ def register_function_calling():
                 description="(可选)置为 true 时 @ 正在跟你说话的人；"
                 "私聊、或本来就是在直接回答他时不必加。",
             ),
+            FunctionCallingArg(
+                name="voice",
+                _type="bool",
+                description="(可选)置为 true 时，这条消息会再附带一条语音。"
+                "默认 false。只在短句、情绪明显的时刻用（撒娇、道谢、惊呼、"
+                "轻声提醒）；解释、列表、长句、多条回复不要用语音。",
+            ),
         ]
 
         @staticmethod
@@ -823,6 +830,12 @@ def register_function_calling():
             ),
             FunctionCallingArg(
                 name="tone", _type="str", description="(可选)语气，如「认真」「轻松」"
+            ),
+            FunctionCallingArg(
+                name="voice",
+                _type="bool",
+                description="(可选)置为 true 时，卡片发出后再附一条语音复述要点；"
+                "默认 false。卡片本身是给人看的，通常不需要朗读。",
             ),
         ]
 

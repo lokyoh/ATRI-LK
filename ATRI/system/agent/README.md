@@ -45,7 +45,9 @@ ATRI/system/agent/
 │   ├── gemini.py        # Gemini 接口
 │   ├── system_one.py    # SystemOne 接口
 │   ├── embedding.py     # Embedding 模型
-│   ├── tts.py           # TTS 模型
+│   ├── tts.py           # TTS 模型（OpenAI 兼容 /audio/speech）
+│   ├── edge_voice.py    # 内置 Edge 语音供应商（edge-tts，无需密钥）
+│   ├── speech.py        # 朗读文本清洗与截断
 │   ├── log.py           # 模型输入输出独立日志
 │   └── ...
 ├── utils.py             # 日志与通用请求封装
@@ -74,6 +76,10 @@ ATRI/system/agent/
 | `atri-tts` | 语音合成 | 可选 | 只发文字 |
 
 通用类型 `chat` / `work` / `tool` / `image` / `embedding` / `tts` / `sys1` 继续供 `lkpet`、`trpg`、`feed` 等非 Agent 服务使用；Agent 不消费它们。
+
+语音使用点开箱可用：`load_models_from_config()` 在没有用户语音模型时会在内存里补一个**内置 Edge 供应商**（`provider_type: edge-tts`，模型 `edge-tts/晓伊`，走 `zh-CN-XiaoyiNeural`）。它不写 `provider.yml`，若已经存在任何 `tts` 类型模型则不补；想改音色 / 语速，就在 WebUI 里编辑该供应商或模型的「附加配置」（`voice` / `rate` / `pitch` / `volume` / `proxy`），想换成本地服务就换成自己的 `tts` 模型。
+
+**要不要发语音由模型逐条决定**：`say` / `md` 都多了一个可选参数 `voice`（默认 `false`），提示词里写明只在短句、情绪明显的时刻用（撒娇、道谢、惊呼、轻声提醒）。`say_exact` 是逐字发送，不配语音。配置项「允许语音回复」（`tts_enabled`，默认开）是总闸，关掉后模型的 `voice=true` 一律不生效；「语音字数上限」（`tts_max_chars`，默认 60，0 = 不限）挡住长句——超了就只发文字。语音在后台合成，不阻塞后续消息，`drain()` 会等它收尾。
 
 ### 3.2 `LLMManager`
 
@@ -215,13 +221,14 @@ thinking 产出 say(intent) / md(intent) / face(intent) / say_exact(text)
   → ActionExecutor 校验后投递 ReplyJob
   → ChatOutbox 单 worker：
        ChatModel (atri-chat) 渲染 → ReplyPipeline 清洗/分条/去重
-       → sender 发送 → 写历史 → TTS
+       → sender 发送 → 写历史 → 语音回复（可选）
 ```
 
 - `say` / `md` / `face` 必须经 `atri-chat`；唯一跳过渲染的是 `say_exact`（代码、命令、引用原文）。
 - 缺 `atri-chat` 时：`say` / `md` 用清洗后的 intent 兜底，`face` 丢弃；**不回退**旧 `CHAT`/`TOOL`。
 - `chat_parallel_render` 打开后 worker 会一次取多条排队任务**并发渲染**，发送仍严格按序；默认关闭。
 - 发送顺序与 thinking 调用顺序一致；`drain()` 后 `sent_count`、历史与主动发言记账落定。
+- 语音回复由模型逐条决定（`say` / `md` 的 `voice` 参数，默认 false），文字先发、语音后台合成；总闸「允许语音回复」关闭后不生效，清洗后超过 `tts_max_chars` 也只发文字。通道通过 `ChatSender.can_send_record()` 与 `record_message()` 声明并封装语音：OneBot 用 `[CQ:record]`，QQ 官方群聊/C2C 用 `file_audio`（适配器会先上传再以 `msg_type=7` 发送，频道与私信没有音频接口因此不发）。
 - 历史记录最终发出的内容，不记 intent。
 
 ### 3.9 生活数据文件
@@ -284,6 +291,7 @@ class AgentConfig(PluginConfig):
 - `reply_max_chars` / `reply_inter_message_delay`：单条上限与分条间隔
 - `chat_parallel_render` / `max_parallel_render`：并行渲染开关与上限（默认关闭 / 2）
 - `skill_prompt_budget`：技能目录 + 内嵌正文总预算（默认 10000 字）
+- `tts_enabled` / `tts_max_chars`：允许语音回复（默认开，只是总闸）+ 语音字数上限（默认 60，0 = 不限）
 - `outfit_night_hour` / `life_morning_plan`：晚间穿搭切换点 / 早间主动计划
 - `search.enable` / `search.provider` / `search.api_key`：联网搜索能力配置
 

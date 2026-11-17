@@ -140,9 +140,16 @@ _HEADING_LINE_RE = re.compile(rf"^#{{2,{MAX_SECTION_LEVEL}}}\s+")
 
 
 def _strip_heading(block: str) -> str:
-    """去掉章节块的第一行标题，留下正文。"""
+    """去掉章节块的**第一行**标题，留下正文与其子章节。
+
+    这里只能删一行。旧版写成 ``while`` 会把紧跟其后的子标题一起吃掉：
+    ``## 容器`` 与 ``### 衣柜`` 之间没有空行时（模板与手写文件都常这样），
+    正文里就只剩衣柜的条目、看不到「### 衣柜」。家模型照着这份正文追加，
+    返回的 body 自然也没有那一行，写回后衣柜条目被挂到 ``## 容器`` 底下，
+    容器就只剩冰箱了。
+    """
     lines = str(block or "").splitlines()
-    while lines and _HEADING_LINE_RE.match(lines[0]):
+    if lines and _HEADING_LINE_RE.match(lines[0]):
         lines.pop(0)
     return "\n".join(lines).strip()
 
@@ -265,17 +272,42 @@ class HomeStore:
         room = next(item for item in sections if item[1] == SECTION_ROOMS)
         if not any(item[0] == 3 and room[2] < item[2] < room[3] for item in sections):
             return f"`## {SECTION_ROOMS}` 下至少要有一个 `###` 房间"
-        return HomeStore._container_problem(sections)
+        return HomeStore._container_problem(sections, body)
 
     @staticmethod
-    def _container_problem(sections: list[tuple[int, str, int, int]]) -> str:
-        """容器层额外两条：名字不能重、不能再用 #### 分组（会丢物品）。"""
+    def _container_problem(
+        sections: list[tuple[int, str, int, int]], text: str = ""
+    ) -> str:
+        """容器层额外三条：名字不能重、不能再用 #### 分组、物品必须挂在容器下。"""
         holder = next(
             (item for item in sections if item[1] == SECTION_CONTAINERS), None
         )
         if holder is None:
             return ""
         _, _, start, end = holder
+        # 直接挂在 `## 容器` 下面的条目没有归属：读取时按容器名取清单，
+        # 它们哪一项都取不到，写回后整段就像凭空蒸发——衣柜就是这样丢的。
+        heading_end = text.find("\n", start)
+        heading_end = end if heading_end < 0 else heading_end + 1
+        first_child = next(
+            (
+                item_start
+                for level, _, item_start, _ in sections
+                if level == 3 and start < item_start < end
+            ),
+            end,
+        )
+        orphan = [
+            _BULLET_RE.sub("", line).strip()
+            for line in text[heading_end:first_child].splitlines()
+            if _BULLET_RE.match(line)
+        ]
+        if orphan:
+            return (
+                f"`## {SECTION_CONTAINERS}` 下面直接出现了物品「{orphan[0]}」，"
+                "但它不属于任何容器，读的时候会整段丢掉。请写成"
+                "「### 容器名」再在下面列「- 名称：说明」"
+            )
         names: list[str] = []
         current = ""
         for level, title, item_start, _ in sections:

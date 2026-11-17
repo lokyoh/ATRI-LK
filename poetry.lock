@@ -1389,14 +1389,14 @@ typing-extensions = ">=4.0.0,<5.0.0"
 
 [[package]]
 name = "nonebot-adapter-qq"
-version = "1.7.3"
+version = "1.7.4"
 description = "QQ adapter for nonebot2"
 optional = false
 python-versions = "<4,>=3.10"
 groups = ["main"]
 files = [
-    {file = "nonebot_adapter_qq-1.7.3-py3-none-any.whl", hash = "sha256:fe59b6b9dbde979f1eb8a4a33dc6f27634feb92ecb4ceb9dc3ea8d04c979ac77"},
-    {file = "nonebot_adapter_qq-1.7.3.tar.gz", hash = "sha256:54d6427894ca1443bdab8d3101e7efdbf4407a6385d032cbda883c396fb2025e"},
+    {file = "nonebot_adapter_qq-1.7.4-py3-none-any.whl", hash = "sha256:12f3f69fd59aa93b194995270d75d647faed5bb7b842f1dd375fcb6db7da7342"},
+    {file = "nonebot_adapter_qq-1.7.4.tar.gz", hash = "sha256:7fc87a42a6728a31bb64fa4b705a45afe5b09be4fdc948e180d449b1ef026c33"},
 ]
 
 [package.dependencies]
@@ -3002,4 +3002,4 @@ propcache = ">=0.2.1"
 [metadata]
 lock-version = "2.1"
 python-versions = "^3.12"
-content-hash = "f2f02493917567b004483e201045f1e43bee94f0dcc619eaa77aa94ab0608667"
+content-hash = "40ed44773c86747d21b69e06fb456d2db0817212d84eac650ef2abbee779b5bb"

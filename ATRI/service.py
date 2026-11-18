@@ -130,6 +130,53 @@ class Service:
             """
             return self.name.lower()
 
+        @classmethod
+        def register(cls, name: str, label: str) -> "Service.ServiceType":
+            """新增一个服务类型（就地追加，不替换枚举）。
+
+            :param name: 成员名，英文数字，会被转成大写；``key`` 即它的小写
+            :param label: 展示名，会写进 ``data/config/<服务名>.json`` 与商店 meta 的 ``type``
+
+            已存在同名成员时直接返回它（幂等，便于插件重载）；同名不同展示名、
+            或展示名与已有成员重复时报错——重复的 ``value`` 在 Enum 里会变成别名。
+            """
+            text = str(name or "").strip()
+            if not text or not re.fullmatch(r"[A-Za-z_][A-Za-z0-9_]*", text):
+                raise ServiceRegisterError(f"服务类型名不合法：{name!r}")
+            member_name = text.upper()
+            label_text = str(label or "").strip()
+            if not label_text:
+                raise ServiceRegisterError(f"服务类型 {member_name} 缺少展示名")
+
+            existed = cls._member_map_.get(member_name)
+            if existed is not None:
+                if existed.value == label_text:
+                    return existed
+                raise ServiceRegisterError(
+                    f"服务类型 {member_name} 已存在（展示名 {existed.value}），"
+                    f"不能改成 {label_text}"
+                )
+            for other in cls:
+                if other.value == label_text:
+                    raise ServiceRegisterError(
+                        f"服务类型展示名 {label_text} 已被 {other.name} 占用"
+                    )
+
+            member = object.__new__(cls)
+            member._name_ = member_name
+            member._value_ = label_text
+            member._sort_order_ = len(cls._member_names_)
+            setattr(cls, member_name, member)
+            cls._member_map_[member_name] = member
+            names = cls._member_names_
+            if isinstance(names, dict):  # 3.11 之前是 dict，之后是 list
+                names[member_name] = len(names)
+            else:
+                names.append(member_name)
+            cls._value2member_map_[label_text] = member
+            log.info(f"已注册服务类型 {member_name}（{label_text}）")
+            return member
+
     def __init__(
         self,
         service: str,

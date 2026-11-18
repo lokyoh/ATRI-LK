@@ -21,6 +21,7 @@ ATRI/system/agent/
 ├── service.py           # 插件注册与命令入口
 ├── agent/               # Agent 实际运行逻辑
 │   ├── chat_chain.py    # 对话链路
+│   ├── memes.py         # 表情包候选（路径 + 描述）
 │   ├── function_calling.py
 │   ├── function_permission.py  # 三级权限与作用域求值
 │   ├── action_executor.py      # 校验 / 分流 / 并发 / 回填
@@ -233,6 +234,7 @@ thinking 产出 say(intent) / md(intent) / face(intent) / say_exact(text)
 - `chat_parallel_render` 打开后 worker 会一次取多条排队任务**并发渲染**，发送仍严格按序；默认关闭。
 - 发送顺序与 thinking 调用顺序一致；`drain()` 后 `sent_count`、历史与主动发言记账落定。
 - 语音回复由模型逐条决定（`say` / `md` 的 `voice` 参数，默认 false），文字先发、语音后台合成；总闸「允许语音回复」关闭后不生效，清洗后超过 `tts_max_chars` 也只发文字。通道通过 `ChatSender.can_send_record()` 与 `record_message()` 声明并封装语音：OneBot 用 `[CQ:record]`，QQ 官方群聊/C2C 用 `file_audio`（适配器会先上传再以 `msg_type=7` 发送，频道与私信没有音频接口因此不发）。
+- 图片同理走通道声明：`ChatSender.can_send_image()` / `image_message()`。OneBot 用 `image` 段；QQ 官方用 `QQMessage.img_msg()`，URL 走 `image` 段、本地文件/bytes 走 `file_image`（同样由适配器上传成 `msg_type=7`）。`face` 要求通道声明支持发图，因此 QQ 官方群聊/C2C 现在也能发表情。
 - 历史记录最终发出的内容，不记 intent。
 
 ### 3.9 生活数据文件

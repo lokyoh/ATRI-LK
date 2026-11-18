@@ -1,6 +1,6 @@
 import json
 import random
-from typing import Optional
+from pathlib import Path
 
 from ATRI.dir import RES_DIR
 from ATRI.message import img_msg_from_path
@@ -18,17 +18,25 @@ class FaceManager:
     def _load_data(self):
         """加载表情数据"""
         if self.data_file.exists():
-            with open(self.data_file, "r", encoding="utf-8") as f:
+            with open(str(self.data_file), encoding="utf-8") as f:
                 self.memes_data = json.load(f)
 
     @classmethod
-    def get_face(cls, meme: str) -> Optional:
+    def get_face(cls, meme: str):
         """
         根据 meme 类型获取随机表情图片消息
 
         :param meme: 表情类型（如 "amused", "distress" 等）
         :return: MessageSegment 对象，如果表情不存在则返回 None
         """
+        path = cls.get_face_path(meme)
+        if path is None:
+            return None
+        return img_msg_from_path(path)
+
+    @classmethod
+    def get_face_path(cls, meme: str) -> Path | None:
+        """按 meme 类型随机取一张表情图片路径，由发送通道包装成各自的图片段。"""
         manager = cls()
         # 检查 meme 类型是否存在
         if meme not in manager.memes_data:
@@ -46,12 +54,10 @@ class FaceManager:
         if not image_files:
             return None
         # 随机选择一个图片
-        selected_image = random.choice(image_files)
-        # 生成 MessageSegment 对象并返回
-        return img_msg_from_path(selected_image)
+        return random.choice(image_files)
 
     @classmethod
-    def get_meme_description(cls, meme: str) -> Optional[str]:
+    def get_meme_description(cls, meme: str) -> str | None:
         """
         获取 meme 类型的描述信息
 

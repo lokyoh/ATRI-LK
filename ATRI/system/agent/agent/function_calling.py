@@ -20,7 +20,7 @@ from .history import History
 from .memes import FaceManager
 from .memory.manage import memory_manager
 from .memory.persona import tag_emotion
-from .sender import ChatSender, OneBotChatSender
+from .sender import ChatSender
 from .state import feel
 from .telemetry import telemetry
 from .user import add_self_memory, get_user_info, save_user_info
@@ -1031,12 +1031,11 @@ def register_function_calling():
 
         @classmethod
         def is_available_for(cls, sender: ChatSender | None, user_id: str) -> bool:
-            if sender is None:
+            if sender is None or type(sender) is ChatSender:
                 return False
-            if isinstance(sender, OneBotChatSender):
-                return True
-            # 裸 ChatSender 只是抽象基类，不是任何真实通道。
-            return type(sender) is not ChatSender and getattr(sender, "mtype", 1) == 0
+            # 表情就是一张图：能不能发由通道自己声明。
+            can_send = getattr(sender, "can_send_image", None)
+            return bool(callable(can_send) and can_send())
 
         @staticmethod
         async def call(data: FunctionCallingData):

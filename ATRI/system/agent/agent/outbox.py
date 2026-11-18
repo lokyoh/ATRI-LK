@@ -1,13 +1,3 @@
-"""聊天输出队列（计划 3.5.5）。
-
-thinking 只产出意图；worker 逐条完成「渲染 → 清洗 → 分条 → 发送 → 写历史」。
-单 worker 保证顺序，渲染与发送不占用思考轮次；回合结束 `drain()` 后
-`sender.sent_count`、历史与主动发言限流记账都已落定。
-
-与 P3 的最小版区别：``say`` / ``md`` / ``face`` 不再直接发送，而是构造
-``ReplyJob`` 交给这里；``say_exact`` 是唯一跳过 Chat 渲染的入口。
-"""
-
 from __future__ import annotations
 
 import asyncio
@@ -399,11 +389,11 @@ class ChatOutbox:
         face_id = str(payload.get("id") or "").strip()
         if not face_id:
             return
-        face = FaceManager.get_face(face_id)
-        if not face:
+        face_path = FaceManager.get_face_path(face_id)
+        if not face_path:
             log.debug(f"表情 {face_id} 不可用，已丢弃")
             return
-        await sender.send(face)
+        await sender.send_image(face_path)
         self._sent.append(f"[face:{face_id}]")
         if history is not None:
             history.add_response(f"[表情:{face_id}]")

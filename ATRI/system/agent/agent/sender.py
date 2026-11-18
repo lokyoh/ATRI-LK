@@ -64,6 +64,23 @@ class ChatSender:
         await self.send(self.record_message(path))
         return True
 
+    def can_send_image(self) -> bool:
+        """这个通道能否发图片；默认不能，由要发图的通道显式声明。"""
+        return False
+
+    def image_message(self, image):
+        """把图片（路径 / bytes / URL）包成该协议的消息段，默认按 OneBot 处理。"""
+        from ATRI.message import img_msg
+
+        return img_msg(image)
+
+    async def send_image(self, image) -> bool:
+        """发送一张图片；通道不支持时返回 False。"""
+        if not self.can_send_image():
+            return False
+        await self.send(self.image_message(image))
+        return True
+
     async def finish(self, message=None):
         pass
 
@@ -228,6 +245,9 @@ class OneBotChatSender(ChatSender):
     def can_send_record(self) -> bool:
         return True
 
+    def can_send_image(self) -> bool:
+        return True
+
     async def send(self, message):
         await self.matcher.send(message)
         self.sent_count += 1
@@ -253,6 +273,15 @@ class QQChatSender(ChatSender):
         from ATRI.message import QQMessage
 
         return QQMessage.rec_msg(path)
+
+    def can_send_image(self) -> bool:
+        """QQ 官方群聊/C2C 支持图片；本地图由适配器上传后发送。"""
+        return True
+
+    def image_message(self, image):
+        from ATRI.message import QQMessage
+
+        return QQMessage.img_msg(image)
 
     async def send(self, message):
         await self.matcher.send(message)
@@ -307,6 +336,16 @@ class BotChatSender(ChatSender):
 
             return QQMessage.rec_msg(path)
         return super().record_message(path)
+
+    def can_send_image(self) -> bool:
+        return True
+
+    def image_message(self, image):
+        if self.mtype == 1:
+            from ATRI.message import QQMessage
+
+            return QQMessage.img_msg(image)
+        return super().image_message(image)
 
     async def send(self, message):
         if not isinstance(message, str) and message is not None:

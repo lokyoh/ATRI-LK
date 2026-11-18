@@ -243,6 +243,29 @@ class QQMessage:
         return QQMessageSegment.file_audio(audio.read_bytes(), audio.name)
 
     @staticmethod
+    def img_msg(
+        file: str | bytes | BytesIO | Path, file_name: str | None = None
+    ) -> QQMessageSegment:
+        """图片转 QQ 官方图片消息：URL 用 ``image`` 段，本地/bytes 用 ``file_image`` 段。"""
+        if isinstance(file, BytesIO):
+            data = file.getvalue()
+        elif isinstance(file, Path):
+            data = file.read_bytes()
+            if file_name is None:
+                file_name = file.name
+        elif isinstance(file, bytes):
+            data = file
+        else:
+            text = str(file).strip()
+            if text.startswith(("http://", "https://")):
+                return QQMessageSegment.image(text)
+            path = Path(text)
+            data = path.read_bytes()
+            if file_name is None:
+                file_name = path.name
+        return QQMessageSegment.file_image(data, file_name)
+
+    @staticmethod
     def cmd(text: str, show: str | None = None, reference: bool = False) -> str:
         safe_text = quote(text, safe="")
         if show is not None:

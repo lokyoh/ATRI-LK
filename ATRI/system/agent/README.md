@@ -81,6 +81,8 @@ ATRI/system/agent/
 
 edge-tts 7.x 起会**严格校验**音色与语速/音量/音调，写错一个字符就直接 ValueError。附加配置里写的值会先经 `normalize_voice` / `normalize_percent` / `normalize_hz` 收成合法写法（`zh-CN-Xiaoyi` → 补 `Neural`、`-10` → `-10%`、`30` → `+30Hz`），收不回来的改用默认值并只告警一次，所以手填参数不会让整条语音失败。
 
+**版本门槛**：微软已停用 `Sec-MS-GEC` v1 令牌，6.x 连接语音服务一律返回 `403`。`version_is_usable()` 会检查版本，低于 `MIN_EDGE_VERSION`（7.3.1）直接给出「执行 poetry install / 容器 restart」的提示；真的收到 403 时也会翻成「版本过旧 / 系统时间偏差 / 需要 proxy」的可排查说明，而不是只丢原始 wss 地址。
+
 **要不要发语音由模型逐条决定**：`say` / `md` 都多了一个可选参数 `voice`（默认 `false`），提示词里写明只在短句、情绪明显的时刻用（撒娇、道谢、惊呼、轻声提醒）。`say_exact` 是逐字发送，不配语音。配置项「允许语音回复」（`tts_enabled`，默认开）是总闸，关掉后模型的 `voice=true` 一律不生效；「语音字数上限」（`tts_max_chars`，默认 60，0 = 不限）挡住长句——超了就只发文字。语音在后台合成，不阻塞后续消息，`drain()` 会等它收尾。
 
 ### 3.2 `LLMManager`

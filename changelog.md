@@ -1,5 +1,39 @@
 > 此处仅为记录重大更新，修复 BUG/以及其它 请关注[`GitHub commits`](https://github.com/lokyoh/ATRI-LK/commits/main)
 
+## Nov 19, 2026
+
+> !!!破坏性更新!!! `Agent`模型类型改为`atri-*`族按用途选型,需在 WebUI 重新配置模型;功能调用改用短名(旧名仅作别名,参数已变);旧整日日程需迁移;`更新`移除`/更新至测试版`
+
+- 更新版本号: `YHN-LK0-025`
+- 新增:
+  - `Agent`模型改为按使用点选型(思考/聊天/判断/记忆/画像/日程/着装/家/总结/图片理解/向量/语音),选型确定、能力由使用点声明;新增供应商注册表与 DeepSeek 供应商;缓存标识改为`atri-{设备标识}-{调用方}`
+  - `Agent`新增三级权限(主人 / 群管理 / 用户):默认权限由功能声明,配置只记覆盖项;群管理不能调用`bot`作用域功能,拒绝原因可解释;新增模型健康检查与配置 v2
+  - `Agent`功能调用改短名(保留旧名别名);新增`say_exact`逐字发送、`send_message`的`at`、`say`/`md`的`voice`;新增`plan`/`wear`/`home`/`where`/`go`生活函数
+  - `Agent`新增生活系统:固定作息 + 填入式日程(可落任意时段,撞上自动挪动或拆段)、实时位置、白天/晚上两套着装、`home.md`固定章节与容器;家改写交给`atri-home`,不合格重试最多 3 次
+  - `Agent`新增聊天输出流:思考只产出意图,经`atri-chat`渲染、清洗、分条、去重后单队列保序发送;新增动作执行器,数据调用可并发、副作用按模型顺序执行
+  - `Agent`记忆可写入、可预取、可归并并区分时效;向量搬入副表,缺向量模型时退回关键词检索
+  - `Agent`内置 Edge 语音与朗读清洗,QQ 官方适配器支持语音;新增用户别名、查人与关系查询;定时任务落库并在重启后恢复
+  - `Agent`技能目录直接进提示词,`skill`支持按章节与偏移读取;`skills`降为补漏清单;内嵌正文与索引受预算约束
+  - `Agent`早间计划改为按群配置并可指定整点,调度每小时触发、按各群自己的小时筛
+  - `Agent`新增行为埋点`telemetry`,六类事件按天写入`data/plugins/agent/telemetry/`
+  - `宠物`新增训练、技能详情与商队本金;遗物逐件定价、商店按区域加价;QQ 端改 markdown 排版与可点选项
+  - `ATRI`新增备份、调度管理与年终总结服务;新增鉴权流水线与服务运行时策略(冷却、计次、并发、撤回)
+  - `ATRI`定时任务支持持久化与重启恢复;`更新`正式版/测试版改为分支切换并自动对齐依赖;`插件商店`安装事务化(失败回滚)并支持进度与兼容性校验
+  - `WebAPI`新增版本信息、插件类型、商店进度、Agent 任务与 lkbot 用户管理接口
+- 重构:
+  - 业务插件(`feed`/`fortune`/`lkchat`/`lkfarm`/`lkfishing`/`lkpet`/`signin`)从`plugins/`迁入`ATRI/system/`
+  - `PluginConfig`支持可选分节与分类集合整块提交;`Service`类型新增稳定键;`SchedulerController`新增任务列表、暂停、恢复与立即执行
+  - `Service.ServiceType` 新增 `register(name, label)`,外部插件可就地注册自定义服务类型(不替换枚举,恒等判断与旧成员都不受影响;同名同展示名幂等,重名或展示名重复报错)
+- 移除:
+  - `Agent`移除`stop_thinking`,统一改用`say`;不再整日生成日程,旧`ATRI_schedule.json`用`scripts/migrate_agent_life.py`迁移
+  - `更新`移除`/更新至测试版`,能力并入`/更新`
+- 修复:
+  - `Agent`记忆跨群串味与遗忘复利;家改写吃掉`### 衣柜`等子标题导致穿搭失去衣物来源
+  - `Agent`定时任务换 bot 发言、无去向仍被唤起;QQ 端`@`需用消息段构造、富消息被过长清洗丢弃
+  - `Agent`图片消息顺序错误、保存密钥后 WebUI 仍显示旧模型
+  - `宠物`QQ 端 openid 让玩家 ID 崩溃;商店编号`1-3`被`int()`截断导致买错商品
+  - `WebAPI` favicon 404;更新后旧版 WebUI 文件残留
+
 ## Oct 14, 2026
 
 > !!!破坏性更新!!! 新增QQ适配器,需更新依赖;完全重构`PluginConfig`会导致一批插件挂掉,请及时更新插件;需重新配置`tts`、`embedding`类型模型
@@ -51,30 +85,6 @@
   - `插件商店`更新版本与安装信息显示;修复移除插件失败的问题bug[#14](https://github.com/lokyoh/ATRI-LK/issues/14)
 - Patch4:
   - `Agent`修复「已想好要说的话却没有调用`send_message`,导致回复丢失」的问题:Patch3 加入「像人聊天」的风格引导后,模型倾向直接把话写进正文
-
-## Nov 13, 2026
-
-> !!!破坏性更新!!! `Agent`模型类型改为`atri-*`族,需在 WebUI 重新配置模型;功能调用改用短名(旧名与旧参数不再兼容),旧日程需迁移
-
-- 更新版本号: `YHN-LK0-025`
-- Patch1:
-  - `Agent`模型类型改为`atri-*`族(12 类),Agent 不再回退`chat`/`tool`,需在 WebUI 重新配置模型;新增模型健康检查与配置版本 v2
-  - `Agent`新增三级权限(主人 / 群管理 / 用户):默认权限由功能自己声明,配置只记覆盖项;群管理不能调用任何 `bot` 作用域功能,拒绝原因可解释;个人规则只能降权、不能提权
-  - `Agent`功能调用改为短名并保留旧名别名一个版本;新增`say`/`md`/`face`的意图参数、`say_exact`逐字发送、`plan`/`wear`/`home`/`where`/`go`生活函数
-  - `Agent`新增生活系统:固定作息表 + 填入式日程、实时位置、白天/晚上两套着装、`home.md`分节读写与备份;旧整日日程改为迁移脚本转换
-  - `Agent`新增聊天输出流:thinking 只产出意图,经`atri-chat`渲染、清洗、分条、去重后由单队列保序发送;发送不阻塞思考,回合结束`drain`保证计数与历史
-  - `Agent`新增无返回值调用并行化:数据调用可并发,副作用按模型顺序执行;新增`ActionExecutor`与队列上限、单轮副作用上限
-  - `Agent`技能目录直接进提示词,`skill`支持按章节与偏移读取;`skills`降为补漏清单;内嵌正文与索引受预算约束
-  - `Agent`新增行为埋点:`chat_render`、`outbox`、`permission_denied`、`life.*`、技能索引与读取
-  - `Agent`升级时自动清空旧版权限清单,避免群管理因旧覆盖项丢失默认允许的生活/关系功能;新增配置迁移日志
-  - `Agent`修复`plan(fill)`不带`end`时清空当天后续安排;修复`home(edit)`整体替换父章节会连子章节一起删除,写入校验补上「房间下必须有子章节」
-  - `Agent`修复早间生活计划的提示词走成「有人发消息叫你」分支;早安发言补上清洗与历史记录
-  - `Agent`修复个人`downgrade_to`不作用于定时任务存等级与`plan(force)`判断;`explain`不再重复最后一环
-  - `Agent`补上`chat_parallel_render`/`max_parallel_render`的实际实现:渲染可并发,发送仍严格保序;缺失`atri-chat`时降级直发而不是整轮拒聊
-  - `Agent`拼提示词不再写`permission_denied`埋点;`say_exact`/`skills`在提示词里单列为「可直调但不在常规清单」
-  - `Agent`聊天模型输出不像 JSON 且内容是解释/拒绝时,改用 intent 兜底,不再把解释直接发进群
-  - `Agent``outfit_night_hour`同时作用于`wear(show)`、`describe`与 WebUI,不再两套默认值
-  - `Agent`迁移脚本`migrate_agent_life.py`可直接`python`运行(自补仓库根路径并初始化 NoneBot)
 
 ## Sep 9, 2026
 

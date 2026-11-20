@@ -27,7 +27,6 @@ from .schedule_store import ScheduleStore as ScheduleStore
 from .system import (
     LifeSystem,
     describe_entries,
-    describe_state,
     extract_json,
     get_life_system,
 )
@@ -54,7 +53,6 @@ __all__ = [
     "ScheduleEntry",
     "ScheduleStore",
     "describe_entries",
-    "describe_state",
     "extract_json",
     "format_time",
     "get_life_system",

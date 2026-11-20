@@ -308,7 +308,3 @@ class FunctionPluginManager:
 
 
 function_plugin_manager = FunctionPluginManager()
-
-
-def get_function_plugin_manager() -> FunctionPluginManager:
-    return function_plugin_manager

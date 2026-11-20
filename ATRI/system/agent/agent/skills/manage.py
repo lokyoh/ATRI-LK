@@ -471,12 +471,3 @@ skill_manager = SkillManager()
 
 def get_skill_manager() -> SkillManager:
     return skill_manager
-
-
-def embedded_prompt() -> str:
-    """thinking.get_prompt 使用；技能目录为空时返回空串。"""
-    try:
-        return skill_manager.get_prompt_block()
-    except Exception as e:
-        log.warning(f"内嵌技能提示词生成失败:{e}")
-        return ""

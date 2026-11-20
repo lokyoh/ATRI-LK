@@ -205,9 +205,6 @@ class HomeStore:
             self._backup()
         self.path.write_text(self._template(), encoding="utf-8")
 
-    # 兼容旧调用名
-    _ensure_exists = ensure
-
     @staticmethod
     def _template() -> str:
         if HOME_TEMPLATE_FILE.is_file():

@@ -17,7 +17,6 @@ from ATRI.log import log
 
 from ..agent.reply_pipeline import (
     FACE_TEXT_CHARS,
-    REPLY_MAX_CHARS,
     parse_face,
     parse_markdown,
     parse_messages,
@@ -222,7 +221,8 @@ class ChatModel:
             )
         from ..agent.reply_pipeline import split
 
-        messages = split(intent, REPLY_MAX_CHARS)[: max(1, request.count or 1)]
+        # 不传 max_chars，跟随 `reply_max_chars` 配置。
+        messages = split(intent)[: max(1, request.count or 1)]
         return RenderedReply(kind="text", messages=messages, degraded=True)
 
 
@@ -247,22 +247,3 @@ def build_context(
         chat_id=str(chat_id),
         user_id=str(user_id),
     )
-
-
-def now_label() -> str:
-    from ATRI.utils.datetime import now
-
-    return now().strftime("%H:%M")
-
-
-def face_options(
-    memes: list[str], descriptions: dict[str, str]
-) -> list[dict[str, object]]:
-    """把表情名与描述整理成 Chat 模型的候选清单。"""
-    options: list[dict[str, object]] = []
-    for meme in memes:
-        desc = str(descriptions.get(meme) or "").strip()
-        if not desc:
-            continue
-        options.append({"id": meme, "desc": desc.split("（")[0][:20]})
-    return options

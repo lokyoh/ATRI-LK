@@ -11,7 +11,7 @@ import json
 import re
 from collections import deque
 
-#: 单条文本上限；与 `function_calling.REPLY_MAX_CHARS` 保持一致
+#: 单条文本上限的兜底值；运行时以 `AgentConfig.reply_max_chars` 为准。
 REPLY_MAX_CHARS = 300
 
 #: 一次 `say` 最多分几条

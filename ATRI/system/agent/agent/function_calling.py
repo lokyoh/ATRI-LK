@@ -17,7 +17,6 @@ from .function_permission import (
     PermissionResolver,
 )
 from .history import History
-from .memes import FaceManager
 from .memory.manage import memory_manager
 from .memory.persona import tag_emotion
 from .sender import ChatSender
@@ -32,32 +31,6 @@ USER_MEMORY_LIMIT = 11
 
 #: 亚托莉自我记忆的条数上限。
 SELF_MEMORY_LIMIT = 8
-
-#: 单条回复的字数上限（兼容旧常量）。
-#:
-#: 实际运行时以 `AgentConfig.reply_max_chars` 为准；`reply_pipeline.split`
-#: 会读取配置。这里保留常量供旧调用与测试引用。
-REPLY_MAX_CHARS = 300
-
-
-def _trim_reply(text: str) -> tuple[str, str]:
-    """兼容旧代码：把过长文本截短，返回 (新文本, 提示语)。
-
-    P5 之后实际清洗在 `reply_pipeline`；这里保留给旧调用方，
-    行为与 `split` 的句子边界截断一致。
-    """
-    from .reply_pipeline import split
-
-    body = (text or "").strip()
-    if len(body) <= REPLY_MAX_CHARS:
-        return body, ""
-    parts = split(body, REPLY_MAX_CHARS)
-    trimmed = parts[0] if parts else ""
-    note = (
-        f"已发送，但内容过长被截断（原 {len(body)} 字，只发了 {len(trimmed)} 字）。"
-        "下次想说的多，就分几次调用 say，每条一句。"
-    )
-    return trimmed, note
 
 
 class FunctionCallingArg:
@@ -562,18 +535,6 @@ class FunctionCallingManager:
         return await cls.function_calling[canonical].call(data)
 
 
-#: 表情候选清单；实际由 `action_executor._available_faces()` 在投递时读取，
-#: 这里保留旧变量供插件/测试引用。
-meme_examples = []
-for meme in FaceManager.get_all_memes():
-    desc = FaceManager.get_meme_description(meme)
-    if desc:
-        # 只取描述的前一部分，避免过长
-        short_desc = desc.split("（")[0] if "（" in desc else desc[:20]
-        meme_examples.append(f"{meme}:{short_desc}")
-meme_example_str = ";".join(meme_examples)
-
-
 def register_function_calling():
     FunctionCallingManager.clear_all()
 
@@ -638,7 +599,7 @@ def register_function_calling():
             正常链路由 `ChatOutbox` 渲染后发送；只有绕过 Outbox 的旧调用
             （测试 / 插件直接调用）才走这里：把 intent 清洗后当最终文本发。
             """
-            from .reply_pipeline import sanitize, split
+            from .reply_pipeline import MAX_MESSAGES, sanitize, split
 
             intent = str(data.data.get("intent") or "").strip()
             current_history = data.current_history
@@ -648,10 +609,12 @@ def register_function_calling():
                 return None
             count = data.data.get("count") or 1
             try:
-                count = max(1, min(3, int(count)))
+                count = max(1, min(MAX_MESSAGES, int(count)))
             except (TypeError, ValueError):
                 count = 1
-            messages = split(sanitize(intent), REPLY_MAX_CHARS)[:count]
+            # 不传 max_chars：由 reply_pipeline 读 `reply_max_chars` 配置，
+            # 这条降级路径才会和正常链路一样跟随 WebUI 改动。
+            messages = split(sanitize(intent))[:count]
             if not messages:
                 return None
             if _as_bool(data.data.get("at")):

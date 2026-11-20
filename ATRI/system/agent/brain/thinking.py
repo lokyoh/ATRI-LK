@@ -1,6 +1,5 @@
 import asyncio
 import time
-from typing import Any
 
 from ATRI.exceptions import str_traceback
 from ATRI.utils.datetime import now
@@ -15,9 +14,8 @@ from ..agent.memory.persona import render_memories, render_self_memories
 from ..agent.model import ChatArgs
 from ..agent.outbox import ChatOutbox
 from ..agent.role import ATRI
-from ..agent.schedule import ATRISchedule
 from ..agent.skills import skill_manager
-from ..agent.state import get_state, settle_from_turn, state_prompt, state_store
+from ..agent.state import settle_from_turn, state_prompt
 from ..agent.telemetry import telemetry
 from ..agent.temp_his import ChatMessage
 from ..agent.user import (
@@ -35,24 +33,7 @@ from ..llm import (
     llm_manager,
 )
 from ..utils import log
-from .action_parser import parse_calls, split_response
-
-
-def _sync_attention(current_activity: str) -> None:
-    """把日程里的「当前活动」写进内心状态。
-
-    只在变化时落库；日程的 Null / 睡眠占位不算「正忙」，跳过。
-    """
-    try:
-        text = str(current_activity or "").strip()
-        if not text or text in {"Null", "睡眠中。", "睡眠中"}:
-            return
-        state = get_state()
-        if state.attention != text:
-            state.attention = text
-            state_store.save(state)
-    except Exception:
-        pass
+from .action_parser import split_response
 
 
 def _burst_count(history_list: list[History], user_id: str) -> int:
@@ -280,10 +261,8 @@ class ThinkingModel:
                 prompt += f"#你的家\n{parts['home']}\n\n"
 
         except Exception as exc:
+            # 生活数据读不出来就整段跳过；穿搭/位置宁可不写，也不要写 Null。
             log.warning(f"生活提示词生成失败，已跳过：{exc}")
-            now_schedule = await ATRISchedule().get_schedule()
-            prompt += f"#今日穿搭\n{now_schedule.outfit}\n"
-            _sync_attention(now_schedule.now_schedule)
         state_text = get_state_prompt()
         if state_text:
             prompt += state_text
@@ -604,11 +583,6 @@ class ThinkingModel:
             )
             if drain_cancelled is not None:
                 raise drain_cancelled
-
-    @staticmethod
-    def parse_dsl(text: str) -> list[dict[str, Any]]:
-        """把 DSL 文本解析成调用列表；具体解析与容错见 action_parser。"""
-        return parse_calls(text)
 
     @classmethod
     async def process_resp(cls, resp) -> tuple[str, list, list[str]]:

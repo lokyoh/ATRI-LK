@@ -211,21 +211,10 @@ def feel(
     return state
 
 
-def set_fatigue(value: float, attention: str | None = None) -> InnerState:
-    """更新疲劳与「此刻在做什么」。由日程/时段驱动，不由对话驱动。"""
-    state = state_store.load()
-    state.settle()
-    state.fatigue = max(0.0, min(MAX_MAGNITUDE, float(value)))
-    if attention is not None:
-        state.attention = str(attention)
-    state_store.save(state)
-    return state
-
-
 def fatigue_for_hour(hour: int) -> float:
     """按小时给一个基础疲劳值。
 
-    对应 ``schedule.py`` 里「02:00–06:00 睡眠」的设定。曲线必须**醒来后单调递增**：
+    对应 ``life/routine.md`` 里「02:00–06:00 睡眠」的设定。曲线必须**醒来后单调递增**：
     她 6 点起床，所以清早最清醒、深夜最累。
     （第一版把 6–9 点写成 0.35，比午后 0.3 还高——那是倒挂的：
     刚睡醒的人不可能比上了一天班的人更累。）

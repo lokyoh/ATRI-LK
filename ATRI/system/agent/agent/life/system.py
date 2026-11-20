@@ -13,7 +13,6 @@ from ...config import config
 from ...service import plugin
 from .home import HomeStore
 from .model import (
-    DayPlan,
     EntryKind,
     LocationState,
     OutfitPlan,
@@ -144,9 +143,6 @@ class LifeSystem:
     ) -> bool:
         return self.schedules.remove_entry(date, start, end, activity)
 
-    def save_plan(self, plan: DayPlan) -> None:
-        self.schedules.save(plan)
-
     # ---- 穿搭 ----
 
     def set_outfit(self, period: str, text: str, date: str | None = None) -> OutfitPlan:
@@ -185,11 +181,6 @@ class LifeSystem:
         if removed:
             log.info(f"清理了 {removed} 个过期生活数据文件")
 
-    def archive(self) -> None:
-        """按日文件自动清理；旧数据保留 7 天。"""
-        prune_dated_files(self.schedules.schedule_dir)
-        prune_dated_files(self.outfits.outfit_dir)
-
 
 _life_system: LifeSystem | None = None
 
@@ -217,10 +208,6 @@ def extract_json(text: str) -> dict:
     except json.JSONDecodeError:
         cleaned = re.sub(r",\s*([}\]])", r"\1", body)
         return json.loads(cleaned)
-
-
-def describe_state(state: LocationState) -> str:
-    return state.describe()
 
 
 def describe_entries(entries: list[ScheduleEntry]) -> str:

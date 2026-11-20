@@ -30,7 +30,6 @@ ATRI/system/agent/
 │   ├── history.py       # 历史记录管理
 │   ├── memory/          # 记忆系统
 │   ├── life/            # 固定作息 / 日程 / 位置 / 着装 / 家
-│   ├── schedule.py      # 旧日程接口 facade
 │   ├── sender.py        # 消息发送器
 │   └── ...
 ├── brain/               # 思考与表达
@@ -380,7 +379,7 @@ ATRI Agent 的典型生命周期大致如下：
 - `MemoryManager`：记忆存储与总结
 - `UserProfile`：用户资料与偏好
 - `FaceManager`：表情/消息风格管理
-- `LifeSystem`：固定作息 + 填入式日程、位置、穿搭与家（`agent/life/`）；`agent/schedule.py` 只是兼容 facade
+- `LifeSystem`：固定作息 + 填入式日程、位置、穿搭与家（`agent/life/`）
 - `ChatOutbox` / `ChatModel` / `ReplyPipeline`：聊天输出的渲染、清洗、保序发送
 
 这让 Agent 不只是单轮生成器，而是具备一定长期交互状态的智能体。

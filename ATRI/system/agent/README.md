@@ -6,7 +6,7 @@ ATRI-LK 项目的智能体（Agent）模块，负责统一管理模型、消息�
 
 `ATRI.system.agent` 是系统级智能体能力层，核心职责包括：
 
-- 统一封装 LLM 与多种模型类型（聊天、工具、图片、嵌入、语音等）
+- 统一封装 LLM 与模型能力（通用文本、图片理解、向量、语音、SystemOne 协议），按「使用点」在配置层为每处单独选模型
 - 维护模型提供商配置和注册流程
 - 管理 Agent 历史对话、记忆、用户资料与任务调度
 - 提供函数调用与工具链接入能力
@@ -21,7 +21,7 @@ ATRI/system/agent/
 ├── service.py           # 插件注册与命令入口
 ├── agent/               # Agent 实际运行逻辑
 │   ├── chat_chain.py    # 对话链路
-│   ├── memes.py         # 表情包候选（路径 + 描述）
+│   ├── memes.py         # 表情清单：分类描述、随机取图、可用表情
 │   ├── function_calling.py
 │   ├── function_permission.py  # 三级权限与作用域求值
 │   ├── action_executor.py      # 校验 / 分流 / 并发 / 回填
@@ -34,12 +34,13 @@ ATRI/system/agent/
 │   └── ...
 ├── brain/               # 思考与表达
 │   ├── thinking.py      # 决策循环
-│   ├── chat_model.py    # 意图 → 表达（ATRI_CHAT）
+│   ├── chat_model.py    # 意图 → 表达（chat 使用点）
 │   ├── action_parser.py # DSL 解析与参数校验
 │   └── reply_judgment.py
-├── llm/                 # 模型定义、Provider、工厂函数
-│   ├── model.py         # ModelType、LLMManager、LLMResponse
+├── llm/                 # 模型定义、Provider、供应商注册表
+│   ├── model.py         # ModelType、SLOT_SPECS、LLMManager、LLMResponse
 │   ├── provider.py      # ProviderManager 与默认 provider
+│   ├── registry.py      # ProviderSpec 注册表（类型下拉与连通性测试）
 │   ├── contents.py      # 消息内容封装
 │   ├── openai.py        # OpenAI/OpenAI-compatible 接口
 │   ├── gemini.py        # Gemini 接口
@@ -56,26 +57,31 @@ ATRI/system/agent/
 
 ## 3. 关键概念
 
-### 3.1 LLM 模型类型
+### 3.1 模型能力与使用点
 
-模型类型由 `ModelType` 枚举定义。Agent 只认 `atri-*` 类型，**绝不回退**到 `chat` / `tool` 等通用类型：
+分两层，不要混：
 
-| 类型 | 用途 | 必填 | 缺失后果 |
+- **能力类型**（`ModelType`）：模型本身会做什么。只有 `general`（通用文本）/ `image`（图片理解）/ `tts`（语音合成）/ `embedding`（向量）/ `sys1`（SystemOne 协议）。一个模型可以同时声明多个能力，比如一个多模态模型同时是 `general` 和 `image`。
+- **使用点**（`SLOT_SPECS`）：Agent 内部「谁在用模型」，共 12 个，每个使用点自己声明能接受哪些能力，并在 `AgentConfig` 里有独立的选择字段。
+
+| 使用点 | 配置字段 | 可选能力 | 缺失后果 |
 |---|---|---|---|
-| `atri-think` | 决策中心：读上下文、选工具、产出意图 | 是 | Agent 无法思考，拒绝聊天并告警 |
-| `atri-chat` | 聊天措辞：意图 → 自然文本 | 建议 | 链路继续工作，但 `say` / `md` 降级为 intent 直发、`face` 跳过 |
-| `atri-judge` | 主动聊天判断 | 主动聊天 | 不主动插话，只响应 @ / 点名 |
-| `atri-memory` | 记忆抽取 / 总结 | 记忆功能 | 记忆总结与写入工具隐藏 |
-| `atri-profile` | 用户画像生成与修改 | 画像功能 | `profile` 只能读，不能改 |
-| `atri-schedule` | 填入式日程 | 生活系统 | `plan(fill)` 不可用；固定作息仍可读 |
-| `atri-outfit` | 白天 / 晚上两套着装 | 生活系统 | 显示「还没决定今天穿什么」 |
-| `atri-home` | 按意图改写家的某一节（`home` 的 edit / add） | 改家 | `home(edit)` / `home(add)` 拒绝改动 |
-| `atri-summary` | 转发 / 长文总结 | 可选 | 总结功能隐藏 |
-| `atri-vision` | 图片理解 | 图片功能 | 图片统一记 `[图片]` |
-| `atri-embedding` | 记忆检索向量 | 记忆功能 | 检索 / 写入工具隐藏 |
-| `atri-tts` | 语音合成 | 可选 | 只发文字 |
+| `think` 思考 | `model_think` | `general` | **唯一必填**；缺失时 Agent 无法思考，聊天入口直接拒绝 |
+| `chat` 聊天 | `model_chat` | `general` | 链路继续，但 `say` / `md` 降级为 intent 直发、`face` 跳过 |
+| `judge` 判断 | `model_judge` | `general` | 不主动插话 |
+| `memory` 记忆 | `model_memory` | `general` | 不做记忆总结与归并（每日任务跳过）；`remember` / `self_note` 仍可写 |
+| `profile` 画像 | `model_profile` | `general` | `profile()` 整体不可用；已存的画像仍随用户信息注入提示词 |
+| `schedule` 日程 | `model_schedule` | `general` | `plan(fill)` 不可用；固定作息仍可读 |
+| `outfit` 着装 | `model_outfit` | `general` | 提示词显示「今天还没决定穿什么」 |
+| `home` 家 | `model_home` | `general` | `home(edit)` / `home(add)` 拒绝改动 |
+| `summary` 总结 | `model_summary` | `general` | 转发消息只记 `[转发消息]`，不生成摘要 |
+| `vision` 图片理解 | `model_image` | `image` 或 `general` | 图片统一记 `[图片]` |
+| `embedding` 向量 | `model_embedding` | `embedding` | 检索退化为关键词匹配，工具仍可用 |
+| `tts` 语音 | `model_tts` | `tts` | 只发文字 |
 
-通用类型 `chat` / `work` / `tool` / `image` / `embedding` / `tts` / `sys1` 继续供 `lkpet`、`trpg`、`feed` 等非 Agent 服务使用；Agent 不消费它们。
+**选型是确定性的**：使用点填了模型名且该模型具备对应能力，就用它；没填则用该能力下**第一个注册**的模型（按 `provider.yml` 顺序）。同一能力注册了多个模型又没指定时，只告警一次，不会随机打散——否则同一使用点每轮可能落到不同模型，风格与缓存都对不上。
+
+`lkpet`、`feed` 等非 Agent 服务仍直接按能力调用 `call_model_by_type(ModelType.GENERAL, ...)`，与上面的使用点选型互不影响。
 
 语音使用点开箱可用：`load_models_from_config()` 在没有用户语音模型时会在内存里补一个**内置 Edge 供应商**（`provider_type: edge-tts`，模型 `edge-tts/晓伊`，走 `zh-CN-XiaoyiNeural`）。它不写 `provider.yml`，若已经存在任何 `tts` 类型模型则不补；想改音色 / 语速，就在 WebUI 里编辑该供应商或模型的「附加配置」（`voice` / `rate` / `pitch` / `volume` / `proxy`），想换成本地服务就换成自己的 `tts` 模型。
 
@@ -89,21 +95,23 @@ edge-tts 7.x 起会**严格校验**音色与语速/音量/音调，写错一个�
 
 `LLMManager` 是统一的模型调度器，负责：
 
-- 注册模型：`register_model()`
-- 获取模型：`get_model()` / `get_models()`
-- 按类型调用：`call_model_by_type()`
+- 注册模型：`register_model()`（同时记录模型的能力类型）
+- 获取模型：`get_model()` / `get_models(能力类型)`
+- 按能力调用：`call_model_by_type()`
 - 按名称调用：`call_model()`
-- Agent 专用：`require(type)` 缺类型直接抛 `AgentModelMissingError`，`call_agent(type, ...)` 先校验再调用
+- 按使用点选型：`set_preferred()` / `get_preferred()` / `model_fits_slot()` / `has_slot()` / `capability_for_slot()` / `model_for_slot()`
+- Agent 专用入口：`call_agent(slot, ...)` —— 使用点没有可用模型时抛 `AgentModelMissingError`，不退回别的能力
 
-如果目标模型不存在，或没有注册该类型的模型，将抛出 `ModelRequestError` / `NO_MODEL_ERR`。在调用失败时通常需要捕获该异常。
+调用失败的抛出方式分两条：走 `call_agent()` / `call_model_by_type()` 时，异常一律归一成 `ModelRequestError`（该能力下一个模型都没注册时是 `ModelRequestError(NO_MODEL_ERR)`，全部候选模型都失败时是 `ALL_MODEL_RESP_ERR`，`NO_MODEL_ERR` / `ALL_MODEL_RESP_ERR` 都是提示文案常量）；直接调 `call_model()` 则会原样抛出底层的 `httpx` 异常。业务层需要自己捕获。
 
 ### 3.3 `LLMContents` / `LLMMessages`
 
-模块提供了结构化消息内容对象，适合构造更复杂的请求：
+模块提供了结构化消息内容对象，适合构造更复杂的请求（三者都是链式调用，方法返回自身）：
 
-- `LLMContents`：单一内容对象
-- `LLMMessages`：多轮消息集合
-- `LLMMessage`：单条消息
+- `LLMContent`：单个内容片段（`type` + `content`，如 `text` / `image` / `audio`）
+- `LLMContents`：一组内容片段；`text()` / `image()` / `audio()` 追加片段
+- `LLMMessage`：`role` + `LLMContents`
+- `LLMMessages`：多轮消息集合；`add_message()` / `add_response()` 追加
 
 这样可以方便组装多角色对话、工具调用上下文、系统提示等信息。
 
@@ -129,11 +137,11 @@ api_key:
 models:
   - name: example
     model: example-model
-    type: chat
+    type: [general]
     api_key: backup
-  - name: example-all
-    model: example-model
-    type: chat
+  - name: example-multimodal
+    model: example-vl
+    type: [general, image]
     api_key: all
 ```
 
@@ -146,7 +154,7 @@ Provider 的 `api_key` 列表项必须是 `name` / `key` 对象。模型上的 `
 
 旧版 `api_key: "sk-xxx"` 仍可直接加载，会自动转换为名为 `key-1` 的密钥。
 
-在启动或 reload 时，会从系统配置目录读取 `provider.yml`（由 `PROVIDER_CONFIG_FILE` 指定），并通过 `load_provider_from_config()` 注册所有模型。
+在启动或 reload 时，会从 `data/config/system/provider.yml`（`PROVIDER_CONFIG_FILE`）读取配置，并通过 `load_models_from_config()` 注册所有模型；文件不存在时先按代码里的 `default_provider` 写一份。模型声明的 `type` 不在 `MODEL_TYPES` 里时只告警并跳过——一个模型声明多个能力时，会按能力逐个注册。
 
 ### 3.5 模型调用日志
 
@@ -160,7 +168,7 @@ Provider 的 `api_key` 列表项必须是 `name` / `key` 对象。模型上的 `
 
 日志由 `LLMManager.call_model()` 统一写入。
 
-### 3.6 三级权限与功能调用
+### 3.6 三级权限
 
 权限只有三个账户等级，另有一个只由代码构造的内部伪角色 `system`：
 
@@ -189,6 +197,8 @@ Provider 的 `api_key` 列表项必须是 `name` / `key` 对象。模型上的 `
 | `love` | `love_change` | 改好感度 |
 | `rel_set` | `relation_set` | 设置对某人的态度 |
 | `rel_get` | `relation_query` | 查关系 / 名单 |
+| `feel` | — | 表达此刻情绪（影响后续几轮语气） |
+| `search` | — | 联网搜索（需 `search.enable` + API Key） |
 | `user` | `get_user_info` | 查用户资料 |
 | `alias` | `user_alias` | 记 / 删别名 |
 | `profile` | `user_profile` | 用户画像 |
@@ -218,18 +228,18 @@ Provider 的 `api_key` 列表项必须是 `name` / `key` 对象。模型上的 `
 
 ### 3.8 聊天输出流
 
-thinking（`atri-think`）只决定「表达什么」；所有对外发送都进入 `ChatOutbox`：
+thinking（`think` 使用点）只决定「表达什么」；所有对外发送都进入 `ChatOutbox`：
 
 ```text
 thinking 产出 say(intent) / md(intent) / face(intent) / say_exact(text)
   → ActionExecutor 校验后投递 ReplyJob
   → ChatOutbox 单 worker：
-       ChatModel (atri-chat) 渲染 → ReplyPipeline 清洗/分条/去重
+       ChatModel（`chat` 使用点）渲染 → `reply_pipeline` 清洗/分条/去重
        → sender 发送 → 写历史 → 语音回复（可选）
 ```
 
-- `say` / `md` / `face` 必须经 `atri-chat`；唯一跳过渲染的是 `say_exact`（代码、命令、引用原文）。
-- 缺 `atri-chat` 时：`say` / `md` 用清洗后的 intent 兜底，`face` 丢弃；**不回退**旧 `CHAT`/`TOOL`。
+- `say` / `md` / `face` 必须经 `chat` 使用点的模型渲染；唯一跳过渲染的是 `say_exact`（代码、命令、引用原文）。
+- `chat` 使用点没有可用模型时：`say` / `md` 用清洗后的 intent 兜底，`face` 丢弃；不借用别的能力。
 - `chat_parallel_render` 打开后 worker 会一次取多条排队任务**并发渲染**，发送仍严格按序；默认关闭。
 - 发送顺序与 thinking 调用顺序一致；`drain()` 后 `sent_count`、历史与主动发言记账落定。
 - 语音回复由模型逐条决定（`say` / `md` 的 `voice` 参数，默认 false），文字先发、语音后台合成；总闸「允许语音回复」关闭后不生效，清洗后超过 `tts_max_chars` 也只发文字。通道通过 `ChatSender.can_send_record()` 与 `record_message()` 声明并封装语音：OneBot 用 `[CQ:record]`，QQ 官方群聊/C2C 用 `file_audio`（适配器会先上传再以 `msg_type=7` 发送，频道与私信没有音频接口因此不发）。
@@ -245,7 +255,7 @@ res/data/agent/life/           # 随仓库发布
 
 data/plugins/agent/life/      # 运行时
   routine.md                  # 固定作息的用户覆盖（存在时优先于内置）
-  schedule/<date>.json        # 填入层；固定作息不写入
+  schedule/<date>.json        # 当天填入的条目 + 骨架快照（每次 fill 都写一份）
   outfit/<date>.json          # 白天 / 晚上两套
   home.md                     # 家的内容；首次从模板复制
   home_history/               # 每次修改前的备份（最多 20 份）
@@ -256,14 +266,14 @@ data/plugins/agent/life/      # 运行时
 写入规则：
 
 - `plan(fill)` 只替换它覆盖的时间窗口，**不传 `truncate_after` 不会清掉当天后续安排**；
-- 填入可以落在任意时间：撞上固定作息时先整体挪骨架（≤60 分钟），挪不动就拆段绕开；挪过的骨架只写进当天的 `schedule/<date>.json`，`routine.md` 不改；
-- `home(edit)` / `home(add)` 不是直接落笔：她只给「想怎么改」，由 `atri-home` 按格式重写该节正文后再写入；`add` 是在原有内容后追加；
+- 填入可以落在任意时间：撞上固定作息时先整体挪骨架（≤60 分钟），挪不动就拆段绕开。每次 `fill` 都会把**当天的骨架快照**一起写进 `schedule/<date>.json`（`routine` 字段），所以之后改 `routine.md` 不会让已经排好的日子错位；`routine.md` 本身永远不被改写；
+- `home(edit)` / `home(add)` 不是直接落笔：她只给「想怎么改」，由 `home` 使用点的模型按格式重写该节正文后再写入；`add` 是在原有内容后追加；
 - 家模型只返回该节正文，其它章节原样保留；产出超过 800 字、房间超过 12 个、容器超过 12 个时拒绝写入（容器内物品不限量）；
 - 家模型输出不合格（非 JSON / body 为空 / 违反上面任一条）时，把具体原因回传给它重试，最多 3 次；仍不合格则整次放弃、家保持不变；
 - WebUI 的 `set_home(edit/add/replace)` 不经模型，管理员手写的内容直接落盘，只走章节与容器校验；
 - `home.md` 固定五节：`## 位置`、`## 房间`、`## 周边`、`## 容器`、`## 习惯`；`## 位置` 与 `## 房间`（至少一个 `###`）缺失时写入被拒；
 - `## 容器` 下每个 `###` 是一个容器，物品写成「- 名称：说明」；容器名不可重复，容器下不再分 `####`；
-- 提示词只读「位置 + 房间名 + 周边前三条 + 习惯」，容器要看内容得 `home(show)`；穿搭生成读 `### 衣柜`。
+- 提示词只读「位置 + 房间名 + 周边（前 3 条）+ 习惯（前 8 条）」，整段预算 320 字；容器要看内容得 `home(show)`；穿搭生成读 `### 衣柜`。
 
 ## 4. 配置项
 
@@ -271,9 +281,9 @@ data/plugins/agent/life/      # 运行时
 
 ```python
 class AgentConfig(PluginConfig):
-    model_think = Field(str, "", "思考模型（atri-think）", required=True)
-    model_chat = Field(str, "", "聊天模型（atri-chat）", required=True)
-    ...
+    model_think = Field(str, "", "思考模型", required=True)  # 唯一必填
+    model_chat = Field(str, "", "聊天模型")
+    ...  # 其余 10 个使用点，字段名见 3.1 的表
     max_history = Field(int, 30, ...)
     max_thinking_times = Field(int, 20, ...)
     search = Field(
@@ -287,9 +297,11 @@ class AgentConfig(PluginConfig):
     )
 ```
 
+配置分 8 组：`models`（12 个使用点）/ `context` / `proactive` / `search` / `capabilities` / `permission` / `telemetry` / `advanced`（设备标识）。
+
 含义：
 
-- `model_think` / `model_chat`：Agent 必需的两类模型；其余 `atri-*` 按功能可选
+- `model_think`：唯一必填；只填它也能跑，其余使用点缺失只影响对应功能
 - `max_history`：最大历史消息数，控制上下文窗口大小
 - `max_thinking_times`：Agent 的最大思考轮数
 - `max_side_effects_per_turn`：单回合副作用上限（默认 5）
@@ -297,8 +309,8 @@ class AgentConfig(PluginConfig):
 - `chat_parallel_render` / `max_parallel_render`：并行渲染开关与上限（默认关闭 / 2）
 - `skill_prompt_budget`：技能目录 + 内嵌正文总预算（默认 10000 字）
 - `tts_enabled` / `tts_max_chars`：允许语音回复（默认开，只是总闸）+ 语音字数上限（默认 60，0 = 不限）
-- `outfit_night_hour` / `life_morning_plan`：晚间穿搭切换点 / 早间主动计划
-- `search.enable` / `search.provider` / `search.api_key`：联网搜索能力配置
+- `outfit_night_hour`：晚间穿搭切换点（默认 20:00）；早间计划不在这里，在 `proactive_start` 的每个群里用 `morning_plan` / `morning_hour` 单独配
+- `search.enable` / `search.api_key`：联网搜索开关与密钥；`search.provider` 是预留字段，代码目前固定走 Tavily，改它不生效
 
 ## 5. 快速开始
 
@@ -307,8 +319,14 @@ class AgentConfig(PluginConfig):
 ```python
 from ATRI.system.agent.llm import ModelType, llm_manager
 
-resp = await llm_manager.call_model_by_type(ModelType.CHAT, "你好!")
+resp = await llm_manager.call_model_by_type(ModelType.GENERAL, "你好!")
 print(resp.content)
+```
+
+Agent 内部不给模型传「用途」，只传使用点；使用点决定用哪个模型。缓存标识与此无关——它只由「设备标识 + 调用方标识」组成（`atri-{设备}-{调用方}`），调用处通过 `app_id` 自己声明：
+
+```python
+resp = await llm_manager.call_agent("chat", "你好!", "主Agent聊天", app_id="chat")
 ```
 
 ### 5.2 复杂消息构造
@@ -337,7 +355,9 @@ resp = await llm_manager.call_model(model, "请总结一下机器学习的核心
 print(resp.content)
 ```
 
-## 6. 默认 Provider 说明
+## 6. 默认 Provider 与供应商注册表
+
+供应商的「类型」不再写死在代码里：每种供应商在自己的模块里调用 `register_provider(ProviderSpec(...))` 声明显示名、默认地址、连通性探测内容与缓存字段，WebUI 的类型下拉和「测试连通性」都从注册表读，新增供应商只需加一个模块。
 
 默认 provider 在 `ATRI.system.agent.llm.provider` 中定义，示例为 `siliconflow`，使用 OpenAI 兼容接口：
 
@@ -351,11 +371,13 @@ default_provider = LLMProvider(
             name="siliconflow/DeepSeek-V4-Flash",
             model="deepseek-ai/DeepSeek-V4-Flash",
             temperature=0.7,
-            type="chat",
+            type=["general"],
         ),
     ],
 )
 ```
+
+`type` 写的是**能力**，可以是一个字符串或能力列表；写成 `chat` / `tool` 之类旧名字会在加载时被跳过并告警。
 
 `load_models_from_config()` 会读取 provider 配置并把模型注册到 `llm_manager` 中，从而实现统一调用。
 
@@ -363,13 +385,12 @@ default_provider = LLMProvider(
 
 ATRI Agent 的典型生命周期大致如下：
 
-1. 启动插件时执行 `init()`
-2. `load_models_from_config()` 自动加载 provider 与 model
-3. `agent.daily_task.init()` 注册日常任务与运行逻辑，并确保生活数据就绪
-4. 对话链路通过 `ATRIAgent` / `ChatHistoryManager` / `MemoryManager` 获取上下文
-5. thinking 通过 `ActionExecutor` 分派功能调用；数据调用可并发，副作用进 `ChatOutbox`
-6. 聊天输出由 `ChatModel`（`atri-chat`）渲染后经单 worker 发送
-7. 对处理结果进行返回、记忆落库或进一步调度
+1. 启动插件时执行 `service.py` 的 `on_startup` 钩子，依次：初始化 LLM 日志 → `load_models_from_config()` 加载 provider 与模型 → 注册功能调用 → 应用运行时配置（含模型偏好与健康检查）→ 初始化生活数据 → 注册主动开口巡检 → 恢复持久化的定时任务
+2. 两个每日任务（记忆总结 / 清理）在 `daily_task.py` 被导入时就由 `@daily_update` 注册；`daily_task.init()` 只额外确保生活数据就绪（`home.md` 存在、清理过期文件）
+3. 对话链路通过 `ATRIAgent` / `ChatHistoryManager` / `MemoryManager` 获取上下文
+4. thinking 通过 `ActionExecutor` 分派功能调用；数据调用可并发，副作用进 `ChatOutbox`
+5. 聊天输出由 `ChatModel`（`chat` 使用点）渲染后经单 worker 发送
+6. 对处理结果进行返回、记忆落库或进一步调度
 
 ## 8. 记忆、历史与生活
 
@@ -378,9 +399,9 @@ ATRI Agent 的典型生命周期大致如下：
 - `ChatHistoryManager`：管理聊天历史
 - `MemoryManager`：记忆存储与总结
 - `UserProfile`：用户资料与偏好
-- `FaceManager`：表情/消息风格管理
+- `FaceManager`：表情分类描述、按分类取图与可用表情清单
 - `LifeSystem`：固定作息 + 填入式日程、位置、穿搭与家（`agent/life/`）
-- `ChatOutbox` / `ChatModel` / `ReplyPipeline`：聊天输出的渲染、清洗、保序发送
+- `ChatOutbox` / `ChatModel` / `reply_pipeline`：聊天输出的渲染、清洗、保序发送
 
 这让 Agent 不只是单轮生成器，而是具备一定长期交互状态的智能体。
 
@@ -388,8 +409,9 @@ ATRI Agent 的典型生命周期大致如下：
 
 如果需要扩展 Agent 能力，可以考虑以下几个点：
 
-- 新增 provider：在 `provider.py` 中注册新的 `LLMProvider`
-- 新增模型：在 `provider.yml` 中配置 `models`
+- 新增 provider：新建一个模块并调用 `register_provider(ProviderSpec(...))`，WebUI 的类型下拉与连通性测试会自动出现它；`_template.py` 是现成的模板
+- 新增模型：在 `data/config/system/provider.yml` 的 `models` 里加一项，`type` 写能力（`general` / `image` / `tts` / `embedding`），可写多个
+- 新增使用点：在 `llm/model.py` 的 `SLOT_SPECS` 加一条，再在 `config.py` 加对应字段，`model_health.py` 的 `GROUP_BY_SLOT` 决定它出现在哪个分组
 - 追加工具调用：扩展 `agent/function_calling.py`，并声明 `scope` / `returns_data` / `parallel_safe`
 - 新增聊天输出类型：扩展 `brain/chat_model.py` 与 `reply_pipeline.py`
 - 增加记忆策略：调整 `agent/memory/` 模块逻辑
@@ -397,20 +419,20 @@ ATRI Agent 的典型生命周期大致如下：
 
 ## 10. 常见异常
 
-- `AgentModelMissingError`：必需的 `atri-*` 类型没有注册
-- `ModelRequestError`：模型调用失败，通常是网络、鉴权或 API 返回异常
-- `ValueError`：模型未注册或错误参数
-- `NO_MODEL_ERR`：没有可用模型
+- `AgentModelMissingError`：某个使用点没有可用模型（`think` 缺失时聊天入口直接拒绝）
+- `ModelRequestError`：模型调用失败，通常是网络、鉴权或 API 返回异常；`call_model_by_type()` 会对每个候选模型重试 3 次，全失败后统一抛 `ALL_MODEL_RESP_ERR`（同样是 `ModelRequestError`）
+- `ValueError`：`call_model()` 传入的名字未注册，或请求方法不受支持
+- `NO_MODEL_ERR`：该能力下一个模型都没注册时的提示文案（包在 `ModelRequestError` 里抛）
 - `FunctionCallingUnavailableError`：功能存在但当前不可用（权限 / 开关 / 环境）
 
-当使用 `llm_manager.call_model_by_type()` / `call_agent()` 时，建议在业务层进行异常捕获与重试。
+`call_agent()` 已经在内部做过重试与多密钥/多模型切换，业务层**不需要再套一层重试**；按功能降级处理（例如 `say` 走 intent 直发、`face` 丢弃）即可。
 
 ## 11. 说明
 
 该模块适合在 ATRI-LK 中作为系统级 Agent 能力底座使用。它的设计目标是：
 
 - 统一抽象不同厂商的 LLM 接口
-- 兼容多种模型类型和调用场景
+- 模型只按能力分类，用途由使用点声明，配置与健康检查都按使用点走
 - 简化 Agent 的消息、记忆和工具调用开发过程
 - 让业务层更容易使用可靠的智能体能力
 

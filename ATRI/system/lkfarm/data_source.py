@@ -42,6 +42,8 @@ plugin.scheduler_jobs().add_job(
     "cron",
     hour=config.get("hour"),
     minute=config.get("minute"),
+    # 天气按天推进，晚一点播报无妨。
+    misfire_grace_time=600,
 )
 
 FARM_RES_PATH = RES_DIR / "data" / "lkfarm"

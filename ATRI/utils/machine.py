@@ -3,12 +3,13 @@ from sys import platform as pf
 
 import psutil
 
-from .apscheduler import scheduler
+from ATRI.scheduler import scheduler
+
 from .model import BaseModel
 
 if pf == "win32":
-    import wmi # type: ignore
-    from win32com.client import GetObject # type: ignore
+    import wmi  # type: ignore
+    from win32com.client import GetObject  # type: ignore
 
 
 class PlatformInfo(BaseModel):
@@ -67,7 +68,7 @@ def get_platform_info() -> PlatformInfo:
 def get_cpu_info() -> CpuInfo:
     cpu_name = platform.processor()
     if pf == "win32":
-        winm = GetObject("winmgmts:root\cimv2")
+        winm = GetObject("winmgmts:root\\cimv2")
         cpus = winm.ExecQuery("SELECT * FROM Win32_Processor")
         cpu_name = cpus[0].Name.strip()
 
@@ -110,8 +111,10 @@ last_disk_io = [0, 0]
 now_disk_io = [0, 0]
 
 
-@scheduler.scheduled_job("interval", seconds=1, misfire_grace_time=15)
-async def _():
+@scheduler.scheduled_job(
+    "interval", seconds=1, id="ATRI-磁盘采样", misfire_grace_time=15
+)
+async def _disk_sampling():
     global last_disk_io, now_disk_io
 
     disk_counters = psutil.disk_io_counters()
@@ -124,9 +127,9 @@ async def _():
 
 def get_disk_info():
     disk_name = "ATRI Disk Pro Plus"
-    disk_total = int()
-    disk_used = int()
-    disk_free = int()
+    disk_total = 0
+    disk_used = 0
+    disk_free = 0
     disk_drive = 1
     if pf == "win32":
         w = wmi.WMI()
@@ -159,8 +162,10 @@ last_net_io = [0, 0]
 now_net_io = [0, 0]
 
 
-@scheduler.scheduled_job("interval", seconds=1, misfire_grace_time=15)
-async def _():
+@scheduler.scheduled_job(
+    "interval", seconds=1, id="ATRI-网络采样", misfire_grace_time=15
+)
+async def _net_sampling():
     global last_net_io, now_net_io
 
     net_counters = psutil.net_io_counters()

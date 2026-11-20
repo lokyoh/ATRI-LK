@@ -1,8 +1,10 @@
 import asyncio
+import contextlib
 import inspect
 import logging
 from typing import ClassVar
 
+from apscheduler.events import EVENT_JOB_ERROR, EVENT_JOB_EXECUTED, EVENT_JOB_MISSED
 from apscheduler.job import Job
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from apscheduler.triggers.base import BaseTrigger
@@ -11,7 +13,32 @@ from nonebot.log import LoguruHandler
 
 from ATRI.exceptions import BotRuntimeError, str_traceback
 
-scheduler = AsyncIOScheduler(timezone="Asia/Shanghai")
+# APScheduler 默认 misfire_grace_time 只有 1 秒，事件循环抖一下就整次跳过；
+# 统一放宽到 60 秒，按天推进的任务再各自显式放宽。
+scheduler = AsyncIOScheduler(
+    timezone="Asia/Shanghai",
+    job_defaults={"misfire_grace_time": 60, "coalesce": True, "max_instances": 1},
+)
+
+#: ``run_job_now`` 对原本暂停的任务打标记，跑完这一次再暂停回去。
+_pause_after_run: set[str] = set()
+
+
+def _restore_paused_after_run(event) -> None:
+    """``run_job_now`` 的收尾：只跑一次的任务执行完后恢复暂停状态。"""
+    job_id = getattr(event, "job_id", None)
+    if not job_id or job_id not in _pause_after_run:
+        return
+    _pause_after_run.discard(job_id)
+    # 一次性任务跑完就从调度器里摘掉了，暂停失败是正常情况。
+    with contextlib.suppress(Exception):
+        scheduler.pause_job(job_id)
+
+
+scheduler.add_listener(
+    _restore_paused_after_run,
+    EVENT_JOB_EXECUTED | EVENT_JOB_ERROR | EVENT_JOB_MISSED,
+)
 
 aps_logger = logging.getLogger("apscheduler")
 aps_logger.setLevel(30)
@@ -35,7 +62,7 @@ class SchedulerJob:
         self.service = service
         self.name = name or id
         self.job: Job = scheduler.add_job(
-            func=func, trigger=trigger, id=id, name=id, **kwargs
+            func=func, trigger=trigger, id=id, name=self.name, **kwargs
         )
 
     @property
@@ -226,9 +253,9 @@ class SchedulerController:
     def add_pause_job(
         self, func, name: str, trigger: str | BaseTrigger = "date", **kwargs
     ) -> SchedulerJob:
-        """添加暂停的计划任务"""
-        job = self.add_job(self, func, name, trigger=trigger, kwargs=kwargs)
-        job.job.pause()
+        """添加暂停的计划任务；``kwargs`` 原样传给 :meth:`add_job`。"""
+        job = self.add_job(func, name, trigger, **kwargs)
+        job.pause()
         return job
 
     def get_job(self, name) -> SchedulerJob:
@@ -286,21 +313,38 @@ class SchedulerController:
         通过 ``resume()`` + 修改 ``next_run_time`` 让调度器马上跑一遍，
         **不直接调用任务函数**——这样日志包装、异常兜底和一次性任务的
         清理逻辑都还在。
+
+        原本暂停的任务跑完这一次会重新暂停（见 ``_restore_paused_after_run``）：
+        「立即执行一次」不等于「恢复这个任务」。
         """
         from ATRI.utils.datetime import now
 
         job = self.get_job(name)
         if scheduler.get_job(job.id) is None:
             raise BotRuntimeError(f"任务`{name}`已过期，无法执行")
-        if job.is_paused:
+        was_paused = job.is_paused
+        if was_paused:
+            _pause_after_run.add(job.id)
             job.resume()
         if scheduler.get_job(job.id) is None:
+            _pause_after_run.discard(job.id)
             raise BotRuntimeError(f"任务`{name}`已过期，无法执行")
-        job.job.modify(next_run_time=now())
+        try:
+            job.job.modify(next_run_time=now())
+        except Exception:
+            _pause_after_run.discard(job.id)
+            if was_paused:
+                job.pause()
+            raise
         return job
 
     @classmethod
-    def get_job_by_id(cls, job_id: str) -> Job:
+    def get_job_by_id(cls, job_id: str) -> Job | None:
+        """按 job id 取 APScheduler 的 Job；不存在时返回 ``None``。
+
+        调用方（如 WebAPI）要自己判空——之前直接 ``.pause()``，
+        取不到就抛 ``AttributeError``，被外层宽 ``except`` 吞成通用错误。
+        """
         return scheduler.get_job(job_id=job_id)
 
 
@@ -310,50 +354,99 @@ _pending_writes: set = set()
 
 
 def _spawn(coro) -> None:
-    """在当前事件循环里后台执行一个协程，失败只记日志。"""
-    import asyncio
+    """把写库协程交给**调度器自己的事件循环**执行，实在没有循环就同步跑完。
 
-    async def _guard():
-        try:
-            await coro
-        except Exception as exc:  # pragma: no cover - 兜底
-            from ATRI.log import log
+    之前用 ``asyncio.get_event_loop()``，在 AnyIO worker 线程里直接抛
+    「no current event loop」，异常又被 debug 日志吞掉——结果是任务注册了、
+    库里没有。现在按可用性依次退让，任何一条路都保证协程被执行。
+    """
+    from ATRI.log import log
 
-            log.debug(f"定时任务持久化失败：{exc}")
+    scheduler_loop = getattr(scheduler, "_eventloop", None)
+    if scheduler_loop is not None and scheduler_loop.is_closed():
+        scheduler_loop = None
 
     try:
-        loop = asyncio.get_event_loop()
-        if loop.is_running():
-            task = loop.create_task(_guard())
-            _pending_writes.add(task)
-            task.add_done_callback(_pending_writes.discard)
-        else:
-            loop.run_until_complete(_guard())
-    except Exception as exc:
-        from ATRI.log import log
+        running_loop = asyncio.get_running_loop()
+    except RuntimeError:
+        running_loop = None
 
+    if scheduler_loop is not None and running_loop is scheduler_loop:
+        task = scheduler_loop.create_task(_guard_write(coro))
+        _pending_writes.add(task)
+        task.add_done_callback(_pending_writes.discard)
+        return
+
+    if scheduler_loop is not None and scheduler_loop.is_running():
+        future = asyncio.run_coroutine_threadsafe(_guard_write(coro), scheduler_loop)
+        _pending_writes.add(future)
+        future.add_done_callback(_pending_writes.discard)
+        return
+
+    if running_loop is not None:
+        task = running_loop.create_task(_guard_write(coro))
+        _pending_writes.add(task)
+        task.add_done_callback(_pending_writes.discard)
+        return
+
+    # 没有循环可用（worker 线程或启动前的同步代码）：同步跑完，慢一点但不会丢。
+    try:
+        asyncio.run(_guard_write(coro))
+    except Exception as exc:
         log.debug(f"调度持久化任务失败：{exc}")
 
 
+async def _guard_write(coro) -> None:
+    """执行写库协程，失败只记日志。"""
+    try:
+        await coro
+    except Exception as exc:  # pragma: no cover - 兜底
+        from ATRI.log import log
+
+        log.debug(f"定时任务持久化失败：{exc}")
+
+
+def _split_job_options(job_kwargs: dict) -> dict:
+    """挑出属于 job、不属于触发器的参数，供恢复时原样交回。
+
+    按「是否出现过」判断，不按值判断：``misfire_grace_time=None`` 在
+    APScheduler 里是「迟到多久都照跑」，和缺省是两回事。
+    """
+    keys = ("misfire_grace_time", "max_instances", "coalesce", "executor")
+    return {k: job_kwargs[k] for k in keys if k in job_kwargs}
+
+
 def _serialize_trigger(trigger, job_kwargs: dict) -> tuple[str, dict]:
-    """把触发器转成 (kind, args) 以便入库。看不懂的类型返回空。"""
+    """把触发器转成 (kind, args) 以便入库。看不懂的类型返回空。
+
+    job 级参数（迟到窗口、并发数、合并）压在 ``__job_options__`` 下一起存，
+    恢复时再拆出来——否则重启后这些值会退回全局默认，
+    「原定 300 秒内补跑」变成 60 秒。
+    """
     from apscheduler.triggers.cron import CronTrigger
     from apscheduler.triggers.date import DateTrigger
     from apscheduler.triggers.interval import IntervalTrigger
 
+    def _pack(kind: str, args: dict) -> tuple[str, dict]:
+        options = _split_job_options(job_kwargs)
+        if options:
+            args["__job_options__"] = options
+        return kind, args
+
     if isinstance(trigger, str):
-        kind = trigger
         args = {
             k: v
             for k, v in job_kwargs.items()
-            if k
-            not in ("args", "kwargs", "misfire_grace_time", "max_instances", "coalesce")
+            if k not in ("args", "kwargs", "id", "trigger")
+            and k not in ("misfire_grace_time", "max_instances", "coalesce", "executor")
+            and k not in ("next_run_time", "replace_existing", "jobstore")
         }
-        return kind, args
+        return _pack(trigger, args)
 
-    now = None
     if isinstance(trigger, DateTrigger):
-        return "date", {"run_date": (trigger.run_date or now).isoformat()}
+        if trigger.run_date is None:
+            return "", {}
+        return _pack("date", {"run_date": trigger.run_date.isoformat()})
     if isinstance(trigger, CronTrigger):
         args = {}
         for f in trigger.fields:
@@ -364,20 +457,28 @@ def _serialize_trigger(trigger, job_kwargs: dict) -> tuple[str, dict]:
                 args[f.name] = int(text)
             except ValueError:
                 args[f.name] = text
-        return "cron", args
+        for key in ("jitter", "start_date", "end_date"):
+            value = getattr(trigger, key, None)
+            if value is not None:
+                args[key] = value.isoformat() if hasattr(value, "isoformat") else value
+        return _pack("cron", args)
     if isinstance(trigger, IntervalTrigger):
-        delta = trigger.interval
-        return "interval", {"seconds": int(delta.total_seconds())}
+        args = {"seconds": int(trigger.interval.total_seconds())}
+        jitter = getattr(trigger, "jitter", None)
+        if jitter:
+            args["jitter"] = jitter
+        end_date = getattr(trigger, "end_date", None)
+        if end_date is not None:
+            args["end_date"] = end_date.isoformat()
+        return _pack("interval", args)
     return "", {}
 
 
 async def _persist_job(service: str, name: str, trigger, job_kwargs: dict) -> bool:
     """把任务定义写入数据库（若可序列化）。返回是否写入成功。
 
-    **必须 await，不能丢到后台**：之前用 `_spawn` 把写库作为后台任务，
-    但 `add_job` 可能被运行在 AnyIO worker 线程的代码调用——
-    那里 `asyncio.get_event_loop()` 直接抛错，协程从未被执行，
-    结果就是「任务注册了、库里却没有」，重启后自然恢复不出来。
+    ``add_job(persist=True)`` 走后台任务调用它，``add_job_async`` 直接 await。
+    想确保写库成功，用后者。
     """
     import json
     import time
@@ -484,8 +585,9 @@ async def restore(funcs: dict[str, object], *, drop_expired: bool = False) -> in
         if func is None:
             continue
         trigger = item["trigger"]
-        args = item["trigger_args"]
+        args = dict(item["trigger_args"])
         kwargs = item["job_kwargs"] or {}
+        job_options = args.pop("__job_options__", None) or {}
         if trigger == "date":
             run_date = str(args.get("run_date") or "")
             if _is_past(run_date):
@@ -497,7 +599,7 @@ async def restore(funcs: dict[str, object], *, drop_expired: bool = False) -> in
                     continue
                 restored += 1
                 log.info(f"任务 {service}:{name} 已过期，立即补发一次")
-                _spawn(_run_expired(func, kwargs))
+                _spawn(_run_expired(func, kwargs, service, name))
                 continue
         controller = SchedulerController(service)
         try:
@@ -507,10 +609,18 @@ async def restore(funcs: dict[str, object], *, drop_expired: bool = False) -> in
                 from apscheduler.triggers.date import DateTrigger
 
                 trig = DateTrigger(run_date=datetime.fromisoformat(run_date))
-                controller.add_job(func, name, trig, kwargs=kwargs, persist=False)
+                controller.add_job(
+                    func, name, trig, kwargs=kwargs, persist=False, **job_options
+                )
             else:
                 controller.add_job(
-                    func, name, trigger, kwargs=kwargs, persist=False, **args
+                    func,
+                    name,
+                    trigger,
+                    kwargs=kwargs,
+                    persist=False,
+                    **args,
+                    **job_options,
                 )
             restored += 1
         except Exception as exc:
@@ -526,7 +636,7 @@ async def restore(funcs: dict[str, object], *, drop_expired: bool = False) -> in
     return restored
 
 
-async def _run_expired(func, kwargs: dict) -> None:
+async def _run_expired(func, kwargs: dict, service: str = "", name: str = "") -> None:
     """补发一个已过期的一次性任务。
 
     **必须等 bot 连上**：恢复发生在 `on_startup` 阶段，那时
@@ -534,6 +644,8 @@ async def _run_expired(func, kwargs: dict) -> None:
     立刻执行只会得到「没有可用的 bot，跳过」——任务照样丢。
 
     这里轮询等待，最多 `_WAIT_BOT_TIMEOUT` 秒；超时才放弃。
+    只有**执行成功**才删库里的记录：失败（比如等不到 bot）保留它，
+    下次启动还有机会补上；成功还留着就是每次重启重放一遍。
     """
     import asyncio
 
@@ -555,6 +667,9 @@ async def _run_expired(func, kwargs: dict) -> None:
         await func(**kwargs)
     except Exception as exc:
         log.warning(f"补发过期任务失败：{exc}")
+        return
+    if service and name:
+        _forget_job(service, name)
 
 
 #: 补发前等待 bot 上线的总时长（秒）。启动时 WebSocket 反连通常几秒内完成，

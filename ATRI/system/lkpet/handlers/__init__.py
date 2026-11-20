@@ -12,4 +12,6 @@ plugin.scheduler_jobs().add_job(
     "cron",
     hour=config.get("settle_check_hour", 0),
     minute=config.get("settle_check_minute", 0),
+    # 结算按「上次结算日」推进，晚跑不会重复扣减；错过就是整天不推进。
+    misfire_grace_time=3600,
 )

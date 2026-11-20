@@ -26,7 +26,10 @@ class ATRIHeartbeat:
 
 def register_triggers():
     """注册ATRI事件总线触发器"""
-    ATRIScheduler.add_job(daily_update, "daily_update", "cron", hour=0, minute=0)
+    # 日更错过一次就是整天不更新，给一小时补跑窗口。
+    ATRIScheduler.add_job(
+        daily_update, "daily_update", "cron", hour=0, minute=0, misfire_grace_time=3600
+    )
     ATRIScheduler.add_job(
         ATRIHeartbeat.heartbeat,
         "heartbeat",

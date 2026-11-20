@@ -346,9 +346,17 @@ async def _(param: BotManageUpdateParam):
             if t in module_data.block_tasks:
                 module_data.block_tasks.remove(t)
             else:
-                SchedulerController.get_job_by_id(t).pause()
+                job = SchedulerController.get_job_by_id(t)
+                if job is None:
+                    log.warning(f"任务 {t} 不存在，跳过暂停")
+                else:
+                    job.pause()
         for t in module_data.block_tasks:
-            SchedulerController.get_job_by_id(t).resume()
+            job = SchedulerController.get_job_by_id(t)
+            if job is None:
+                log.warning(f"任务 {t} 不存在，跳过恢复")
+            else:
+                job.resume()
         return Result.ok()
     except Exception as e:
         log.error(f"{router.prefix}/update_bot_manage 调用错误:{str_traceback(e)}")

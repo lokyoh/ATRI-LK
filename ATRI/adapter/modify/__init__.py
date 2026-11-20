@@ -1,1 +1,1 @@
-from . import message  # noqa: F401
+from . import message, qq_log  # noqa: F401

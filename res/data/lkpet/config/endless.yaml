@@ -1,0 +1,67 @@
+# 无尽模式配置。与 roguelike.yaml 完全独立，改这里不会影响爬塔。
+# 具体数值的调参说明见 docs/lkpet-endless-mode-design.md。
+
+template:
+  # 统一模板：不继承养成属性，所有人都从同一份面板起步。
+  attributes: { hp: 40, atk: 5, def: 0, spd: 10, mp: 10 }
+  level: 1                 # level_combat_mults 的基准等级
+  # 开局 3 次 4 选 1 的技能池由 endless_skills.yaml 提供。
+  skills: { active: [], passive: [] }
+
+stage:
+  # 层数结构写在 floor.py 的 STAGE_FLOORS / MAJOR_STAGES，不在这里配。
+  option_weights: { 1: 10, 2: 75, 3: 15 }
+  pool_weights: { event: 52, elite_fight: 28, rest: 20 }
+
+leveling:
+  exp_to_next: { base: 50, per_level: 30 }
+  gain: { def: 1, hp: 8, mp: 5, atk: 1 }   # 等级无上限（设计 §10）
+
+rewards:
+  exp:   { normal: 40, elite: 120, boss: 320, elite_fight: 60 }
+  coins: { normal: 40, elite: 120, boss: 320, elite_fight: 60 }
+  variance: 0.30
+
+region:
+  spread: 3
+
+# 数值配平（12）：三组开关互相独立，全关就回到「没有任何补偿」的原始行为。
+balance:
+  # 【平衡 12】三条规则：取消每层回血、敌人阶段内缩放、无尽削弱系数。
+  #
+  # 1) 不回血。周内靠升级撑血，只有阶段结束才回 30%。
+  stage_recovery: { hp_pct: 0.30 }
+
+  # 2) 无尽削弱系数 K：HP / ATK / DEF 三项乘它（SPD 不乘）。
+  k: 0.5
+
+  # 3) 敌人系数。按**模板**缩放而非玩家当前面板，否则练级等于没练。
+  #    阶段内缩放 0.55→1.00 与 growth 递增写在 encounter.py 的常量里。
+  enemy: { hp: 1.0, atk: 1.0, def: 1.0, elite: 1.25, boss: 2.0 }
+
+  # 备用旋钮（当前未启用）：白送基础防御。
+  base_def: 0
+
+enemy:
+  # 阶段倍率基数（每大阶段再 +0.05，见 encounter.py 的 GROWTH_MAJOR_STEP）。
+  growth_per_stage: 0.15
+  # 以下四项（ttk_cap / 词缀 / 群怪 / 穿甲准确闪避上限）尚未实现，
+  # 等做到那一步再加回来——放着会让人以为能调。
+
+
+shop:
+  slots: { relic: 5, skill: 3, weapon: 1, armor: 1, accessory: 2 }
+  refresh: { first: 10, step: 10 }   # 无次数上限，离店重置
+  affix_bias: 0.60
+
+battle:
+  max_rounds: 100
+  timeout_damage: round_number
+  crit_mult: 1.80
+  def_softness: 100
+
+# 局内熟练度：与 skills.yaml 的 limits 同口径，但只作用于本局。
+proficiency:
+  gain: 0.01
+  max: 1.0
+  power_bonus: 0.30

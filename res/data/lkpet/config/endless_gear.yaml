@@ -1,0 +1,160 @@
+# 无尽模式装备（3 槽：武器 / 防具 / 饰品）。
+# 每件 = 1 主词条 + 1 副词条 + 1 特殊效果；共 150 件（3 类 × 5 档 × 10）。
+# 等阶来源：打怪掉当前最高档；精英/首领掉高一档；商店只刷最高档。
+
+slots:
+  weapon: 武器
+  armor: 防具
+  accessory: 饰品
+
+gear:
+  - { id: e_weapon_1_1, slot: weapon, tier: 1, name: 残锋, main: { atk: 11 }, sub: { atk_pct: 0.1071 }, special: { id: crit_burst, value: 6, desc: '暴击时额外造成 6% 伤害' } }
+  - { id: e_weapon_1_2, slot: weapon, tier: 1, name: 断刃, main: { atk: 11 }, sub: { basic_dmg: 0.1071 }, special: { id: combo, value: 6, desc: '普攻连续命中 3 次后，下次技能威力 +6%' } }
+  - { id: e_weapon_1_3, slot: weapon, tier: 1, name: 薄锋, main: { atk: 11 }, sub: { skill_dmg: 0.1071 }, special: { id: first_strike, value: 6, desc: '对满血目标伤害 +6%' } }
+  - { id: e_weapon_1_4, slot: weapon, tier: 1, name: 钝齿, main: { atk: 11 }, sub: { crit_rate: 0.0536 }, special: { id: kill_heal, value: 6, desc: '击杀后回复 6% 生命' } }
+  - { id: e_weapon_1_5, slot: weapon, tier: 1, name: 窄锋, main: { atk: 11 }, sub: { crit_mult: 0.1607 }, special: { id: opening, value: 6, desc: '开战首回合伤害 +6%' } }
+  - { id: e_weapon_1_6, slot: weapon, tier: 1, name: 锈刃, main: { atk: 11 }, sub: { armor_pen: 0.075 }, special: { id: pierce_boost, value: 6, desc: '穿甲效果 +6%' } }
+  - { id: e_weapon_1_7, slot: weapon, tier: 1, name: 短锋, main: { atk: 11 }, sub: { elem_all: 0.075 }, special: { id: execute, value: 6, desc: '目标生命低于 20% 时伤害 +6%' } }
+  - { id: e_weapon_1_8, slot: weapon, tier: 1, name: 裂刃, main: { atk: 11 }, sub: { lifesteal: 0.0536 }, special: { id: momentum, value: 6, desc: '每次连续出手提升 6% 伤害（最多 3 层）' } }
+  - { id: e_weapon_1_9, slot: weapon, tier: 1, name: 弯锋, main: { atk: 11 }, sub: { accuracy: 0.0536 }, special: { id: sunder, value: 6, desc: '命中时 6% 概率降低对方防御' } }
+  - { id: e_weapon_1_10, slot: weapon, tier: 1, name: 重刃, main: { atk: 11 }, sub: { armor_pen: 0.075 }, special: { id: echo_blade, value: 6, desc: '技能命中后普攻伤害 +6%' } }
+  - { id: e_weapon_2_1, slot: weapon, tier: 2, name: 双锋, main: { atk: 16 }, sub: { atk_pct: 0.1554 }, special: { id: crit_burst, value: 9, desc: '暴击时额外造成 9% 伤害' } }
+  - { id: e_weapon_2_2, slot: weapon, tier: 2, name: 斜刃, main: { atk: 16 }, sub: { basic_dmg: 0.1554 }, special: { id: combo, value: 9, desc: '普攻连续命中 3 次后，下次技能威力 +9%' } }
+  - { id: e_weapon_2_3, slot: weapon, tier: 2, name: 灰锋, main: { atk: 16 }, sub: { skill_dmg: 0.1554 }, special: { id: first_strike, value: 9, desc: '对满血目标伤害 +9%' } }
+  - { id: e_weapon_2_4, slot: weapon, tier: 2, name: 浮刃, main: { atk: 16 }, sub: { crit_rate: 0.0777 }, special: { id: kill_heal, value: 9, desc: '击杀后回复 9% 生命' } }
+  - { id: e_weapon_2_5, slot: weapon, tier: 2, name: 细锋, main: { atk: 16 }, sub: { crit_mult: 0.233 }, special: { id: opening, value: 9, desc: '开战首回合伤害 +9%' } }
+  - { id: e_weapon_2_6, slot: weapon, tier: 2, name: 暗刃, main: { atk: 16 }, sub: { armor_pen: 0.1087 }, special: { id: pierce_boost, value: 9, desc: '穿甲效果 +9%' } }
+  - { id: e_weapon_2_7, slot: weapon, tier: 2, name: 旧锋, main: { atk: 16 }, sub: { elem_all: 0.1087 }, special: { id: execute, value: 9, desc: '目标生命低于 20% 时伤害 +9%' } }
+  - { id: e_weapon_2_8, slot: weapon, tier: 2, name: 曲刃, main: { atk: 16 }, sub: { lifesteal: 0.0777 }, special: { id: momentum, value: 9, desc: '每次连续出手提升 9% 伤害（最多 3 层）' } }
+  - { id: e_weapon_2_9, slot: weapon, tier: 2, name: 薄刃, main: { atk: 16 }, sub: { accuracy: 0.0777 }, special: { id: sunder, value: 9, desc: '命中时 9% 概率降低对方防御' } }
+  - { id: e_weapon_2_10, slot: weapon, tier: 2, name: 铜刃, main: { atk: 16 }, sub: { armor_pen: 0.1087 }, special: { id: echo_blade, value: 9, desc: '技能命中后普攻伤害 +9%' } }
+  - { id: e_weapon_3_1, slot: weapon, tier: 3, name: 磁锋, main: { atk: 21 }, sub: { atk_pct: 0.2143 }, special: { id: crit_burst, value: 12, desc: '暴击时额外造成 12% 伤害' } }
+  - { id: e_weapon_3_2, slot: weapon, tier: 3, name: 棱刃, main: { atk: 21 }, sub: { basic_dmg: 0.2143 }, special: { id: combo, value: 12, desc: '普攻连续命中 3 次后，下次技能威力 +12%' } }
+  - { id: e_weapon_3_3, slot: weapon, tier: 3, name: 退刃, main: { atk: 21 }, sub: { skill_dmg: 0.2143 }, special: { id: first_strike, value: 12, desc: '对满血目标伤害 +12%' } }
+  - { id: e_weapon_3_4, slot: weapon, tier: 3, name: 冷刃, main: { atk: 21 }, sub: { crit_rate: 0.1071 }, special: { id: kill_heal, value: 12, desc: '击杀后回复 12% 生命' } }
+  - { id: e_weapon_3_5, slot: weapon, tier: 3, name: 硬锋, main: { atk: 21 }, sub: { crit_mult: 0.3214 }, special: { id: opening, value: 12, desc: '开战首回合伤害 +12%' } }
+  - { id: e_weapon_3_6, slot: weapon, tier: 3, name: 缠刃, main: { atk: 21 }, sub: { armor_pen: 0.15 }, special: { id: pierce_boost, value: 12, desc: '穿甲效果 +12%' } }
+  - { id: e_weapon_3_7, slot: weapon, tier: 3, name: 微锋, main: { atk: 21 }, sub: { elem_all: 0.15 }, special: { id: execute, value: 12, desc: '目标生命低于 20% 时伤害 +12%' } }
+  - { id: e_weapon_3_8, slot: weapon, tier: 3, name: 哑刃, main: { atk: 21 }, sub: { lifesteal: 0.1071 }, special: { id: momentum, value: 12, desc: '每次连续出手提升 12% 伤害（最多 3 层）' } }
+  - { id: e_weapon_3_9, slot: weapon, tier: 3, name: 冻锋, main: { atk: 21 }, sub: { accuracy: 0.1071 }, special: { id: sunder, value: 12, desc: '命中时 12% 概率降低对方防御' } }
+  - { id: e_weapon_3_10, slot: weapon, tier: 3, name: 火刃, main: { atk: 21 }, sub: { armor_pen: 0.15 }, special: { id: echo_blade, value: 12, desc: '技能命中后普攻伤害 +12%' } }
+  - { id: e_weapon_4_1, slot: weapon, tier: 4, name: 沉锋, main: { atk: 30 }, sub: { atk_pct: 0.3 }, special: { id: crit_burst, value: 17, desc: '暴击时额外造成 17% 伤害' } }
+  - { id: e_weapon_4_2, slot: weapon, tier: 4, name: 浮光刃, main: { atk: 30 }, sub: { basic_dmg: 0.3 }, special: { id: combo, value: 17, desc: '普攻连续命中 3 次后，下次技能威力 +17%' } }
+  - { id: e_weapon_4_3, slot: weapon, tier: 4, name: 断锋, main: { atk: 30 }, sub: { skill_dmg: 0.3 }, special: { id: first_strike, value: 17, desc: '对满血目标伤害 +17%' } }
+  - { id: e_weapon_4_4, slot: weapon, tier: 4, name: 吞刃, main: { atk: 30 }, sub: { crit_rate: 0.15 }, special: { id: kill_heal, value: 17, desc: '击杀后回复 17% 生命' } }
+  - { id: e_weapon_4_5, slot: weapon, tier: 4, name: 静锋, main: { atk: 30 }, sub: { crit_mult: 0.45 }, special: { id: opening, value: 17, desc: '开战首回合伤害 +17%' } }
+  - { id: e_weapon_4_6, slot: weapon, tier: 4, name: 喧刃, main: { atk: 30 }, sub: { armor_pen: 0.21 }, special: { id: pierce_boost, value: 17, desc: '穿甲效果 +17%' } }
+  - { id: e_weapon_4_7, slot: weapon, tier: 4, name: 暮刃, main: { atk: 30 }, sub: { elem_all: 0.21 }, special: { id: execute, value: 17, desc: '目标生命低于 20% 时伤害 +17%' } }
+  - { id: e_weapon_4_8, slot: weapon, tier: 4, name: 晨锋, main: { atk: 30 }, sub: { lifesteal: 0.15 }, special: { id: momentum, value: 17, desc: '每次连续出手提升 17% 伤害（最多 3 层）' } }
+  - { id: e_weapon_4_9, slot: weapon, tier: 4, name: 暗锋, main: { atk: 30 }, sub: { accuracy: 0.15 }, special: { id: sunder, value: 17, desc: '命中时 17% 概率降低对方防御' } }
+  - { id: e_weapon_4_10, slot: weapon, tier: 4, name: 曜刃, main: { atk: 30 }, sub: { armor_pen: 0.21 }, special: { id: echo_blade, value: 17, desc: '技能命中后普攻伤害 +17%' } }
+  - { id: e_weapon_5_1, slot: weapon, tier: 5, name: 碎锋, main: { atk: 42 }, sub: { atk_pct: 0.4179 }, special: { id: crit_burst, value: 23, desc: '暴击时额外造成 23% 伤害' } }
+  - { id: e_weapon_5_2, slot: weapon, tier: 5, name: 牢刃, main: { atk: 42 }, sub: { basic_dmg: 0.4179 }, special: { id: combo, value: 23, desc: '普攻连续命中 3 次后，下次技能威力 +23%' } }
+  - { id: e_weapon_5_3, slot: weapon, tier: 5, name: 游锋, main: { atk: 42 }, sub: { skill_dmg: 0.4179 }, special: { id: first_strike, value: 23, desc: '对满血目标伤害 +23%' } }
+  - { id: e_weapon_5_4, slot: weapon, tier: 5, name: 整锋, main: { atk: 42 }, sub: { crit_rate: 0.2089 }, special: { id: kill_heal, value: 23, desc: '击杀后回复 23% 生命' } }
+  - { id: e_weapon_5_5, slot: weapon, tier: 5, name: 末刃, main: { atk: 42 }, sub: { crit_mult: 0.6268 }, special: { id: opening, value: 23, desc: '开战首回合伤害 +23%' } }
+  - { id: e_weapon_5_6, slot: weapon, tier: 5, name: 初锋, main: { atk: 42 }, sub: { armor_pen: 0.2925 }, special: { id: pierce_boost, value: 23, desc: '穿甲效果 +23%' } }
+  - { id: e_weapon_5_7, slot: weapon, tier: 5, name: 玄刃, main: { atk: 42 }, sub: { elem_all: 0.2925 }, special: { id: execute, value: 23, desc: '目标生命低于 20% 时伤害 +23%' } }
+  - { id: e_weapon_5_8, slot: weapon, tier: 5, name: 朴锋, main: { atk: 42 }, sub: { lifesteal: 0.2089 }, special: { id: momentum, value: 23, desc: '每次连续出手提升 23% 伤害（最多 3 层）' } }
+  - { id: e_weapon_5_9, slot: weapon, tier: 5, name: 绝刃, main: { atk: 42 }, sub: { accuracy: 0.2089 }, special: { id: sunder, value: 23, desc: '命中时 23% 概率降低对方防御' } }
+  - { id: e_weapon_5_10, slot: weapon, tier: 5, name: 终刃, main: { atk: 42 }, sub: { armor_pen: 0.2925 }, special: { id: echo_blade, value: 23, desc: '技能命中后普攻伤害 +23%' } }
+  - { id: e_armor_1_1, slot: armor, tier: 1, name: 旧甲, main: { def: 11 }, sub: { def_pct: 0.1071 }, special: { id: reflect, value: 6, desc: '受到伤害的 6% 反弹' } }
+  - { id: e_armor_1_2, slot: armor, tier: 1, name: 皮铠, main: { hp: 43 }, sub: { hp_pct: 0.1071 }, special: { id: low_hp_guard, value: 6, desc: '生命低于 30% 时减伤 6%' } }
+  - { id: e_armor_1_3, slot: armor, tier: 1, name: 链衣, main: { mp: 21 }, sub: { mp_pct: 0.1071 }, special: { id: regen_turn, value: 6, desc: '每回合回复 6% 生命上限' } }
+  - { id: e_armor_1_4, slot: armor, tier: 1, name: 板胸, main: { def: 11 }, sub: { spd: 6 }, special: { id: immune_once, value: 6, desc: '免疫第一次控制' } }
+  - { id: e_armor_1_5, slot: armor, tier: 1, name: 锁甲, main: { hp: 43 }, sub: { dodge: 0.0536 }, special: { id: steady, value: 6, desc: '受击时 6% 概率减伤 50%' } }
+  - { id: e_armor_1_6, slot: armor, tier: 1, name: 布袍, main: { mp: 21 }, sub: { debuff_res: 0.1071 }, special: { id: thorns_aura, value: 6, desc: '被攻击时反弹固定 6 点伤害' } }
+  - { id: e_armor_1_7, slot: armor, tier: 1, name: 鳞衣, main: { def: 11 }, sub: { solid: 0.1071 }, special: { id: endure, value: 6, desc: '每场战斗首次致死伤害留存 1 点生命' } }
+  - { id: e_armor_1_8, slot: armor, tier: 1, name: 硬革, main: { hp: 43 }, sub: { heal_gain: 0.1071 }, special: { id: bulwark_wall, value: 6, desc: '连续 3 回合未受伤则减伤 +6%' } }
+  - { id: e_armor_1_9, slot: armor, tier: 1, name: 薄铠, main: { mp: 21 }, sub: { shield_gain: 0.1071 }, special: { id: regen_burst, value: 6, desc: '受到治疗时额外回复 6%' } }
+  - { id: e_armor_1_10, slot: armor, tier: 1, name: 重铠, main: { def: 11 }, sub: { atk_pct: 0.1071 }, special: { id: guard_shift, value: 6, desc: '生命越低减伤越高（最多 6%）' } }
+  - { id: e_armor_2_1, slot: armor, tier: 2, name: 灰袍, main: { def: 16 }, sub: { def_pct: 0.1554 }, special: { id: reflect, value: 9, desc: '受到伤害的 9% 反弹' } }
+  - { id: e_armor_2_2, slot: armor, tier: 2, name: 粗衣, main: { hp: 62 }, sub: { hp_pct: 0.1554 }, special: { id: low_hp_guard, value: 9, desc: '生命低于 30% 时减伤 9%' } }
+  - { id: e_armor_2_3, slot: armor, tier: 2, name: 叠甲, main: { mp: 31 }, sub: { mp_pct: 0.1554 }, special: { id: regen_turn, value: 9, desc: '每回合回复 9% 生命上限' } }
+  - { id: e_armor_2_4, slot: armor, tier: 2, name: 补铠, main: { def: 16 }, sub: { spd: 8 }, special: { id: immune_once, value: 9, desc: '免疫第一次控制' } }
+  - { id: e_armor_2_5, slot: armor, tier: 2, name: 破甲, main: { hp: 62 }, sub: { dodge: 0.0777 }, special: { id: steady, value: 9, desc: '受击时 9% 概率减伤 50%' } }
+  - { id: e_armor_2_6, slot: armor, tier: 2, name: 旧襦, main: { mp: 31 }, sub: { debuff_res: 0.1554 }, special: { id: thorns_aura, value: 9, desc: '被攻击时反弹固定 9 点伤害' } }
+  - { id: e_armor_2_7, slot: armor, tier: 2, name: 木甲, main: { def: 16 }, sub: { solid: 0.1554 }, special: { id: endure, value: 9, desc: '每场战斗首次致死伤害留存 1 点生命' } }
+  - { id: e_armor_2_8, slot: armor, tier: 2, name: 藤铠, main: { hp: 62 }, sub: { heal_gain: 0.1554 }, special: { id: bulwark_wall, value: 9, desc: '连续 3 回合未受伤则减伤 +9%' } }
+  - { id: e_armor_2_9, slot: armor, tier: 2, name: 石衣, main: { mp: 31 }, sub: { shield_gain: 0.1554 }, special: { id: regen_burst, value: 9, desc: '受到治疗时额外回复 9%' } }
+  - { id: e_armor_2_10, slot: armor, tier: 2, name: 软甲, main: { def: 16 }, sub: { atk_pct: 0.1554 }, special: { id: guard_shift, value: 9, desc: '生命越低减伤越高（最多 9%）' } }
+  - { id: e_armor_3_1, slot: armor, tier: 3, name: 环甲, main: { def: 21 }, sub: { def_pct: 0.2143 }, special: { id: reflect, value: 12, desc: '受到伤害的 12% 反弹' } }
+  - { id: e_armor_3_2, slot: armor, tier: 3, name: 片铠, main: { hp: 86 }, sub: { hp_pct: 0.2143 }, special: { id: low_hp_guard, value: 12, desc: '生命低于 30% 时减伤 12%' } }
+  - { id: e_armor_3_3, slot: armor, tier: 3, name: 纹袍, main: { mp: 43 }, sub: { mp_pct: 0.2143 }, special: { id: regen_turn, value: 12, desc: '每回合回复 12% 生命上限' } }
+  - { id: e_armor_3_4, slot: armor, tier: 3, name: 绒衣, main: { def: 21 }, sub: { spd: 11 }, special: { id: immune_once, value: 12, desc: '免疫第一次控制' } }
+  - { id: e_armor_3_5, slot: armor, tier: 3, name: 素甲, main: { hp: 86 }, sub: { dodge: 0.1071 }, special: { id: steady, value: 12, desc: '受击时 12% 概率减伤 50%' } }
+  - { id: e_armor_3_6, slot: armor, tier: 3, name: 哑铠, main: { mp: 43 }, sub: { debuff_res: 0.2143 }, special: { id: thorns_aura, value: 12, desc: '被攻击时反弹固定 12 点伤害' } }
+  - { id: e_armor_3_7, slot: armor, tier: 3, name: 薄袍, main: { def: 21 }, sub: { solid: 0.2143 }, special: { id: endure, value: 12, desc: '每场战斗首次致死伤害留存 1 点生命' } }
+  - { id: e_armor_3_8, slot: armor, tier: 3, name: 硬甲, main: { hp: 86 }, sub: { heal_gain: 0.2143 }, special: { id: bulwark_wall, value: 12, desc: '连续 3 回合未受伤则减伤 +12%' } }
+  - { id: e_armor_3_9, slot: armor, tier: 3, name: 碎铠, main: { mp: 43 }, sub: { shield_gain: 0.2143 }, special: { id: regen_burst, value: 12, desc: '受到治疗时额外回复 12%' } }
+  - { id: e_armor_3_10, slot: armor, tier: 3, name: 整甲, main: { def: 21 }, sub: { atk_pct: 0.2143 }, special: { id: guard_shift, value: 12, desc: '生命越低减伤越高（最多 12%）' } }
+  - { id: e_armor_4_1, slot: armor, tier: 4, name: 沉甲, main: { def: 30 }, sub: { def_pct: 0.3 }, special: { id: reflect, value: 17, desc: '受到伤害的 17% 反弹' } }
+  - { id: e_armor_4_2, slot: armor, tier: 4, name: 浮铠, main: { hp: 120 }, sub: { hp_pct: 0.3 }, special: { id: low_hp_guard, value: 17, desc: '生命低于 30% 时减伤 17%' } }
+  - { id: e_armor_4_3, slot: armor, tier: 4, name: 静衣, main: { mp: 60 }, sub: { mp_pct: 0.3 }, special: { id: regen_turn, value: 17, desc: '每回合回复 17% 生命上限' } }
+  - { id: e_armor_4_4, slot: armor, tier: 4, name: 动甲, main: { def: 30 }, sub: { spd: 16 }, special: { id: immune_once, value: 17, desc: '免疫第一次控制' } }
+  - { id: e_armor_4_5, slot: armor, tier: 4, name: 暮袍, main: { hp: 120 }, sub: { dodge: 0.15 }, special: { id: steady, value: 17, desc: '受击时 17% 概率减伤 50%' } }
+  - { id: e_armor_4_6, slot: armor, tier: 4, name: 晨铠, main: { mp: 60 }, sub: { debuff_res: 0.3 }, special: { id: thorns_aura, value: 17, desc: '被攻击时反弹固定 17 点伤害' } }
+  - { id: e_armor_4_7, slot: armor, tier: 4, name: 暗甲, main: { def: 30 }, sub: { solid: 0.3 }, special: { id: endure, value: 17, desc: '每场战斗首次致死伤害留存 1 点生命' } }
+  - { id: e_armor_4_8, slot: armor, tier: 4, name: 曜衣, main: { hp: 120 }, sub: { heal_gain: 0.3 }, special: { id: bulwark_wall, value: 17, desc: '连续 3 回合未受伤则减伤 +17%' } }
+  - { id: e_armor_4_9, slot: armor, tier: 4, name: 玄铠, main: { mp: 60 }, sub: { shield_gain: 0.3 }, special: { id: regen_burst, value: 17, desc: '受到治疗时额外回复 17%' } }
+  - { id: e_armor_4_10, slot: armor, tier: 4, name: 朴甲, main: { def: 30 }, sub: { atk_pct: 0.3 }, special: { id: guard_shift, value: 17, desc: '生命越低减伤越高（最多 17%）' } }
+  - { id: e_armor_5_1, slot: armor, tier: 5, name: 末衣, main: { def: 42 }, sub: { def_pct: 0.4179 }, special: { id: reflect, value: 23, desc: '受到伤害的 23% 反弹' } }
+  - { id: e_armor_5_2, slot: armor, tier: 5, name: 初甲, main: { hp: 167 }, sub: { hp_pct: 0.4179 }, special: { id: low_hp_guard, value: 23, desc: '生命低于 30% 时减伤 23%' } }
+  - { id: e_armor_5_3, slot: armor, tier: 5, name: 绝铠, main: { mp: 84 }, sub: { mp_pct: 0.4179 }, special: { id: regen_turn, value: 23, desc: '每回合回复 23% 生命上限' } }
+  - { id: e_armor_5_4, slot: armor, tier: 5, name: 终袍, main: { def: 42 }, sub: { spd: 22 }, special: { id: immune_once, value: 23, desc: '免疫第一次控制' } }
+  - { id: e_armor_5_5, slot: armor, tier: 5, name: 牢甲, main: { hp: 167 }, sub: { dodge: 0.2089 }, special: { id: steady, value: 23, desc: '受击时 23% 概率减伤 50%' } }
+  - { id: e_armor_5_6, slot: armor, tier: 5, name: 游铠, main: { mp: 84 }, sub: { debuff_res: 0.4179 }, special: { id: thorns_aura, value: 23, desc: '被攻击时反弹固定 23 点伤害' } }
+  - { id: e_armor_5_7, slot: armor, tier: 5, name: 整袍, main: { def: 42 }, sub: { solid: 0.4179 }, special: { id: endure, value: 23, desc: '每场战斗首次致死伤害留存 1 点生命' } }
+  - { id: e_armor_5_8, slot: armor, tier: 5, name: 残甲, main: { hp: 167 }, sub: { heal_gain: 0.4179 }, special: { id: bulwark_wall, value: 23, desc: '连续 3 回合未受伤则减伤 +23%' } }
+  - { id: e_armor_5_9, slot: armor, tier: 5, name: 全铠, main: { mp: 84 }, sub: { shield_gain: 0.4179 }, special: { id: regen_burst, value: 23, desc: '受到治疗时额外回复 23%' } }
+  - { id: e_armor_5_10, slot: armor, tier: 5, name: 孤甲, main: { def: 42 }, sub: { atk_pct: 0.4179 }, special: { id: guard_shift, value: 23, desc: '生命越低减伤越高（最多 23%）' } }
+  - { id: e_accessory_1_1, slot: accessory, tier: 1, name: 铜佩, main: { crit_rate: 0.0536 }, sub: { crit_mult: 0.1607 }, special: { id: on_kill_heal, value: 6, desc: '击杀后回复 6% 生命' } }
+  - { id: e_accessory_1_2, slot: accessory, tier: 1, name: 石坠, main: { armor_pen: 0.075 }, sub: { crit_mult: 0.1607 }, special: { id: stacking, value: 6, desc: '每 5 回合获得一层增伤（每层 6%）' } }
+  - { id: e_accessory_1_3, slot: accessory, tier: 1, name: 骨环, main: { solid: 0.1071 }, sub: { armor_pen: 0.075 }, special: { id: crit_echo, value: 6, desc: '暴击后下次普攻伤害 +6%' } }
+  - { id: e_accessory_1_4, slot: accessory, tier: 1, name: 纹扣, main: { skill_dmg: 0.1071 }, sub: { solid: 0.1071 }, special: { id: shield_start, value: 6, desc: '开战获得 6 点护盾' } }
+  - { id: e_accessory_1_5, slot: accessory, tier: 1, name: 旧镯, main: { elem_all: 0.075 }, sub: { dodge: 0.0536 }, special: { id: mp_echo, value: 6, desc: '施放技能后回复 6% 魔力' } }
+  - { id: e_accessory_1_6, slot: accessory, tier: 1, name: 木牌, main: { crit_rate: 0.0536 }, sub: { accuracy: 0.0536 }, special: { id: fortune, value: 6, desc: '掉落的金币 +6%' } }
+  - { id: e_accessory_1_7, slot: accessory, tier: 1, name: 铁符, main: { armor_pen: 0.075 }, sub: { lifesteal: 0.0536 }, special: { id: swift_start, value: 6, desc: '开战首回合速度 +6%' } }
+  - { id: e_accessory_1_8, slot: accessory, tier: 1, name: 玉珠, main: { solid: 0.1071 }, sub: { shield_gain: 0.1071 }, special: { id: last_stand, value: 6, desc: '生命低于 30% 时攻击 +6%' } }
+  - { id: e_accessory_1_9, slot: accessory, tier: 1, name: 丝结, main: { skill_dmg: 0.1071 }, sub: { heal_gain: 0.1071 }, special: { id: focus, value: 6, desc: '未受击的回合技能伤害 +6%' } }
+  - { id: e_accessory_1_10, slot: accessory, tier: 1, name: 残佩, main: { elem_all: 0.075 }, sub: { crit_rate: 0.0536 }, special: { id: harvest, value: 6, desc: '击败敌人后回复 6% 生命' } }
+  - { id: e_accessory_2_1, slot: accessory, tier: 2, name: 薄坠, main: { crit_rate: 0.0777 }, sub: { crit_mult: 0.233 }, special: { id: on_kill_heal, value: 9, desc: '击杀后回复 9% 生命' } }
+  - { id: e_accessory_2_2, slot: accessory, tier: 2, name: 窄环, main: { armor_pen: 0.1087 }, sub: { crit_mult: 0.233 }, special: { id: stacking, value: 9, desc: '每 5 回合获得一层增伤（每层 9%）' } }
+  - { id: e_accessory_2_3, slot: accessory, tier: 2, name: 哑扣, main: { solid: 0.1554 }, sub: { armor_pen: 0.1087 }, special: { id: crit_echo, value: 9, desc: '暴击后下次普攻伤害 +9%' } }
+  - { id: e_accessory_2_4, slot: accessory, tier: 2, name: 灰牌, main: { skill_dmg: 0.1554 }, sub: { solid: 0.1554 }, special: { id: shield_start, value: 9, desc: '开战获得 9 点护盾' } }
+  - { id: e_accessory_2_5, slot: accessory, tier: 2, name: 冷符, main: { elem_all: 0.1087 }, sub: { dodge: 0.0777 }, special: { id: mp_echo, value: 9, desc: '施放技能后回复 9% 魔力' } }
+  - { id: e_accessory_2_6, slot: accessory, tier: 2, name: 暗珠, main: { crit_rate: 0.0777 }, sub: { accuracy: 0.0777 }, special: { id: fortune, value: 9, desc: '掉落的金币 +9%' } }
+  - { id: e_accessory_2_7, slot: accessory, tier: 2, name: 硬结, main: { armor_pen: 0.1087 }, sub: { lifesteal: 0.0777 }, special: { id: swift_start, value: 9, desc: '开战首回合速度 +9%' } }
+  - { id: e_accessory_2_8, slot: accessory, tier: 2, name: 软佩, main: { solid: 0.1554 }, sub: { shield_gain: 0.1554 }, special: { id: last_stand, value: 9, desc: '生命低于 30% 时攻击 +9%' } }
+  - { id: e_accessory_2_9, slot: accessory, tier: 2, name: 碎坠, main: { skill_dmg: 0.1554 }, sub: { heal_gain: 0.1554 }, special: { id: focus, value: 9, desc: '未受击的回合技能伤害 +9%' } }
+  - { id: e_accessory_2_10, slot: accessory, tier: 2, name: 整环, main: { elem_all: 0.1087 }, sub: { crit_rate: 0.0777 }, special: { id: harvest, value: 9, desc: '击败敌人后回复 9% 生命' } }
+  - { id: e_accessory_3_1, slot: accessory, tier: 3, name: 环扣, main: { crit_rate: 0.1071 }, sub: { crit_mult: 0.3214 }, special: { id: on_kill_heal, value: 12, desc: '击杀后回复 12% 生命' } }
+  - { id: e_accessory_3_2, slot: accessory, tier: 3, name: 链牌, main: { armor_pen: 0.15 }, sub: { crit_mult: 0.3214 }, special: { id: stacking, value: 12, desc: '每 5 回合获得一层增伤（每层 12%）' } }
+  - { id: e_accessory_3_3, slot: accessory, tier: 3, name: 线符, main: { solid: 0.2143 }, sub: { armor_pen: 0.15 }, special: { id: crit_echo, value: 12, desc: '暴击后下次普攻伤害 +12%' } }
+  - { id: e_accessory_3_4, slot: accessory, tier: 3, name: 灰珠, main: { skill_dmg: 0.2143 }, sub: { solid: 0.2143 }, special: { id: shield_start, value: 12, desc: '开战获得 12 点护盾' } }
+  - { id: e_accessory_3_5, slot: accessory, tier: 3, name: 朴结, main: { elem_all: 0.15 }, sub: { dodge: 0.1071 }, special: { id: mp_echo, value: 12, desc: '施放技能后回复 12% 魔力' } }
+  - { id: e_accessory_3_6, slot: accessory, tier: 3, name: 锈佩, main: { crit_rate: 0.1071 }, sub: { accuracy: 0.1071 }, special: { id: fortune, value: 12, desc: '掉落的金币 +12%' } }
+  - { id: e_accessory_3_7, slot: accessory, tier: 3, name: 亮坠, main: { armor_pen: 0.15 }, sub: { lifesteal: 0.1071 }, special: { id: swift_start, value: 12, desc: '开战首回合速度 +12%' } }
+  - { id: e_accessory_3_8, slot: accessory, tier: 3, name: 哑环, main: { solid: 0.2143 }, sub: { shield_gain: 0.2143 }, special: { id: last_stand, value: 12, desc: '生命低于 30% 时攻击 +12%' } }
+  - { id: e_accessory_3_9, slot: accessory, tier: 3, name: 沉扣, main: { skill_dmg: 0.2143 }, sub: { heal_gain: 0.2143 }, special: { id: focus, value: 12, desc: '未受击的回合技能伤害 +12%' } }
+  - { id: e_accessory_3_10, slot: accessory, tier: 3, name: 浮牌, main: { elem_all: 0.15 }, sub: { crit_rate: 0.1071 }, special: { id: harvest, value: 12, desc: '击败敌人后回复 12% 生命' } }
+  - { id: e_accessory_4_1, slot: accessory, tier: 4, name: 静符, main: { crit_rate: 0.15 }, sub: { crit_mult: 0.45 }, special: { id: on_kill_heal, value: 17, desc: '击杀后回复 17% 生命' } }
+  - { id: e_accessory_4_2, slot: accessory, tier: 4, name: 动珠, main: { armor_pen: 0.21 }, sub: { crit_mult: 0.45 }, special: { id: stacking, value: 17, desc: '每 5 回合获得一层增伤（每层 17%）' } }
+  - { id: e_accessory_4_3, slot: accessory, tier: 4, name: 暮结, main: { solid: 0.3 }, sub: { armor_pen: 0.21 }, special: { id: crit_echo, value: 17, desc: '暴击后下次普攻伤害 +17%' } }
+  - { id: e_accessory_4_4, slot: accessory, tier: 4, name: 晨佩, main: { skill_dmg: 0.3 }, sub: { solid: 0.3 }, special: { id: shield_start, value: 17, desc: '开战获得 17 点护盾' } }
+  - { id: e_accessory_4_5, slot: accessory, tier: 4, name: 玄坠, main: { elem_all: 0.21 }, sub: { dodge: 0.15 }, special: { id: mp_echo, value: 17, desc: '施放技能后回复 17% 魔力' } }
+  - { id: e_accessory_4_6, slot: accessory, tier: 4, name: 素环, main: { crit_rate: 0.15 }, sub: { accuracy: 0.15 }, special: { id: fortune, value: 17, desc: '掉落的金币 +17%' } }
+  - { id: e_accessory_4_7, slot: accessory, tier: 4, name: 末扣, main: { armor_pen: 0.21 }, sub: { lifesteal: 0.15 }, special: { id: swift_start, value: 17, desc: '开战首回合速度 +17%' } }
+  - { id: e_accessory_4_8, slot: accessory, tier: 4, name: 初牌, main: { solid: 0.3 }, sub: { shield_gain: 0.3 }, special: { id: last_stand, value: 17, desc: '生命低于 30% 时攻击 +17%' } }
+  - { id: e_accessory_4_9, slot: accessory, tier: 4, name: 绝符, main: { skill_dmg: 0.3 }, sub: { heal_gain: 0.3 }, special: { id: focus, value: 17, desc: '未受击的回合技能伤害 +17%' } }
+  - { id: e_accessory_4_10, slot: accessory, tier: 4, name: 全珠, main: { elem_all: 0.21 }, sub: { crit_rate: 0.15 }, special: { id: harvest, value: 17, desc: '击败敌人后回复 17% 生命' } }
+  - { id: e_accessory_5_1, slot: accessory, tier: 5, name: 牢结, main: { crit_rate: 0.2089 }, sub: { crit_mult: 0.6268 }, special: { id: on_kill_heal, value: 23, desc: '击杀后回复 23% 生命' } }
+  - { id: e_accessory_5_2, slot: accessory, tier: 5, name: 游佩, main: { armor_pen: 0.2925 }, sub: { crit_mult: 0.6268 }, special: { id: stacking, value: 23, desc: '每 5 回合获得一层增伤（每层 23%）' } }
+  - { id: e_accessory_5_3, slot: accessory, tier: 5, name: 终坠, main: { solid: 0.4179 }, sub: { armor_pen: 0.2925 }, special: { id: crit_echo, value: 23, desc: '暴击后下次普攻伤害 +23%' } }
+  - { id: e_accessory_5_4, slot: accessory, tier: 5, name: 残环, main: { skill_dmg: 0.4179 }, sub: { solid: 0.4179 }, special: { id: shield_start, value: 23, desc: '开战获得 23 点护盾' } }
+  - { id: e_accessory_5_5, slot: accessory, tier: 5, name: 孤扣, main: { elem_all: 0.2925 }, sub: { dodge: 0.2089 }, special: { id: mp_echo, value: 23, desc: '施放技能后回复 23% 魔力' } }
+  - { id: e_accessory_5_6, slot: accessory, tier: 5, name: 双牌, main: { crit_rate: 0.2089 }, sub: { accuracy: 0.2089 }, special: { id: fortune, value: 23, desc: '掉落的金币 +23%' } }
+  - { id: e_accessory_5_7, slot: accessory, tier: 5, name: 单符, main: { armor_pen: 0.2925 }, sub: { lifesteal: 0.2089 }, special: { id: swift_start, value: 23, desc: '开战首回合速度 +23%' } }
+  - { id: e_accessory_5_8, slot: accessory, tier: 5, name: 孤珠, main: { solid: 0.4179 }, sub: { shield_gain: 0.4179 }, special: { id: last_stand, value: 23, desc: '生命低于 30% 时攻击 +23%' } }
+  - { id: e_accessory_5_9, slot: accessory, tier: 5, name: 合结, main: { skill_dmg: 0.4179 }, sub: { heal_gain: 0.4179 }, special: { id: focus, value: 23, desc: '未受击的回合技能伤害 +23%' } }
+  - { id: e_accessory_5_10, slot: accessory, tier: 5, name: 分佩, main: { elem_all: 0.2925 }, sub: { crit_rate: 0.2089 }, special: { id: harvest, value: 23, desc: '击败敌人后回复 23% 生命' } }

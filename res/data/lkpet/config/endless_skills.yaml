@@ -1,0 +1,170 @@
+# 无尽模式技能：32 原型 × 5 等阶 = 160 个。
+# 原型 = 8 元素 × 4 系列（主力伤害 / 特色伤害 / 辅助 / 防御-恢复）。
+# 转伤属性：风=速 土=防 光=蓝 暗=血，其余用攻；同原型跨阶只改名字与数值，机制不变。
+
+limits:
+  active_slots: 4        # 主动装备槽
+  enhance_max: 10        # 单技能最多强化次数
+  enhance_step: 0.15     # 每次 +15% 威力（满 10 次 = ×2.5）
+
+skills:
+  - { id: sk_normal_main_1, name: 重斩, element: normal, series: main, tier: 1, dir: atk, target: single, power: 58, mp_cost: 0, cooldown: 0 }
+  - { id: sk_normal_main_2, name: 裂甲斩, element: normal, series: main, tier: 2, dir: atk, target: single, power: 63, mp_cost: 0, cooldown: 0 }
+  - { id: sk_normal_main_3, name: 断骨斩, element: normal, series: main, tier: 3, dir: atk, target: single, power: 67, mp_cost: 0, cooldown: 0 }
+  - { id: sk_normal_main_4, name: 碎魂斩, element: normal, series: main, tier: 4, dir: atk, target: single, power: 72, mp_cost: 0, cooldown: 0 }
+  - { id: sk_normal_main_5, name: 灭世斩, element: normal, series: main, tier: 5, dir: atk, target: single, power: 77, mp_cost: 0, cooldown: 0 }
+  - { id: sk_normal_special_1, name: 三连斩, element: normal, series: special, tier: 1, dir: atk, target: all, power: 50, mp_cost: 8, cooldown: 1 }
+  - { id: sk_normal_special_2, name: 四连斩, element: normal, series: special, tier: 2, dir: atk, target: all, power: 54, mp_cost: 10, cooldown: 2 }
+  - { id: sk_normal_special_3, name: 五连斩, element: normal, series: special, tier: 3, dir: atk, target: all, power: 58, mp_cost: 12, cooldown: 2 }
+  - { id: sk_normal_special_4, name: 六连斩, element: normal, series: special, tier: 4, dir: atk, target: all, power: 62, mp_cost: 14, cooldown: 3 }
+  - { id: sk_normal_special_5, name: 万刃归一, element: normal, series: special, tier: 5, dir: atk, target: all, power: 66, mp_cost: 16, cooldown: 3 }
+  - { id: sk_normal_support_1, name: 战意, element: normal, series: support, tier: 1, dir: buff, target: self, mp_cost: 8, cooldown: 1 }
+  - { id: sk_normal_support_2, name: 斗志, element: normal, series: support, tier: 2, dir: buff, target: self, mp_cost: 10, cooldown: 2 }
+  - { id: sk_normal_support_3, name: 狂心, element: normal, series: support, tier: 3, dir: buff, target: self, mp_cost: 12, cooldown: 2 }
+  - { id: sk_normal_support_4, name: 战魂, element: normal, series: support, tier: 4, dir: buff, target: self, mp_cost: 14, cooldown: 3 }
+  - { id: sk_normal_support_5, name: 不屈意志, element: normal, series: support, tier: 5, dir: buff, target: self, mp_cost: 16, cooldown: 3 }
+  - { id: sk_normal_guard_1, name: 铁壁, element: normal, series: guard, tier: 1, dir: guard, target: self, mp_cost: 8, cooldown: 1 }
+  - { id: sk_normal_guard_2, name: 坚壁, element: normal, series: guard, tier: 2, dir: guard, target: self, mp_cost: 10, cooldown: 2 }
+  - { id: sk_normal_guard_3, name: 钢壁, element: normal, series: guard, tier: 3, dir: guard, target: self, mp_cost: 12, cooldown: 2 }
+  - { id: sk_normal_guard_4, name: 不动壁, element: normal, series: guard, tier: 4, dir: guard, target: self, mp_cost: 14, cooldown: 3 }
+  - { id: sk_normal_guard_5, name: 永恒壁垒, element: normal, series: guard, tier: 5, dir: guard, target: self, mp_cost: 16, cooldown: 3 }
+  - { id: sk_fire_main_1, name: 烈焰冲击, element: fire, series: main, tier: 1, dir: atk, target: single, power: 58, mp_cost: 0, cooldown: 0 }
+  - { id: sk_fire_main_2, name: 烈焰爆裂, element: fire, series: main, tier: 2, dir: atk, target: single, power: 63, mp_cost: 0, cooldown: 0 }
+  - { id: sk_fire_main_3, name: 熔火崩灭, element: fire, series: main, tier: 3, dir: atk, target: single, power: 67, mp_cost: 0, cooldown: 0 }
+  - { id: sk_fire_main_4, name: 焚世之焰, element: fire, series: main, tier: 4, dir: atk, target: single, power: 72, mp_cost: 0, cooldown: 0 }
+  - { id: sk_fire_main_5, name: 终焉烈阳, element: fire, series: main, tier: 5, dir: atk, target: single, power: 77, mp_cost: 0, cooldown: 0 }
+  - { id: sk_fire_special_1, name: 火海, element: fire, series: special, tier: 1, dir: atk, target: all, power: 50, mp_cost: 8, cooldown: 1 }
+  - { id: sk_fire_special_2, name: 燎原, element: fire, series: special, tier: 2, dir: atk, target: all, power: 54, mp_cost: 10, cooldown: 2 }
+  - { id: sk_fire_special_3, name: 炼狱, element: fire, series: special, tier: 3, dir: atk, target: all, power: 58, mp_cost: 12, cooldown: 2 }
+  - { id: sk_fire_special_4, name: 焦土, element: fire, series: special, tier: 4, dir: atk, target: all, power: 62, mp_cost: 14, cooldown: 3 }
+  - { id: sk_fire_special_5, name: 永燃之界, element: fire, series: special, tier: 5, dir: atk, target: all, power: 66, mp_cost: 16, cooldown: 3 }
+  - { id: sk_fire_support_1, name: 燃尽, element: fire, series: support, tier: 1, dir: buff, target: self, mp_cost: 8, cooldown: 1 }
+  - { id: sk_fire_support_2, name: 灼骨, element: fire, series: support, tier: 2, dir: buff, target: self, mp_cost: 10, cooldown: 2 }
+  - { id: sk_fire_support_3, name: 熔甲, element: fire, series: support, tier: 3, dir: buff, target: self, mp_cost: 12, cooldown: 2 }
+  - { id: sk_fire_support_4, name: 灰烬, element: fire, series: support, tier: 4, dir: buff, target: self, mp_cost: 14, cooldown: 3 }
+  - { id: sk_fire_support_5, name: 万物归灰, element: fire, series: support, tier: 5, dir: buff, target: self, mp_cost: 16, cooldown: 3 }
+  - { id: sk_fire_guard_1, name: 烈焰护盾, element: fire, series: guard, tier: 1, dir: guard, target: self, mp_cost: 8, cooldown: 1 }
+  - { id: sk_fire_guard_2, name: 炎甲, element: fire, series: guard, tier: 2, dir: guard, target: self, mp_cost: 10, cooldown: 2 }
+  - { id: sk_fire_guard_3, name: 熔岩壁, element: fire, series: guard, tier: 3, dir: guard, target: self, mp_cost: 12, cooldown: 2 }
+  - { id: sk_fire_guard_4, name: 炽天护罩, element: fire, series: guard, tier: 4, dir: guard, target: self, mp_cost: 14, cooldown: 3 }
+  - { id: sk_fire_guard_5, name: 阳炎不灭, element: fire, series: guard, tier: 5, dir: guard, target: self, mp_cost: 16, cooldown: 3 }
+  - { id: sk_ice_main_1, name: 冰棱刺, element: ice, series: main, tier: 1, dir: atk, target: single, power: 58, mp_cost: 0, cooldown: 0 }
+  - { id: sk_ice_main_2, name: 霜牙, element: ice, series: main, tier: 2, dir: atk, target: single, power: 63, mp_cost: 0, cooldown: 0 }
+  - { id: sk_ice_main_3, name: 寒椎, element: ice, series: main, tier: 3, dir: atk, target: single, power: 67, mp_cost: 0, cooldown: 0 }
+  - { id: sk_ice_main_4, name: 玄冰绝刺, element: ice, series: main, tier: 4, dir: atk, target: single, power: 72, mp_cost: 0, cooldown: 0 }
+  - { id: sk_ice_main_5, name: 永冬之矛, element: ice, series: main, tier: 5, dir: atk, target: single, power: 77, mp_cost: 0, cooldown: 0 }
+  - { id: sk_ice_special_1, name: 霜冻领域, element: ice, series: special, tier: 1, dir: atk, target: all, power: 50, mp_cost: 8, cooldown: 1 }
+  - { id: sk_ice_special_2, name: 冰封环, element: ice, series: special, tier: 2, dir: atk, target: all, power: 54, mp_cost: 10, cooldown: 2 }
+  - { id: sk_ice_special_3, name: 寒潮, element: ice, series: special, tier: 3, dir: atk, target: all, power: 58, mp_cost: 12, cooldown: 2 }
+  - { id: sk_ice_special_4, name: 极寒之地, element: ice, series: special, tier: 4, dir: atk, target: all, power: 62, mp_cost: 14, cooldown: 3 }
+  - { id: sk_ice_special_5, name: 时光冻结, element: ice, series: special, tier: 5, dir: atk, target: all, power: 66, mp_cost: 16, cooldown: 3 }
+  - { id: sk_ice_support_1, name: 冰封, element: ice, series: support, tier: 1, dir: buff, target: self, mp_cost: 8, cooldown: 1 }
+  - { id: sk_ice_support_2, name: 凝滞, element: ice, series: support, tier: 2, dir: buff, target: self, mp_cost: 10, cooldown: 2 }
+  - { id: sk_ice_support_3, name: 锢魂, element: ice, series: support, tier: 3, dir: buff, target: self, mp_cost: 12, cooldown: 2 }
+  - { id: sk_ice_support_4, name: 玄冰锁, element: ice, series: support, tier: 4, dir: buff, target: self, mp_cost: 14, cooldown: 3 }
+  - { id: sk_ice_support_5, name: 万古冰封, element: ice, series: support, tier: 5, dir: buff, target: self, mp_cost: 16, cooldown: 3 }
+  - { id: sk_ice_guard_1, name: 冰甲, element: ice, series: guard, tier: 1, dir: guard, target: self, mp_cost: 8, cooldown: 1 }
+  - { id: sk_ice_guard_2, name: 霜衣, element: ice, series: guard, tier: 2, dir: guard, target: self, mp_cost: 10, cooldown: 2 }
+  - { id: sk_ice_guard_3, name: 寒壁, element: ice, series: guard, tier: 3, dir: guard, target: self, mp_cost: 12, cooldown: 2 }
+  - { id: sk_ice_guard_4, name: 冰魄护体, element: ice, series: guard, tier: 4, dir: guard, target: self, mp_cost: 14, cooldown: 3 }
+  - { id: sk_ice_guard_5, name: 不化坚冰, element: ice, series: guard, tier: 5, dir: guard, target: self, mp_cost: 16, cooldown: 3 }
+  - { id: sk_thunder_main_1, name: 落雷, element: thunder, series: main, tier: 1, dir: atk, target: single, power: 58, mp_cost: 0, cooldown: 0 }
+  - { id: sk_thunder_main_2, name: 惊雷, element: thunder, series: main, tier: 2, dir: atk, target: single, power: 63, mp_cost: 0, cooldown: 0 }
+  - { id: sk_thunder_main_3, name: 震雷, element: thunder, series: main, tier: 3, dir: atk, target: single, power: 67, mp_cost: 0, cooldown: 0 }
+  - { id: sk_thunder_main_4, name: 天罚雷, element: thunder, series: main, tier: 4, dir: atk, target: single, power: 72, mp_cost: 0, cooldown: 0 }
+  - { id: sk_thunder_main_5, name: 九霄神雷, element: thunder, series: main, tier: 5, dir: atk, target: single, power: 77, mp_cost: 0, cooldown: 0 }
+  - { id: sk_thunder_special_1, name: 连锁闪电, element: thunder, series: special, tier: 1, dir: atk, target: all, power: 50, mp_cost: 8, cooldown: 1 }
+  - { id: sk_thunder_special_2, name: 电弧扩散, element: thunder, series: special, tier: 2, dir: atk, target: all, power: 54, mp_cost: 10, cooldown: 2 }
+  - { id: sk_thunder_special_3, name: 雷网, element: thunder, series: special, tier: 3, dir: atk, target: all, power: 58, mp_cost: 12, cooldown: 2 }
+  - { id: sk_thunder_special_4, name: 万雷齐鸣, element: thunder, series: special, tier: 4, dir: atk, target: all, power: 62, mp_cost: 14, cooldown: 3 }
+  - { id: sk_thunder_special_5, name: 天雷倾覆, element: thunder, series: special, tier: 5, dir: atk, target: all, power: 66, mp_cost: 16, cooldown: 3 }
+  - { id: sk_thunder_support_1, name: 导电, element: thunder, series: support, tier: 1, dir: buff, target: self, mp_cost: 8, cooldown: 1 }
+  - { id: sk_thunder_support_2, name: 聚电, element: thunder, series: support, tier: 2, dir: buff, target: self, mp_cost: 10, cooldown: 2 }
+  - { id: sk_thunder_support_3, name: 电场, element: thunder, series: support, tier: 3, dir: buff, target: self, mp_cost: 12, cooldown: 2 }
+  - { id: sk_thunder_support_4, name: 雷体, element: thunder, series: support, tier: 4, dir: buff, target: self, mp_cost: 14, cooldown: 3 }
+  - { id: sk_thunder_support_5, name: 雷神之躯, element: thunder, series: support, tier: 5, dir: buff, target: self, mp_cost: 16, cooldown: 3 }
+  - { id: sk_thunder_guard_1, name: 雷铠, element: thunder, series: guard, tier: 1, dir: guard, target: self, mp_cost: 8, cooldown: 1 }
+  - { id: sk_thunder_guard_2, name: 电甲, element: thunder, series: guard, tier: 2, dir: guard, target: self, mp_cost: 10, cooldown: 2 }
+  - { id: sk_thunder_guard_3, name: 雷纹护, element: thunder, series: guard, tier: 3, dir: guard, target: self, mp_cost: 12, cooldown: 2 }
+  - { id: sk_thunder_guard_4, name: 雷霆壁垒, element: thunder, series: guard, tier: 4, dir: guard, target: self, mp_cost: 14, cooldown: 3 }
+  - { id: sk_thunder_guard_5, name: 不动雷城, element: thunder, series: guard, tier: 5, dir: guard, target: self, mp_cost: 16, cooldown: 3 }
+  - { id: sk_wind_main_1, name: 风刃, element: wind, series: main, tier: 1, dir: spd, target: single, power: 58, mp_cost: 0, cooldown: 0 }
+  - { id: sk_wind_main_2, name: 疾风刃, element: wind, series: main, tier: 2, dir: spd, target: single, power: 63, mp_cost: 0, cooldown: 0 }
+  - { id: sk_wind_main_3, name: 裂空刃, element: wind, series: main, tier: 3, dir: spd, target: single, power: 67, mp_cost: 0, cooldown: 0 }
+  - { id: sk_wind_main_4, name: 天风刃, element: wind, series: main, tier: 4, dir: spd, target: single, power: 72, mp_cost: 0, cooldown: 0 }
+  - { id: sk_wind_main_5, name: 无声之风, element: wind, series: main, tier: 5, dir: spd, target: single, power: 77, mp_cost: 0, cooldown: 0 }
+  - { id: sk_wind_special_1, name: 疾风连斩, element: wind, series: special, tier: 1, dir: spd, target: all, power: 50, mp_cost: 8, cooldown: 1 }
+  - { id: sk_wind_special_2, name: 风影连击, element: wind, series: special, tier: 2, dir: spd, target: all, power: 54, mp_cost: 10, cooldown: 2 }
+  - { id: sk_wind_special_3, name: 狂岚乱舞, element: wind, series: special, tier: 3, dir: spd, target: all, power: 58, mp_cost: 12, cooldown: 2 }
+  - { id: sk_wind_special_4, name: 千刃风暴, element: wind, series: special, tier: 4, dir: spd, target: all, power: 62, mp_cost: 14, cooldown: 3 }
+  - { id: sk_wind_special_5, name: 风之尽头, element: wind, series: special, tier: 5, dir: spd, target: all, power: 66, mp_cost: 16, cooldown: 3 }
+  - { id: sk_wind_support_1, name: 疾行, element: wind, series: support, tier: 1, dir: buff, target: self, mp_cost: 8, cooldown: 1 }
+  - { id: sk_wind_support_2, name: 疾风步, element: wind, series: support, tier: 2, dir: buff, target: self, mp_cost: 10, cooldown: 2 }
+  - { id: sk_wind_support_3, name: 迅影, element: wind, series: support, tier: 3, dir: buff, target: self, mp_cost: 12, cooldown: 2 }
+  - { id: sk_wind_support_4, name: 疾如闪电, element: wind, series: support, tier: 4, dir: buff, target: self, mp_cost: 14, cooldown: 3 }
+  - { id: sk_wind_support_5, name: 风之化身, element: wind, series: support, tier: 5, dir: buff, target: self, mp_cost: 16, cooldown: 3 }
+  - { id: sk_wind_guard_1, name: 风之壁, element: wind, series: guard, tier: 1, dir: guard, target: self, mp_cost: 8, cooldown: 1 }
+  - { id: sk_wind_guard_2, name: 风障, element: wind, series: guard, tier: 2, dir: guard, target: self, mp_cost: 10, cooldown: 2 }
+  - { id: sk_wind_guard_3, name: 风幕, element: wind, series: guard, tier: 3, dir: guard, target: self, mp_cost: 12, cooldown: 2 }
+  - { id: sk_wind_guard_4, name: 天风罩, element: wind, series: guard, tier: 4, dir: guard, target: self, mp_cost: 14, cooldown: 3 }
+  - { id: sk_wind_guard_5, name: 绝对风壁, element: wind, series: guard, tier: 5, dir: guard, target: self, mp_cost: 16, cooldown: 3 }
+  - { id: sk_earth_main_1, name: 碎岩拳, element: earth, series: main, tier: 1, dir: def, target: single, power: 58, mp_cost: 0, cooldown: 0 }
+  - { id: sk_earth_main_2, name: 裂地拳, element: earth, series: main, tier: 2, dir: def, target: single, power: 63, mp_cost: 0, cooldown: 0 }
+  - { id: sk_earth_main_3, name: 崩山拳, element: earth, series: main, tier: 3, dir: def, target: single, power: 67, mp_cost: 0, cooldown: 0 }
+  - { id: sk_earth_main_4, name: 镇岳拳, element: earth, series: main, tier: 4, dir: def, target: single, power: 72, mp_cost: 0, cooldown: 0 }
+  - { id: sk_earth_main_5, name: 大地终焉, element: earth, series: main, tier: 5, dir: def, target: single, power: 77, mp_cost: 0, cooldown: 0 }
+  - { id: sk_earth_special_1, name: 地裂, element: earth, series: special, tier: 1, dir: def, target: all, power: 50, mp_cost: 8, cooldown: 1 }
+  - { id: sk_earth_special_2, name: 裂谷, element: earth, series: special, tier: 2, dir: def, target: all, power: 54, mp_cost: 10, cooldown: 2 }
+  - { id: sk_earth_special_3, name: 山崩, element: earth, series: special, tier: 3, dir: def, target: all, power: 58, mp_cost: 12, cooldown: 2 }
+  - { id: sk_earth_special_4, name: 大地的怒吼, element: earth, series: special, tier: 4, dir: def, target: all, power: 62, mp_cost: 14, cooldown: 3 }
+  - { id: sk_earth_special_5, name: 万岳镇压, element: earth, series: special, tier: 5, dir: def, target: all, power: 66, mp_cost: 16, cooldown: 3 }
+  - { id: sk_earth_support_1, name: 坚岩, element: earth, series: support, tier: 1, dir: buff, target: self, mp_cost: 8, cooldown: 1 }
+  - { id: sk_earth_support_2, name: 石肤, element: earth, series: support, tier: 2, dir: buff, target: self, mp_cost: 10, cooldown: 2 }
+  - { id: sk_earth_support_3, name: 岩甲, element: earth, series: support, tier: 3, dir: buff, target: self, mp_cost: 12, cooldown: 2 }
+  - { id: sk_earth_support_4, name: 磐石之躯, element: earth, series: support, tier: 4, dir: buff, target: self, mp_cost: 14, cooldown: 3 }
+  - { id: sk_earth_support_5, name: 不动如山, element: earth, series: support, tier: 5, dir: buff, target: self, mp_cost: 16, cooldown: 3 }
+  - { id: sk_earth_guard_1, name: 磐石, element: earth, series: guard, tier: 1, dir: guard, target: self, mp_cost: 8, cooldown: 1 }
+  - { id: sk_earth_guard_2, name: 石壁, element: earth, series: guard, tier: 2, dir: guard, target: self, mp_cost: 10, cooldown: 2 }
+  - { id: sk_earth_guard_3, name: 岩障, element: earth, series: guard, tier: 3, dir: guard, target: self, mp_cost: 12, cooldown: 2 }
+  - { id: sk_earth_guard_4, name: 地脉护壁, element: earth, series: guard, tier: 4, dir: guard, target: self, mp_cost: 14, cooldown: 3 }
+  - { id: sk_earth_guard_5, name: 永恒大地, element: earth, series: guard, tier: 5, dir: guard, target: self, mp_cost: 16, cooldown: 3 }
+  - { id: sk_light_main_1, name: 圣光弹, element: light, series: main, tier: 1, dir: mp, target: single, power: 58, mp_cost: 0, cooldown: 0 }
+  - { id: sk_light_main_2, name: 光矢, element: light, series: main, tier: 2, dir: mp, target: single, power: 63, mp_cost: 0, cooldown: 0 }
+  - { id: sk_light_main_3, name: 曜光, element: light, series: main, tier: 3, dir: mp, target: single, power: 67, mp_cost: 0, cooldown: 0 }
+  - { id: sk_light_main_4, name: 圣裁之光, element: light, series: main, tier: 4, dir: mp, target: single, power: 72, mp_cost: 0, cooldown: 0 }
+  - { id: sk_light_main_5, name: 初开之光, element: light, series: main, tier: 5, dir: mp, target: single, power: 77, mp_cost: 0, cooldown: 0 }
+  - { id: sk_light_special_1, name: 审判之光, element: light, series: special, tier: 1, dir: mp, target: all, power: 50, mp_cost: 8, cooldown: 1 }
+  - { id: sk_light_special_2, name: 裁决, element: light, series: special, tier: 2, dir: mp, target: all, power: 54, mp_cost: 10, cooldown: 2 }
+  - { id: sk_light_special_3, name: 净世, element: light, series: special, tier: 3, dir: mp, target: all, power: 58, mp_cost: 12, cooldown: 2 }
+  - { id: sk_light_special_4, name: 圣光普照, element: light, series: special, tier: 4, dir: mp, target: all, power: 62, mp_cost: 14, cooldown: 3 }
+  - { id: sk_light_special_5, name: 万物归光, element: light, series: special, tier: 5, dir: mp, target: all, power: 66, mp_cost: 16, cooldown: 3 }
+  - { id: sk_light_support_1, name: 祝福, element: light, series: support, tier: 1, dir: buff, target: self, mp_cost: 8, cooldown: 1 }
+  - { id: sk_light_support_2, name: 恩泽, element: light, series: support, tier: 2, dir: buff, target: self, mp_cost: 10, cooldown: 2 }
+  - { id: sk_light_support_3, name: 圣佑, element: light, series: support, tier: 3, dir: buff, target: self, mp_cost: 12, cooldown: 2 }
+  - { id: sk_light_support_4, name: 神恩, element: light, series: support, tier: 4, dir: buff, target: self, mp_cost: 14, cooldown: 3 }
+  - { id: sk_light_support_5, name: 光明庇佑, element: light, series: support, tier: 5, dir: buff, target: self, mp_cost: 16, cooldown: 3 }
+  - { id: sk_light_guard_1, name: 治愈术, element: light, series: guard, tier: 1, dir: guard, target: self, mp_cost: 8, cooldown: 1 }
+  - { id: sk_light_guard_2, name: 回春, element: light, series: guard, tier: 2, dir: guard, target: self, mp_cost: 10, cooldown: 2 }
+  - { id: sk_light_guard_3, name: 新生, element: light, series: guard, tier: 3, dir: guard, target: self, mp_cost: 12, cooldown: 2 }
+  - { id: sk_light_guard_4, name: 生命之泉, element: light, series: guard, tier: 4, dir: guard, target: self, mp_cost: 14, cooldown: 3 }
+  - { id: sk_light_guard_5, name: 不朽之光, element: light, series: guard, tier: 5, dir: guard, target: self, mp_cost: 16, cooldown: 3 }
+  - { id: sk_dark_main_1, name: 暗影突袭, element: dark, series: main, tier: 1, dir: hp, target: single, power: 58, mp_cost: 0, cooldown: 0 }
+  - { id: sk_dark_main_2, name: 影刺, element: dark, series: main, tier: 2, dir: hp, target: single, power: 63, mp_cost: 0, cooldown: 0 }
+  - { id: sk_dark_main_3, name: 暗刃, element: dark, series: main, tier: 3, dir: hp, target: single, power: 67, mp_cost: 0, cooldown: 0 }
+  - { id: sk_dark_main_4, name: 噬影斩, element: dark, series: main, tier: 4, dir: hp, target: single, power: 72, mp_cost: 0, cooldown: 0 }
+  - { id: sk_dark_main_5, name: 永寂之刃, element: dark, series: main, tier: 5, dir: hp, target: single, power: 77, mp_cost: 0, cooldown: 0 }
+  - { id: sk_dark_special_1, name: 吸血之触, element: dark, series: special, tier: 1, dir: hp, target: all, power: 50, mp_cost: 8, cooldown: 1 }
+  - { id: sk_dark_special_2, name: 汲取, element: dark, series: special, tier: 2, dir: hp, target: all, power: 54, mp_cost: 10, cooldown: 2 }
+  - { id: sk_dark_special_3, name: 血宴, element: dark, series: special, tier: 3, dir: hp, target: all, power: 58, mp_cost: 12, cooldown: 2 }
+  - { id: sk_dark_special_4, name: 深渊之渴, element: dark, series: special, tier: 4, dir: hp, target: all, power: 62, mp_cost: 14, cooldown: 3 }
+  - { id: sk_dark_special_5, name: 永夜吸食, element: dark, series: special, tier: 5, dir: hp, target: all, power: 66, mp_cost: 16, cooldown: 3 }
+  - { id: sk_dark_support_1, name: 诅咒, element: dark, series: support, tier: 1, dir: buff, target: self, mp_cost: 8, cooldown: 1 }
+  - { id: sk_dark_support_2, name: 毒咒, element: dark, series: support, tier: 2, dir: buff, target: self, mp_cost: 10, cooldown: 2 }
+  - { id: sk_dark_support_3, name: 衰败, element: dark, series: support, tier: 3, dir: buff, target: self, mp_cost: 12, cooldown: 2 }
+  - { id: sk_dark_support_4, name: 枯萎之咒, element: dark, series: support, tier: 4, dir: buff, target: self, mp_cost: 14, cooldown: 3 }
+  - { id: sk_dark_support_5, name: 万物凋零, element: dark, series: support, tier: 5, dir: buff, target: self, mp_cost: 16, cooldown: 3 }
+  - { id: sk_dark_guard_1, name: 暗影护体, element: dark, series: guard, tier: 1, dir: guard, target: self, mp_cost: 8, cooldown: 1 }
+  - { id: sk_dark_guard_2, name: 影衣, element: dark, series: guard, tier: 2, dir: guard, target: self, mp_cost: 10, cooldown: 2 }
+  - { id: sk_dark_guard_3, name: 夜幕, element: dark, series: guard, tier: 3, dir: guard, target: self, mp_cost: 12, cooldown: 2 }
+  - { id: sk_dark_guard_4, name: 深渊庇护, element: dark, series: guard, tier: 4, dir: guard, target: self, mp_cost: 14, cooldown: 3 }
+  - { id: sk_dark_guard_5, name: 虚空不灭, element: dark, series: guard, tier: 5, dir: guard, target: self, mp_cost: 16, cooldown: 3 }

@@ -41,6 +41,7 @@ from ..core import (
     talents,
     tutorial,
 )
+from ..core import endless as endless_core
 from ..core.affection import (
     AFFECTION_MAX,
     affection_bonus_ratio,
@@ -54,6 +55,7 @@ from ..matchers import (
     pet_bio_matcher,
     pet_chat_matcher,
     pet_create_matcher,
+    pet_endless_matcher,
     pet_feed_matcher,
     pet_group_list_matcher,
     pet_instruction_matcher,
@@ -71,7 +73,7 @@ from ..matchers import (
     pet_talent_matcher,
     pet_train_matcher,
 )
-from ..utils import menus, reply, rogue_actions, style
+from ..utils import endless_actions, menus, reply, rogue_actions, style
 from ..utils.cooldown import cooldown
 from ..utils.formatters import (
     format_action_result,
@@ -1086,6 +1088,600 @@ async def handle_rogue(event: Event, args: BaseMessage = CommandArg()):
         pet_rogue_matcher,
         _never_empty(msg, _rogue_usage()),
         choices,
+    )
+
+
+# ---- 无尽模式（与爬塔完全独立：独立存档、零点数零经验） ----
+@pet_endless_matcher.handle()
+async def handle_endless(event: Event, args: BaseMessage = CommandArg()):
+    """`/宠物.无尽 开始|继续|进度|撤退`。"""
+    await _guard(pet_endless_matcher)
+    player_id = _player_id(event)
+    raw = args.extract_plain_text().strip()
+    from ..database import Endless, load_endless, save_endless
+
+    try:
+        endless = load_endless(player_id)
+        if endless is None:
+            endless = Endless(player_id=str(player_id))
+        running = (
+            endless_core.RogueRun.from_dict(endless.run_state)
+            if endless.run_state
+            else None
+        )
+
+        if raw in ("", "进度"):
+            msg = endless_core.render_progress(endless)
+            if running is not None:
+                msg = endless_core.render_summary(running) + "\n" + msg
+        elif raw == "开始":
+            run = endless_core.start_run(_endless_seed(player_id))
+            endless_core.sync_codex(endless, run)
+            endless.run_state = run.to_dict()
+            save_endless(endless)
+            endless_core.telemetry.run_start(
+                stage=endless_core.current_stage(run), floor=run.floor, seed=run.seed
+            )
+            endless_core.telemetry.floor_enter(
+                floor=run.floor,
+                stage=endless_core.current_stage(run),
+                kind=endless_core.floor_meta(run)["kind"],
+                region=run.region,
+            )
+            msg = _endless_prefixed("🌱 无尽模式开局") + endless_core.render_summary(
+                run
+            )
+        elif raw == "继续":
+            if running is None:
+                msg = _endless_usage()
+            else:
+                msg = _endless_prefixed("🔁 继续本局") + endless_core.render_summary(
+                    running
+                )
+        elif raw.startswith("库存") and running is not None:
+            msg = _endless_stock(running, raw)
+            endless.run_state = running.to_dict()
+            save_endless(endless)
+        elif raw in ("刷新", "离开") and running is not None:
+            msg, changed = _endless_shop_action(running, raw)
+            if changed:
+                msg = _endless_persist(endless, running, save_endless, msg)
+        elif _endless_is_step(running, raw) and running is not None:
+            msg, changed = _endless_step(running, _endless_step_number(running, raw))
+            if changed:
+                msg = _endless_persist(endless, running, save_endless, msg)
+        elif raw.startswith("强化") and running is not None:
+            msg, changed = _endless_enhance(running, raw)
+            if changed:
+                msg = _endless_persist(endless, running, save_endless, msg)
+        elif raw == "撤退":
+            if running is None:
+                msg = _endless_usage()
+            else:
+                summary = endless_core.finish(endless, running)
+                endless.run_state = {}
+                save_endless(endless)
+                endless_core.telemetry.run_end(
+                    floor=summary["floor"],
+                    best=summary["best"],
+                    runs=summary["runs"],
+                    reason="retreat",
+                )
+                msg = _endless_settle_text(summary)
+        else:
+            msg = _endless_usage()
+    except Exception as exc:  # 未知错误也要回执，不静默吞掉对话
+        log.warning(f"宠物.无尽 处理失败：{exc!r}")
+        msg = "❌ 无尽指令执行出错，请查看机器人日志。"
+
+    choices = []
+    if running is not None:
+        choices = endless_actions.choices_from_endless(running)
+    if not choices:
+        choices = menus.rogue_menu(running=running is not None)
+    await reply.finish(
+        pet_endless_matcher,
+        _never_empty(msg, _endless_usage()),
+        choices,
+    )
+
+
+def _endless_persist(endless, running, save_endless, msg: str) -> str:
+    """每一次状态变化都写回：图鉴增量 + 存档；生命耗尽就地结算。
+
+    不能只在「撤退」时结算——玩家中途死掉或直接关掉对话就不会再发指令，
+    那一局的图鉴收获会整份丢掉。
+    """
+    from ..core.endless import finish, sync_codex, telemetry
+
+    if running.hp > 0:
+        sync_codex(endless, running)
+        endless.run_state = running.to_dict()
+        save_endless(endless)
+        return msg
+
+    summary = finish(endless, running)
+    endless.run_state = {}
+    save_endless(endless)
+    telemetry.run_end(
+        floor=summary["floor"],
+        best=summary["best"],
+        runs=summary["runs"],
+        reason="death",
+    )
+    return "💀 生命耗尽，本局结束。\n" + _endless_settle_text(summary)
+
+
+def _endless_shop_action(run, raw: str) -> tuple[str, bool]:
+    """商店的「刷新 / 离开」。不在店里就提示。"""
+    from ..core.endless import (
+        advance,
+        leave_shop,
+        refresh_shop,
+        render_floor,
+        render_options,
+        render_shop,
+        render_status,
+        shop_state,
+    )
+
+    if not shop_state(run):
+        return "当前不在商店里。", False
+    if raw == "刷新":
+        out = refresh_shop(run)
+        if not out.get("ok"):
+            reason = str(out.get("reason") or "")
+            if reason == "capped":
+                return "刷新次数已用尽。", False
+            if reason == "poor":
+                return "金币不够刷新（需要 " + str(out.get("cost", 0)) + "）。", False
+            return "刷新失败：" + reason, False
+        session = shop_state(run) or {}
+        return (
+            "🔄 已刷新，花费 "
+            + str(out.get("cost", 0))
+            + " 金。\n"
+            + render_shop(session)
+            + "\n"
+            + render_status(run)
+        ), True
+    summary = leave_shop(run)
+    advance(run)
+    return (
+        "👋 已离开商店。\n" + render_floor(run) + "\n" + render_options(run)
+    ), summary.get("ok", False)
+
+
+def _endless_is_step(run, raw: str) -> bool:
+    """这个输入是否等价于「局内编号」。
+
+    设计 §15.2 允许具名写法，这里归一成编号：
+    ``买 2`` → 2（购买）、``1×3`` → 1（连打由战斗侧按次数处理）、
+    ``技能 火球`` → 该技能在 ``battle_actions`` 里的序号。
+    """
+    return bool(raw) and (_endless_step_number(run, raw) > 0)
+
+
+def _endless_step_number(run, raw: str) -> int:
+    """把各种写法解析成局内编号；解析不出来返回 0。"""
+    text = str(raw or "").strip()
+    if text.isdigit():
+        return int(text)
+    # 「1×3」：数字 + 乘号，取前半部分的编号
+    if "×" in text:
+        head = text.split("×")[0].strip()
+        return int(head) if head.isdigit() else 0
+    for prefix in ("买", "强化"):
+        if text.startswith(prefix):
+            rest = text[len(prefix) :].strip()
+            return int(rest) if rest.isdigit() else 0
+    if text.startswith("技能"):
+        return _endless_skill_number(run, text[len("技能") :].strip())
+    return 0
+
+
+def _endless_skill_number(run, name: str) -> int:
+    """按技能名（或 id）找它在当前行动列表里的编号。"""
+    from ..core.endless import battle_actions, skill_specs
+
+    if not name:
+        return 0
+    specs = skill_specs()
+    for action in battle_actions(run):
+        spec = specs.get(str((action.get("action") or {}).get("skill") or "")) or {}
+        if name in (str(spec.get("name") or ""), str(spec.get("id") or "")):
+            return int(str(action.get("key") or 0) or 0)
+    return 0
+
+
+def _endless_enhance(run, raw: str) -> tuple[str, bool]:
+    """强化技能：``强化 3`` 强化行动列表里的第 3 个技能。
+
+
+
+    强化次数存 ``run.pending["enhance"]``，战斗侧按次数乘威力（§8.7）。
+
+    """
+
+    from ..core.endless import (
+        ENHANCE_MAX,
+        battle_actions,
+        enhance_cost,
+        skill_specs,
+    )
+
+    number = _endless_step_number(run, raw)
+
+    if number <= 0:
+        return "用法：强化 N（N = 行动列表里的技能序号）", False
+
+    actions = battle_actions(run)
+
+    if not 1 <= number <= len(actions):
+        return "序号超出范围。", False
+
+    skill_id = str((actions[number - 1].get("action") or {}).get("skill") or "")
+
+    if not skill_id:
+        return "这一项不是技能。", False
+
+    enhance = dict(run.pending.get("enhance") or {})
+
+    times = int(enhance.get(skill_id, 0) or 0)
+
+    if times >= ENHANCE_MAX:
+        return "这个技能已经强化到上限。", False
+
+    spec = skill_specs().get(skill_id) or {}
+
+    cost = enhance_cost(int(spec.get("tier", 1) or 1), times)
+
+    if run.coins < cost:
+        return "金币不够（需要 " + str(cost) + "）。", False
+
+    run.coins -= cost
+
+    enhance[skill_id] = times + 1
+
+    run.pending["enhance"] = enhance
+
+    name = str(spec.get("name") or skill_id)
+
+    return (
+        "🔧 "
+        + name
+        + " 强化到 "
+        + str(times + 1)
+        + "/"
+        + str(ENHANCE_MAX)
+        + "，花费 "
+        + str(cost)
+        + " 金，剩余 "
+        + str(run.coins)
+        + " 金"
+    ), True
+
+
+def _endless_stock(run, raw: str) -> str:
+    """库存操作：``库存`` 看列表，``库存 穿上 <序号>`` / ``库存 分解 <序号>``。"""
+    from ..core.endless import decompose, gear_specs, stock_of, take_from_stock
+
+    stock = stock_of(run)
+    parts = raw.split(" ")
+    if len(parts) == 1:
+        if not stock:
+            return "🎒 库存是空的。换下的装备会进这里。"
+        specs = gear_specs()
+        lines = ["🎒 库存："]
+        for index, gear_id in enumerate(stock, 1):
+            spec = specs.get(gear_id) or {}
+            name = str(spec.get("name") or gear_id)
+            slot = str(spec.get("slot") or "?")
+            tier = spec.get("tier", "?")
+            lines.append(f"{index}. {name}（{slot} T{tier}）")
+        lines.append("回复「库存 穿上 N」换上，或「库存 分解 N」回收金币。")
+        return "\n".join(lines)
+
+    if len(parts) != 3 or parts[1] not in ("穿上", "分解"):
+        return "用法：库存 / 库存 穿上 N / 库存 分解 N"
+    try:
+        index = int(parts[2])
+    except ValueError:
+        return "序号必须是数字。"
+    if not 1 <= index <= len(stock):
+        return "序号超出范围。"
+    gear_id = stock[index - 1]
+    if parts[1] == "穿上":
+        if take_from_stock(run, gear_id):
+            return f"✅ 已换上 {gear_id}。\n" + _endless_stock(run, "库存")
+        return "这件不在库存里。"
+    value = decompose(run, gear_id)
+    return f"♻️ 分解回收 {value} 金币。\n" + _endless_stock(run, "库存")
+
+
+def _endless_advance(run) -> str:
+    """前进一层；跨阶段时把回血量播报出来（P2-1）。"""
+    from ..core.endless import advance, current_stage, floor_meta, telemetry
+
+    heal = advance(run)
+    telemetry.floor_enter(
+        floor=run.floor,
+        stage=current_stage(run),
+        kind=floor_meta(run)["kind"],
+        region=run.region,
+    )
+    gained = int((heal or {}).get("hp", 0) or 0)
+    if gained:
+        return "\n💤 阶段结束，生命回复 " + str(gained)
+    return ""
+
+
+def _endless_opening(run, number: int) -> tuple[str, bool]:
+    """开局抽卡的一次选择：把选中的遗物/技能落地，然后弹下一步。"""
+    from ..core.endless import (
+        build_options,
+        render_floor,
+        render_options,
+        render_status,
+    )
+
+    pending = run.pending or {}
+    kind = str(pending.get("type") or "")
+    options = pending.get("options") or []
+    if not 1 <= number <= len(options):
+        return "编号超出范围（可选 1-" + str(len(options)) + "）", False
+    picked = options[number - 1]
+
+    if kind == "open_relic":
+        run.relics.append(str(picked.get("id")))
+        done = "🎁 已获得遗物【" + str(picked.get("name") or picked.get("id")) + "】"
+    elif kind == "open_skill":
+        active = [str(s) for s in (run.skills.get("active") or [])]
+        if str(picked.get("id")) not in active:
+            active.append(str(picked.get("id")))
+        run.skills = {"active": active, "passive": []}
+        done = "📖 已学会【" + str(picked.get("name") or picked.get("id")) + "】"
+    else:
+        return "未知的开局步骤。", False
+
+    queue = list(pending.get("queue") or [])
+    if queue:
+        nxt = queue.pop(0)
+        nxt["queue"] = queue
+        run.pending = nxt
+        from ..core.endless import sync_resources
+
+        sync_resources(run)
+        return done + "\n" + render_options(run), True
+
+    run.pending = {"type": "floor", "options": build_options(run.floor, run.seed)}
+    from ..core.endless import sync_resources
+
+    sync_resources(run)
+    head = [done, render_floor(run), render_status(run)]
+    tail = render_options(run)
+    return "\n".join(head + ([tail] if tail else [])), True
+
+
+def _endless_step(run, number: int) -> tuple[str, bool]:
+    """局内编号：升级选属性 / 战斗指令 / 事件选项 / 商店购买 / 路线选择。"""
+    import random as _random
+
+    from ..core.endless import (
+        RogueRun,
+        battle_actions,
+        begin_battle,
+        choose_event,
+        choose_level,
+        clear_floor,
+        floor_meta,
+        open_shop,
+        pending_levels,
+        pick_event,
+        purchase,
+        render_event,
+        render_floor,
+        render_options,
+        render_result,
+        render_reward,
+        render_shop,
+        render_status,
+        submit,
+    )
+
+    assert isinstance(run, RogueRun)
+    pending = run.pending or {}
+
+    # 1) 升级 4 选 1 优先级最高
+    if pending_levels(run):
+        keys = ("atk", "def", "hp", "mp")
+        if not 1 <= number <= len(keys):
+            return "编号超出范围（可选 1-4）", False
+        if not choose_level(run, keys[number - 1]):
+            return "这一项不可选。", False
+        from ..core.endless import telemetry
+
+        telemetry.level_up(
+            level=run.progression.level,
+            key=keys[number - 1],
+            pending=len(run.progression.pending),
+        )
+        if pending_levels(run):
+            return "🎖 已选择加成。\n还剩 " + str(
+                pending_levels(run)
+            ) + " 次选择。", True
+        head = "🎖 已选择加成。\n" + render_floor(run) + "\n" + render_status(run)
+        tail = render_options(run)
+        return head + ("\n" + tail if tail else ""), True
+
+    # 2) 战斗中
+    if pending.get("session"):
+        actions = battle_actions(run)
+        if not 1 <= number <= len(actions):
+            return "编号超出范围（战斗中可选 1-" + str(len(actions)) + "）", False
+        out = submit(run, actions[number - 1]["action"])
+        lines = [render_status(run)]
+        if out.get("ended"):
+            meta = floor_meta(run)
+            reward = clear_floor(
+                run,
+                victor=bool(out["victory"]),
+                elite=bool(meta["elite"]),
+                boss=bool(meta["boss"]),
+                elite_fight=out.get("kind") == "elite_fight",
+            )
+            if out.get("timed_out"):
+                lines.insert(0, "⏱ 回合上限，本场判负")
+            else:
+                lines.insert(0, "⚔️ 战斗结束：" + ("胜利" if out["victory"] else "失败"))
+            lines.append(render_reward(reward))
+            if out["victory"]:
+                healed = _endless_advance(run)
+                if healed:
+                    lines.append(healed)
+                lines.append(render_floor(run))
+                lines.append(render_options(run))
+            else:
+                # 超时也按失败结算：必须离开这一层，否则玩家能原地重打刷经验
+                run.pending.pop("options", None)
+                lines.append("生命耗尽或回合用尽，本局结束。")
+        else:
+            lines.append(
+                "轮到你了：" + "｜".join(a["key"] + " " + a["label"] for a in actions)
+            )
+        return "\n".join(x for x in lines if x), True
+
+    # 3) 事件选项
+    event = pending.get("event")
+    if isinstance(event, dict) and event.get("id"):
+        choices = list(event.get("choices") or [])
+        if not 1 <= number <= len(choices):
+            return "编号超出范围（可选 1-" + str(len(choices)) + "）", False
+        rng = _random.Random(f"{run.seed}:{run.floor}:event:{event['id']}")
+        changed = choose_event(run, event, number, rng=rng)
+        pending.pop("event", None)
+        lines = ["🔸 " + str(changed.get("text") or ""), render_result(changed)]
+        if changed.get("elite_fight"):
+            begin_battle(run, elite_fight=True)
+            lines.append("⚠️ 事件引来了强化战斗！")
+            if pending.get("session"):
+                actions = battle_actions(run)
+                lines.append(
+                    "轮到你了："
+                    + "｜".join(a["key"] + " " + a["label"] for a in actions)
+                )
+                return "\n".join(x for x in lines if x), True
+        healed = _endless_advance(run)
+        if healed:
+            lines.append(healed)
+        lines.append(render_floor(run))
+        lines.append(render_options(run))
+        return "\n".join(x for x in lines if x), True
+
+    # 4) 商店：编号即买入
+    session = pending.get("shop")
+    if isinstance(session, dict) and session.get("shelf"):
+        out = purchase(run, number)
+        if not out.get("ok"):
+            reason = str(out.get("reason") or "")
+            hint = {
+                "empty": "这一格已经卖掉了。",
+                "poor": "金币不够。",
+                "no_slot": "没有这个位置。",
+            }
+            return hint.get(reason, "买不了：" + reason), False
+        spec = out.get("spec") or {}
+        head = "🛍 已买入【" + str(spec.get("name") or spec.get("id")) + "】"
+        if out.get("replaced"):
+            head += "，换下的已入库存。"
+        body = render_shop(session)
+        return head + "\n" + body + "\n" + render_status(run), True
+
+    # 5) 开局抽卡（遗物 3 选 1 / 技能 4 选 1 ×3）
+    if str(pending.get("type") or "").startswith("open_"):
+        return _endless_opening(run, number)
+
+    # 6) 楼层路线
+    options = pending.get("options") or []
+    if options:
+        if not 1 <= number <= len(options):
+            return "编号超出范围（可选 1-" + str(len(options)) + "）", False
+        kind = str(options[number - 1].get("kind") or "")
+        if kind == "battle" or kind == "elite_fight":
+            out = begin_battle(run, elite_fight=(kind == "elite_fight"))
+            lines = [render_floor(run)]
+            if out.get("ended") and out.get("victory"):
+                healed = _endless_advance(run)
+                if healed:
+                    lines.append(healed)
+                lines.append(render_options(run))
+            else:
+                actions = battle_actions(run)
+                lines.append(
+                    "轮到你了："
+                    + "｜".join(a["key"] + " " + a["label"] for a in actions)
+                )
+            return "\n".join(x for x in lines if x), True
+        if kind == "event":
+            rng = _random.Random(f"{run.seed}:{run.floor}:pick")
+            ev = pick_event(run, rng, run.region)
+            if ev is None:
+                healed = _endless_advance(run)
+                return (
+                    "这层没有更多事件。"
+                    + healed
+                    + "\n"
+                    + render_floor(run)
+                    + "\n"
+                    + render_options(run)
+                ), True
+            pending["event"] = ev
+            return render_event(ev), True
+        if kind == "shop":
+            shop = open_shop(run)
+            return render_shop(shop) + "\n回复编号买入；刷新 / 离开", True
+        if kind == "rest":
+            gain_hp = run.hp_max - run.hp
+            gain_mp = run.mp_max - run.mp
+            run.hp = run.hp_max
+            run.mp = run.mp_max
+            healed = _endless_advance(run)
+            head = (
+                "💤 休息补给：生命回满（+" + str(gain_hp) + "）"
+                " 魔力回满（+" + str(gain_mp) + "）" + healed
+            )
+            return head + "\n" + render_floor(run) + "\n" + render_options(run), True
+        healed = _endless_advance(run)
+        return "这一层直接前进。" + healed + "\n" + render_floor(
+            run
+        ) + "\n" + render_options(run), True
+
+    return "当前没有可应答的选项。", False
+
+
+def _endless_seed(player_id: str) -> int:
+    """开局种子：玩家号 + 当前时间，保证每次开局不同。"""
+    from time import time
+
+    return abs(hash((str(player_id), int(time())))) % (2**31)
+
+
+def _endless_usage() -> str:
+    return endless_core.usage()
+
+
+def _endless_prefixed(title: str) -> str:
+    return title + "\n"
+
+
+def _endless_settle_text(summary: dict) -> str:
+    """结算回执：只报层数与图鉴，不报任何数值产出。"""
+    best_mark = "（新纪录）" if summary.get("new_best") else ""
+    return (
+        f"🏁 本局结束：到达第 {summary['floor']} 层{best_mark}\n"
+        f"最深第 {summary['best']} 层 · 共 {summary['runs']} 局\n"
+        f"📇 图鉴：遗物 {summary['relics']} · 技能 {summary['skills']}"
+        f" · 装备 {summary['equips']} · 事件 {summary['events']}"
     )
 
 

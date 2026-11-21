@@ -2,6 +2,7 @@
 
 import random
 from dataclasses import dataclass
+from math import ceil
 from typing import Any
 
 from ..affection import apply_affection_bonus
@@ -207,14 +208,38 @@ class BattleSession:
         )
         # 「不可行动」（眩晕）参数：数值与上限全部外置，便于按首领特点配平。
         self.unactionable = unactionable_cfg(cfg)
+        # 手动战斗：manual=False 时与原实现逐点等价（见 test_lkpet_endless_manual）。
+        self.manual = False
+        self.frame_phase = "idle"  # idle -> gauged -> done -> idle
+        self.pending_actors: list[tuple[str, int | None, float]] = []
+        self.actor_cursor = 0
+        self.pet_action_ready = False
+        self.pending_action: dict[str, Any] | None = None
+        self._frame_guard = 0
+        self._siphon_opened = False
+        # 无尽模式的元素克制 / 穿甲 / 伤害加成乘区。空字典 = 爬塔路径，行为不变。
+        self.pet_combat_mods: dict[str, float] = {}
+        self.pet_element_resist: dict[str, float] = {}
+        self.pet_shield = 0
+        self.pet_shield_gain = 0.0
+        self.pet_heal_gain = 0.0
+        self.pet_lifesteal = 0.0
+        self.pet_debuff_res = 0.0
+        self.pet_solid = 0.0
+        self.pet_dodge = 0.0
+        self.accuracy = 0.0
         # 局内魔力：每层 / 每个战斗回合（= 我方每次行动）的回复比例。
         self.mp_floor_pct = mp_regen_pct(cfg, "per_floor_pct")
         self.mp_turn_pct = mp_regen_pct(cfg, "per_turn_pct")
 
-        # 技能配置
+        # 技能配置：pet 可自带定义表（无尽模式的 id 空间与爬塔完全不同，
+        # 不给覆盖就永远解析不到，技能槽等于空的）。不提供时退回爬塔表。
         if not isinstance(monster.get("skills"), list | tuple):
             monster["skills"] = []
-        self.skills_cfg = _load_skills_config()
+        override = getattr(pet, "skills_config", None)
+        self.skills_cfg = (
+            override if isinstance(override, dict) else _load_skills_config()
+        )
 
         # 宠物属性计算
         self._compute_pet_stats()
@@ -418,7 +443,46 @@ class BattleSession:
             return 0.0
         return float(self.gauge_rate_mult) * float(speed) ** float(self.spd_exponent)
 
-    def _pet_damage(self, defence: int, bossy: bool) -> tuple[int, bool]:
+    def _skill_power_of(self, skill_id: str, skill: dict[str, Any]) -> float:
+        """技能最终威力 = 定义表 power × 强化乘区 × 熟练度加成。
+
+        强化次数存在 ``pet.skill_enhance``（无尽模式由外层维护）；
+        爬塔不提供这个属性，乘区恒为 1.0，行为不变。
+        """
+        power = get_skill_power(self.pet, skill_id, self.skills_cfg)
+        enhance = getattr(self.pet, "skill_enhance", None)
+        if not isinstance(enhance, dict):
+            return power
+        times = max(0, int(enhance.get(skill_id, 0) or 0))
+        step = float((self.skills_cfg.get("limits") or {}).get("enhance_step", 0.15))
+        cap = int((self.skills_cfg.get("limits") or {}).get("enhance_max", 10))
+        return power * (1.0 + step * min(times, cap))
+
+    def _skill_base_by_dir(self, skill: dict[str, Any]) -> tuple[int, float]:
+        """按技能的转伤方向取基础值，返回 (基础值, 自耗比例)。
+
+        dir 决定这条技能吃哪个面板属性（§8.5）：atk / def / spd / mp / hp。
+        hp 方向同时按 self_cost 消耗自身生命。未标注时退回攻击力。
+        """
+        d = str(skill.get("dir") or "atk").strip().lower()
+        if d == "def":
+            return max(0, self._pet_def_eff()), 0.0
+        if d == "spd":
+            return max(1, self._pet_spd_eff()), 0.0
+        if d == "mp":
+            return max(0, int(self.mp_cap)), 0.0
+        if d == "hp":
+            return max(1, int(self.hp_max)), float(skill.get("self_cost", 0.05) or 0.0)
+        return max(1, self._pet_atk_eff()), 0.0
+
+    def _pet_damage(
+        self,
+        defence: int,
+        bossy: bool,
+        enemy_solid: float = 0.0,
+        atk_override: int | None = None,
+        enemy_resist: dict[str, float] | None = None,
+    ) -> tuple[int, bool]:
         """我方输出（等级战力 × 遗物 vs_boss_mult × 被动 dmg_mult × 好感加成 × 暴击）。
 
         ``level_atk_mult`` 是等级战力乘区（``battle.level_power``）：等级低于该层
@@ -430,11 +494,28 @@ class BattleSession:
         逐点相同，加成只对「已经确定的伤害」生效，不会顺带把基线压下去。
         """
         mult = (self.out_mult if bossy else 1.0) * self.dmg_mult * self.level_atk_mult
+        mods = self.pet_combat_mods
+        if mods:
+            mult *= float(mods.get("damage_bonus", 1.0))
+            mult *= float(mods.get("element_bonus", 1.0))
+            mult *= float(mods.get("counter", 1.0))
+            pen = min(1.0, max(0.0, float(mods.get("armor_pen", 0.0))))
+            defence = max(0, round(float(defence) * (1.0 - pen)))
+        # 敌方元素抗性：n/(n+R)，与玩家侧同一口径（永远到不了 0）
+        if enemy_resist:
+            elem = str(mods.get("element") or "normal") if mods else "normal"
+            value = float(
+                enemy_resist.get(elem, enemy_resist.get("normal", 0.0)) or 0.0
+            )
+            if elem != "normal":
+                value = max(value, float(enemy_resist.get("all", 0.0) or 0.0))
+            if value > 0:
+                mult *= 100.0 / (100.0 + value)
         base = max(
             1,
             round(
                 _damage(
-                    self._pet_atk_eff(),
+                    self._pet_atk_eff() if atk_override is None else int(atk_override),
                     defence,
                     self.variance,
                     self.def_softness,
@@ -450,14 +531,45 @@ class BattleSession:
             self.crits += 1
         return dmg, is_crit
 
+    def grant_opening_shield(self, base: int) -> int:
+        """开战护盾：``base * (1 + shield_gain)``，返回实际授予量。
+
+        ``shield_gain`` 只有一个消费点——「获得护盾时放大」，
+        所以入场是它唯一的触发时机。
+        """
+        rate = float(self.pet_shield_gain or 0.0)
+        if rate <= 0 or base <= 0:
+            return 0
+        amount = max(0, round(base * (1.0 + rate)))
+        self.pet_shield += amount
+        return amount
+
+    def _pet_lifesteal(self, dealt: int) -> None:
+        """普攻命中后的吸血回复（技能侧并入技能自带的 leech）。"""
+        rate = float(self.pet_lifesteal or 0.0)
+        if rate <= 0 or dealt <= 0:
+            return
+        healed = min(round(dealt * rate), max(0, self.hp_max - self.pet_hp))
+        if healed > 0:
+            self.pet_hp += healed
+            self._blog(
+                "log_attack_leech",
+                "回合{round} {actor} 吸取 {heal} 点生命。",
+                actor=self.pet.name,
+                heal=healed,
+            )
+
     def _heal_amount(self, skill: dict[str, Any]) -> int:
         """治疗技能的回复量。"""
         if int(skill.get("power", 0)) != 0:
             return 0
         effects = skill.get("effects", []) or []
-        return next(
+        amount = next(
             (int(e.get("amount", 0)) for e in effects if e.get("type") == "heal"), 0
         )
+        if amount and self.pet_heal_gain:
+            amount = round(amount * (1.0 + self.pet_heal_gain))
+        return amount
 
     @staticmethod
     def _is_aoe(skill: dict[str, Any]) -> bool:
@@ -524,6 +636,41 @@ class BattleSession:
                 mp_max=self.mp_cap,
             )
 
+    def _manual_pick(self, skill_id: str) -> bool:
+        """手动模式下这个技能是否是玩家点的那个。
+
+        玩家没点技能时返回 True（退回「按威力自动挑」），
+        这样不选技能的回合仍然打得出去。
+        """
+        wanted = str((self.pending_action or {}).get("skill") or "")
+        return not wanted or wanted == skill_id
+
+    def _defend_action(self) -> None:
+        """防御：本回合减伤 + 回一点魔力，不出伤害。"""
+        defend = self.cfg.get("defend") or {}
+        # 刷新同一条而不是追加：连按防御不能叠成 5 倍减伤（审查 P1-8）。
+        self.pet_debuffs = [
+            d for d in self.pet_debuffs if d.get("id") != "endless:defend"
+        ]
+        self.pet_debuffs.append(
+            {
+                "id": "endless:defend",
+                "frames": self.frames_per_turn,
+                "rounds": 0,
+                "def_mult": float(defend.get("def_mult", 1.5)),
+            }
+        )
+        self._refresh_pet_mods()
+        gain_pct = float(defend.get("mp_gain_pct", 0.10))
+        if gain_pct > 0 and self.mp_cap > 0:
+            self.pet_mp = min(self.mp_cap, self.pet_mp + round(self.mp_cap * gain_pct))
+        self._blog(
+            "log_defend",
+            "回合{round} {actor} 举盾防守，魔力回复 {mp} 点。",
+            actor=self.pet.name,
+            mp=round(self.mp_cap * gain_pct) if gain_pct else 0,
+        )
+
     def _pet_action(self) -> None:
         """宠物行动（一次出手，**不等于**一个回合）。"""
         self.gauge_pet -= 100.0
@@ -536,11 +683,18 @@ class BattleSession:
         # 目标变化从随后的伤害行就能看出来。
         self.current_target = target
 
+        # 手动模式：玩家选了「防御」就举盾，不走伤害分支
+        if self.manual and str((self.pending_action or {}).get("kind")) == "defend":
+            self._defend_action()
+            return
+
         acted = False
         # 血量 < 50% 优先治疗
         if self.pet_hp < self.hp_max * 0.5:
             for skill_id, skill in self.active_pairs:
                 if self.cooldowns.get(skill_id, 0) > 0:
+                    continue
+                if self.manual and not self._manual_pick(skill_id):
                     continue
                 amount = self._heal_amount(skill)
                 cost = int(skill.get("mp_cost", 0))
@@ -560,7 +714,9 @@ class BattleSession:
                 (
                     (sid, sk)
                     for sid, sk in self.active_pairs
-                    if self._heal_amount(sk) == 0 and self.cooldowns.get(sid, 0) <= 0
+                    if self._heal_amount(sk) == 0
+                    and self.cooldowns.get(sid, 0) <= 0
+                    and (not self.manual or self._manual_pick(sid))
                 ),
                 key=lambda pair: -self._skill_priority(pair[0], pair[1]),
             )
@@ -574,10 +730,12 @@ class BattleSession:
                 targets = self._live_units() if is_aoe else [target]
                 if not targets:
                     continue
-                factor = (
-                    get_skill_power(self.pet, skill_id, self.skills_cfg)
-                    / BASE_SKILL_POWER
-                )
+                factor = self._skill_power_of(skill_id, skill) / BASE_SKILL_POWER
+                base_by_dir, self_cost = self._skill_base_by_dir(skill)
+                if self_cost > 0:
+                    # 血转伤：先扣自身生命（不低于 1），再算伤害
+                    paid = min(max(0, self.pet_hp - 1), round(self.hp_max * self_cost))
+                    self.pet_hp -= paid
                 # 群体技能每个目标按 aoe_factor 衰减（见 roguelike.yaml battle.aoe）。
                 if is_aoe:
                     factor *= self.aoe_factor
@@ -595,7 +753,11 @@ class BattleSession:
                             dodged += 1
                             continue
                         dmg, is_crit = self._pet_damage(
-                            int(rec["unit"]["def"]), bool(rec["primary"])
+                            int(rec["unit"]["def"]),
+                            bool(rec["primary"]),
+                            float(rec["unit"].get("solid", 0.0) or 0.0),
+                            atk_override=base_by_dir,
+                            enemy_resist=rec["unit"].get("resist") or None,
                         )
                         dealt = max(1, round(dmg * factor))
                         # 护盾先吃伤害；真正落到生命上的才计打断累积
@@ -646,7 +808,7 @@ class BattleSession:
                 # 注意：打断累积与棘刺反弹已在逐目标循环里结算过，
                 # 这里不能再对 target 重复调用（否则单体技能会双倍反弹/双倍打断）。
                 # 吸血：按实际伤害比例回复局内生命（不超上限）。
-                leech = float(skill.get("leech", 0.0) or 0.0)
+                leech = float(skill.get("leech", 0.0) or 0.0) + self.pet_lifesteal
                 if leech > 0 and dealt_total > 0:
                     healed = min(
                         round(dealt_total * leech), max(0, self.hp_max - self.pet_hp)
@@ -680,7 +842,10 @@ class BattleSession:
                 )
             else:
                 dmg, is_crit = self._pet_damage(
-                    int(target["unit"]["def"]), bool(target["primary"])
+                    int(target["unit"]["def"]),
+                    bool(target["primary"]),
+                    float(target["unit"].get("solid", 0.0) or 0.0),
+                    enemy_resist=target["unit"].get("resist") or None,
                 )
                 hp_dealt = self._absorb_shield(target, dmg)
                 target["unit"]["hp"] -= hp_dealt
@@ -691,6 +856,7 @@ class BattleSession:
                     dmg=dmg,
                 )
                 self._blog_crit(is_crit)
+                self._pet_lifesteal(hp_dealt)
                 self._charge_taken(target, hp_dealt)
                 self._strike_back(target["unit"], dmg)
                 self._unit_rage(target)
@@ -708,6 +874,8 @@ class BattleSession:
         也不计打断累积、不触发棘刺反弹——它根本没打到。
         """
         rate = float(rec["unit"].get("dodge", 0.0) or 0.0)
+        if self.accuracy:
+            rate = max(0.0, rate - float(self.accuracy))
         return rate > 0 and self.rng.random() < rate
 
     def _cooldown_frames(self, skill: dict[str, Any]) -> int:
@@ -1253,6 +1421,7 @@ class BattleSession:
                     multiplier=power / BASE_SKILL_POWER,
                     crit_rate=rate,
                     rec=rec,
+                    element=str(skill.get("element") or "normal"),
                 )
                 self.pet_hp -= dmg
                 dealt += dmg
@@ -1324,6 +1493,10 @@ class BattleSession:
         debuff = skill.get("debuff") or {}
         if debuff:
             rounds = max(1, int(debuff.get("rounds", 1)))
+            # 负面抗性缩短时长；用 ceil 保证至少留 1 回合（堆满抗性也不等于免疫）
+            res = float(self.pet_debuff_res or 0.0)
+            if res > 0 and rounds > 1:
+                rounds = max(1, ceil(rounds * (1.0 - min(0.9, res))))
             entry: dict[str, Any] = {
                 "id": skill_id,
                 # frames = 剩余帧数。用 frames 而不是「回合末 -1」，
@@ -1374,6 +1547,7 @@ class BattleSession:
         multiplier: float = 1.0,
         crit_rate: float = 0.0,
         rec: dict[str, Any] | None = None,
+        element: str = "normal",
     ) -> int:
         """敌方打到我方的单次伤害（统一口径，含等级承伤乘区）。
 
@@ -1382,14 +1556,29 @@ class BattleSession:
         即挨得更痛）→ **受击叠怒**（``rage`` 层数加成）。集中一处避免两条
         路径的乘区口径分叉。
         """
+        if self.pet_dodge > 0 and self.rng.random() < self.pet_dodge:
+            return 0
+        # 敌方穿甲先削我方防御；玩家「坚固」抵消它（有效穿甲 = max(0, 敌穿甲 - 坚固)）
+        defence = self._pet_def_eff()
+        if rec is not None:
+            raw_pen = float(rec["unit"].get("armor_pen", 0.0) or 0.0)
+            pen = min(1.0, max(0.0, raw_pen - float(self.pet_solid or 0.0)))
+            if pen > 0:
+                defence = max(0, round(float(defence) * (1.0 - pen)))
         dmg = _damage(
             int(atk),
-            self._pet_def_eff(),
+            defence,
             self.variance,
             self.def_softness,
             self.rng,
         )
         dmg = max(1, round(dmg * float(multiplier)))
+        if self.pet_element_resist:
+            scale = self.pet_element_resist.get(
+                element, self.pet_element_resist.get("normal", 1.0)
+            )
+            if scale < 1.0:
+                dmg = max(1, round(dmg * float(scale)))
         if crit_rate > 0 and self.rng.random() < crit_rate:
             dmg = max(1, round(dmg * self.crit_mult))
         dmg = max(1, round(dmg * self.level_taken_mult))
@@ -1398,6 +1587,10 @@ class BattleSession:
             per = float(rec.get("rage_per_stack", 0.0) or 0.0)
             if stacks > 0 and per > 0:
                 dmg = max(1, round(dmg * (1.0 + stacks * per)))
+        if self.pet_shield > 0:
+            absorbed = min(self.pet_shield, dmg)
+            self.pet_shield -= absorbed
+            dmg -= absorbed
         return dmg
 
     def _enemy_plain(self, rec: dict[str, Any]) -> None:
@@ -1411,7 +1604,11 @@ class BattleSession:
             if self.pet_hp <= 0 or unit["hp"] <= 0:
                 break
             dmg = self._enemy_damage_to_pet(
-                int(unit["atk"]), multiplier=strike_mult, crit_rate=rate, rec=rec
+                int(unit["atk"]),
+                multiplier=strike_mult,
+                crit_rate=rate,
+                rec=rec,
+                element=str(unit.get("element") or "normal"),
             )
             self.pet_hp -= dmg
             dealt += dmg
@@ -1495,7 +1692,8 @@ class BattleSession:
         """
         # 战斗开场：先结算一次「抽蓝」。精英战常常跑不满一个回合，只挂在
         # 回合结束上的话这条机制在短战斗里完全不出现（见 _passive_siphon）。
-        self._passive_siphon()
+        self._frame_phase_reset()
+        self._passive_siphon_once()
         while (
             self.frames < self.max_frames
             and self.pet_hp > 0
@@ -1532,60 +1730,119 @@ class BattleSession:
             enemy_alive=len(self._live_units()),
         )
 
+    def _ready_actors(self) -> list[tuple[str, int | None, float]]:
+        """本帧攒满的行动者，按速度降序。
+
+        存**单位下标**而非对象：dict 不能用 list.index（同内容的群怪会取到
+        同一个下标），而且下标能直接进 JSON。
+        """
+        actors: list[tuple[str, int | None, float]] = []
+        if self.gauge_pet >= 100.0:
+            actors.append(("pet", None, float(self._pet_spd_eff())))
+        for idx, rec in enumerate(self.units):
+            if rec["unit"]["hp"] > 0 and rec["gauge"] >= 100.0:
+                actors.append(("monster", idx, float(rec["unit"]["spd"])))
+        actors.sort(key=lambda a: -a[2])
+        return actors
+
     def _run_round(self) -> None:
         """执行一轮（帧）。"""
-        # 攻击条积攒：**不截断**到 100，多出的点数保留下来。
-        # 旧写法 min(100, gauge + fill) 会把高速度多攒的点直接丢弃——
-        # 速度 25 每帧攒 125，被压成 100，行动一次后归零，白丢 25 点，
-        # 于是 20 以上全部卡在每回合 10 次（速度投资完全无效）。
-        self.gauge_pet += self._spd_gauge_gain(self._pet_spd_eff())
-        for rec in self._live_units():
-            speed = self._spend_stun(rec)
-            rec["gauge"] += self._spd_gauge_gain(speed)
-
-        # 决定行动顺序并执行；同一帧内攒够 200 点就能连动两次。
-        # 每次行动即扣 100，剩余点数带入下一次，行动条不再有上限封顶。
-        # 注意：每个 break 都必须跳出**整个 while**（用标志位 + 统一的
-        # ``battle_over`` 判断），否则战斗结束后 while 还会继续空转——
-        # 因为此时没人能消耗掉剩下的行动条，就是一个死循环。
-        guard = 0
-        max_actions = self.max_actions_per_frame
-        while guard < max_actions:
-            if self.pet_hp <= 0 or self._pick_target() is None:
-                break
-            actors: list[tuple[str, float, dict[str, Any] | None]] = []
-            if self.gauge_pet >= 100.0:
-                actors.append(("pet", float(self._pet_spd_eff()), None))
+        if self.frame_phase == "idle":
+            # 攻击条积攒：**不截断**到 100，多出的点数保留下来。
+            self.gauge_pet += self._spd_gauge_gain(self._pet_spd_eff())
             for rec in self._live_units():
-                if rec["gauge"] >= 100.0:
-                    actors.append(("monster", float(rec["unit"]["spd"]), rec))
-            if not actors:
-                break
-            actors.sort(key=lambda a: -a[1])
+                speed = self._spend_stun(rec)
+                rec["gauge"] += self._spd_gauge_gain(speed)
+            self.pending_actors = self._ready_actors()
+            self.actor_cursor = 0
+            self._frame_guard = 0
+            self.frame_phase = "gauged"
 
-            for who, _, rec in actors:
-                guard += 1
-                if guard > max_actions:
-                    break
-                if self.pet_hp <= 0 or self._pick_target() is None:
-                    break
-                if rec is not None and rec["unit"]["hp"] <= 0:
-                    continue
-                if who == "pet":
-                    self._pet_action()
-                else:
-                    assert rec is not None
-                    # 本轮被「不可行动」打断并取消行动的：扣掉行动条直接跳过，
-                    # 不写日志（控制本身已经由「被打断了」那条说明）。
-                    if rec.pop("skip_round", False):
-                        rec["gauge"] -= 100.0
-                        continue
+        if self.frame_phase == "gauged":
+            if self._consume_gauges():
+                return
+            self.frame_phase = "done"
+
+        if self.frame_phase == "done":
+            self._end_of_round()
+            self.frame_phase = "idle"
+
+    def _consume_gauges(self) -> bool:
+        """消费行动队列；返回 True 表示停在「等玩家指令」。
+
+        游标走到队尾就重建行动者列表——原实现在 while 内部每轮重建，
+        所以同一单位攒够 200 点会在同一帧连动两次，这个语义必须保留。
+        """
+        max_actions = self.max_actions_per_frame
+        while self._frame_guard < max_actions:
+            if self.pet_hp <= 0 or self._pick_target() is None:
+                return False
+            if self.actor_cursor >= len(self.pending_actors):
+                self.pending_actors = self._ready_actors()
+                self.actor_cursor = 0
+                if not self.pending_actors:
+                    return False
+            who, idx, _ = self.pending_actors[self.actor_cursor]
+            self._frame_guard += 1
+            rec = self.units[idx] if idx is not None else None
+            if self.pet_hp <= 0 or self._pick_target() is None:
+                return False
+            if rec is not None and rec["unit"]["hp"] <= 0:
+                self.actor_cursor += 1
+                continue
+            if who == "pet":
+                if self.manual and not self.pet_action_ready:
+                    # 游标与行动条都不动：等玩家下指令
+                    return True
+                self.actor_cursor += 1
+                self.pet_action_ready = False
+                self._pet_action()
+            else:
+                self.actor_cursor += 1
+                assert rec is not None
+                if rec.pop("skip_round", False):
                     rec["gauge"] -= 100.0
-                    self.monster_acts += 1
-                    self._enemy_action(rec)
+                    continue
+                rec["gauge"] -= 100.0
+                self.monster_acts += 1
+                self._enemy_action(rec)
+        return False
 
-        # 轮末处理
-        self._end_of_round()
+    def step_until_my_turn(self) -> None:
+        """跑到「轮到我方」或战斗结束就停（手动模式入口）。"""
+        self._passive_siphon_once()
+        self.pet_action_ready = False
+        self.pending_action = None
+        while (
+            self.frames < self.max_frames
+            and self.pet_hp > 0
+            and self._pick_target() is not None
+        ):
+            self.frames += 1
+            self._run_round()
+            if self.frame_phase == "gauged" and self.manual:
+                return
+        self.frame_phase = "idle"
+
+    def _frame_phase_reset(self) -> None:
+        """把帧相位归零（run() 全新开跑时用）。"""
+        self.frame_phase = "idle"
+        self.pending_actors = []
+        self.actor_cursor = 0
+        self._frame_guard = 0
+
+    def _passive_siphon_once(self) -> None:
+        """开场抽蓝只做一次（原实现在 run() 开头无条件调用）。"""
+        if not self._siphon_opened:
+            self._siphon_opened = True
+            self._passive_siphon()
+
+    def submit_action(self, action: dict[str, Any] | None) -> None:
+        """玩家下达指令后继续跑。"""
+        self.pending_action = action or {"kind": "attack"}
+        self.pet_action_ready = True
+        self._run_round()
+        self.step_until_my_turn()
 
     def _spend_stun(self, rec: dict[str, Any]) -> float:
         """用速度抵扣「不可行动」值，返回本轮可用于攒条的速度。

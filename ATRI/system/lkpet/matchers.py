@@ -60,3 +60,6 @@ pet_rogue_matcher = plugin.cmd_as_group(
     "肉鸽", "肉鸽爬塔：开始/继续/进度/撤退，局内用编号应答"
 )
 pet_train_matcher = plugin.cmd_as_group("训练", "训练宠物获取经验（消耗行动点和状态）")
+pet_endless_matcher = plugin.cmd_as_group(
+    "无尽", "无尽肉鸽：开始 / 继续 / 进度 / 撤退（与爬塔完全独立）"
+)

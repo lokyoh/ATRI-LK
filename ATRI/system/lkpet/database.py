@@ -146,6 +146,27 @@ class Rogue(BaseModel):
     updated_at: datetime = Field(default_factory=datetime.now)
 
 
+class Endless(BaseModel):
+    """无尽模式进度：最高层、场次、进行中的局与四个图鉴。
+
+    数据独立于 ``PETROGUE``——两种模式互不写入，整块放在一张新表里。
+    ``run_state`` 为空 dict 表示没有进行中的局。
+    """
+
+    player_id: str
+    best_floor: int = 0
+    total_runs: int = 0
+    run_state: dict[str, Any] = Field(default_factory=dict)
+    codex_relics: list[str] = Field(default_factory=list)
+    codex_skills: dict[str, int] = Field(default_factory=dict)
+    """``{原型 id: 见过的最高等阶}``。160 个技能是 32 原型 × 5 等阶，
+    按原型记比按实例记少 5 倍噪音。
+    """
+    codex_equips: list[str] = Field(default_factory=list)
+    codex_events: list[str] = Field(default_factory=list)
+    updated_at: datetime = Field(default_factory=datetime.now)
+
+
 PETDATA_VERSION = 2
 """PETDATA 表结构版本。
 
@@ -572,10 +593,52 @@ rogue_table: DBTable = lk_db.get_table(
     "PETROGUE", ROGUE_COLUMNS, ROGUE_VERSION, update_rogue_db
 )
 
+ENDLESS_VERSION = 0
+"""PETENDLESS 表结构版本。新表从 0 起，列补齐走 PRAGMA 幂等 ALTER。"""
+
+ENDLESS_COLUMNS = """
+PLAYER_ID      TEXT PRIMARY KEY,
+BEST_FLOOR     INTEGER NOT NULL DEFAULT 0,
+TOTAL_RUNS     INTEGER NOT NULL DEFAULT 0,
+RUN_STATE      TEXT NOT NULL DEFAULT '{}',
+CODEX_RELICS   TEXT NOT NULL DEFAULT '[]',
+CODEX_SKILLS   TEXT NOT NULL DEFAULT '{}',
+CODEX_EQUIPS   TEXT NOT NULL DEFAULT '[]',
+CODEX_EVENTS   TEXT NOT NULL DEFAULT '[]',
+UPDATED_AT     TEXT
+"""
+
+ENDLESS_MIGRATION_COLUMNS = {
+    "CODEX_RELICS": "TEXT NOT NULL DEFAULT '[]'",
+    "CODEX_SKILLS": "TEXT NOT NULL DEFAULT '{}'",
+    "CODEX_EQUIPS": "TEXT NOT NULL DEFAULT '[]'",
+    "CODEX_EVENTS": "TEXT NOT NULL DEFAULT '[]'",
+}
+
+
+def update_endless_db(connection, version: int) -> None:
+    """幂等的列差异补齐（与 update_rogue_db 同策略）。"""
+    cursor = connection.cursor()
+    try:
+        existing = {
+            str(row[1]).upper()
+            for row in cursor.execute("PRAGMA table_info(PETENDLESS)")
+        }
+        with connection:
+            for column, definition in ENDLESS_MIGRATION_COLUMNS.items():
+                if column not in existing:
+                    cursor.execute(
+                        f"ALTER TABLE PETENDLESS ADD COLUMN {column} {definition}"
+                    )
+    finally:
+        cursor.close()
+
+
 PET_KEY_COLUMN = "ID"
 REINCARNATION_KEY_COLUMN = "PLAYER_ID"
 BIOGRAPHY_KEY_COLUMN = "PLAYER_ID"
 ROGUE_KEY_COLUMN = "PLAYER_ID"
+ENDLESS_KEY_COLUMN = "PLAYER_ID"
 """各表主键列名；模型侧统一叫 ``player_id``。"""
 
 TABLE_FIELD_ALIASES: dict[str, dict[str, str]] = {
@@ -588,8 +651,13 @@ STRING_KEY_FIELDS: dict[str, frozenset[str]] = {
     "Reincarnation": frozenset({"player_id"}),
     "Biography": frozenset({"player_id"}),
     "Rogue": frozenset({"player_id"}),
+    "Endless": frozenset({"player_id"}),
 }
 """必须按字符串读回的主键字段（见 :func:`_normalize_string_keys`）。"""
+
+endless_table: DBTable = lk_db.get_table(
+    "PETENDLESS", ENDLESS_COLUMNS, ENDLESS_VERSION, update_endless_db
+)
 
 
 def _encode_value(value: Any) -> Any:
@@ -711,6 +779,16 @@ def load_rogue(player_id: str | int) -> Rogue | None:
 def save_rogue(rogue: Rogue) -> None:
     """Persist a roguelike progress row (insert or update)."""
     save_model(rogue_table, rogue, ROGUE_KEY_COLUMN)
+
+
+def load_endless(player_id: str | int) -> Endless | None:
+    """Read a player's endless run row, or ``None`` when never created."""
+    return load_model(endless_table, Endless, ENDLESS_KEY_COLUMN, str(player_id))
+
+
+def save_endless(endless: Endless) -> None:
+    """Persist an endless run row (insert or update)."""
+    save_model(endless_table, endless, ENDLESS_KEY_COLUMN)
 
 
 def load_all_pets() -> list[Pet]:

@@ -1,0 +1,351 @@
+# 无尽模式遗物（与爬塔的 rogue_relics.yaml 完全独立）。
+# 27 套 × 每套 8 件 = 216 套装件；散件 100 件（T1 30 / T2 25 / T3 20 / T4 15 / T5 10）。
+# 散件 set 为空、不计数；每件 2 条属性、名字不带数字、全池互不相同。
+# 池子无总数上限：重复获得按叠加计。
+
+sets:
+  atk: { name: 锋锐, attr: 攻击 }
+  def: { name: 壁垒, attr: 防御 }
+  spd: { name: 疾行, attr: 速度 }
+  hp: { name: 生息, attr: 生命 }
+  mp: { name: 灵泉, attr: 魔力 }
+  crit_rate: { name: 锐意, attr: 暴击率 }
+  crit_mult: { name: 贯穿, attr: 暴击伤害 }
+  armor_pen: { name: 破甲, attr: 穿甲 }
+  basic_dmg: { name: 刚猛, attr: 普攻伤害 }
+  skill_dmg: { name: 秘法, attr: 技能伤害 }
+  elem_fire: { name: 烈焰, attr: 火元素加伤 }
+  elem_ice: { name: 霜寒, attr: 冰元素加伤 }
+  elem_thunder: { name: 雷鸣, attr: 雷元素加伤 }
+  elem_wind: { name: 疾风, attr: 风元素加伤 }
+  elem_earth: { name: 厚土, attr: 土元素加伤 }
+  elem_light: { name: 圣辉, attr: 光元素加伤 }
+  elem_dark: { name: 幽影, attr: 暗元素加伤 }
+  elem_all: { name: 元素亲和, attr: 全元素加伤 }
+  solid: { name: 坚壁, attr: 坚固 }
+  debuff_res: { name: 定神, attr: 负面抗性 }
+  phys_res: { name: 铁壁, attr: 物理抗性 }
+  dodge: { name: 鬼影, attr: 闪避 }
+  phys_dmg: { name: 战锋, attr: 物理加伤 }
+  accuracy: { name: 鹰眼, attr: 准确率 }
+  lifesteal: { name: 嗜血, attr: 吸血 }
+  shield_gain: { name: 护佑, attr: 护盾获取 }
+  heal_gain: { name: 慈光, attr: 治疗获取 }
+
+relics:
+  - { id: s_atk_1_1, set: atk, tier: 1, name: 锋锐·Ia, effect: { atk: 10 } }
+  - { id: s_atk_1_2, set: atk, tier: 1, name: 锋锐·Ib, effect: { atk: 10 } }
+  - { id: s_atk_2_1, set: atk, tier: 2, name: 锋锐·IIa, effect: { atk: 15 } }
+  - { id: s_atk_2_2, set: atk, tier: 2, name: 锋锐·IIb, effect: { atk: 15 } }
+  - { id: s_atk_3_1, set: atk, tier: 3, name: 锋锐·IIIa, effect: { atk: 22 } }
+  - { id: s_atk_3_2, set: atk, tier: 3, name: 锋锐·IIIb, effect: { atk: 22 } }
+  - { id: s_atk_4_1, set: atk, tier: 4, name: 锋锐·IV, effect: { atk: 32 } }
+  - { id: s_atk_5_1, set: atk, tier: 5, name: 锋锐·V, effect: { atk: 45 } }
+  - { id: s_def_1_1, set: def, tier: 1, name: 壁垒·Ia, effect: { def: 10 } }
+  - { id: s_def_1_2, set: def, tier: 1, name: 壁垒·Ib, effect: { def: 10 } }
+  - { id: s_def_2_1, set: def, tier: 2, name: 壁垒·IIa, effect: { def: 15 } }
+  - { id: s_def_2_2, set: def, tier: 2, name: 壁垒·IIb, effect: { def: 15 } }
+  - { id: s_def_3_1, set: def, tier: 3, name: 壁垒·IIIa, effect: { def: 22 } }
+  - { id: s_def_3_2, set: def, tier: 3, name: 壁垒·IIIb, effect: { def: 22 } }
+  - { id: s_def_4_1, set: def, tier: 4, name: 壁垒·IV, effect: { def: 32 } }
+  - { id: s_def_5_1, set: def, tier: 5, name: 壁垒·V, effect: { def: 45 } }
+  - { id: s_spd_1_1, set: spd, tier: 1, name: 疾行·Ia, effect: { spd: 5 } }
+  - { id: s_spd_1_2, set: spd, tier: 1, name: 疾行·Ib, effect: { spd: 5 } }
+  - { id: s_spd_2_1, set: spd, tier: 2, name: 疾行·IIa, effect: { spd: 8 } }
+  - { id: s_spd_2_2, set: spd, tier: 2, name: 疾行·IIb, effect: { spd: 8 } }
+  - { id: s_spd_3_1, set: spd, tier: 3, name: 疾行·IIIa, effect: { spd: 12 } }
+  - { id: s_spd_3_2, set: spd, tier: 3, name: 疾行·IIIb, effect: { spd: 12 } }
+  - { id: s_spd_4_1, set: spd, tier: 4, name: 疾行·IV, effect: { spd: 17 } }
+  - { id: s_spd_5_1, set: spd, tier: 5, name: 疾行·V, effect: { spd: 24 } }
+  - { id: s_hp_1_1, set: hp, tier: 1, name: 生息·Ia, effect: { hp: 40 } }
+  - { id: s_hp_1_2, set: hp, tier: 1, name: 生息·Ib, effect: { hp: 40 } }
+  - { id: s_hp_2_1, set: hp, tier: 2, name: 生息·IIa, effect: { hp: 60 } }
+  - { id: s_hp_2_2, set: hp, tier: 2, name: 生息·IIb, effect: { hp: 60 } }
+  - { id: s_hp_3_1, set: hp, tier: 3, name: 生息·IIIa, effect: { hp: 88 } }
+  - { id: s_hp_3_2, set: hp, tier: 3, name: 生息·IIIb, effect: { hp: 88 } }
+  - { id: s_hp_4_1, set: hp, tier: 4, name: 生息·IV, effect: { hp: 128 } }
+  - { id: s_hp_5_1, set: hp, tier: 5, name: 生息·V, effect: { hp: 180 } }
+  - { id: s_mp_1_1, set: mp, tier: 1, name: 灵泉·Ia, effect: { mp: 20 } }
+  - { id: s_mp_1_2, set: mp, tier: 1, name: 灵泉·Ib, effect: { mp: 20 } }
+  - { id: s_mp_2_1, set: mp, tier: 2, name: 灵泉·IIa, effect: { mp: 30 } }
+  - { id: s_mp_2_2, set: mp, tier: 2, name: 灵泉·IIb, effect: { mp: 30 } }
+  - { id: s_mp_3_1, set: mp, tier: 3, name: 灵泉·IIIa, effect: { mp: 44 } }
+  - { id: s_mp_3_2, set: mp, tier: 3, name: 灵泉·IIIb, effect: { mp: 44 } }
+  - { id: s_mp_4_1, set: mp, tier: 4, name: 灵泉·IV, effect: { mp: 64 } }
+  - { id: s_mp_5_1, set: mp, tier: 5, name: 灵泉·V, effect: { mp: 90 } }
+  - { id: s_crit_rate_1_1, set: crit_rate, tier: 1, name: 锐意·Ia, effect: { crit_rate: 0.05 } }
+  - { id: s_crit_rate_1_2, set: crit_rate, tier: 1, name: 锐意·Ib, effect: { crit_rate: 0.05 } }
+  - { id: s_crit_rate_2_1, set: crit_rate, tier: 2, name: 锐意·IIa, effect: { crit_rate: 0.075 } }
+  - { id: s_crit_rate_2_2, set: crit_rate, tier: 2, name: 锐意·IIb, effect: { crit_rate: 0.075 } }
+  - { id: s_crit_rate_3_1, set: crit_rate, tier: 3, name: 锐意·IIIa, effect: { crit_rate: 0.11 } }
+  - { id: s_crit_rate_3_2, set: crit_rate, tier: 3, name: 锐意·IIIb, effect: { crit_rate: 0.11 } }
+  - { id: s_crit_rate_4_1, set: crit_rate, tier: 4, name: 锐意·IV, effect: { crit_rate: 0.16 } }
+  - { id: s_crit_rate_5_1, set: crit_rate, tier: 5, name: 锐意·V, effect: { crit_rate: 0.225 } }
+  - { id: s_crit_mult_1_1, set: crit_mult, tier: 1, name: 贯穿·Ia, effect: { crit_mult: 0.15 } }
+  - { id: s_crit_mult_1_2, set: crit_mult, tier: 1, name: 贯穿·Ib, effect: { crit_mult: 0.15 } }
+  - { id: s_crit_mult_2_1, set: crit_mult, tier: 2, name: 贯穿·IIa, effect: { crit_mult: 0.225 } }
+  - { id: s_crit_mult_2_2, set: crit_mult, tier: 2, name: 贯穿·IIb, effect: { crit_mult: 0.225 } }
+  - { id: s_crit_mult_3_1, set: crit_mult, tier: 3, name: 贯穿·IIIa, effect: { crit_mult: 0.33 } }
+  - { id: s_crit_mult_3_2, set: crit_mult, tier: 3, name: 贯穿·IIIb, effect: { crit_mult: 0.33 } }
+  - { id: s_crit_mult_4_1, set: crit_mult, tier: 4, name: 贯穿·IV, effect: { crit_mult: 0.48 } }
+  - { id: s_crit_mult_5_1, set: crit_mult, tier: 5, name: 贯穿·V, effect: { crit_mult: 0.675 } }
+  - { id: s_armor_pen_1_1, set: armor_pen, tier: 1, name: 破甲·Ia, effect: { armor_pen: 0.07 } }
+  - { id: s_armor_pen_1_2, set: armor_pen, tier: 1, name: 破甲·Ib, effect: { armor_pen: 0.07 } }
+  - { id: s_armor_pen_2_1, set: armor_pen, tier: 2, name: 破甲·IIa, effect: { armor_pen: 0.105 } }
+  - { id: s_armor_pen_2_2, set: armor_pen, tier: 2, name: 破甲·IIb, effect: { armor_pen: 0.105 } }
+  - { id: s_armor_pen_3_1, set: armor_pen, tier: 3, name: 破甲·IIIa, effect: { armor_pen: 0.154 } }
+  - { id: s_armor_pen_3_2, set: armor_pen, tier: 3, name: 破甲·IIIb, effect: { armor_pen: 0.154 } }
+  - { id: s_armor_pen_4_1, set: armor_pen, tier: 4, name: 破甲·IV, effect: { armor_pen: 0.224 } }
+  - { id: s_armor_pen_5_1, set: armor_pen, tier: 5, name: 破甲·V, effect: { armor_pen: 0.315 } }
+  - { id: s_basic_dmg_1_1, set: basic_dmg, tier: 1, name: 刚猛·Ia, effect: { basic_dmg: 0.1 } }
+  - { id: s_basic_dmg_1_2, set: basic_dmg, tier: 1, name: 刚猛·Ib, effect: { basic_dmg: 0.1 } }
+  - { id: s_basic_dmg_2_1, set: basic_dmg, tier: 2, name: 刚猛·IIa, effect: { basic_dmg: 0.15 } }
+  - { id: s_basic_dmg_2_2, set: basic_dmg, tier: 2, name: 刚猛·IIb, effect: { basic_dmg: 0.15 } }
+  - { id: s_basic_dmg_3_1, set: basic_dmg, tier: 3, name: 刚猛·IIIa, effect: { basic_dmg: 0.22 } }
+  - { id: s_basic_dmg_3_2, set: basic_dmg, tier: 3, name: 刚猛·IIIb, effect: { basic_dmg: 0.22 } }
+  - { id: s_basic_dmg_4_1, set: basic_dmg, tier: 4, name: 刚猛·IV, effect: { basic_dmg: 0.32 } }
+  - { id: s_basic_dmg_5_1, set: basic_dmg, tier: 5, name: 刚猛·V, effect: { basic_dmg: 0.45 } }
+  - { id: s_skill_dmg_1_1, set: skill_dmg, tier: 1, name: 秘法·Ia, effect: { skill_dmg: 0.1 } }
+  - { id: s_skill_dmg_1_2, set: skill_dmg, tier: 1, name: 秘法·Ib, effect: { skill_dmg: 0.1 } }
+  - { id: s_skill_dmg_2_1, set: skill_dmg, tier: 2, name: 秘法·IIa, effect: { skill_dmg: 0.15 } }
+  - { id: s_skill_dmg_2_2, set: skill_dmg, tier: 2, name: 秘法·IIb, effect: { skill_dmg: 0.15 } }
+  - { id: s_skill_dmg_3_1, set: skill_dmg, tier: 3, name: 秘法·IIIa, effect: { skill_dmg: 0.22 } }
+  - { id: s_skill_dmg_3_2, set: skill_dmg, tier: 3, name: 秘法·IIIb, effect: { skill_dmg: 0.22 } }
+  - { id: s_skill_dmg_4_1, set: skill_dmg, tier: 4, name: 秘法·IV, effect: { skill_dmg: 0.32 } }
+  - { id: s_skill_dmg_5_1, set: skill_dmg, tier: 5, name: 秘法·V, effect: { skill_dmg: 0.45 } }
+  - { id: s_elem_fire_1_1, set: elem_fire, tier: 1, name: 烈焰·Ia, effect: { elem_fire: 0.1 } }
+  - { id: s_elem_fire_1_2, set: elem_fire, tier: 1, name: 烈焰·Ib, effect: { elem_fire: 0.1 } }
+  - { id: s_elem_fire_2_1, set: elem_fire, tier: 2, name: 烈焰·IIa, effect: { elem_fire: 0.15 } }
+  - { id: s_elem_fire_2_2, set: elem_fire, tier: 2, name: 烈焰·IIb, effect: { elem_fire: 0.15 } }
+  - { id: s_elem_fire_3_1, set: elem_fire, tier: 3, name: 烈焰·IIIa, effect: { elem_fire: 0.22 } }
+  - { id: s_elem_fire_3_2, set: elem_fire, tier: 3, name: 烈焰·IIIb, effect: { elem_fire: 0.22 } }
+  - { id: s_elem_fire_4_1, set: elem_fire, tier: 4, name: 烈焰·IV, effect: { elem_fire: 0.32 } }
+  - { id: s_elem_fire_5_1, set: elem_fire, tier: 5, name: 烈焰·V, effect: { elem_fire: 0.45 } }
+  - { id: s_elem_ice_1_1, set: elem_ice, tier: 1, name: 霜寒·Ia, effect: { elem_ice: 0.1 } }
+  - { id: s_elem_ice_1_2, set: elem_ice, tier: 1, name: 霜寒·Ib, effect: { elem_ice: 0.1 } }
+  - { id: s_elem_ice_2_1, set: elem_ice, tier: 2, name: 霜寒·IIa, effect: { elem_ice: 0.15 } }
+  - { id: s_elem_ice_2_2, set: elem_ice, tier: 2, name: 霜寒·IIb, effect: { elem_ice: 0.15 } }
+  - { id: s_elem_ice_3_1, set: elem_ice, tier: 3, name: 霜寒·IIIa, effect: { elem_ice: 0.22 } }
+  - { id: s_elem_ice_3_2, set: elem_ice, tier: 3, name: 霜寒·IIIb, effect: { elem_ice: 0.22 } }
+  - { id: s_elem_ice_4_1, set: elem_ice, tier: 4, name: 霜寒·IV, effect: { elem_ice: 0.32 } }
+  - { id: s_elem_ice_5_1, set: elem_ice, tier: 5, name: 霜寒·V, effect: { elem_ice: 0.45 } }
+  - { id: s_elem_thunder_1_1, set: elem_thunder, tier: 1, name: 雷鸣·Ia, effect: { elem_thunder: 0.1 } }
+  - { id: s_elem_thunder_1_2, set: elem_thunder, tier: 1, name: 雷鸣·Ib, effect: { elem_thunder: 0.1 } }
+  - { id: s_elem_thunder_2_1, set: elem_thunder, tier: 2, name: 雷鸣·IIa, effect: { elem_thunder: 0.15 } }
+  - { id: s_elem_thunder_2_2, set: elem_thunder, tier: 2, name: 雷鸣·IIb, effect: { elem_thunder: 0.15 } }
+  - { id: s_elem_thunder_3_1, set: elem_thunder, tier: 3, name: 雷鸣·IIIa, effect: { elem_thunder: 0.22 } }
+  - { id: s_elem_thunder_3_2, set: elem_thunder, tier: 3, name: 雷鸣·IIIb, effect: { elem_thunder: 0.22 } }
+  - { id: s_elem_thunder_4_1, set: elem_thunder, tier: 4, name: 雷鸣·IV, effect: { elem_thunder: 0.32 } }
+  - { id: s_elem_thunder_5_1, set: elem_thunder, tier: 5, name: 雷鸣·V, effect: { elem_thunder: 0.45 } }
+  - { id: s_elem_wind_1_1, set: elem_wind, tier: 1, name: 疾风·Ia, effect: { elem_wind: 0.1 } }
+  - { id: s_elem_wind_1_2, set: elem_wind, tier: 1, name: 疾风·Ib, effect: { elem_wind: 0.1 } }
+  - { id: s_elem_wind_2_1, set: elem_wind, tier: 2, name: 疾风·IIa, effect: { elem_wind: 0.15 } }
+  - { id: s_elem_wind_2_2, set: elem_wind, tier: 2, name: 疾风·IIb, effect: { elem_wind: 0.15 } }
+  - { id: s_elem_wind_3_1, set: elem_wind, tier: 3, name: 疾风·IIIa, effect: { elem_wind: 0.22 } }
+  - { id: s_elem_wind_3_2, set: elem_wind, tier: 3, name: 疾风·IIIb, effect: { elem_wind: 0.22 } }
+  - { id: s_elem_wind_4_1, set: elem_wind, tier: 4, name: 疾风·IV, effect: { elem_wind: 0.32 } }
+  - { id: s_elem_wind_5_1, set: elem_wind, tier: 5, name: 疾风·V, effect: { elem_wind: 0.45 } }
+  - { id: s_elem_earth_1_1, set: elem_earth, tier: 1, name: 厚土·Ia, effect: { elem_earth: 0.1 } }
+  - { id: s_elem_earth_1_2, set: elem_earth, tier: 1, name: 厚土·Ib, effect: { elem_earth: 0.1 } }
+  - { id: s_elem_earth_2_1, set: elem_earth, tier: 2, name: 厚土·IIa, effect: { elem_earth: 0.15 } }
+  - { id: s_elem_earth_2_2, set: elem_earth, tier: 2, name: 厚土·IIb, effect: { elem_earth: 0.15 } }
+  - { id: s_elem_earth_3_1, set: elem_earth, tier: 3, name: 厚土·IIIa, effect: { elem_earth: 0.22 } }
+  - { id: s_elem_earth_3_2, set: elem_earth, tier: 3, name: 厚土·IIIb, effect: { elem_earth: 0.22 } }
+  - { id: s_elem_earth_4_1, set: elem_earth, tier: 4, name: 厚土·IV, effect: { elem_earth: 0.32 } }
+  - { id: s_elem_earth_5_1, set: elem_earth, tier: 5, name: 厚土·V, effect: { elem_earth: 0.45 } }
+  - { id: s_elem_light_1_1, set: elem_light, tier: 1, name: 圣辉·Ia, effect: { elem_light: 0.1 } }
+  - { id: s_elem_light_1_2, set: elem_light, tier: 1, name: 圣辉·Ib, effect: { elem_light: 0.1 } }
+  - { id: s_elem_light_2_1, set: elem_light, tier: 2, name: 圣辉·IIa, effect: { elem_light: 0.15 } }
+  - { id: s_elem_light_2_2, set: elem_light, tier: 2, name: 圣辉·IIb, effect: { elem_light: 0.15 } }
+  - { id: s_elem_light_3_1, set: elem_light, tier: 3, name: 圣辉·IIIa, effect: { elem_light: 0.22 } }
+  - { id: s_elem_light_3_2, set: elem_light, tier: 3, name: 圣辉·IIIb, effect: { elem_light: 0.22 } }
+  - { id: s_elem_light_4_1, set: elem_light, tier: 4, name: 圣辉·IV, effect: { elem_light: 0.32 } }
+  - { id: s_elem_light_5_1, set: elem_light, tier: 5, name: 圣辉·V, effect: { elem_light: 0.45 } }
+  - { id: s_elem_dark_1_1, set: elem_dark, tier: 1, name: 幽影·Ia, effect: { elem_dark: 0.1 } }
+  - { id: s_elem_dark_1_2, set: elem_dark, tier: 1, name: 幽影·Ib, effect: { elem_dark: 0.1 } }
+  - { id: s_elem_dark_2_1, set: elem_dark, tier: 2, name: 幽影·IIa, effect: { elem_dark: 0.15 } }
+  - { id: s_elem_dark_2_2, set: elem_dark, tier: 2, name: 幽影·IIb, effect: { elem_dark: 0.15 } }
+  - { id: s_elem_dark_3_1, set: elem_dark, tier: 3, name: 幽影·IIIa, effect: { elem_dark: 0.22 } }
+  - { id: s_elem_dark_3_2, set: elem_dark, tier: 3, name: 幽影·IIIb, effect: { elem_dark: 0.22 } }
+  - { id: s_elem_dark_4_1, set: elem_dark, tier: 4, name: 幽影·IV, effect: { elem_dark: 0.32 } }
+  - { id: s_elem_dark_5_1, set: elem_dark, tier: 5, name: 幽影·V, effect: { elem_dark: 0.45 } }
+  - { id: s_elem_all_1_1, set: elem_all, tier: 1, name: 元素亲和·Ia, effect: { elem_all: 0.07 } }
+  - { id: s_elem_all_1_2, set: elem_all, tier: 1, name: 元素亲和·Ib, effect: { elem_all: 0.07 } }
+  - { id: s_elem_all_2_1, set: elem_all, tier: 2, name: 元素亲和·IIa, effect: { elem_all: 0.105 } }
+  - { id: s_elem_all_2_2, set: elem_all, tier: 2, name: 元素亲和·IIb, effect: { elem_all: 0.105 } }
+  - { id: s_elem_all_3_1, set: elem_all, tier: 3, name: 元素亲和·IIIa, effect: { elem_all: 0.154 } }
+  - { id: s_elem_all_3_2, set: elem_all, tier: 3, name: 元素亲和·IIIb, effect: { elem_all: 0.154 } }
+  - { id: s_elem_all_4_1, set: elem_all, tier: 4, name: 元素亲和·IV, effect: { elem_all: 0.224 } }
+  - { id: s_elem_all_5_1, set: elem_all, tier: 5, name: 元素亲和·V, effect: { elem_all: 0.315 } }
+  - { id: s_solid_1_1, set: solid, tier: 1, name: 坚壁·Ia, effect: { solid: 0.1 } }
+  - { id: s_solid_1_2, set: solid, tier: 1, name: 坚壁·Ib, effect: { solid: 0.1 } }
+  - { id: s_solid_2_1, set: solid, tier: 2, name: 坚壁·IIa, effect: { solid: 0.15 } }
+  - { id: s_solid_2_2, set: solid, tier: 2, name: 坚壁·IIb, effect: { solid: 0.15 } }
+  - { id: s_solid_3_1, set: solid, tier: 3, name: 坚壁·IIIa, effect: { solid: 0.22 } }
+  - { id: s_solid_3_2, set: solid, tier: 3, name: 坚壁·IIIb, effect: { solid: 0.22 } }
+  - { id: s_solid_4_1, set: solid, tier: 4, name: 坚壁·IV, effect: { solid: 0.32 } }
+  - { id: s_solid_5_1, set: solid, tier: 5, name: 坚壁·V, effect: { solid: 0.45 } }
+  - { id: s_debuff_res_1_1, set: debuff_res, tier: 1, name: 定神·Ia, effect: { debuff_res: 0.1 } }
+  - { id: s_debuff_res_1_2, set: debuff_res, tier: 1, name: 定神·Ib, effect: { debuff_res: 0.1 } }
+  - { id: s_debuff_res_2_1, set: debuff_res, tier: 2, name: 定神·IIa, effect: { debuff_res: 0.15 } }
+  - { id: s_debuff_res_2_2, set: debuff_res, tier: 2, name: 定神·IIb, effect: { debuff_res: 0.15 } }
+  - { id: s_debuff_res_3_1, set: debuff_res, tier: 3, name: 定神·IIIa, effect: { debuff_res: 0.22 } }
+  - { id: s_debuff_res_3_2, set: debuff_res, tier: 3, name: 定神·IIIb, effect: { debuff_res: 0.22 } }
+  - { id: s_debuff_res_4_1, set: debuff_res, tier: 4, name: 定神·IV, effect: { debuff_res: 0.32 } }
+  - { id: s_debuff_res_5_1, set: debuff_res, tier: 5, name: 定神·V, effect: { debuff_res: 0.45 } }
+  - { id: s_phys_res_1_1, set: phys_res, tier: 1, name: 铁壁·Ia, effect: { phys_res: 32 } }
+  - { id: s_phys_res_1_2, set: phys_res, tier: 1, name: 铁壁·Ib, effect: { phys_res: 32 } }
+  - { id: s_phys_res_2_1, set: phys_res, tier: 2, name: 铁壁·IIa, effect: { phys_res: 48 } }
+  - { id: s_phys_res_2_2, set: phys_res, tier: 2, name: 铁壁·IIb, effect: { phys_res: 48 } }
+  - { id: s_phys_res_3_1, set: phys_res, tier: 3, name: 铁壁·IIIa, effect: { phys_res: 70 } }
+  - { id: s_phys_res_3_2, set: phys_res, tier: 3, name: 铁壁·IIIb, effect: { phys_res: 70 } }
+  - { id: s_phys_res_4_1, set: phys_res, tier: 4, name: 铁壁·IV, effect: { phys_res: 102 } }
+  - { id: s_phys_res_5_1, set: phys_res, tier: 5, name: 铁壁·V, effect: { phys_res: 144 } }
+  - { id: s_dodge_1_1, set: dodge, tier: 1, name: 鬼影·Ia, effect: { dodge: 0.05 } }
+  - { id: s_dodge_1_2, set: dodge, tier: 1, name: 鬼影·Ib, effect: { dodge: 0.05 } }
+  - { id: s_dodge_2_1, set: dodge, tier: 2, name: 鬼影·IIa, effect: { dodge: 0.075 } }
+  - { id: s_dodge_2_2, set: dodge, tier: 2, name: 鬼影·IIb, effect: { dodge: 0.075 } }
+  - { id: s_dodge_3_1, set: dodge, tier: 3, name: 鬼影·IIIa, effect: { dodge: 0.11 } }
+  - { id: s_dodge_3_2, set: dodge, tier: 3, name: 鬼影·IIIb, effect: { dodge: 0.11 } }
+  - { id: s_dodge_4_1, set: dodge, tier: 4, name: 鬼影·IV, effect: { dodge: 0.16 } }
+  - { id: s_dodge_5_1, set: dodge, tier: 5, name: 鬼影·V, effect: { dodge: 0.225 } }
+  - { id: s_phys_dmg_1_1, set: phys_dmg, tier: 1, name: 战锋·Ia, effect: { phys_dmg: 0.1 } }
+  - { id: s_phys_dmg_1_2, set: phys_dmg, tier: 1, name: 战锋·Ib, effect: { phys_dmg: 0.1 } }
+  - { id: s_phys_dmg_2_1, set: phys_dmg, tier: 2, name: 战锋·IIa, effect: { phys_dmg: 0.15 } }
+  - { id: s_phys_dmg_2_2, set: phys_dmg, tier: 2, name: 战锋·IIb, effect: { phys_dmg: 0.15 } }
+  - { id: s_phys_dmg_3_1, set: phys_dmg, tier: 3, name: 战锋·IIIa, effect: { phys_dmg: 0.22 } }
+  - { id: s_phys_dmg_3_2, set: phys_dmg, tier: 3, name: 战锋·IIIb, effect: { phys_dmg: 0.22 } }
+  - { id: s_phys_dmg_4_1, set: phys_dmg, tier: 4, name: 战锋·IV, effect: { phys_dmg: 0.32 } }
+  - { id: s_phys_dmg_5_1, set: phys_dmg, tier: 5, name: 战锋·V, effect: { phys_dmg: 0.45 } }
+  - { id: s_accuracy_1_1, set: accuracy, tier: 1, name: 鹰眼·Ia, effect: { accuracy: 0.05 } }
+  - { id: s_accuracy_1_2, set: accuracy, tier: 1, name: 鹰眼·Ib, effect: { accuracy: 0.05 } }
+  - { id: s_accuracy_2_1, set: accuracy, tier: 2, name: 鹰眼·IIa, effect: { accuracy: 0.075 } }
+  - { id: s_accuracy_2_2, set: accuracy, tier: 2, name: 鹰眼·IIb, effect: { accuracy: 0.075 } }
+  - { id: s_accuracy_3_1, set: accuracy, tier: 3, name: 鹰眼·IIIa, effect: { accuracy: 0.11 } }
+  - { id: s_accuracy_3_2, set: accuracy, tier: 3, name: 鹰眼·IIIb, effect: { accuracy: 0.11 } }
+  - { id: s_accuracy_4_1, set: accuracy, tier: 4, name: 鹰眼·IV, effect: { accuracy: 0.16 } }
+  - { id: s_accuracy_5_1, set: accuracy, tier: 5, name: 鹰眼·V, effect: { accuracy: 0.225 } }
+  - { id: s_lifesteal_1_1, set: lifesteal, tier: 1, name: 嗜血·Ia, effect: { lifesteal: 0.05 } }
+  - { id: s_lifesteal_1_2, set: lifesteal, tier: 1, name: 嗜血·Ib, effect: { lifesteal: 0.05 } }
+  - { id: s_lifesteal_2_1, set: lifesteal, tier: 2, name: 嗜血·IIa, effect: { lifesteal: 0.075 } }
+  - { id: s_lifesteal_2_2, set: lifesteal, tier: 2, name: 嗜血·IIb, effect: { lifesteal: 0.075 } }
+  - { id: s_lifesteal_3_1, set: lifesteal, tier: 3, name: 嗜血·IIIa, effect: { lifesteal: 0.11 } }
+  - { id: s_lifesteal_3_2, set: lifesteal, tier: 3, name: 嗜血·IIIb, effect: { lifesteal: 0.11 } }
+  - { id: s_lifesteal_4_1, set: lifesteal, tier: 4, name: 嗜血·IV, effect: { lifesteal: 0.16 } }
+  - { id: s_lifesteal_5_1, set: lifesteal, tier: 5, name: 嗜血·V, effect: { lifesteal: 0.225 } }
+  - { id: s_shield_gain_1_1, set: shield_gain, tier: 1, name: 护佑·Ia, effect: { shield_gain: 0.1 } }
+  - { id: s_shield_gain_1_2, set: shield_gain, tier: 1, name: 护佑·Ib, effect: { shield_gain: 0.1 } }
+  - { id: s_shield_gain_2_1, set: shield_gain, tier: 2, name: 护佑·IIa, effect: { shield_gain: 0.15 } }
+  - { id: s_shield_gain_2_2, set: shield_gain, tier: 2, name: 护佑·IIb, effect: { shield_gain: 0.15 } }
+  - { id: s_shield_gain_3_1, set: shield_gain, tier: 3, name: 护佑·IIIa, effect: { shield_gain: 0.22 } }
+  - { id: s_shield_gain_3_2, set: shield_gain, tier: 3, name: 护佑·IIIb, effect: { shield_gain: 0.22 } }
+  - { id: s_shield_gain_4_1, set: shield_gain, tier: 4, name: 护佑·IV, effect: { shield_gain: 0.32 } }
+  - { id: s_shield_gain_5_1, set: shield_gain, tier: 5, name: 护佑·V, effect: { shield_gain: 0.45 } }
+  - { id: s_heal_gain_1_1, set: heal_gain, tier: 1, name: 慈光·Ia, effect: { heal_gain: 0.1 } }
+  - { id: s_heal_gain_1_2, set: heal_gain, tier: 1, name: 慈光·Ib, effect: { heal_gain: 0.1 } }
+  - { id: s_heal_gain_2_1, set: heal_gain, tier: 2, name: 慈光·IIa, effect: { heal_gain: 0.15 } }
+  - { id: s_heal_gain_2_2, set: heal_gain, tier: 2, name: 慈光·IIb, effect: { heal_gain: 0.15 } }
+  - { id: s_heal_gain_3_1, set: heal_gain, tier: 3, name: 慈光·IIIa, effect: { heal_gain: 0.22 } }
+  - { id: s_heal_gain_3_2, set: heal_gain, tier: 3, name: 慈光·IIIb, effect: { heal_gain: 0.22 } }
+  - { id: s_heal_gain_4_1, set: heal_gain, tier: 4, name: 慈光·IV, effect: { heal_gain: 0.32 } }
+  - { id: s_heal_gain_5_1, set: heal_gain, tier: 5, name: 慈光·V, effect: { heal_gain: 0.45 } }
+  - { id: l_1, tier: 1, name: 旧铜环, effect: { elem_wind: 0.0878, elem_earth: 0.1137 } }
+  - { id: l_2, tier: 1, name: 裂纹护符, effect: { elem_thunder: 0.1012, element_resist: { ice: 34 } } }
+  - { id: l_3, tier: 1, name: 褪色布条, effect: { phys_res: 34, armor_pen: 0.0705 } }
+  - { id: l_4, tier: 1, name: 半截钥匙, effect: { mp: 23, elem_earth: 0.1135 } }
+  - { id: l_5, tier: 1, name: 碎瓷片, effect: { crit_rate: 0.0454, lifesteal: 0.0534 } }
+  - { id: l_6, tier: 1, name: 锈铁钉, effect: { elem_thunder: 0.1099, elem_light: 0.0986 } }
+  - { id: l_7, tier: 1, name: 干枯花枝, effect: { elem_all: 0.0637, element_resist: { wind: 35 } } }
+  - { id: l_8, tier: 1, name: 灰烬石, effect: { atk: 9, element_resist: { thunder: 32 } } }
+  - { id: l_9, tier: 1, name: 空药瓶, effect: { elem_ice: 0.0932, element_resist: { earth: 36 } } }
+  - { id: l_10, tier: 1, name: 断线罗盘, effect: { hp: 46, phys_res: 28 } }
+  - { id: l_11, tier: 1, name: 斑驳铜镜, effect: { phys_res: 28, elem_dark: 0.0881 } }
+  - { id: l_12, tier: 1, name: 焦木片, effect: { hp: 36, crit_rate: 0.0462 } }
+  - { id: l_13, tier: 1, name: 湿苔球, effect: { crit_mult: 0.1716, lifesteal: 0.0557 } }
+  - { id: l_14, tier: 1, name: 骨制哨, effect: { elem_fire: 0.0981, elem_light: 0.0905 } }
+  - { id: l_15, tier: 1, name: 残页书, effect: { atk: 11, elem_earth: 0.0858 } }
+  - { id: l_16, tier: 1, name: 凝露珠, effect: { atk: 10, accuracy: 0.055 } }
+  - { id: l_17, tier: 1, name: 砂砾袋, effect: { crit_rate: 0.0566, elem_light: 0.1143 } }
+  - { id: l_18, tier: 1, name: 霜结晶, effect: { crit_rate: 0.0501, elem_dark: 0.1143 } }
+  - { id: l_19, tier: 1, name: 风蚀木, effect: { hp: 34, elem_thunder: 0.1052 } }
+  - { id: l_20, tier: 1, name: 余烬炭, effect: { def: 10, element_resist: { dark: 32 } } }
+  - { id: l_21, tier: 1, name: 碎冰棱, effect: { elem_all: 0.0623, lifesteal: 0.0474 } }
+  - { id: l_22, tier: 1, name: 灰羽, effect: { phys_dmg: 0.1094, element_resist: { light: 32 } } }
+  - { id: l_23, tier: 1, name: 石臼屑, effect: { shield_gain: 0.0918, element_resist: { fire: 35 } } }
+  - { id: l_24, tier: 1, name: 萤光粉, effect: { elem_thunder: 0.1069, element_resist: { earth: 29 } } }
+  - { id: l_25, tier: 1, name: 暗纹布, effect: { phys_res: 34, phys_dmg: 0.0999 } }
+  - { id: l_26, tier: 1, name: 裂纹珠, effect: { elem_fire: 0.0982, element_resist: { fire: 31 } } }
+  - { id: l_27, tier: 1, name: 无字牌, effect: { atk: 10, element_resist: { fire: 34 } } }
+  - { id: l_28, tier: 1, name: 褪光鳞, effect: { skill_dmg: 0.0969, elem_fire: 0.0855 } }
+  - { id: l_29, tier: 1, name: 缠丝线, effect: { phys_dmg: 0.1071, element_resist: { dark: 28 } } }
+  - { id: l_30, tier: 1, name: 薄铁片, effect: { atk: 9, armor_pen: 0.0686 } }
+  - { id: l_31, tier: 2, name: 砂金屑, effect: { accuracy: 0.0824, heal_gain: 0.1314 } }
+  - { id: l_32, tier: 2, name: 灰白岩, effect: { mp: 26, element_resist: { light: 53 } } }
+  - { id: l_33, tier: 2, name: 沉水石, effect: { phys_dmg: 0.1711, element_resist: { fire: 49 } } }
+  - { id: l_34, tier: 2, name: 枯藤环, effect: { crit_rate: 0.0776, elem_ice: 0.1431 } }
+  - { id: l_35, tier: 2, name: 哑铃铛, effect: { elem_all: 0.1145, dodge: 0.0701 } }
+  - { id: l_36, tier: 2, name: 破陶罐, effect: { crit_mult: 0.219, elem_earth: 0.1598 } }
+  - { id: l_37, tier: 2, name: 旧钥匙圈, effect: { atk: 15, hp: 54 } }
+  - { id: l_38, tier: 2, name: 毛边纸, effect: { lifesteal: 0.0679, element_resist: { dark: 47 } } }
+  - { id: l_39, tier: 2, name: 细麻绳, effect: { def: 13, elem_wind: 0.1326 } }
+  - { id: l_40, tier: 2, name: 磨损刻刀, effect: { elem_dark: 0.141, element_resist: { earth: 50 } } }
+  - { id: l_41, tier: 2, name: 裂口铃, effect: { basic_dmg: 0.1336, element_resist: { dark: 41 } } }
+  - { id: l_42, tier: 2, name: 半枚钱, effect: { elem_light: 0.1339, heal_gain: 0.1708 } }
+  - { id: l_43, tier: 2, name: 暗尘包, effect: { mp: 31, solid: 0.158 } }
+  - { id: l_44, tier: 2, name: 碎骨片, effect: { mp: 29, shield_gain: 0.1299 } }
+  - { id: l_45, tier: 2, name: 冻土块, effect: { spd: 8, shield_gain: 0.171 } }
+  - { id: l_46, tier: 2, name: 空壳蝶, effect: { mp: 31, crit_rate: 0.0758 } }
+  - { id: l_47, tier: 2, name: 湿木塞, effect: { skill_dmg: 0.1349, lifesteal: 0.0769 } }
+  - { id: l_48, tier: 2, name: 裂瓷碗, effect: { spd: 8, elem_light: 0.1623 } }
+  - { id: l_49, tier: 2, name: 黑白石, effect: { heal_gain: 0.1548, element_resist: { earth: 52 } } }
+  - { id: l_50, tier: 2, name: 灰烬罐, effect: { hp: 60, elem_dark: 0.1577 } }
+  - { id: l_51, tier: 2, name: 短烛头, effect: { mp: 28, lifesteal: 0.0693 } }
+  - { id: l_52, tier: 2, name: 裂纹砚, effect: { solid: 0.1701, dodge: 0.0802 } }
+  - { id: l_53, tier: 2, name: 浮纹纱, effect: { elem_wind: 0.1344, element_resist: { light: 45 } } }
+  - { id: l_54, tier: 2, name: 焦尾绳, effect: { mp: 29, phys_res: 48 } }
+  - { id: l_55, tier: 2, name: 断齿梳, effect: { basic_dmg: 0.1316, elem_earth: 0.1649 } }
+  - { id: l_56, tier: 3, name: 残扇骨, effect: { mp: 48, skill_dmg: 0.2055 } }
+  - { id: l_57, tier: 3, name: 冷铁屑, effect: { elem_wind: 0.2437, element_resist: { dark: 72 } } }
+  - { id: l_58, tier: 3, name: 暖石卵, effect: { elem_dark: 0.2155, heal_gain: 0.2134 } }
+  - { id: l_59, tier: 3, name: 旧皮囊, effect: { spd: 12, element_resist: { ice: 74 } } }
+  - { id: l_60, tier: 3, name: 枯叶夹, effect: { crit_mult: 0.3273, skill_dmg: 0.2466 } }
+  - { id: l_61, tier: 3, name: 碎月片, effect: { phys_res: 72, element_resist: { dark: 80 } } }
+  - { id: l_62, tier: 3, name: 薄云帛, effect: { elem_earth: 0.1922, elem_dark: 0.2249 } }
+  - { id: l_63, tier: 3, name: 裂星砂, effect: { mp: 46, element_resist: { dark: 68 } } }
+  - { id: l_64, tier: 3, name: 沉沙斗, effect: { def: 23, armor_pen: 0.1642 } }
+  - { id: l_65, tier: 3, name: 空蜡芯, effect: { elem_all: 0.1729, elem_thunder: 0.2305 } }
+  - { id: l_66, tier: 3, name: 断羽笔, effect: { solid: 0.2201, element_resist: { ice: 78 } } }
+  - { id: l_67, tier: 3, name: 锈锁芯, effect: { elem_light: 0.2197, element_resist: { ice: 77 } } }
+  - { id: l_68, tier: 3, name: 暗纹钉, effect: { basic_dmg: 0.2285, element_resist: { light: 69 } } }
+  - { id: l_69, tier: 3, name: 灰陶片, effect: { atk: 24, element_resist: { ice: 62 } } }
+  - { id: l_70, tier: 3, name: 半卷帘, effect: { atk: 22, elem_ice: 0.2315 } }
+  - { id: l_71, tier: 3, name: 残香灰, effect: { armor_pen: 0.1562, phys_dmg: 0.2153 } }
+  - { id: l_72, tier: 3, name: 哑风铃, effect: { accuracy: 0.1044, element_resist: { earth: 80 } } }
+  - { id: l_73, tier: 3, name: 旧绳结, effect: { elem_wind: 0.2091, heal_gain: 0.1969 } }
+  - { id: l_74, tier: 3, name: 小铁盒, effect: { elem_all: 0.1653, element_resist: { dark: 61 } } }
+  - { id: l_75, tier: 3, name: 褪色符, effect: { crit_mult: 0.2941, element_resist: { light: 74 } } }
+  - { id: l_76, tier: 4, name: 残灯罩, effect: { elem_all: 0.2449, phys_dmg: 0.3363 } }
+  - { id: l_77, tier: 4, name: 断线琴, effect: { skill_dmg: 0.3564, elem_earth: 0.3502 } }
+  - { id: l_78, tier: 4, name: 冷灰烬, effect: { basic_dmg: 0.3297, elem_dark: 0.3325 } }
+  - { id: l_79, tier: 4, name: 碎镜角, effect: { elem_light: 0.3114, solid: 0.3656 } }
+  - { id: l_80, tier: 4, name: 沉木块, effect: { mp: 66, basic_dmg: 0.2734 } }
+  - { id: l_81, tier: 4, name: 裂纹瓦, effect: { elem_all: 0.2406, element_resist: { thunder: 117 } } }
+  - { id: l_82, tier: 4, name: 哑铃舌, effect: { elem_ice: 0.2792, element_resist: { fire: 103 } } }
+  - { id: l_83, tier: 4, name: 空砂壶, effect: { elem_dark: 0.2746, debuff_res: 0.3107 } }
+  - { id: l_84, tier: 4, name: 卷边叶, effect: { elem_light: 0.3069, element_resist: { dark: 91 } } }
+  - { id: l_85, tier: 4, name: 哑铁哨, effect: { elem_fire: 0.3145, elem_dark: 0.2953 } }
+  - { id: l_86, tier: 4, name: 断针线, effect: { spd: 16, element_resist: { fire: 95 } } }
+  - { id: l_87, tier: 4, name: 干苔块, effect: { spd: 19, hp: 129 } }
+  - { id: l_88, tier: 4, name: 裂纹锁, effect: { shield_gain: 0.284, element_resist: { ice: 89 } } }
+  - { id: l_89, tier: 4, name: 空琉璃, effect: { elem_fire: 0.2942, lifesteal: 0.1386 } }
+  - { id: l_90, tier: 4, name: 残烛台, effect: { def: 30, mp: 61 } }
+  - { id: l_91, tier: 5, name: 褪色穗, effect: { dodge: 0.1988, phys_dmg: 0.4141 } }
+  - { id: l_92, tier: 5, name: 半片甲, effect: { debuff_res: 0.4421, lifesteal: 0.2008 } }
+  - { id: l_93, tier: 5, name: 裂石环, effect: { debuff_res: 0.4364, dodge: 0.2564 } }
+  - { id: l_94, tier: 5, name: 暗尘袋, effect: { def: 49, phys_res: 130 } }
+  - { id: l_95, tier: 5, name: 焦布片, effect: { elem_earth: 0.451, element_resist: { wind: 143 } } }
+  - { id: l_96, tier: 5, name: 冷烛泪, effect: { skill_dmg: 0.461, elem_ice: 0.4312 } }
+  - { id: l_97, tier: 5, name: 干果核, effect: { basic_dmg: 0.4781, element_resist: { wind: 134 } } }
+  - { id: l_98, tier: 5, name: 哑木鱼, effect: { mp: 100, elem_ice: 0.4479 } }
+  - { id: l_99, tier: 5, name: 旧铁环, effect: { elem_earth: 0.4169, element_resist: { dark: 132 } } }
+  - { id: l_100, tier: 5, name: 碎陶哨, effect: { def: 50, phys_dmg: 0.4533 } }

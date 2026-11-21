@@ -542,7 +542,6 @@ class PluginManager:
         if not cls.plugin_list:
             raise PluginError("更新列表失败")
 
-    @classmethod
     @staticmethod
     def read_local_meta(plugin_name: str, raw: Mapping) -> dict:
         """读已装插件目录下的 ``meta.yml``，纯本地、不联网。

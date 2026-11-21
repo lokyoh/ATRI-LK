@@ -12,7 +12,7 @@ from .compat import check as check_compat
 from .data_source import PluginEntry, PluginManager, PluginRuntimeManager
 
 plugin = Service(
-    "插件商店", "插件商店", "0.5.0", Service.ServiceType.SYSTEM
+    "插件商店", "插件商店", "0.5.1", Service.ServiceType.SYSTEM
 ).permission(MASTER)
 
 plugins = plugin.on_command("插件列表", "查看插件列表")

@@ -324,7 +324,9 @@ def begin_battle(
     # 进战斗就清掉上一层留下的 type/options，否则按钮会一直指向开局抽卡
     run.pending.pop("type", None)
     run.pending.pop("options", None)
-    session = BattleSession(avatar, state, monster, cfg, rng)
+    # 每步一份新列表：只收这一步产生的战报，不把整场都叠回去
+    log: list[tuple[int, str]] = []
+    session = BattleSession(avatar, state, monster, cfg, rng, log=log)
     session.manual = True
     _attach_attrs(session, run, monster)
     session.step_until_my_turn()
@@ -382,7 +384,8 @@ def submit(
         "buffs": {"atk": 0, "def": 0, "spd": 0},
         "relics": [],
     }
-    session = BattleSession(avatar, state, monster, cfg, rng)
+    log: list[tuple[int, str]] = []
+    session = BattleSession(avatar, state, monster, cfg, rng, log=log)
     session.manual = True
     # 每次续战都要重新挂：load_session 只恢复血/蓝/条，不恢复局内属性
     _attach_attrs(session, run, monster)
@@ -433,10 +436,13 @@ def _after_step(
         )
         run.pending.pop("session", None)
         run.pending.pop("monster", None)
+        run.pending.pop("battle_log", None)
     else:
         run.pending["_steps"] = int(run.pending.get("_steps") or 0) + 1
         run.pending["session"] = dump_session(session)
         run.pending["monster"] = monster
+        # 本步战报也存一份：回执要渲染它，渲染层不该再去重跑一遍战斗
+        run.pending["battle_log"] = [[int(r), str(t)] for r, t in (session.log or [])]
     return {
         "ended": ended,
         "victory": victory,
@@ -444,7 +450,7 @@ def _after_step(
         "kind": str(monster.get("kind") or "normal"),
         "pet_hp": run.hp,
         "enemy_hp": sum(max(0, int(r["unit"]["hp"])) for r in session.units),
-        "log": list((session.log or [])[-8:]),
+        "log": list(session.log or []),
     }
 
 

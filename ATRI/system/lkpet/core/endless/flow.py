@@ -210,6 +210,32 @@ def floor_meta(run: RogueRun) -> dict[str, Any]:
     }
 
 
+def known_skills(run: RogueRun) -> list[str]:
+    """已学会的技能（含换下的）：设计 §8.1「换下的进已学列表，换回来免费」。
+
+    没写过 ``known`` 的老存档按已装的那几个算，不至于读成空。
+    """
+    known = [str(s) for s in (run.skills.get("known") or [])]
+    if known:
+        return known
+    return [str(s) for s in (run.skills.get("active") or [])]
+
+
+def learn_skill(run: RogueRun, skill_id: str) -> list[str]:
+    """把一个技能记进已学列表。
+
+    必须**总是写回** ``known``：:func:`known_skills` 在缺 ``known`` 时退回
+    ``active``，照那个返回值判「已学过」会让首次写入变成空操作。
+    """
+    known = [str(s) for s in (run.skills.get("known") or [])]
+    if not known:
+        known = [str(s) for s in (run.skills.get("active") or [])]
+    if str(skill_id) not in known:
+        known.append(str(skill_id))
+    run.skills = {**run.skills, "known": known}
+    return known
+
+
 def skill_slots(run: RogueRun) -> list[str]:
     return [str(s) for s in (run.skills.get("active") or [])]
 

@@ -1104,6 +1104,7 @@ async def handle_endless(event: Event, args: BaseMessage = CommandArg()):
     # OneBot 端没有 cmd-input，编号必须留着。
     numbered = not reply.is_qq(event)
     running = None
+    panel_name = ""
     try:
         with (
             rogue_actions.numbered_options(numbered),
@@ -1148,6 +1149,11 @@ async def handle_endless(event: Event, args: BaseMessage = CommandArg()):
                     msg = _endless_prefixed(
                         "🔁 继续本局"
                     ) + endless_core.render_summary(running)
+            elif raw.startswith("查看") and running is not None:
+                msg = _endless_look(running, raw)
+            elif raw.split()[0] in endless_core.PANELS and running is not None:
+                panel_name = str(raw).split()[0]
+                msg = _endless_panel(running, raw)
             elif raw.startswith("库存") and running is not None:
                 msg = _endless_stock(running, raw)
                 endless.run_state = running.to_dict()
@@ -1189,6 +1195,13 @@ async def handle_endless(event: Event, args: BaseMessage = CommandArg()):
     choices = []
     if running is not None:
         choices = endless_actions.choices_from_endless(running)
+        # 刚打开的那个面板，先给它自己的操作按钮
+        from ..utils.reply import Choice
+
+        choices = [
+            Choice(label, command)
+            for command, label in _endless_panel_choices(running, panel_name)
+        ] or choices
     if not choices:
         choices = menus.endless_menu(running=running is not None)
     await reply.finish(
@@ -1374,6 +1387,62 @@ def _endless_enhance(run, raw: str) -> tuple[str, bool]:
     ), True
 
 
+def _endless_panel_choices(run, panel: str) -> list[tuple[str, str]]:
+    """面板底部的按钮：``(完整指令, 显示名)``。"""
+    from ..core.endless import panel_actions
+
+    if not panel:
+        return []
+    return list(panel_actions(run, panel))
+
+
+def _endless_panel(run, raw: str) -> str:
+    """面板入口：``状态`` / ``装备 [动作] [参数]`` / ``技能 ...`` / ``遗物``。
+
+    战斗中一律拒绝——那段时间每条指令都要用来推进战斗。
+    """
+    from ..core.endless import in_battle, render_panel
+
+    if in_battle(run):
+        from ..core.endless.panels import busy
+
+        return busy()
+
+    parts = str(raw or "").split()
+    name = parts[0] if parts else ""
+    action = parts[1] if len(parts) > 1 else ""
+    arg = parts[2] if len(parts) > 2 else ""
+
+    if action:
+        from ..core.endless import gear_action, skill_action
+
+        handler = gear_action if name == "装备" else skill_action
+        if not arg.isdigit() and name == "装备" and action == "卸下" and parts[2:]:
+            arg = parts[2]
+        text, _changed = handler(run, action, arg)
+        return text
+
+    text = render_panel(run, name)
+    return text
+
+
+def _endless_look(run, raw: str) -> str:
+    """``查看 <名字>``：一件技能 / 装备 / 遗物的完整介绍。"""
+    from ..core.endless import find_spec, in_battle, render_detail
+
+    if in_battle(run):
+        from ..core.endless.panels import busy
+
+        return busy()
+
+    name = str(raw or "").replace("查看", "", 1).strip()
+    found = find_spec(name)
+    if not found:
+        return "没找到「" + name + "」。可查看技能 / 装备 / 遗物的名字。"
+    kind, spec = found
+    return render_detail(kind, spec)
+
+
 def _endless_stock(run, raw: str) -> str:
     """库存操作：``库存`` 看列表，``库存 穿上 <序号>`` / ``库存 分解 <序号>``。"""
     from ..core.endless import decompose, gear_specs, stock_of, take_from_stock
@@ -1448,10 +1517,14 @@ def _endless_opening(run, number: int) -> tuple[str, bool]:
         run.relics.append(str(picked.get("id")))
         done = "🎁 已获得遗物【" + str(picked.get("name") or picked.get("id")) + "】"
     elif kind == "open_skill":
-        active = [str(s) for s in (run.skills.get("active") or [])]
-        if str(picked.get("id")) not in active:
-            active.append(str(picked.get("id")))
-        run.skills = {"active": active, "passive": []}
+        from ..core.endless import equip_skill, learn_skill
+
+        skill_id = str(picked.get("id"))
+        active, _replaced = equip_skill(
+            [str(s) for s in (run.skills.get("active") or [])], skill_id
+        )
+        run.skills = {**run.skills, "active": active, "passive": []}
+        learn_skill(run, skill_id)
         done = "📖 已学会【" + str(picked.get("name") or picked.get("id")) + "】"
     else:
         return "未知的开局步骤。", False
@@ -1533,7 +1606,8 @@ def _endless_step(run, number: int) -> tuple[str, bool]:
         if not 1 <= number <= len(actions):
             return "编号超出范围（战斗中可选 1-" + str(len(actions)) + "）", False
         out = submit(run, actions[number - 1]["action"])
-        lines = [render_status(run)]
+        # 未结束时 render_battle 自带状态行，这里别再加一遍
+        lines: list[str] = [] if not out.get("ended") else [render_status(run)]
         if out.get("ended"):
             meta = floor_meta(run)
             reward = clear_floor(
@@ -1547,7 +1621,9 @@ def _endless_step(run, number: int) -> tuple[str, bool]:
                 lines.insert(0, "⏱ 回合上限，本场判负")
             else:
                 lines.insert(0, "⚔️ 战斗结束：" + ("胜利" if out["victory"] else "失败"))
-            lines.append(render_reward(reward))
+            reward_text = render_reward(reward)
+            if reward_text:
+                lines.append(reward_text)
             if out["victory"]:
                 healed = _endless_advance(run)
                 if healed:

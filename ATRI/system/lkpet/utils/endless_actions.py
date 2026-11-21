@@ -39,6 +39,24 @@ def choices_from_endless(run: Any) -> list[Choice]:
             for act in battle_actions(run)[:MAX_CHOICES]
         ]
 
+    # 非战斗面板：没有待答选项时给「状态 / 装备 / 技能 / 遗物」入口
+    if not options and not pending.get("event") and not pending.get("shop"):
+        from ..core.endless import PANELS
+
+        return [Choice(name, cmd(f"宠物.无尽 {name}")) for name in PANELS]
+
+    event = pending.get("event")
+    if isinstance(event, dict) and event.get("choices"):
+        # 事件卡的按钮是**选项本身**，不是楼层选项——两者同时在 pending 里，
+        # 不先判事件会让底部给出「战斗 / 事件」这种已经过时的一层。
+        return [
+            Choice(
+                str(choice.get("text") or "?")[:12],
+                cmd(f"宠物.无尽 {index}"),
+            )
+            for index, choice in enumerate(event["choices"][:MAX_CHOICES], 1)
+        ]
+
     if pending.get("shop"):
         shelf = list((pending.get("shop") or {}).get("shelf") or [])
         out = [

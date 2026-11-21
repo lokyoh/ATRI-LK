@@ -79,23 +79,23 @@ create:
 
 feed:
   title: "🍚 喂食完成"
-  line: "{message}\n饱食 {bar_hunger} {hunger}/{max} ｜ 心情 {bar_mood} {mood}/{max}\n亲密 {affection}（+{affection_gain}）｜ 行动点 {action_points}"
+  line: "{message}\n饱食 {bar_hunger} {hunger}/{max}\n心情 {bar_mood} {mood}/{max}\n亲密 {affection}（+{affection_gain}）\n行动点 {action_points}"
 
 play:
   title: "🎾 玩耍完成"
-  line: "{message}\n心情 {bar_mood} {mood}/{max} ｜ 体力 {bar_stamina} {stamina}/{max}\n亲密 {affection}（+{affection_gain}）｜ 行动点 {action_points}"
+  line: "{message}\n心情 {bar_mood} {mood}/{max}\n体力 {bar_stamina} {stamina}/{max}\n亲密 {affection}（+{affection_gain}）\n行动点 {action_points}"
 
 bathe:
   title: "🛁 洗澡完成"
-  line: "{message}\n清洁 {bar_cleanliness} {cleanliness}/{max}\n亲密 {affection}（+{affection_gain}）｜ 行动点 {action_points}"
+  line: "{message}\n清洁 {bar_cleanliness} {cleanliness}/{max}\n亲密 {affection}（+{affection_gain}）\n行动点 {action_points}"
 
 rest:
   title: "😴 休息完成"
-  line: "{message}\n体力 {bar_stamina} {stamina}/{max}\n亲密 {affection}（+{affection_gain}）｜ 行动点 {action_points}"
+  line: "{message}\n体力 {bar_stamina} {stamina}/{max}\n亲密 {affection}（+{affection_gain}）\n行动点 {action_points}"
 
 train:
   title: "🏋 训练完成"
-  line: "{message}\n经验 +{exp}（Lv.{level}）\n饱食 {bar_hunger} {hunger}/{max} ｜ 体力 {bar_stamina} {stamina}/{max} ｜ 心情 {bar_mood} {mood}/{max}\n行动点 {action_points}"
+  line: "{message}\n经验 +{exp}（Lv.{level}）\n饱食 {bar_hunger} {hunger}/{max}\n体力 {bar_stamina} {stamina}/{max}\n心情 {bar_mood} {mood}/{max}\n行动点 {action_points}"
   failed_title: "❌ 训练未开始"
   failed_line: "{label} {bar} {value}/{max}（{need_text}）"
   failed_need: "需 ≥{limit}，还差 {need}"

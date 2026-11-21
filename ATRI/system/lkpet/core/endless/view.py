@@ -13,7 +13,7 @@ from .codex import codex_paths, settle
 from .floor import REGION_CN, floor_kind, offset_of, stage_of
 from .run import RogueRun, advance, new_run, refresh_floor
 
-ACTIONS = ("开始", "继续", "进度", "撤退")
+ACTIONS = ("开始", "继续", "进度", "撤退", "状态", "装备", "技能", "遗物", "查看")
 
 
 def usage() -> str:
@@ -76,11 +76,15 @@ def render_options(run: RogueRun) -> str:
     rows: list[str] = []
     if ptype.startswith("open_"):
         head = "🎁 选一件开局遗物：" if ptype == "open_relic" else "📖 选一个开局技能："
+        from .describe import relic_note, skill_note
+
         for index, spec in enumerate(options, 1):
             name = str(spec.get("name") or spec.get("id") or "?")
-            extra = f"（T{spec.get('tier', '?')}）" if ptype == "open_relic" else ""
-            body = f"{index}. {name}{extra}" if numbered else f"{name}{extra}"
+            tier = f"（T{spec.get('tier', '?')}）"
+            note = relic_note(spec) if ptype == "open_relic" else skill_note(spec)
+            body = f"{index}. {name}{tier}" if numbered else f"{name}{tier}"
             rows.append(line_link(body, f"{ENDLESS_CMD} {index}"))
+            rows.append("　　" + note)
         return head + "\n" + "\n".join(rows)
 
     names = {
@@ -124,20 +128,32 @@ def _gauge_label(rec: dict[str, Any]) -> str:
     return f"{pct}%"
 
 
-def render_battle(run: RogueRun) -> str:
-    """战斗中的状态行 + 可选动作（整行可点，与肉鸽的「迎战」同款）。"""
+def render_battle(run: RogueRun, *, log_limit: int = 8) -> str:
+    """战斗中的战报 + 状态行 + 可选动作（整行可点，与肉鸽的「迎战」同款）。
+
+    战报取自 ``pending["battle_log"]``——那是**这一步**产生的行，不是整场：
+    ATB 一场要打十几步，全量重放会把正文撑爆，也看不出这次发生了什么。
+    """
     from ..roguelike._common import line_link, show_numbered_options
     from .encounter import battle_actions
 
     numbered = show_numbered_options()
+    head: list[str] = []
+    raw = (run.pending or {}).get("battle_log") or []
+    shown = [tuple(x) for x in raw][-log_limit:]
+    if shown:
+        head.append("🗒 战报：")
+        head.extend(line for _, line in shown)
+
+    head.extend([enemy_line(run), render_status(run)])
+    head = [x for x in head if x]
+
     rows: list[str] = []
     for act in battle_actions(run):
         key = str(act.get("key") or "")
         label = str(act.get("label") or key)
         body = f"{key}. {label}" if numbered else label
         rows.append(line_link(body, f"{ENDLESS_CMD} {key}"))
-    head = [enemy_line(run), render_status(run)]
-    head = [x for x in head if x]
     if not rows:
         return "\n".join(head)
     return "\n".join([*head, "轮到你了：", *rows])
@@ -192,7 +208,7 @@ def render_reward(reward: dict[str, Any]) -> str:
             parts.append(f"回复魔力 {int(heal['mp'])}")
     if int(reward.get("levels", 0) or 0):
         parts.append(f"升级 ×{int(reward['levels'])}")
-    return "\n📦 " + "　".join(parts) if parts else ""
+    return "📦 " + "　".join(parts) if parts else ""
 
 
 def start_run(seed: int) -> RogueRun:

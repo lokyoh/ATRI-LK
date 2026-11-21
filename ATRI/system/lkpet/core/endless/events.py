@@ -181,12 +181,20 @@ def choose_event(
 
 
 def render_event(event: dict[str, Any]) -> str:
-    """把事件渲染成标题 + 描述 + 编号选项。"""
-    kind = KIND_CN.get(str(event.get("kind")), str(event.get("kind")))
-    lines = ["🎲 " + kind + "：" + str(event.get("text") or "")]
-    for i, choice in enumerate(event.get("choices") or [], 1):
-        lines.append(str(i) + ". " + str(choice.get("text") or ""))
-    return "\n".join(lines)
+    """把事件渲染成描述 + 编号选项（QQ 端整行可点）。
+
+    **不写分类标签**：``kind`` 只作内部配比统计用，写出来等于剧透这个事件
+    是福缘还是陷阱——玩家该从文案本身判断。
+    """
+    from ..roguelike._common import line_link, show_numbered_options
+
+    numbered = show_numbered_options()
+    rows: list[str] = ["🎲 " + str(event.get("text") or "")]
+    for index, choice in enumerate(event.get("choices") or [], 1):
+        label = str(choice.get("text") or "")
+        body = f"{index}. {label}" if numbered else label
+        rows.append(line_link(body, f"宠物.无尽 {index}"))
+    return "\n".join(rows)
 
 
 def render_result(changed: dict[str, Any]) -> str:

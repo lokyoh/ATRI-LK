@@ -114,10 +114,13 @@ def purchase(
         run.relics.append(str(spec.get("id")))
         replaced = None
     elif kind == "skill":
+        from .flow import learn_skill
         from .skills import equip_skill
 
-        active, replaced = equip_skill(_active_skills(run), str(spec.get("id")))
-        run.skills = {"active": active, "passive": []}
+        skill_id = str(spec.get("id"))
+        active, replaced = equip_skill(_active_skills(run), skill_id)
+        run.skills = {**run.skills, "active": active, "passive": []}
+        learn_skill(run, skill_id)
     elif kind == "gear":
         from .gear import equip as equip_gear
 
@@ -148,6 +151,17 @@ def leave_shop(
     return {"ok": True, "refreshes": refreshes, "coins": run.coins}
 
 
+def _shelf_note(kind: str, spec: dict[str, Any]) -> str:
+    """货架条目的说明：遗物 / 技能 / 装备各用各的口径。"""
+    from .describe import gear_note, relic_note, skill_note
+
+    if kind == "skill":
+        return skill_note(spec)
+    if kind == "gear":
+        return gear_note(spec)
+    return relic_note(spec)
+
+
 def render_shop(session: dict[str, Any]) -> str:
     """把货架渲染成编号列表；空格子显式标出。"""
     shelf = list(session.get("shelf") or [])
@@ -160,9 +174,11 @@ def render_shop(session: dict[str, Any]) -> str:
         name = str(spec.get("name") or spec.get("id"))
         tier = spec.get("tier", "?")
         price = int(entry.get("price", 0) or 0)
-        lines.append(
-            str(i) + ". " + name + "（T" + str(tier) + "）" + str(price) + " 金"
-        )
+        kind = str(entry.get("kind") or "")
+        note = _shelf_note(kind, spec)
+        head = str(i) + ". " + name + "（T" + str(tier) + "）" + str(price) + " 金"
+        # 说明单独一行：和价格挤在一行会到手机屏宽外，也看不清买了什么
+        lines.append(head + ("\n　　" + note if note else ""))
     refreshes = int(session.get("refreshes", 0) or 0)
     next_cost = refresh_cost(refreshes)
     lines.append("刷新 " + str(next_cost) + " 金（第 " + str(refreshes + 1) + " 次）")

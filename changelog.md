@@ -33,6 +33,12 @@
   - `Agent`图片消息顺序错误、保存密钥后 WebUI 仍显示旧模型
   - `宠物`QQ 端 openid 让玩家 ID 崩溃;商店编号`1-3`被`int()`截断导致买错商品
   - `WebAPI` favicon 404;更新后旧版 WebUI 文件残留
+- Patch1:
+  - `插件商店`修复 Python 3.13 下读取插件商店列表报错bug[#16](https://github.com/lokyoh/ATRI-LK/issues/16):`read_local_meta` 上 `@classmethod` 与 `@staticmethod` 叠加,而链式描述符在 3.13 已被移除,`cls` 被当成第一个位置参数传入,于是报 `takes 2 positional arguments but 3 were given`;函数本身不用 `cls`,只保留 `@staticmethod`
+  - `ATRI`定时任务:错过执行窗口由 1 秒放宽到 60 秒(日更与宠物日结算 1 小时、农场天气 10 分钟);`add_pause_job` 参数错位导致一调用就 TypeError;工作线程取不到事件循环、写库被静默丢弃;持久化补全 `misfire_grace_time`/`max_instances`/`coalesce`/`executor` 与 cron、interval 的 `jitter`/`start_date`/`end_date`;过期一次性任务改为执行成功才删库;`run_job_now` 不再永久恢复暂停任务;`set_timezone` 同步调度器时区;`machine.py` 采样任务改到 `ATRI.scheduler`
+  - `WebAPI`任务开关对不存在的任务直接 `.pause()` 抛 `AttributeError`,改为判空
+  - `QQ`断线日志:WebSocketClosed / NetworkError / Timeout / OSError / httpx 请求异常不再打整条栈,改为一行摘要并附排查提示;心跳路径抛出的 `ConnectionClosedError` 同样处理;事件处理器调度合并去重
+  - `Agent`修复 `reply_max_chars` 对 `say` 的 `call()` 与 `ChatModel._degrade()` 两条直发路径不生效;移除 `agent/schedule.py` 整份 facade 与一批无人调用的空壳函数(`_trim_reply`/`set_fatigue`/`save_plan`/`now_label`/`parse_dsl` 等),日程统一由生活系统提供,日更不再写 `generate_schedule()` 的 WARNING;README 按代码重写模型选型与降级行为
 
 ## Oct 14, 2026
 

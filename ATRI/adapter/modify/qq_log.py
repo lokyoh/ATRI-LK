@@ -11,10 +11,12 @@ import nonebot.adapters.qq.utils as qq_utils
 from nonebot.adapters.qq.exception import NetworkError
 from nonebot.exception import WebSocketClosed
 from nonebot.utils import escape_tag
+from websockets.exceptions import ConnectionClosed, WebSocketException
 
 _CONNECTION_ERRORS = (
     WebSocketClosed,
     NetworkError,
+    WebSocketException,
     TimeoutError,
     OSError,
     httpx.RequestError,
@@ -25,8 +27,21 @@ _MAX_DETAIL_LENGTH = 120
 
 _HINT_RESOLVE_FAILED = "域名解析失败，检查容器 DNS 与网络"
 _HINT_GATEWAY_FAILED = "启动阶段取网关失败，QQ 适配器不会自动重连，需重启"
+_HINT_HEARTBEAT = "连接已被对端断开，心跳随之停止，适配器会自动重连"
 
 _PATCHED_FLAG = "_atri_simplified"
+
+
+def _describe_close(exception: ConnectionClosed) -> str:
+    """把 websockets 的关闭异常压成 `code + reason`，不带上英文长句。"""
+    frame = exception.rcvd or exception.sent
+    code = getattr(frame, "code", None)
+    reason = (getattr(frame, "reason", "") or "").strip()
+    if code is None:
+        return type(exception).__name__
+    if reason:
+        return f"{type(exception).__name__}(code={code} {reason})"
+    return f"{type(exception).__name__}(code={code})"
 
 
 def _describe(exception: BaseException) -> str:
@@ -37,6 +52,8 @@ def _describe(exception: BaseException) -> str:
             brief += f" reason={exception.reason}"
     elif isinstance(exception, NetworkError):
         brief = f"NetworkError({exception.msg or 'request failed'})"
+    elif isinstance(exception, ConnectionClosed):
+        brief = _describe_close(exception)
     else:
         brief = f"{type(exception).__name__}: {exception}"
 
@@ -65,6 +82,8 @@ def _hint(exception: BaseException, message: str) -> str:
         current = current.__cause__
     if "Failed to get gateway info" in message:
         hints.append(_HINT_GATEWAY_FAILED)
+    elif "heartbeat" in message.lower():
+        hints.append(_HINT_HEARTBEAT)
     return "；".join(hints)
 
 

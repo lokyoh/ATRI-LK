@@ -103,24 +103,36 @@ def care_menu() -> list[Choice]:
     )
 
 
-def action_menu() -> list[Choice]:
-    """四种互动（喂食 / 玩耍 / 洗澡 / 休息）回执底部的统一动作组。
+def action_menu(action: str | None = None) -> list[Choice]:
+    """照护动作回执底部的动作组。
 
-    与 :func:`care_menu` 同一套：互动完最顺手的就是接着做另一项照护，
-    所以直接复用，不再维护第二份「只有状态/玩耍/休息」的短名单——
-    那份名单会让玩家喂完食想洗澡时只能手打。
+    以 :func:`care_menu` 为底——互动完最顺手的就是接着做另一项照护。
+    但**先**把这次动作真正变差的那几项恢复项提到最前：``玩耍`` 会累掉体力、
+    ``洗澡`` 会掉心情，不提醒的话玩家只能自己记住。标签带能补回的量。
+
+    ``action`` 传配置里的动作键（feed / play / bathe / rest）；不传时只给通用组。
     """
-    return care_menu()
+    base = care_menu()
+    if not action:
+        return base
+
+    from ..core.interaction import load_effects, recovery_choices
+
+    recovery = recovery_choices(load_effects().get(action) or {})
+    seen = {choice.command for choice in recovery}
+    tail = [choice for choice in base if choice.command not in seen]
+    return recovery + tail
 
 
 def train_menu() -> list[Choice]:
-    """训练之后：最可能接着再练一次，或看看成果。"""
-    return list(
-        Menu()
-        .add("再训练", cmd("宠物.训练"))
-        .add("状态", cmd("宠物.状态"))
-        .add("肉鸽", cmd("宠物.肉鸽"))
-    )
+    """训练回执底部的按钮：恢复项 + 状态 + 再训练 + 肉鸽。
+
+    训练消耗饱食 / 心情 / 疲劳，所以底部必须能顺手把这几项补回来。
+    恢复项由 ``core.interaction.train_recovery_menu`` 按配置生成。
+    """
+    from ..core.interaction import train_recovery_menu
+
+    return train_recovery_menu()
 
 
 # ---------------------------------------------------------------- 记录类
@@ -243,6 +255,24 @@ def rogue_menu(*, running: bool) -> list[Choice]:
         .add("继续", cmd("宠物.肉鸽 继续"))
         .add("预计进度", cmd("宠物.肉鸽 进度"))
         .add("撤退", cmd("宠物.肉鸽 撤退"))
+    )
+
+
+def endless_menu(*, running: bool) -> list[Choice]:
+    """无尽：没开局给「开始」，局内给「继续 / 进度 / 撤退」。
+
+    不能复用 :func:``rogue_menu``——那组按钮指向 ``/宠物.肉鸽``，
+    点下去会进另一个模式。
+    """
+    if not running:
+        return list(
+            Menu().add("开始", cmd("宠物.无尽 开始")).add("进度", cmd("宠物.无尽 进度"))
+        )
+    return list(
+        Menu()
+        .add("继续", cmd("宠物.无尽 继续"))
+        .add("进度", cmd("宠物.无尽 进度"))
+        .add("撤退", cmd("宠物.无尽 撤退"))
     )
 
 

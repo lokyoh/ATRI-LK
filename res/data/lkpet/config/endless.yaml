@@ -59,6 +59,11 @@ battle:
   timeout_damage: round_number
   crit_mult: 1.80
   def_softness: 100
+  # 防御：受伤降低 damage_cut，保护到**下次行动**为止（独立乘区，看 def 没用）
+  # 冥想：回复 mp_gain_pct 的魔力上限；mp 每场战斗开场满
+  defend:
+    damage_cut: 0.50
+    meditate_pct: 0.40
 
 # 局内熟练度：与 skills.yaml 的 limits 同口径，但只作用于本局。
 proficiency:

@@ -46,8 +46,12 @@ def render_status(run: RogueRun) -> str:
     )
 
 
+ENDLESS_CMD = "宠物.无尽"
+"""局内编号指令的相对路径（由 menus.cmd 补 command_start）。"""
+
+
 def render_options(run: RogueRun) -> str:
-    """把 pending 里的选项列成可回复的编号。"""
+    """把 pending 里的选项列成可回复的行（QQ 端整行可点）。"""
     from .events import render_event
     from .shop_session import render_shop, shop_state
 
@@ -59,21 +63,26 @@ def render_options(run: RogueRun) -> str:
             render_shop(shop_state(run) or {})
             + "\n回复编号买入；或回复「刷新」/「离开」"
         )
+    if pending.get("session"):
+        return render_battle(run)
     options = pending.get("options") or []
     if not options:
         return ""
-    kind = str(pending.get("type") or "")
-    if kind.startswith("open_"):
-        # 开局抽卡：选项本身就是遗物/技能定义，直接列名字
-        lines = []
+
+    from ..roguelike._common import line_link, show_numbered_options
+
+    numbered = show_numbered_options()
+    ptype = str(pending.get("type") or "")
+    rows: list[str] = []
+    if ptype.startswith("open_"):
+        head = "🎁 选一件开局遗物：" if ptype == "open_relic" else "📖 选一个开局技能："
         for index, spec in enumerate(options, 1):
-            label = str(spec.get("name") or spec.get("id") or "?")
-            extra = ""
-            if kind == "open_relic":
-                extra = f"（T{spec.get('tier', '?')}）"
-            lines.append(f"{index}. {label}{extra}")
-        head = "🎁 选一件开局遗物：" if kind == "open_relic" else "📖 选一个开局技能："
-        return head + "\n" + "\n".join(lines)
+            name = str(spec.get("name") or spec.get("id") or "?")
+            extra = f"（T{spec.get('tier', '?')}）" if ptype == "open_relic" else ""
+            body = f"{index}. {name}{extra}" if numbered else f"{name}{extra}"
+            rows.append(line_link(body, f"{ENDLESS_CMD} {index}"))
+        return head + "\n" + "\n".join(rows)
+
     names = {
         "battle": "战斗",
         "event": "事件",
@@ -81,11 +90,57 @@ def render_options(run: RogueRun) -> str:
         "rest": "休息补给",
         "shop": "商店",
     }
-    lines = []
     for index, opt in enumerate(options, 1):
-        kind = str(opt.get("kind") or "")
-        lines.append(f"{index}. {names.get(kind, kind)}")
-    return "\n".join(lines)
+        label = names.get(str(opt.get("kind") or ""), str(opt.get("kind") or ""))
+        body = f"{index}. {label}" if numbered else label
+        rows.append(line_link(body, f"{ENDLESS_CMD} {index}"))
+    return "\n".join(rows)
+
+
+def enemy_line(run: RogueRun) -> str:
+    """敌方一行：名字 + 剩余/总生命 + 行动条 + 存活只数（群怪才写只数）。"""
+    pending = run.pending or {}
+    data = pending.get("session") or {}
+    monster = pending.get("monster") or {}
+    units = list(data.get("units") or [])
+    if not units:
+        return ""
+    alive = [u for u in units if int((u.get("unit") or {}).get("hp") or 0) > 0]
+    hp = sum(int((u.get("unit") or {}).get("hp") or 0) for u in units)
+    cap = sum(int(u.get("hp_cap") or 0) for u in units)
+    name = str(monster.get("name") or "敌人")
+    text = f"👹 {name}  {hp}/{cap}"
+    bars = [_gauge_label(u) for u in alive]
+    if bars:
+        text += "  行动条 " + " ".join(bars)
+    if len(units) > 1:
+        text += f"  （存活 {len(alive)}/{len(units)}）"
+    return text
+
+
+def _gauge_label(rec: dict[str, Any]) -> str:
+    """单只敌方的行动条百分比；群怪用 ①②③ 区分。"""
+    pct = min(100, max(0, round(float(rec.get("gauge") or 0.0))))
+    return f"{pct}%"
+
+
+def render_battle(run: RogueRun) -> str:
+    """战斗中的状态行 + 可选动作（整行可点，与肉鸽的「迎战」同款）。"""
+    from ..roguelike._common import line_link, show_numbered_options
+    from .encounter import battle_actions
+
+    numbered = show_numbered_options()
+    rows: list[str] = []
+    for act in battle_actions(run):
+        key = str(act.get("key") or "")
+        label = str(act.get("label") or key)
+        body = f"{key}. {label}" if numbered else label
+        rows.append(line_link(body, f"{ENDLESS_CMD} {key}"))
+    head = [enemy_line(run), render_status(run)]
+    head = [x for x in head if x]
+    if not rows:
+        return "\n".join(head)
+    return "\n".join([*head, "轮到你了：", *rows])
 
 
 def render_progress(endless: Any) -> str:

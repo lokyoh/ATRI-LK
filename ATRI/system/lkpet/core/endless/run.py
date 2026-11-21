@@ -113,7 +113,8 @@ def new_run(seed: int, cfg: dict[str, Any] | None = None) -> RogueRun:
 
     rng = _random.Random(f"{run.seed}:opening")
     picks: list[dict[str, Any]] = []
-    relics = offer_relics(rng, 1, None, 1)
+    # 遗物 3 选 1（设计第三章）——数量是 3，不是 1
+    relics = offer_relics(rng, 1, None, 3)
     if relics:
         picks.append({"type": "open_relic", "options": relics})
     skills = offer_skills(rng, 1, None, 4)

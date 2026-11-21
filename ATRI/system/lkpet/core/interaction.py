@@ -46,6 +46,84 @@ def _load_daily_config() -> dict[str, Any]:
     return load_config("daily")
 
 
+#: 状态 → (恢复指令, 按钮名, 配置里的动作键)。顺序即按钮顺序。
+RECOVERY_ACTIONS: dict[str, tuple[str, str, str]] = {
+    "hunger": ("宠物.喂食", "喂食", "feed"),
+    "mood": ("宠物.玩耍", "玩耍", "play"),
+    "cleanliness": ("宠物.洗澡", "洗澡", "bathe"),
+    "fatigue": ("宠物.休息", "休息", "rest"),
+}
+"""哪一项状态变差了 → 该点哪个按钮补回来。"""
+
+
+def worsening_fields(effects: dict[str, Any] | None) -> list[str]:
+    """这次动作让哪几项状态变差了（疲劳方向已归一成「越大越差」）。
+
+    只看 ``effects`` 里真正出现的键——配置改了按钮跟着变，
+    不在展示层再抄一份「训练要补三项」这种常量。
+    """
+    worse: set[str] = set()
+    for key, value in (effects or {}).items():
+        if key in ("requirements", "exp_tiers", "exp_base"):
+            continue
+        if not isinstance(value, int | float):
+            continue
+        field = "fatigue" if key == "fatigue_recover" else key
+        delta = -value if key == "fatigue_recover" else value
+        if (
+            delta > 0 if field == "fatigue" else delta < 0
+        ) and field in RECOVERY_ACTIONS:
+            worse.add(field)
+    # 按表顺序输出，不受 yaml 键序影响
+    return [field for field in RECOVERY_ACTIONS if field in worse]
+
+
+def _recovery_gain(effects: dict[str, Any], field: str) -> int:
+    """该动作对 ``field`` 的改善量（对外符号统一成「越大越好」）。"""
+    if field == "fatigue":
+        return int(effects.get("fatigue_recover", 0) or 0)
+    return int(effects.get(field, 0) or 0)
+
+
+def recovery_choices(effects: dict[str, Any] | None, *, with_status: bool = False):
+    """把「变差的状态」翻成可点按钮；标签是该动作**能补回的量**。
+
+    数值读对应恢复动作自己的 effects——不是这次动作的消耗量：
+    喂食能补 38，训练只掉 10，写成 10 会让人以为一次喂食只补 10。
+    """
+    from ..utils.reply import Choice
+    from ..utils.texts import command_start
+
+    cfg = _load_interactions_config()
+    all_effects = cfg.get("effects") or {}
+    result: list[Choice] = []
+    for field in worsening_fields(effects):
+        action, label, cfg_key = RECOVERY_ACTIONS[field]
+        gain = _recovery_gain(all_effects.get(cfg_key) or {}, field)
+        tag = f" +{gain}" if gain > 0 else ""
+        result.append(Choice(f"{label}{tag}", command_start() + action))
+    if with_status:
+        result.append(Choice("状态", command_start() + "宠物.状态"))
+    return result
+
+
+def train_recovery_menu():
+    """训练回执底部的按钮：恢复项 + 状态 + 再训练 + 肉鸽。
+
+    恢复项来自 :func:``recovery_choices``——按配置里真正变差的状态生成，
+    加消耗不用改这里。
+    """
+    from ..utils.reply import Choice
+    from ..utils.texts import command_start
+
+    cfg = _load_interactions_config()
+    effects = (cfg.get("effects") or {}).get("train") or {}
+    result = recovery_choices(effects, with_status=True)
+    result.append(Choice("再训练", command_start() + "宠物.训练"))
+    result.append(Choice("肉鸽", command_start() + "宠物.肉鸽"))
+    return result
+
+
 def _load_interactions_config() -> dict[str, Any]:
     from ..config_loader import load_config
 
@@ -568,3 +646,8 @@ def _train_message(pet, level_result: dict) -> str:
                 )
             )
     return "\n".join(lines)
+
+
+def load_effects() -> dict[str, Any]:
+    """``interactions.yaml`` 的 ``effects`` 段（各动作的消耗与收益）。"""
+    return dict(_load_interactions_config().get("effects") or {})

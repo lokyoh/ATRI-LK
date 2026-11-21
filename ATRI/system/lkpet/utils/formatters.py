@@ -161,26 +161,32 @@ def format_pet_status(pet, pet_config: dict[str, Any] | None = None) -> str:
 
     lines.append(s.label(text("status.section_attr", "属性")))
     lines.append(
-        text(
-            "status.attr_line",
-            "HP {hp} ｜ 攻 {atk} ｜ 防 {def} ｜ 速 {spd} ｜ 魔 {mp}",
-            **fields,
+        style.stacked(
+            text(
+                "status.attr_line",
+                "HP {hp} ｜ 攻 {atk} ｜ 防 {def} ｜ 速 {spd} ｜ 魔 {mp}",
+                **fields,
+            )
         )
     )
 
     lines.append(s.label(text("status.section_growth", "成长")))
     lines.append(
-        text(
-            "status.growth_line",
-            "Lv.{level} ｜ 经验 {exp}/{exp_next} ｜ 年龄 {age} ｜ 寿命 {lifespan}",
-            **fields,
+        style.stacked(
+            text(
+                "status.growth_line",
+                "Lv.{level} ｜ 经验 {exp}/{exp_next} ｜ 年龄 {age} ｜ 寿命 {lifespan}",
+                **fields,
+            )
         )
     )
     lines.append(
-        text(
-            "status.state_line",
-            "体况 {health} ｜ 情绪 {emotion} ｜ 稀有 {rarity} ｜ 性格 {personality}",
-            **fields,
+        style.stacked(
+            text(
+                "status.state_line",
+                "体况 {health} ｜ 情绪 {emotion} ｜ 稀有 {rarity} ｜ 性格 {personality}",
+                **fields,
+            )
         )
     )
     lines.append(
@@ -561,12 +567,14 @@ def format_skill_detail(
         if power > 0:
             lines.append(
                 s.bullet(
-                    text(
-                        "skill.detail.active_power",
-                        "威力 {power}｜熟练度 {proficiency}（实际 {effective}）",
-                        power=power,
-                        proficiency=round(proficiency, 2),
-                        effective=round(get_skill_power(pet, skill_id, cfg), 1),
+                    style.stacked(
+                        text(
+                            "skill.detail.active_power",
+                            "威力 {power}｜熟练度 {proficiency}（实际 {effective}）",
+                            power=power,
+                            proficiency=round(proficiency, 2),
+                            effective=round(get_skill_power(pet, skill_id, cfg), 1),
+                        )
                     )
                 )
             )
@@ -680,20 +688,22 @@ def format_skill_list(pet, skills_config: dict[str, Any] | None = None) -> str:
             if slot == "active":
                 lines.append(
                     s.bullet(
-                        text(
-                            "skill.equipped_line",
-                            "{name}{scope}｜威力 {power}｜耗魔 {mp_cost}｜熟练度 {proficiency}",
-                            name=skill_name(skill_id, cfg),
-                            scope=_skill_scope_note(spec),
-                            power=spec.get("power", 0),
-                            mp_cost=_mp_cost_note(spec),
-                            proficiency=round(
-                                (getattr(pet, "skill_proficiency", None) or {}).get(
-                                    skill_id, 0.0
+                        style.stacked(
+                            text(
+                                "skill.equipped_line",
+                                "{name}{scope}｜威力 {power}｜耗魔 {mp_cost}｜熟练度 {proficiency}",
+                                name=skill_name(skill_id, cfg),
+                                scope=_skill_scope_note(spec),
+                                power=spec.get("power", 0),
+                                mp_cost=_mp_cost_note(spec),
+                                proficiency=round(
+                                    (getattr(pet, "skill_proficiency", None) or {}).get(
+                                        skill_id, 0.0
+                                    ),
+                                    2,
                                 ),
-                                2,
-                            ),
-                            effect="",
+                                effect="",
+                            )
                         )
                     )
                     + _skill_action("卸下", skill_id, cfg)

@@ -54,6 +54,7 @@ def dump_session(session: BattleSession) -> dict[str, Any]:
         "monster_acts": session.monster_acts,
         "crits": session.crits,
         "pet_shield": session.pet_shield,
+        "pet_guard_mult": session.pet_guard_mult,
         "pet_shield_gain": session.pet_shield_gain,
         "pet_heal_gain": session.pet_heal_gain,
         "pet_lifesteal": session.pet_lifesteal,
@@ -126,6 +127,7 @@ def load_session(session: BattleSession, data: dict[str, Any]) -> bool:
     session.monster_acts = int(data.get("monster_acts", 0))
     session.crits = int(data.get("crits", 0))
     session.pet_shield = int(data.get("pet_shield", 0))
+    session.pet_guard_mult = float(data.get("pet_guard_mult", 1.0) or 1.0)
     session.pet_shield_gain = float(data.get("pet_shield_gain", 0.0) or 0.0)
     session.pet_heal_gain = float(data.get("pet_heal_gain", 0.0) or 0.0)
     session.pet_lifesteal = float(data.get("pet_lifesteal", 0.0) or 0.0)

@@ -23,6 +23,7 @@ from .skills import skill_specs
 from .telemetry import telemetry
 
 ACTION_ATTACK = {"kind": "attack"}
+ACTION_MEDITATE = {"kind": "meditate"}
 ACTION_DEFEND = {"kind": "defend"}
 
 
@@ -310,6 +311,8 @@ def begin_battle(
     rng = random.Random(f"{run.seed}:{run.floor}:battle")
     avatar = _avatar(run)
     monster = _build_monster(run, cfg, rng, elite_fight=elite_fight)
+    # 每场战斗开场满蓝（冥想负责战斗中续蓝）
+    run.mp = run.mp_max
     state = {
         "hp": run.hp,
         "hp_max": run.hp_max,
@@ -346,6 +349,8 @@ def _attach_attrs(
     )
     # 护盾获取：入场按生命上限的固定比例折算成护盾基数，再由 shield_gain 放大
     session.grant_opening_shield(round(float(attrs.get("hp", 40)) * SHIELD_BASE_PCT))
+    defend = (session.cfg.get("battle") or {}).get("defend") or {}
+    session.meditate_pct = float(defend.get("meditate_pct", 0.40) or 0.40)
 
 
 def _resist_layer(attrs: dict[str, Any]) -> dict[str, Any]:
@@ -532,5 +537,8 @@ def battle_actions(run: RogueRun) -> list[dict[str, Any]]:
         )
     out.append(
         {"key": str(len(out) + 1), "label": "防御", "action": dict(ACTION_DEFEND)}
+    )
+    out.append(
+        {"key": str(len(out) + 1), "label": "冥想", "action": dict(ACTION_MEDITATE)}
     )
     return out

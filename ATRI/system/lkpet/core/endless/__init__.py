@@ -222,9 +222,11 @@ from .telemetry import Telemetry, telemetry
 from .telemetry import configure as configure_telemetry
 from .view import (
     ACTIONS,
+    enemy_line,
     finish,
     next_floor,
     reface,
+    render_battle,
     render_floor,
     render_options,
     render_progress,
@@ -319,6 +321,7 @@ __all__ = [
     "elemental_scale",
     "elites_of",
     "endless_cap",
+    "enemy_line",
     "enemy_scale_cfg",
     "enhance_cost",
     "enhance_multiplier",
@@ -384,6 +387,7 @@ __all__ = [
     "region_of_id",
     "relic_list",
     "relic_specs",
+    "render_battle",
     "render_event",
     "render_floor",
     "render_options",

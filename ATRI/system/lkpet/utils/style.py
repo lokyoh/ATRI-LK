@@ -155,6 +155,23 @@ def bar(value: int | float, maximum: int | float, width: int = BAR_WIDTH) -> str
     return BAR_FULL * filled + BAR_EMPTY * (max(0, width) - filled)
 
 
+#: 一行超过这个字符宽度就改成换行分隔（手机屏宽下再长会挤成一坨）。
+MAX_LINE_CELLS = 24
+
+
+def stacked(line: str, *, sep: str = "｜", limit: int = MAX_LINE_CELLS) -> str:
+    """把 ``A ｜ B ｜ C`` 这类长条**改成一格一行**。
+
+    短行原样返回。超过 ``limit`` 就拆开：分隔符换成换行，一项一行。
+    不做「塞满一行再换行」的贪心排布——那会把最后一项单独甩出去，
+    卡里留下一个孤零零的 ``魔 10``，比整齐的一格一行更难扫。
+    """
+    parts = [piece.strip() for piece in str(line).split(sep) if piece.strip()]
+    if len(parts) <= 1 or len(str(line)) <= limit:
+        return line
+    return "\n".join(parts)
+
+
 def meter(
     label: str,
     value: int | float,

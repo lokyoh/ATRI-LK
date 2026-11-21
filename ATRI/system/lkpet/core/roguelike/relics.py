@@ -11,6 +11,9 @@ from ._common import (
 #: 平值属性每点折算成「战力 %」的权重（atk=1 为基准，其余按战斗公式比例）。
 _FLAT_WEIGHT = {"atk": 1.0, "def": 0.41, "spd": 0.55, "max_hp": 0.36, "mp": 0.09}
 
+#: 数值型攻击/防御的定价折扣：它们随面板增长贬值最快，按满战力卖没人买。
+_FLAT_PRICE_SCALE = {"atk": 0.8, "def": 0.8}
+
 #: 百分比效果每 1% 折算成的「战力 %」。
 _PCT_WEIGHT = {
     "atk_mult": 1.00,
@@ -73,9 +76,17 @@ def relic_flat_power(
     level: float = _PRICE_REF_LEVEL,
     rogue_cfg: dict[str, Any] | None = None,
 ) -> float:
-    """``effect`` 里平值部分的战力收益（%）——随等级衰减的就是这一段。"""
+    """``effect`` 里平值部分的战力收益（%）——随等级衰减的就是这一段。
+
+    攻击/防御的数值段按 ``_FLAT_PRICE_SCALE`` 打折：它们贬值最快，
+    按满战力定价等于让人用前期金币买后期的废纸。
+    """
     pp = _per_point(level, rogue_cfg)
-    return sum(float(effect[key]) * pp[key] for key in pp if key in effect)
+    return sum(
+        float(effect[key]) * pp[key] * _FLAT_PRICE_SCALE.get(key, 1.0)
+        for key in pp
+        if key in effect
+    )
 
 
 def relic_pct_power(effect: dict[str, Any]) -> float:
@@ -106,12 +117,15 @@ def relic_power(
 def relic_floor_decay(
     effect: dict[str, Any], floor: int, rogue_cfg: dict[str, Any] | None = None
 ) -> float:
-    """平值段在 ``floor`` 层相对 30 级的衰减倍率（0.3~2.0）。"""
+    """平值段在 ``floor`` 层相对 30 级的衰减倍率（0.3~1.0）。
+
+    上限取 1.0：低层的平值更值钱，但那时玩家金币也少，不能反过来加价。
+    """
     now = relic_flat_power(effect, float(floor), rogue_cfg)
     ref = relic_flat_power(effect, _PRICE_REF_LEVEL, rogue_cfg)
     if ref <= 0:
         return 1.0
-    return min(2.0, max(0.3, now / ref))
+    return min(1.0, max(0.3, now / ref))
 
 
 def relic_specs() -> dict[str, dict[str, Any]]:
@@ -166,7 +180,7 @@ def relic_effect_note(effect: dict[str, Any]) -> str:
     if "crit_rate" in effect:
         parts.append(f"暴击率{_pct(float(effect['crit_rate']))}")
     for key, label in _RELIC_MULT_LABELS.items():
-        if key in effect and key[:-5] not in _RELIC_FLAT_LABELS:
+        if key in effect and key[:-5] not in effect:
             parts.append(f"{label}{_pct(float(effect[key]) - 1.0)}")
     if "shop_discount" in effect:
         parts.append(f"商店价格{_pct(float(effect['shop_discount']) - 1.0)}")

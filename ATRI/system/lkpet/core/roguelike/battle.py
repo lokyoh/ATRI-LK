@@ -228,6 +228,9 @@ class BattleSession:
         self.pet_solid = 0.0
         self.pet_dodge = 0.0
         self.accuracy = 0.0
+        # 防御/冥想的独立乘区（与 def 无关，避免 def=0 时乘 1.5 仍是 0）
+        self.pet_guard_mult = 1.0
+        self.meditate_pct = 0.0
         # 局内魔力：每层 / 每个战斗回合（= 我方每次行动）的回复比例。
         self.mp_floor_pct = mp_regen_pct(cfg, "per_floor_pct")
         self.mp_turn_pct = mp_regen_pct(cfg, "per_turn_pct")
@@ -646,29 +649,32 @@ class BattleSession:
         return not wanted or wanted == skill_id
 
     def _defend_action(self) -> None:
-        """防御：本回合减伤 + 回一点魔力，不出伤害。"""
+        """防御：受伤降低 ``damage_cut``，持续到**下次行动**为止。
+
+        独立乘区而不是 ``def_mult``：开局 def = 0，乘 1.5 仍是 0 减伤。
+        """
         defend = self.cfg.get("defend") or {}
-        # 刷新同一条而不是追加：连按防御不能叠成 5 倍减伤（审查 P1-8）。
-        self.pet_debuffs = [
-            d for d in self.pet_debuffs if d.get("id") != "endless:defend"
-        ]
-        self.pet_debuffs.append(
-            {
-                "id": "endless:defend",
-                "frames": self.frames_per_turn,
-                "rounds": 0,
-                "def_mult": float(defend.get("def_mult", 1.5)),
-            }
-        )
-        self._refresh_pet_mods()
-        gain_pct = float(defend.get("mp_gain_pct", 0.10))
-        if gain_pct > 0 and self.mp_cap > 0:
-            self.pet_mp = min(self.mp_cap, self.pet_mp + round(self.mp_cap * gain_pct))
+        cut = float(defend.get("damage_cut", 0.5))
+        self.pet_guard_mult = min(1.0, max(0.0, 1.0 - cut))
         self._blog(
             "log_defend",
-            "回合{round} {actor} 举盾防守，魔力回复 {mp} 点。",
+            "回合{round} {actor} 举盾防守，受伤降低 {pct}%。",
             actor=self.pet.name,
-            mp=round(self.mp_cap * gain_pct) if gain_pct else 0,
+            pct=round(cut * 100),
+        )
+
+    def _meditate_action(self) -> None:
+        """冥想：回复 ``mp_gain_pct`` 的魔力上限，不出伤害。"""
+        defend = self.cfg.get("defend") or {}
+        pct = float(self.meditate_pct or defend.get("meditate_pct", 0.40))
+        gain = round(self.mp_cap * pct)
+        if gain > 0 and self.mp_cap > 0:
+            self.pet_mp = min(self.mp_cap, self.pet_mp + gain)
+        self._blog(
+            "log_meditate",
+            "回合{round} {actor} 凝神冥想，魔力回复 {mp} 点。",
+            actor=self.pet.name,
+            mp=gain,
         )
 
     def _pet_action(self) -> None:
@@ -683,9 +689,16 @@ class BattleSession:
         # 目标变化从随后的伤害行就能看出来。
         self.current_target = target
 
-        # 手动模式：玩家选了「防御」就举盾，不走伤害分支
-        if self.manual and str((self.pending_action or {}).get("kind")) == "defend":
+        # 上次行动的防御/冥想态在这里结束：它只保护到下一次行动为止
+        self.pet_guard_mult = 1.0
+
+        # 手动模式：防御 / 冥想不出伤害
+        kind = str((self.pending_action or {}).get("kind"))
+        if self.manual and kind == "defend":
             self._defend_action()
+            return
+        if self.manual and kind == "meditate":
+            self._meditate_action()
             return
 
         acted = False
@@ -1582,6 +1595,9 @@ class BattleSession:
         if crit_rate > 0 and self.rng.random() < crit_rate:
             dmg = max(1, round(dmg * self.crit_mult))
         dmg = max(1, round(dmg * self.level_taken_mult))
+        # 防御：独立乘区，def = 0 时同样有效
+        if self.pet_guard_mult < 1.0:
+            dmg = max(1, round(dmg * self.pet_guard_mult))
         if rec is not None:
             stacks = int(rec.get("rage", 0) or 0)
             per = float(rec.get("rage_per_stack", 0.0) or 0.0)

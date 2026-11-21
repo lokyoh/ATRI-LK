@@ -1100,76 +1100,88 @@ async def handle_endless(event: Event, args: BaseMessage = CommandArg()):
     raw = args.extract_plain_text().strip()
     from ..database import Endless, load_endless, save_endless
 
+    # 与肉鸽同一套交互：QQ 端的选项由行内链接承载，正文不列编号；
+    # OneBot 端没有 cmd-input，编号必须留着。
+    numbered = not reply.is_qq(event)
+    running = None
     try:
-        endless = load_endless(player_id)
-        if endless is None:
-            endless = Endless(player_id=str(player_id))
-        running = (
-            endless_core.RogueRun.from_dict(endless.run_state)
-            if endless.run_state
-            else None
-        )
+        with (
+            rogue_actions.numbered_options(numbered),
+            rogue_actions.line_links(),
+        ):
+            endless = load_endless(player_id)
+            if endless is None:
+                endless = Endless(player_id=str(player_id))
+            running = (
+                endless_core.RogueRun.from_dict(endless.run_state)
+                if endless.run_state
+                else None
+            )
 
-        if raw in ("", "进度"):
-            msg = endless_core.render_progress(endless)
-            if running is not None:
-                msg = endless_core.render_summary(running) + "\n" + msg
-        elif raw == "开始":
-            run = endless_core.start_run(_endless_seed(player_id))
-            endless_core.sync_codex(endless, run)
-            endless.run_state = run.to_dict()
-            save_endless(endless)
-            endless_core.telemetry.run_start(
-                stage=endless_core.current_stage(run), floor=run.floor, seed=run.seed
-            )
-            endless_core.telemetry.floor_enter(
-                floor=run.floor,
-                stage=endless_core.current_stage(run),
-                kind=endless_core.floor_meta(run)["kind"],
-                region=run.region,
-            )
-            msg = _endless_prefixed("🌱 无尽模式开局") + endless_core.render_summary(
-                run
-            )
-        elif raw == "继续":
-            if running is None:
-                msg = _endless_usage()
-            else:
-                msg = _endless_prefixed("🔁 继续本局") + endless_core.render_summary(
-                    running
-                )
-        elif raw.startswith("库存") and running is not None:
-            msg = _endless_stock(running, raw)
-            endless.run_state = running.to_dict()
-            save_endless(endless)
-        elif raw in ("刷新", "离开") and running is not None:
-            msg, changed = _endless_shop_action(running, raw)
-            if changed:
-                msg = _endless_persist(endless, running, save_endless, msg)
-        elif _endless_is_step(running, raw) and running is not None:
-            msg, changed = _endless_step(running, _endless_step_number(running, raw))
-            if changed:
-                msg = _endless_persist(endless, running, save_endless, msg)
-        elif raw.startswith("强化") and running is not None:
-            msg, changed = _endless_enhance(running, raw)
-            if changed:
-                msg = _endless_persist(endless, running, save_endless, msg)
-        elif raw == "撤退":
-            if running is None:
-                msg = _endless_usage()
-            else:
-                summary = endless_core.finish(endless, running)
-                endless.run_state = {}
+            if raw in ("", "进度"):
+                msg = endless_core.render_progress(endless)
+                if running is not None:
+                    msg = endless_core.render_summary(running) + "\n" + msg
+            elif raw == "开始":
+                run = endless_core.start_run(_endless_seed(player_id))
+                endless_core.sync_codex(endless, run)
+                endless.run_state = run.to_dict()
                 save_endless(endless)
-                endless_core.telemetry.run_end(
-                    floor=summary["floor"],
-                    best=summary["best"],
-                    runs=summary["runs"],
-                    reason="retreat",
+                endless_core.telemetry.run_start(
+                    stage=endless_core.current_stage(run),
+                    floor=run.floor,
+                    seed=run.seed,
                 )
-                msg = _endless_settle_text(summary)
-        else:
-            msg = _endless_usage()
+                endless_core.telemetry.floor_enter(
+                    floor=run.floor,
+                    stage=endless_core.current_stage(run),
+                    kind=endless_core.floor_meta(run)["kind"],
+                    region=run.region,
+                )
+                msg = _endless_prefixed(
+                    "🌱 无尽模式开局"
+                ) + endless_core.render_summary(run)
+            elif raw == "继续":
+                if running is None:
+                    msg = _endless_usage()
+                else:
+                    msg = _endless_prefixed(
+                        "🔁 继续本局"
+                    ) + endless_core.render_summary(running)
+            elif raw.startswith("库存") and running is not None:
+                msg = _endless_stock(running, raw)
+                endless.run_state = running.to_dict()
+                save_endless(endless)
+            elif raw in ("刷新", "离开") and running is not None:
+                msg, changed = _endless_shop_action(running, raw)
+                if changed:
+                    msg = _endless_persist(endless, running, save_endless, msg)
+            elif _endless_is_step(running, raw) and running is not None:
+                msg, changed = _endless_step(
+                    running, _endless_step_number(running, raw)
+                )
+                if changed:
+                    msg = _endless_persist(endless, running, save_endless, msg)
+            elif raw.startswith("强化") and running is not None:
+                msg, changed = _endless_enhance(running, raw)
+                if changed:
+                    msg = _endless_persist(endless, running, save_endless, msg)
+            elif raw == "撤退":
+                if running is None:
+                    msg = _endless_usage()
+                else:
+                    summary = endless_core.finish(endless, running)
+                    endless.run_state = {}
+                    save_endless(endless)
+                    endless_core.telemetry.run_end(
+                        floor=summary["floor"],
+                        best=summary["best"],
+                        runs=summary["runs"],
+                        reason="retreat",
+                    )
+                    msg = _endless_settle_text(summary)
+            else:
+                msg = _endless_usage()
     except Exception as exc:  # 未知错误也要回执，不静默吞掉对话
         log.warning(f"宠物.无尽 处理失败：{exc!r}")
         msg = "❌ 无尽指令执行出错，请查看机器人日志。"
@@ -1178,7 +1190,7 @@ async def handle_endless(event: Event, args: BaseMessage = CommandArg()):
     if running is not None:
         choices = endless_actions.choices_from_endless(running)
     if not choices:
-        choices = menus.rogue_menu(running=running is not None)
+        choices = menus.endless_menu(running=running is not None)
     await reply.finish(
         pet_endless_matcher,
         _never_empty(msg, _endless_usage()),
@@ -1479,6 +1491,7 @@ def _endless_step(run, number: int) -> tuple[str, bool]:
         pending_levels,
         pick_event,
         purchase,
+        render_battle,
         render_event,
         render_floor,
         render_options,
@@ -1546,9 +1559,7 @@ def _endless_step(run, number: int) -> tuple[str, bool]:
                 run.pending.pop("options", None)
                 lines.append("生命耗尽或回合用尽，本局结束。")
         else:
-            lines.append(
-                "轮到你了：" + "｜".join(a["key"] + " " + a["label"] for a in actions)
-            )
+            lines.append(render_battle(run))
         return "\n".join(x for x in lines if x), True
 
     # 3) 事件选项
@@ -1566,10 +1577,7 @@ def _endless_step(run, number: int) -> tuple[str, bool]:
             lines.append("⚠️ 事件引来了强化战斗！")
             if pending.get("session"):
                 actions = battle_actions(run)
-                lines.append(
-                    "轮到你了："
-                    + "｜".join(a["key"] + " " + a["label"] for a in actions)
-                )
+                lines.append(render_battle(run))
                 return "\n".join(x for x in lines if x), True
         healed = _endless_advance(run)
         if healed:
@@ -1617,10 +1625,7 @@ def _endless_step(run, number: int) -> tuple[str, bool]:
                 lines.append(render_options(run))
             else:
                 actions = battle_actions(run)
-                lines.append(
-                    "轮到你了："
-                    + "｜".join(a["key"] + " " + a["label"] for a in actions)
-                )
+                lines.append(render_battle(run))
             return "\n".join(x for x in lines if x), True
         if kind == "event":
             rng = _random.Random(f"{run.seed}:{run.floor}:pick")

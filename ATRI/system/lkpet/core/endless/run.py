@@ -117,11 +117,15 @@ def new_run(seed: int, cfg: dict[str, Any] | None = None) -> RogueRun:
     relics = offer_relics(rng, 1, None, 3)
     if relics:
         picks.append({"type": "open_relic", "options": relics})
-    skills = offer_skills(rng, 1, None, 4)
+    # 三次 4 选 1 必须是**三批不同的技能**：同一份列表复用三次，
+    # 第二三次就成了「已学会的那几个再选一遍」，等于没刷新。
+    offered: list[str] = []
     for _ in range(3):
-        if not skills:
+        batch = offer_skills(rng, 1, offered, 4)
+        if not batch:
             break
-        picks.append({"type": "open_skill", "options": list(skills)})
+        picks.append({"type": "open_skill", "options": batch})
+        offered.extend(str(spec.get("id")) for spec in batch)
 
     run.pending = (
         picks[0]

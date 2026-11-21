@@ -29,6 +29,19 @@ def _state_from_json(data: Any) -> Any:
     return (int(data[0]), tuple(int(x) for x in data[1]), data[2])
 
 
+def _target_index(session: BattleSession) -> int:
+    """``current_target`` 在 ``units`` 里的下标；-1 = 没有目标。
+
+    存下标而不是整条记录：记录本身就是 ``units`` 的一项（含 ``fired`` 这个
+    set），整条存进去既重复又不可 JSON 化。
+    """
+    target = session.current_target
+    for index, rec in enumerate(session.units):
+        if rec is target:
+            return index
+    return -1
+
+
 def dump_session(session: BattleSession) -> dict[str, Any]:
     """把战斗会话压成可存 dict。"""
     units = []
@@ -67,7 +80,7 @@ def dump_session(session: BattleSession) -> dict[str, Any]:
         "actor_cursor": session.actor_cursor,
         "pending_actors": session.pending_actors,
         "frame_phase": session.frame_phase,
-        "current_target": session.current_target,
+        "current_target_index": _target_index(session),
         "rng": _state_to_json(session.rng.getstate()),
     }
 
@@ -140,7 +153,12 @@ def load_session(session: BattleSession, data: dict[str, Any]) -> bool:
     session.actor_cursor = int(data.get("actor_cursor", 0))
     session.pending_actors = [tuple(x) for x in (data.get("pending_actors") or [])]
     session.frame_phase = str(data.get("frame_phase") or "idle")
-    session.current_target = data.get("current_target")
+    index = data.get("current_target_index")
+    units_list = session.units
+    if isinstance(index, int) and 0 <= index < len(units_list):
+        session.current_target = units_list[index]
+    else:
+        session.current_target = None
     rng_state = data.get("rng")
     if rng_state:
         session.rng.setstate(_state_from_json(rng_state))

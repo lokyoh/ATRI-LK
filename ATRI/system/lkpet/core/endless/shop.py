@@ -32,7 +32,7 @@ SLOTS: tuple[tuple[str, int], ...] = (
 )
 """货架的 11 个位置：``[(位置类型, 数量), ...]``。"""
 
-REFRESH_FIRST = 10
+REFRESH_FIRST = 20
 REFRESH_STEP = 10
 """刷新成本的兜底默认值；实际读 ``endless.yaml`` 的 ``shop.refresh``。
 

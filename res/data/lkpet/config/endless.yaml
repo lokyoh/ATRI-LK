@@ -51,7 +51,7 @@ enemy:
 
 shop:
   slots: { relic: 5, skill: 3, weapon: 1, armor: 1, accessory: 2 }
-  refresh: { first: 10, step: 10 }   # 无次数上限，离店重置
+  refresh: { first: 20, step: 10 }   # 首次 20，之后每次 +10；无次数上限，离店重置
   affix_bias: 0.60
 
 battle:

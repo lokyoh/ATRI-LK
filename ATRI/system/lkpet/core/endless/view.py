@@ -53,14 +53,16 @@ ENDLESS_CMD = "宠物.无尽"
 
 
 def render_level_choice(run: RogueRun) -> str:
-    """升级 4 选 1：逐项写出这次选它加多少，玩家不必回查配置。"""
+    """升级 4 选 1：逐项写出这次加多少，并让整行可点。"""
+    from ..roguelike._common import line_link
     from .progression import LEVEL_KEYS, LEVEL_LABELS, gain_table
 
     gains = gain_table()
     left = len(run.progression.pending)
     lines = [f"🎖 升级！Lv.{run.progression.level}（还剩 {left} 次选择）"]
     for index, key in enumerate(LEVEL_KEYS, 1):
-        lines.append(f"{index}. {LEVEL_LABELS[key]} +{gains.get(key, 0)}")
+        body = f"{index}. {LEVEL_LABELS[key]} +{gains.get(key, 0)}"
+        lines.append(line_link(body, f"{ENDLESS_CMD} {index}"))
     return "\n".join(lines)
 
 

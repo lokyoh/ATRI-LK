@@ -146,7 +146,7 @@ def attr_value(key: str, value: Any) -> str:
     if isinstance(value, dict):
         # 元素抗性是 {元素: 数值}，键要翻成中文元素名而不是原样输出
         return "、".join(
-            f"{ELEMENT_NAMES.get(str(k), str(k))}{round(float(v), 1)}"
+            f"{ELEMENT_NAMES.get(str(k), str(k))}抗 {round(float(v), 1)}"
             for k, v in value.items()
         )
     if isinstance(value, bool):
@@ -210,18 +210,51 @@ def relic_note(spec: dict[str, Any]) -> str:
 
 
 def skill_note(spec: dict[str, Any]) -> str:
-    """技能的一行说明：吃哪个属性 + 威力 / 耗魔。"""
+    """技能的一行说明：系别 + 实际效果 + 耗魔。
+
+    效果必须写出来——只写「威力 0」玩家看不出这东西有什么用。
+    """
     series = str(spec.get("series") or "")
     elem = ELEMENT_NAMES.get(str(spec.get("element")), str(spec.get("element")))
-    if series in ("support", "guard"):
-        head = f"{elem}·辅助"
-    else:
-        key = str(spec.get("dir") or "atk")
-        head = f"{elem}·{DIR_LABELS.get(key, key)}转伤"
+    tag = SERIES_LABELS.get(series, series)
+
+    parts: list[str] = []
+    shield = float(spec.get("shield", 0.0) or 0.0)
+    if shield:
+        parts.append(f"护盾 {round(shield * 100)}%")
+    heal = float(spec.get("heal", 0.0) or 0.0)
+    if heal:
+        parts.append(f"回血 {round(heal * 100)}%")
+    for key, label in (("atk_mult", "攻"), ("def_mult", "防"), ("spd_mult", "速")):
+        if key in spec:
+            parts.append(f"{label} +{round((float(spec[key]) - 1.0) * 100)}%")
     power = int(spec.get("power", 0) or 0)
+    if power:
+        parts.append(f"威力 {power}")
+    rounds = int(spec.get("rounds", 0) or 0)
+    if rounds and any(k.endswith("_mult") for k in spec):
+        parts.append(f"持续 {rounds} 回合")
     cost = int(spec.get("mp_cost", 0) or 0)
-    tail = f"威力 {power}" if power else "不造成伤害"
-    return f"{head}，{tail}，耗魔 {cost}"
+    if cost:
+        parts.append(f"耗魔 {cost}")
+    return f"{elem}·{tag}：" + "，".join(parts)
+
+
+SERIES_LABELS = {
+    "main": "单体伤害",
+    "special": "群体伤害",
+    "support": "增益",
+    "guard": "护盾/治疗",
+}
+"""系列 → 商品类型名（玩家看得懂的叫法）。"""
+
+
+KIND_LABELS = {
+    "relic": "遗物",
+    "skill": "技能",
+    "gear": "装备",
+}
+"""货架商品类型。"""
 
 
 def gear_note(spec: dict[str, Any]) -> str:

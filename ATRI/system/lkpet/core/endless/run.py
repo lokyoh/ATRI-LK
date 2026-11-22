@@ -136,11 +136,26 @@ def new_run(seed: int, cfg: dict[str, Any] | None = None) -> RogueRun:
     return run
 
 
+PERSISTENT_PENDING = ("enhance", "gear_stock", "proficiency")
+"""挂在 pending 里但**跨层有效**的字段。
+
+``refresh_floor`` 每次整份替换 pending，不保住这几个键的话：库存装备、
+技能强化次数、熟练度都会在进下一层时凭空消失。
+"""
+
+
+def _carry_over(pending: dict[str, Any]) -> dict[str, Any]:
+    """取出跨层字段，供新的 pending 继承。"""
+    return {k: pending[k] for k in PERSISTENT_PENDING if k in pending}
+
+
 def refresh_floor(run: RogueRun, cfg: dict[str, Any] | None = None) -> None:
     """把当前层的选项写进 pending（推进到新层后调用）。"""
     cfg = cfg or load_endless_config()
     run.region = region_of(run.floor, run.seed, cfg)
+    carried = _carry_over(run.pending or {})
     run.pending = {"type": "floor", "options": build_options(run.floor, run.seed, cfg)}
+    run.pending.update(carried)
     # 本层掉落的遗物/装备会改 hp/mp 上限，进新层时重算一次
     from .flow import sync_resources
 

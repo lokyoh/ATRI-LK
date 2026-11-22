@@ -163,7 +163,10 @@ def _shelf_note(kind: str, spec: dict[str, Any]) -> str:
 
 
 def render_shop(session: dict[str, Any]) -> str:
-    """把货架渲染成编号列表；空格子显式标出。"""
+    """把货架渲染成编号列表；每行整行可点即买入。"""
+    from ..roguelike._common import line_link
+    from .describe import KIND_LABELS
+
     shelf = list(session.get("shelf") or [])
     lines = ["🛒 商店"]
     for i, entry in enumerate(shelf, 1):
@@ -176,10 +179,16 @@ def render_shop(session: dict[str, Any]) -> str:
         price = int(entry.get("price", 0) or 0)
         kind = str(entry.get("kind") or "")
         note = _shelf_note(kind, spec)
-        head = str(i) + ". " + name + "（T" + str(tier) + "）" + str(price) + " 金"
+        # 类型必须写出来：同样标「T1」，遗物和装备看不出区别
+        tag = KIND_LABELS.get(kind, kind)
+        head = f"{i}. 【{tag}】{name}（T{tier}）{price} 金"
         # 说明单独一行：和价格挤在一行会到手机屏宽外，也看不清买了什么
-        lines.append(head + ("\n　　" + note if note else ""))
+        # 整行可点 = 直接买这一格，不必回到底部数第几个按钮
+        lines.append(
+            line_link(head, f"宠物.无尽 {i}") + ("\n　　" + note if note else "")
+        )
     refreshes = int(session.get("refreshes", 0) or 0)
     next_cost = refresh_cost(refreshes)
-    lines.append("刷新 " + str(next_cost) + " 金（第 " + str(refreshes + 1) + " 次）")
+    # 写「下一次」而不是「第 N 次」：后者容易被读成「上一次花了多少」
+    lines.append(f"刷新 {next_cost} 金（下次是第 {refreshes + 1} 次）")
     return "\n".join(lines)

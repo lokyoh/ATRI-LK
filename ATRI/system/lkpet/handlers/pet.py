@@ -1150,7 +1150,7 @@ async def handle_endless(event: Event, args: BaseMessage = CommandArg()):
                         "🔁 继续本局"
                     ) + endless_core.render_summary(running)
             elif raw.startswith("查看") and running is not None:
-                msg = _endless_look(running, raw)
+                msg, panel_name = _endless_look(running, raw)
             elif raw.split()[0] in endless_core.PANELS and running is not None:
                 panel_name = str(raw).split()[0]
                 msg = _endless_panel(running, raw)
@@ -1198,7 +1198,9 @@ async def handle_endless(event: Event, args: BaseMessage = CommandArg()):
     alive = running is not None and running.hp > 0
     if alive:
         choices = endless_actions.choices_from_endless(running)
-        # 刚打开的那个面板，先给它自己的操作按钮
+    # 刚打开的面板 / 查看：先给它自己的操作按钮。这一步放在后面，是因为
+    # 升级选属性那时按钮必须是 4 个加成——面板按钮会把它盖掉。
+    if alive and panel_name and not _endless_choosing_level(running):
         from ..utils.reply import Choice
 
         choices = [
@@ -1390,6 +1392,11 @@ def _endless_enhance(run, raw: str) -> tuple[str, bool]:
     ), True
 
 
+def _endless_choosing_level(run) -> bool:
+    """正在 4 选 1 选升级加成——那时按钮只能是 4 个加成。"""
+    return bool(getattr(run, "progression", None) and run.progression.pending)
+
+
 def _endless_panel_choices(run, panel: str) -> list[tuple[str, str]]:
     """面板底部的按钮：``(完整指令, 显示名)``。"""
     from ..core.endless import panel_actions
@@ -1429,21 +1436,21 @@ def _endless_panel(run, raw: str) -> str:
     return text
 
 
-def _endless_look(run, raw: str) -> str:
-    """``查看 <名字>``：一件技能 / 装备 / 遗物的完整介绍。"""
+def _endless_look(run, raw: str) -> tuple[str, str]:
+    """``查看 <名字>``：返回 (正文, 对应面板名)。"""
     from ..core.endless import find_spec, in_battle, render_detail
 
     if in_battle(run):
         from ..core.endless.panels import busy
 
-        return busy()
+        return busy(), ""
 
     name = str(raw or "").replace("查看", "", 1).strip()
     found = find_spec(name)
     if not found:
-        return "没找到「" + name + "」。可查看技能 / 装备 / 遗物的名字。"
+        return "没找到「" + name + "」。可查看技能 / 装备 / 遗物的名字。", ""
     kind, spec = found
-    return render_detail(kind, spec)
+    return render_detail(kind, spec), kind
 
 
 def _endless_stock(run, raw: str) -> str:

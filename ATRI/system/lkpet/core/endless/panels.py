@@ -27,7 +27,6 @@ from .skills import (
     SERIES_CN,
     active_slots,
     equip_skill,
-    skill_power,
     skill_specs,
 )
 
@@ -123,7 +122,12 @@ def gear_line(spec: dict[str, Any]) -> str:
 
 
 def render_gear(run: Any) -> str:
-    """装备面板：已穿的四件 + 库存，编号供「穿上 / 卸下 / 分解」使用。"""
+    """装备面板：已穿四槽 + 库存；每行整行可点执行对应操作。"""
+    from ..roguelike._common import line_link
+
+    # line_link 的 command 是**相对路径**，构造器自己补 command_start；
+    # 这里再拼一次会渲染成 "//宠物.无尽"
+    base = "宠物.无尽"
     specs = gear_specs()
     lines = ["🛡 装备"]
     for slot in ("weapon", "armor", "accessory"):
@@ -134,16 +138,22 @@ def render_gear(run: Any) -> str:
         lines.append(f"{SLOT_CN[slot]}：")
         for gear_id in ids:
             spec = specs.get(str(gear_id)) or {}
-            lines.append("  " + gear_line(spec))
+            # 已穿的那件：点它 = 卸下这一槽
+            lines.append(
+                "  " + line_link(gear_line(spec), f"{base} 装备 卸下 {SLOT_CN[slot]}")
+            )
 
-    # 库存编号只服务「穿上 N / 分解 N」，所以从 1 起；与已穿的分开计数
     stock = stock_of(run)
     if stock:
-        lines.append("库存（穿上 N / 分解 N）：")
+        lines.append("库存（点名字穿上 / 点【分解】回收）：")
         for index, gear_id in enumerate(stock, 1):
             spec = specs.get(str(gear_id)) or {}
+            value = decompose_value(spec)
             lines.append(
-                f"  {index}. {gear_line(spec)}（分解 {decompose_value(spec)} 金）"
+                f"  {index}. "
+                + line_link(gear_line(spec), f"{base} 装备 穿上 {index}")
+                + "　"
+                + line_link(f"【分解 {value} 金】", f"{base} 装备 分解 {index}")
             )
     else:
         lines.append("库存：空")
@@ -156,9 +166,7 @@ def gear_actions(run: Any) -> list[tuple[str, str]]:
     标签带**装备名**而不是编号——「穿 1」这种写法玩家得回去数第几行。
     不再给「看装备」：面板正文已经把内容全写出来了，点了只是重画一遍。
     """
-    from ...utils.texts import command_start
-
-    base = command_start() + "宠物.无尽"
+    base = "宠物.无尽"
     specs = gear_specs()
     stock = stock_of(run)
     out: list[tuple[str, str]] = []
@@ -227,18 +235,22 @@ def gear_action(run: Any, action: str, arg: str) -> tuple[str, bool]:
 
 
 def skill_line(spec: dict[str, Any], times: int = 0) -> str:
-    """一个技能的一行：档位 + 名字（元素·系）+ 威力。"""
-    elem = ELEMENT_CN.get(str(spec.get("element")), str(spec.get("element")))
-    series = SERIES_CN.get(str(spec.get("series")), str(spec.get("series")))
+    """一个技能的一行：档位 + 名字 + 效果 + 强化次数。"""
+    from .describe import skill_note
+
     tier = int(spec.get("tier", 1) or 1)
     name = str(spec.get("name") or spec.get("id"))
-    power = skill_power(spec, times)
-    plus = f" 强化×{times}" if times else ""
-    return f"T{tier} {name}（{elem}·{series}）威力 {power}{plus}"
+    plus = f"，强化×{times}" if times else ""
+    return f"T{tier} {name} · {skill_note(spec)}{plus}"
 
 
 def render_skills(run: Any) -> str:
-    """技能面板：已装 4 槽 + 学会但未装的。"""
+    """技能面板：已装槽位 + 未装的已学技能；每行整行可点。"""
+    from ...utils.texts import command_start
+    from ..roguelike._common import line_link
+    from .flow import known_skills
+
+    base = command_start() + "宠物.无尽"
     specs = skill_specs()
     enhance = dict((run.pending or {}).get("enhance") or {})
     active = _active_ids(run)
@@ -248,18 +260,23 @@ def render_skills(run: Any) -> str:
     for index, skill_id in enumerate(active, 1):
         spec = specs.get(str(skill_id)) or {}
         times = int(enhance.get(str(skill_id), 0) or 0)
-        lines.append(f"  {index}. {skill_line(spec, times)}")
-
-    from .flow import known_skills
+        # 已装的：点它 = 换下
+        lines.append(
+            f"  {index}. "
+            + line_link(skill_line(spec, times), f"{base} 技能 换下 {index}")
+        )
 
     # 未装 = 已学会但没在槽里；全库 160 个不该出现在玩家的面板里
     bench = [s for s in known_skills(run) if s not in active and s in specs]
     if bench:
-        lines.append(f"未装（{len(bench)} 个）：")
+        lines.append(f"未装（{len(bench)} 个，点名字换上）：")
         for index, skill_id in enumerate(bench[:12], 1):
             spec = specs.get(skill_id) or {}
             times = int(enhance.get(skill_id, 0) or 0)
-            lines.append(f"  {index}. {skill_line(spec, times)}")
+            lines.append(
+                f"  {index}. "
+                + line_link(skill_line(spec, times), f"{base} 技能 换上 {index}")
+            )
     return "\n".join(lines)
 
 
@@ -499,9 +516,7 @@ def panel_actions(run: Any, name: str) -> list[tuple[str, str]]:
 
     面板之间可以互相跳转：看完状态想知道装备什么，不该让他退回去再手打。
     """
-    from ...utils.texts import command_start
-
-    base = command_start() + "宠物.无尽"
+    base = "宠物.无尽"
     jump = [(base + " " + other, other) for other in PANELS if other != name]
     if name == "装备":
         return gear_actions(run)[:6] + jump[:2]

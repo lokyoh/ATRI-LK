@@ -1154,6 +1154,9 @@ async def handle_endless(event: Event, args: BaseMessage = CommandArg()):
             elif raw.split()[0] in endless_core.PANELS and running is not None:
                 panel_name = str(raw).split()[0]
                 msg = _endless_panel(running, raw)
+                # 面板里的穿上/卸下/分解/换上都会改状态，必须写回；
+                # 只读地看一眼也无妨，多写一次比丢改动便宜。
+                msg = _endless_persist(endless, running, save_endless, msg)
             elif raw.startswith("库存") and running is not None:
                 msg = _endless_stock(running, raw)
                 endless.run_state = running.to_dict()

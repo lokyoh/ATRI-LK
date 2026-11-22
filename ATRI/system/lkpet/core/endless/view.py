@@ -18,7 +18,9 @@ ACTIONS = ("开始", "继续", "进度", "撤退", "状态", "装备", "技能",
 
 def usage() -> str:
     cmd = f"{command_start()}宠物.无尽"
-    return "用法：" + cmd + " " + "｜".join(ACTIONS)
+    head = "用法：" + cmd + " " + "｜".join(ACTIONS)
+    tail = "局内：查看 <名字>｜强化 N｜库存｜刷新｜离开"
+    return head + "\n" + tail
 
 
 def render_floor(run: RogueRun) -> str:
@@ -39,21 +41,38 @@ def render_floor(run: RogueRun) -> str:
 
 
 def render_status(run: RogueRun) -> str:
-    """一行状态：生命 / 魔力 / 金币 / 等级。"""
-    return (
-        f"❤ {run.hp}/{run.hp_max}  ◆ {run.mp}/{run.mp_max}  "
-        f"🪙 {run.coins}  Lv.{run.progression.level}"
-    )
+    """一行状态：生命 / 金币 / 等级。
+
+    魔力只活在战斗里，所以这里不显示——战斗中的蓝量由战报行的会话给出。
+    """
+    return f"❤ {run.hp}/{run.hp_max}  🪙 {run.coins}  Lv.{run.progression.level}"
 
 
 ENDLESS_CMD = "宠物.无尽"
 """局内编号指令的相对路径（由 menus.cmd 补 command_start）。"""
 
 
+def render_level_choice(run: RogueRun) -> str:
+    """升级 4 选 1：逐项写出这次选它加多少，玩家不必回查配置。"""
+    from .progression import LEVEL_KEYS, LEVEL_LABELS, gain_table
+
+    gains = gain_table()
+    left = len(run.progression.pending)
+    lines = [f"🎖 升级！Lv.{run.progression.level}（还剩 {left} 次选择）"]
+    for index, key in enumerate(LEVEL_KEYS, 1):
+        lines.append(f"{index}. {LEVEL_LABELS[key]} +{gains.get(key, 0)}")
+    return "\n".join(lines)
+
+
 def render_options(run: RogueRun) -> str:
     """把 pending 里的选项列成可回复的行（QQ 端整行可点）。"""
     from .events import render_event
     from .shop_session import render_shop, shop_state
+
+    # 升级 4 选 1 优先：它必须在正文里出现，否则玩家看到的是楼层选项而按 1
+    # 实际执行的是选加成（曾经就是这么错位的）
+    if run.progression.pending:
+        return render_level_choice(run)
 
     pending = run.pending or {}
     if pending.get("event"):
@@ -85,6 +104,7 @@ def render_options(run: RogueRun) -> str:
             body = f"{index}. {name}{tier}" if numbered else f"{name}{tier}"
             rows.append(line_link(body, f"{ENDLESS_CMD} {index}"))
             rows.append("　　" + note)
+        rows.append("（想知道细节可以「查看 名字」）")
         return head + "\n" + "\n".join(rows)
 
     names = {
@@ -98,6 +118,7 @@ def render_options(run: RogueRun) -> str:
         label = names.get(str(opt.get("kind") or ""), str(opt.get("kind") or ""))
         body = f"{index}. {label}" if numbered else label
         rows.append(line_link(body, f"{ENDLESS_CMD} {index}"))
+    rows.append("查看：状态 / 装备 / 技能 / 遗物 · 详情用「查看 名字」")
     return "\n".join(rows)
 
 
@@ -128,6 +149,16 @@ def _gauge_label(rec: dict[str, Any]) -> str:
     return f"{pct}%"
 
 
+def _battle_mp_line(run: RogueRun) -> str:
+    """战斗中的魔力行：蓝只在战斗里存在，所以也只在这里显示。"""
+    data = (run.pending or {}).get("session") or {}
+    if not data:
+        return ""
+    have = int(data.get("pet_mp", 0) or 0)
+    cap = int(data.get("mp_cap", 0) or 0)
+    return f"◆ {have}/{cap}" if cap else ""
+
+
 def render_battle(run: RogueRun, *, log_limit: int = 8) -> str:
     """战斗中的战报 + 状态行 + 可选动作（整行可点，与肉鸽的「迎战」同款）。
 
@@ -145,7 +176,7 @@ def render_battle(run: RogueRun, *, log_limit: int = 8) -> str:
         head.append("🗒 战报：")
         head.extend(line for _, line in shown)
 
-    head.extend([enemy_line(run), render_status(run)])
+    head.extend([enemy_line(run), render_status(run), _battle_mp_line(run)])
     head = [x for x in head if x]
 
     rows: list[str] = []
@@ -193,13 +224,28 @@ def render_reward(reward: dict[str, Any]) -> str:
         parts.append(f"经验 +{exp}")
     if coins:
         parts.append(f"金币 +{coins}")
-    relic = (
-        reward.get("drops", {}).get("relic")
-        if isinstance(reward.get("drops"), dict)
-        else None
-    )
-    if relic:
-        parts.append(f"获得遗物 {relic}")
+    drops = reward.get("drops") if isinstance(reward.get("drops"), dict) else {}
+    relic_id = drops.get("relic")
+    if relic_id:
+        from .describe import relic_note
+        from .relics import relic_specs
+
+        spec = relic_specs().get(str(relic_id)) or {}
+        name = str(spec.get("name") or relic_id)
+        note = relic_note(spec) if spec else ""
+        parts.append(f"获得遗物 {name}" + (f"（{note}）" if note else ""))
+    gear_id = drops.get("gear")
+    if gear_id:
+        from .describe import gear_note
+        from .gear import gear_specs
+
+        spec = gear_specs().get(str(gear_id)) or {}
+        name = str(spec.get("name") or gear_id)
+        note = gear_note(spec) if spec else ""
+        where = (
+            "已穿上" if drops.get("auto_equipped") else "已入库存，可在「装备」里换上"
+        )
+        parts.append(f"获得装备 {name}（{where}）" + (f"\n　　{note}" if note else ""))
     heal = reward.get("heal") or {}
     if isinstance(heal, dict):
         if int(heal.get("hp", 0) or 0):

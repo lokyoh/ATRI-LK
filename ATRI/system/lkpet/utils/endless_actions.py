@@ -29,6 +29,19 @@ def choices_from_endless(run: Any) -> list[Choice]:
     kind = str(pending.get("type") or "")
     options = list(pending.get("options") or [])
 
+    if getattr(run, "progression", None) and run.progression.pending:
+        from ..core.endless.progression import LEVEL_KEYS, LEVEL_LABELS, gain_table
+
+        gains = gain_table()
+        # 与正文的 4 选 1 对齐：这里给加成本身，不是楼层选项
+        return [
+            Choice(
+                f"{LEVEL_LABELS[key]} +{gains.get(key, 0)}",
+                cmd(f"宠物.无尽 {index}"),
+            )
+            for index, key in enumerate(LEVEL_KEYS, 1)
+        ]
+
     if pending.get("session"):
         from ..core.endless import battle_actions
 
@@ -88,12 +101,20 @@ def choices_from_endless(run: Any) -> list[Choice]:
             "rest": "休息补给",
             "shop": "商店",
         }
-        return [
+        from ..core.endless import PANELS
+
+        picked = [
             Choice(
                 names.get(str(opt.get("kind") or ""), str(opt.get("kind") or "?")),
                 cmd(f"宠物.无尽 {index}"),
             )
-            for index, opt in enumerate(options[:MAX_CHOICES], 1)
+            for index, opt in enumerate(options[:4], 1)
         ]
-
+        # 面板入口跟在楼层选项后面：一层最多 3 个选项，剩下的位给最常用的三个
+        tail = [
+            Choice(name, cmd(f"宠物.无尽 {name}"))
+            for name in ("状态", "装备", "技能")
+            if name in PANELS
+        ]
+        return (picked + tail)[:MAX_CHOICES]
     return []

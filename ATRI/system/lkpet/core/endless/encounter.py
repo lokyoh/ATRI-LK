@@ -13,9 +13,9 @@ from math import floor
 from typing import Any
 
 from ..roguelike.battle import BattleSession
-from .attrs import apply_to_session, make_pet_mods, merge_attrs
+from .attrs import apply_to_session, merge_attrs
 from .avatar import EndlessAvatar
-from .combat import player_element, resistance_scale
+from .combat import mods_builder, player_element, resistance_scale
 from .flow import combat_attrs
 from .run import RogueRun
 from .session import dump_session, load_session
@@ -311,13 +311,17 @@ def begin_battle(
     rng = random.Random(f"{run.seed}:{run.floor}:battle")
     avatar = _avatar(run)
     monster = _build_monster(run, cfg, rng, elite_fight=elite_fight)
-    # 每场战斗开场满蓝（冥想负责战斗中续蓝）
-    run.mp = run.mp_max
+    # 魔力只在战斗内存续；run.mp 只表示**下一场战斗的起始魔力**（默认满）。
+    # 事件里的 run_mp 因此仍然有效：它调整的是下一场开场的蓝量。
+    mp_cap = run.mp_max
+    start_mp = max(0, min(mp_cap, int(run.mp)))
+    # 消耗即复位：事件削减的是「下一场」的起始蓝，不该永久生效
+    run.mp = mp_cap
     state = {
         "hp": run.hp,
         "hp_max": run.hp_max,
-        "mp": run.mp,
-        "mp_max": run.mp_max,
+        "mp": start_mp,
+        "mp_max": mp_cap,
         "buffs": {"atk": 0, "def": 0, "spd": 0},
         "relics": [],
     }
@@ -344,11 +348,11 @@ def _attach_attrs(
     """
     attrs = combat_attrs(run)
     apply_to_session(session, merge_attrs(attrs, _resist_layer(attrs)))
-    session.pet_combat_mods = make_pet_mods(
-        attrs,
-        element=player_element(attrs),
-        enemy_element=str(monster.get("element") or "normal"),
-    )
+    # 默认挂一份按普攻算的乘区；技能的那一份在出手时按技能元素重算
+    builder = mods_builder(attrs)
+    session.pet_mods_builder = builder
+    session.pet_default_element = str(player_element(attrs))
+    session.pet_combat_mods = builder()
     # 护盾获取：入场按生命上限的固定比例折算成护盾基数，再由 shield_gain 放大
     session.grant_opening_shield(round(float(attrs.get("hp", 40)) * SHIELD_BASE_PCT))
     defend = (session.cfg.get("battle") or {}).get("defend") or {}
@@ -376,11 +380,12 @@ def submit(
     rng = random.Random(f"{run.seed}:{run.floor}:battle")
     avatar = _avatar(run)
     monster = dict(run.pending.get("monster") or {})
+    mp_cap = run.mp_max
     state = {
         "hp": run.hp,
         "hp_max": run.hp_max,
-        "mp": run.mp,
-        "mp_max": run.mp_max,
+        "mp": mp_cap,
+        "mp_max": mp_cap,
         "buffs": {"atk": 0, "def": 0, "spd": 0},
         "relics": [],
     }
@@ -416,7 +421,7 @@ def _after_step(
 ) -> dict[str, Any]:
     """把进度写回 run；判断战斗是否结束。"""
     run.hp = max(0, session.pet_hp)
-    run.mp = max(0, session.pet_mp)
+    # 魔力不回写：它只活在战斗里，下一场照旧满蓝
     timed_out = (
         session.frames >= session.max_frames and session._pick_target() is not None
     )
@@ -454,14 +459,40 @@ def _after_step(
     }
 
 
-def _equip_or_stock(run: RogueRun, gear_id: str) -> None:
-    """装上新装备；被换下的进 ``gear_stock``（不销毁，§7.1）。"""
+def _slot_full(run: RogueRun, gear_id: str) -> bool:
+    """这件装备对应的槽位是否已经满了。"""
+    from .gear import SLOT_COUNT, gear_specs
+
+    spec = gear_specs().get(str(gear_id)) or {}
+    slot = str(spec.get("slot") or "")
+    worn = list((run.equip or {}).get(slot) or []) if slot else []
+    return len(worn) >= SLOT_COUNT.get(slot, 1)
+
+
+def _equip_or_stock(run: RogueRun, gear_id: str) -> str | None:
+    """掉落装备进包：**只在有空槽时自动穿上**，否则直接进库存。
+
+    不自动换装——换装是玩家的构筑决定，系统替他换掉一件正在穿的装备，
+    等于把他的选择权拿走了（而且他往往根本没看见掉了什么）。
+    换下来的那件事仍然保留：这是「空槽自动装」而不是「永远不装」。
+    返回被换下的 id（真实只会是 None，留着给调用方判断）。
+    """
+    from .gear import SLOT_COUNT, gear_specs
+
+    spec = gear_specs().get(str(gear_id)) or {}
+    slot = str(spec.get("slot") or "")
+    worn = list((run.equip or {}).get(slot) or []) if slot else []
+    if len(worn) >= SLOT_COUNT.get(slot, 1):
+        run.pending.setdefault("gear_stock", []).append(str(gear_id))
+        return None
+
     from .gear import equip as equip_gear
 
-    equipped, replaced = equip_gear(run.equip, gear_id)
+    equipped, replaced = equip_gear(run.equip, str(gear_id))
     run.equip = equipped
     if replaced:
         run.pending.setdefault("gear_stock", []).append(replaced)
+    return replaced
 
 
 def drop_rewards(
@@ -486,7 +517,13 @@ def drop_rewards(
     stage = stage_of(run.floor)
     unlocked = relic_max_tier(stage)
     source = "boss" if boss else ("elite" if elite else "normal")
-    out: dict[str, Any] = {"relic": None, "gear": None, "source": source, "tier": None}
+    out: dict[str, Any] = {
+        "relic": None,
+        "gear": None,
+        "source": source,
+        "tier": None,
+        "stopped": None,
+    }
 
     # 掉率与档位（文档 §6.7 + 12 号平衡）：
     #   普通/强化 → 概率掉，档位取「1 ~ 已解锁」
@@ -501,8 +538,11 @@ def drop_rewards(
     gear_rng = random.Random(f"{run.seed}:{run.floor}:gear")
     gear = roll_gear(gear_rng, stage)
     if gear is not None:
-        out["gear"] = str(gear.get("id"))
-        _equip_or_stock(run, str(gear.get("id")))
+        gear_id = str(gear.get("id"))
+        out["gear"] = gear_id
+        # 空槽自动穿；槽满只进库存，**不替玩家换装**
+        out["auto_equipped"] = not _slot_full(run, gear_id)
+        _equip_or_stock(run, gear_id)
 
     if not tiers or rng.random() >= chance:
         return out
@@ -527,17 +567,27 @@ def drop_rewards(
 
 
 def battle_actions(run: RogueRun) -> list[dict[str, Any]]:
-    """当前可用的战斗指令（供界面列编号）。"""
+    """当前可用的战斗指令（供界面列编号）。
+
+    技能标签带耗魔与冷却：不写的话玩家没法判断这一下值不值，
+    也看不出为什么某个技能点不动（多半是蓝不够或在冷却）。
+    """
     out = [{"key": "1", "label": "普攻", "action": dict(ACTION_ATTACK)}]
     specs = skill_specs()
     for index, skill_id in enumerate(
         [str(s) for s in (run.skills.get("active") or [])][:4], 2
     ):
         spec = specs.get(skill_id) or {}
+        name = str(spec.get("name") or skill_id)
+        note = skill_cost_note(spec)
+        ok, reason = _skill_usable(run, spec)
+        label = f"{name}（{note}）" if note else name
+        if not ok:
+            label += "·" + reason
         out.append(
             {
                 "key": str(index),
-                "label": str(spec.get("name") or skill_id),
+                "label": label,
                 "action": {"kind": "skill", "skill": skill_id},
             }
         )
@@ -548,3 +598,27 @@ def battle_actions(run: RogueRun) -> list[dict[str, Any]]:
         {"key": str(len(out) + 1), "label": "冥想", "action": dict(ACTION_MEDITATE)}
     )
     return out
+
+
+def _skill_usable(run: RogueRun, spec: dict[str, Any]) -> tuple[bool, str]:
+    """这个技能现在能不能放；不能时给一句原因。
+
+    魔力只活在战斗里：蓝量从当前会话的存档读，没有会话就不判蓝。
+    """
+    data = (run.pending or {}).get("session") or {}
+    if not data:
+        return True, ""
+    need = int(spec.get("mp_cost", 0) or 0)
+    have = int(data.get("pet_mp", 0) or 0)
+    if need > have:
+        return False, f"蓝不足（差 {need - have}）"
+    return True, ""
+
+
+def skill_cost_note(spec: dict[str, Any], cooldown_left: int = 0) -> str:
+    """耗魔 + 冷却剩余：冷却中不写剩余次数，玩家看不出为什么点不动。"""
+    cost = int(spec.get("mp_cost", 0) or 0)
+    parts = [f"魔{cost}"] if cost else []
+    if cooldown_left > 0:
+        parts.append(f"冷却剩 {cooldown_left}")
+    return " ".join(parts)

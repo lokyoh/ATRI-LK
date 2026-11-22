@@ -1193,7 +1193,10 @@ async def handle_endless(event: Event, args: BaseMessage = CommandArg()):
         msg = "❌ 无尽指令执行出错，请查看机器人日志。"
 
     choices = []
-    if running is not None:
+    # 生命耗尽时 _endless_persist 已经把这一局结算清空，running 只是内存里的
+    # 死数据；再拿它算按钮会给出「继续/撤退」，而那局已经没有可继续的东西。
+    alive = running is not None and running.hp > 0
+    if alive:
         choices = endless_actions.choices_from_endless(running)
         # 刚打开的那个面板，先给它自己的操作按钮
         from ..utils.reply import Choice
@@ -1203,7 +1206,7 @@ async def handle_endless(event: Event, args: BaseMessage = CommandArg()):
             for command, label in _endless_panel_choices(running, panel_name)
         ] or choices
     if not choices:
-        choices = menus.endless_menu(running=running is not None)
+        choices = menus.endless_menu(running=alive)
     await reply.finish(
         pet_endless_matcher,
         _never_empty(msg, _endless_usage()),
@@ -1445,23 +1448,19 @@ def _endless_look(run, raw: str) -> str:
 
 def _endless_stock(run, raw: str) -> str:
     """库存操作：``库存`` 看列表，``库存 穿上 <序号>`` / ``库存 分解 <序号>``。"""
-    from ..core.endless import decompose, gear_specs, stock_of, take_from_stock
+    from ..core.endless import (
+        decompose,
+        gear_specs,
+        render_panel,
+        stock_of,
+        take_from_stock,
+    )
 
     stock = stock_of(run)
     parts = raw.split(" ")
     if len(parts) == 1:
-        if not stock:
-            return "🎒 库存是空的。换下的装备会进这里。"
-        specs = gear_specs()
-        lines = ["🎒 库存："]
-        for index, gear_id in enumerate(stock, 1):
-            spec = specs.get(gear_id) or {}
-            name = str(spec.get("name") or gear_id)
-            slot = str(spec.get("slot") or "?")
-            tier = spec.get("tier", "?")
-            lines.append(f"{index}. {name}（{slot} T{tier}）")
-        lines.append("回复「库存 穿上 N」换上，或「库存 分解 N」回收金币。")
-        return "\n".join(lines)
+        # 与「装备」面板同一份排版：两处各写一份必然漂移
+        return render_panel(run, "装备")
 
     if len(parts) != 3 or parts[1] not in ("穿上", "分解"):
         return "用法：库存 / 库存 穿上 N / 库存 分解 N"
@@ -1472,9 +1471,10 @@ def _endless_stock(run, raw: str) -> str:
     if not 1 <= index <= len(stock):
         return "序号超出范围。"
     gear_id = stock[index - 1]
+    name = str((gear_specs().get(gear_id) or {}).get("name") or gear_id)
     if parts[1] == "穿上":
         if take_from_stock(run, gear_id):
-            return f"✅ 已换上 {gear_id}。\n" + _endless_stock(run, "库存")
+            return f"✅ 已换上 {name}。\n" + _endless_stock(run, "库存")
         return "这件不在库存里。"
     value = decompose(run, gear_id)
     return f"♻️ 分解回收 {value} 金币。\n" + _endless_stock(run, "库存")
@@ -1593,9 +1593,8 @@ def _endless_step(run, number: int) -> tuple[str, bool]:
             pending=len(run.progression.pending),
         )
         if pending_levels(run):
-            return "🎖 已选择加成。\n还剩 " + str(
-                pending_levels(run)
-            ) + " 次选择。", True
+            # 还要再选：把 4 个选项重新列出来，否则玩家不知道接下来按几
+            return "🎖 已选择加成。\n" + render_options(run), True
         head = "🎖 已选择加成。\n" + render_floor(run) + "\n" + render_status(run)
         tail = render_options(run)
         return head + ("\n" + tail if tail else ""), True

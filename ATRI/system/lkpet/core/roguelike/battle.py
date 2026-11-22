@@ -219,6 +219,9 @@ class BattleSession:
         self._siphon_opened = False
         # 无尽模式的元素克制 / 穿甲 / 伤害加成乘区。空字典 = 爬塔路径，行为不变。
         self.pet_combat_mods: dict[str, float] = {}
+        # 无尽模式：出手时按技能元素重算乘区的构造器（爬塔为 None，不参与）
+        self.pet_mods_builder: Any = None
+        self.pet_default_element = "normal"
         self.pet_element_resist: dict[str, float] = {}
         self.pet_shield = 0
         self.pet_shield_gain = 0.0
@@ -419,6 +422,20 @@ class BattleSession:
     # 宠物侧
     # -------------------------------------------------------------------------
 
+    def _refresh_mods_for(self, skill: dict[str, Any] | None, *, kind: str) -> None:
+        """按**这一击**的元素与类型重算乘区。
+
+        外层 ``_attach_attrs`` 只能按普攻算一份默认值；技能的元素加伤、
+        克制倍率、``skill_dmg`` 都取决于放的是哪个技能，必须出手时再算。
+        空 ``pet_combat_mods`` = 爬塔路径，不重算。
+        """
+        builder = self.pet_mods_builder
+        if builder is None or not self.pet_combat_mods:
+            return
+        element = str((skill or {}).get("element") or self.pet_default_element)
+        enemy = str(self.monster.get("element") or "normal")
+        self.pet_combat_mods = builder(element=element, enemy_element=enemy, kind=kind)
+
     def _pet_atk_eff(self) -> int:
         return max(1, round(self.pet_atk * self.pet_mods["atk_mult"]))
 
@@ -562,8 +579,79 @@ class BattleSession:
                 heal=healed,
             )
 
+    def _support_action(self, skill_id: str, skill: dict[str, Any], kind: str) -> None:
+        """辅助 / 防御向技能的实际效果：护盾、治疗或临时增益。
+
+        数值全在技能数据里（``shield`` / ``heal`` / ``atk_mult`` …），
+        按等阶与强化次数放大；数据缺字段时退回按等阶推的默认值。
+        """
+        tier = max(1, int(skill.get("tier", 1) or 1))
+        times = max(
+            0, int((getattr(self.pet, "skill_enhance", None) or {}).get(skill_id, 0))
+        )
+        step = float((self.skills_cfg.get("limits") or {}).get("enhance_step", 0.15))
+        boost = 1.0 + step * times
+        name = self._skill_label(skill, skill_id)
+
+        # 护盾：shield 是生命上限的比例
+        ratio = float(skill.get("shield", 0.0) or 0.0)
+        if ratio > 0:
+            amount = max(1, round(self.hp_max * ratio * boost))
+            self.pet_shield += amount
+            self._blog(
+                "log_skill_guard",
+                "回合{round} {actor} 使用【{skill}】，获得 {amount} 点护盾。",
+                actor=self.pet.name,
+                skill=name,
+                amount=amount,
+            )
+
+        # 治疗：heal 是生命上限的比例
+        heal = float(skill.get("heal", 0.0) or 0.0)
+        if heal > 0:
+            amount = max(1, round(self.hp_max * heal * boost))
+            before = self.pet_hp
+            self.pet_hp = min(self.hp_max, self.pet_hp + amount)
+            if self.pet_hp > before:
+                self._blog(
+                    "log_skill_heal",
+                    "回合{round} {actor} 使用【{skill}】，回复 {heal} 点生命。",
+                    actor=self.pet.name,
+                    skill=name,
+                    heal=self.pet_hp - before,
+                )
+
+        # 增益：乘区条目，持续 rounds 回合
+        rounds = max(1, int(skill.get("rounds", 0) or 0) or (3 + (tier - 1)))
+        mods = {k: float(v) for k, v in skill.items() if k.endswith("_mult")}
+        if not mods and kind == "support" and ratio <= 0 and heal <= 0:
+            mods = {"atk_mult": 1.15, "def_mult": 1.15}
+        if mods:
+            entry: dict[str, Any] = {
+                "id": f"skill:{skill_id}",
+                "frames": rounds * self.frames_per_turn,
+                "rounds": rounds,
+            }
+            for key, value in mods.items():
+                entry[key] = 1.0 + (value - 1.0) * boost
+            # 同一技能的增益不叠层，重新施加只刷新时长
+            self.pet_debuffs[:] = [
+                e for e in self.pet_debuffs if e["id"] != entry["id"]
+            ]
+            self.pet_debuffs.append(entry)
+            self._refresh_pet_mods()
+            self._blog(
+                "log_skill_buff",
+                "回合{round} {actor} 使用【{skill}】，状态得到强化（{rounds} 回合）。",
+                actor=self.pet.name,
+                skill=name,
+                rounds=rounds,
+            )
+
     def _heal_amount(self, skill: dict[str, Any]) -> int:
-        """治疗技能的回复量。"""
+        """治疗技能的回复量；辅助/防御向返回 0（它们走 _support_action）。"""
+        if str(skill.get("dir") or "") in ("buff", "guard"):
+            return 0
         if int(skill.get("power", 0)) != 0:
             return 0
         effects = skill.get("effects", []) or []
@@ -602,7 +690,8 @@ class BattleSession:
         if not self._is_aoe(skill):
             return power
         hitting = max(1, min(len(self._live_units()), self.aoe_max_targets))
-        return power * hitting * self.aoe_factor
+        # 与伤害结算同口径：打 1 个目标时不衰减
+        return power * hitting * (self.aoe_factor if hitting > 1 else 1.0)
 
     def _strike_back(self, unit: dict[str, Any], dealt: int) -> None:
         """棘刺特点：反弹伤害。"""
@@ -640,13 +729,40 @@ class BattleSession:
             )
 
     def _manual_pick(self, skill_id: str) -> bool:
-        """手动模式下这个技能是否是玩家点的那个。
+        """这个技能是不是玩家点的那个。
 
-        玩家没点技能时返回 True（退回「按威力自动挑」），
-        这样不选技能的回合仍然打得出去。
+        **手动模式下点普攻就是普攻**：不给技能开口子，否则点「普攻」会按威力
+        自己挑一个技能放出去，按钮等于骗人。非手动（爬塔自动战斗）时一律放行。
         """
+        if not self.manual:
+            return True
+        action = self.pending_action or {}
+        if str(action.get("kind")) != "skill":
+            return False
+        return str(action.get("skill") or "") == skill_id
+
+    def _skill_block_reason(self, skill_id: str) -> str:
+        """这个技能现在放不出的原因；能放返回空串。"""
+        spec = None
+        for sid, sk in self.active_pairs:
+            if sid == skill_id:
+                spec = sk
+                break
+        if spec is None:
+            return "技能不在槽里"
+        if int(self.cooldowns.get(skill_id, 0)) > 0:
+            return "冷却中"
+        if int(self.pet_mp) < int(spec.get("mp_cost", 0) or 0):
+            return "魔力不足"
+        return ""
+
+    def _pending_skill_name(self) -> str:
+        """玩家这次点的技能名（放不出时用来写战报）。"""
         wanted = str((self.pending_action or {}).get("skill") or "")
-        return not wanted or wanted == skill_id
+        for sid, sk in self.active_pairs:
+            if sid == wanted:
+                return self._skill_label(sk, sid)
+        return wanted or "技能"
 
     def _defend_action(self) -> None:
         """防御：受伤降低 ``damage_cut``，持续到**下次行动**为止。
@@ -702,6 +818,41 @@ class BattleSession:
             return
 
         acted = False
+        # 玩家点了一个暂时放不出的技能（在冷却 / 蓝不够）：说明原因后按普攻出手。
+        # 早先这里默默降级成普攻，玩家只看到「点了技能却在普攻」。
+        if self.manual and kind == "skill":
+            blocked = self._skill_block_reason(
+                str(self.pending_action.get("skill") or "")
+            )
+            if blocked:
+                self._blog(
+                    "log_skill_blocked",
+                    "回合{round} {skill} 放不出（{why}），改为普攻。",
+                    skill=self._pending_skill_name(),
+                    why=blocked,
+                )
+
+        # 辅助 / 防御向技能：不造成伤害，给护盾或临时增益，不吃属性
+        # 辅助 / 防御向技能：不造成伤害，给护盾或临时增益，不吃属性
+        if not acted:
+            for skill_id, skill in self.active_pairs:
+                if self.cooldowns.get(skill_id, 0) > 0:
+                    continue
+                if self.manual and not self._manual_pick(skill_id):
+                    continue
+                kind = str(skill.get("dir") or "")
+                if kind not in ("buff", "guard"):
+                    continue
+                cost = int(skill.get("mp_cost", 0))
+                if self.pet_mp < cost:
+                    continue
+                self.pet_mp -= cost
+                self._support_action(skill_id, skill, kind)
+                self.cooldowns[skill_id] = self._cooldown_frames(skill)
+                increase_proficiency(self.pet, skill_id, skills_config=self.skills_cfg)
+                acted = True
+                break
+
         # 血量 < 50% 优先治疗
         if self.pet_hp < self.hp_max * 0.5:
             for skill_id, skill in self.active_pairs:
@@ -728,6 +879,7 @@ class BattleSession:
                     (sid, sk)
                     for sid, sk in self.active_pairs
                     if self._heal_amount(sk) == 0
+                    and str(sk.get("dir") or "") not in ("buff", "guard")
                     and self.cooldowns.get(sid, 0) <= 0
                     and (not self.manual or self._manual_pick(sid))
                 ),
@@ -745,12 +897,16 @@ class BattleSession:
                     continue
                 factor = self._skill_power_of(skill_id, skill) / BASE_SKILL_POWER
                 base_by_dir, self_cost = self._skill_base_by_dir(skill)
+                # 技能走自己的元素与 skill_dmg：外层固定的那份是按普攻算的
+                self._refresh_mods_for(skill, kind="skill")
                 if self_cost > 0:
                     # 血转伤：先扣自身生命（不低于 1），再算伤害
                     paid = min(max(0, self.pet_hp - 1), round(self.hp_max * self_cost))
                     self.pet_hp -= paid
                 # 群体技能每个目标按 aoe_factor 衰减（见 roguelike.yaml battle.aoe）。
-                if is_aoe:
+                # 只命中 1 个目标时**不衰减**：衰减是为了换「打多个」的总收益，
+                # 场上只有一只怪时它纯粹是惩罚（群攻技能会比单体弱一半）。
+                if is_aoe and len(targets) > 1:
                     factor *= self.aoe_factor
                 strikes = max(1, int(skill.get("strikes", 1) or 1))
                 dealt_total = 0
@@ -847,6 +1003,7 @@ class BattleSession:
 
         # 普攻
         if not acted:
+            self._refresh_mods_for(None, kind="attack")
             if self._dodged(target):
                 self._blog(
                     "log_attack_dodged",

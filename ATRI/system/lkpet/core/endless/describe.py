@@ -55,7 +55,7 @@ ATTR_DESCS: dict[str, str] = {
     "hp_pct": "生命上限按百分比再增",
     "mp_pct": "魔力上限按百分比再增",
     "crit_rate": "每次命中判定暴击的概率",
-    "crit_mult": "暴击时多出来的伤害倍率",
+    "crit_mult": "在基准 1.8 倍之上再加，基准本身不可减",
     "armor_pen": "按比例无视对方防御",
     "solid": "抵消对方的穿甲，穿不透就按原防御算",
     "basic_dmg": "只加成普攻",

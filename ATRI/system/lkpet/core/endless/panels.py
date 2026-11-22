@@ -91,7 +91,7 @@ def render_status(run: Any) -> str:
     lines = [
         "📊 状态",
         f"Lv.{run.progression.level} · 金币 {run.coins}",
-        f"生命 {run.hp}/{run.hp_max} · 魔力 {run.mp}/{run.mp_max}",
+        f"生命 {run.hp}/{run.hp_max}",
     ]
     for key, label in PRIMARY_KEYS:
         lines.append(f"{label} {attr_value(key, attrs.get(key, 0))}")
@@ -106,6 +106,7 @@ def render_status(run: Any) -> str:
     else:
         lines.append("加成：暂无")
     lines.append(f"遗物 {len(run.relics)} 件 · 装备 {_equipped_count(run)} 件")
+    lines.append("暴击伤害基准 1.8 倍（装备与遗物在此基础上叠加）")
     return "\n".join(lines)
 
 
@@ -150,19 +151,29 @@ def render_gear(run: Any) -> str:
 
 
 def gear_actions(run: Any) -> list[tuple[str, str]]:
-    """装备面板的按钮：按当前库存与槽位给出可执行的动作。"""
+    """装备面板的按钮：(完整指令, 显示名)。
+
+    标签带**装备名**而不是编号——「穿 1」这种写法玩家得回去数第几行。
+    不再给「看装备」：面板正文已经把内容全写出来了，点了只是重画一遍。
+    """
     from ...utils.texts import command_start
 
     base = command_start() + "宠物.无尽"
-    out: list[tuple[str, str]] = [(base + " 装备", "看装备")]
+    specs = gear_specs()
     stock = stock_of(run)
-    for index in range(1, len(stock) + 1):
-        out.append((base + f" 装备 穿上 {index}", f"穿上 {index}"))
+    out: list[tuple[str, str]] = []
+
+    # 先给「穿上」：库存是玩家唯一需要主动决定的东西
+    for index, gear_id in enumerate(stock[:3], 1):
+        name = str((specs.get(gear_id) or {}).get("name") or gear_id)
+        out.append((base + f" 装备 穿上 {index}", f"穿 {name}"))
+    for index, gear_id in enumerate(stock[:2], 1):
+        name = str((specs.get(gear_id) or {}).get("name") or gear_id)
+        out.append((base + f" 装备 分解 {index}", f"分解 {name}"))
     for slot in ("weapon", "armor", "accessory"):
-        if (run.equip or {}).get(slot):
-            out.append((base + f" 装备 卸下 {SLOT_CN[slot]}", f"卸下{SLOT_CN[slot]}"))
-    for index in range(1, len(stock) + 1):
-        out.append((base + f" 装备 分解 {index}", f"分解 {index}"))
+        if not (run.equip or {}).get(slot):
+            continue
+        out.append((base + f" 装备 卸下 {SLOT_CN[slot]}", f"卸下{SLOT_CN[slot]}"))
     return out[:8]
 
 
@@ -253,17 +264,26 @@ def render_skills(run: Any) -> str:
 
 
 def skill_actions(run: Any) -> list[tuple[str, str]]:
+    """技能面板的按钮：标签带技能名，不带编号。
+
+    换下只列已装的（它们就在正文的列表里，编号对得上）；
+    换上列已学未装的，最多给到按钮上限。
+    """
     from ...utils.texts import command_start
     from .flow import known_skills
 
     base = command_start() + "宠物.无尽"
-    out: list[tuple[str, str]] = [(base + " 技能", "看技能")]
+    specs = skill_specs()
     active = _active_ids(run)
-    bench = [s for s in known_skills(run) if s not in active]
-    for index in range(1, len(bench) + 1):
-        out.append((base + f" 技能 换上 {index}", f"换上 {index}"))
-    for index in range(1, len(active) + 1):
-        out.append((base + f" 技能 换下 {index}", f"换下 {index}"))
+    bench = [s for s in known_skills(run) if s not in active and s in specs]
+    out: list[tuple[str, str]] = []
+
+    for index, skill_id in enumerate(bench[:3], 1):
+        name = str((specs.get(skill_id) or {}).get("name") or skill_id)
+        out.append((base + f" 技能 换上 {index}", f"换 {name}"))
+    for index, skill_id in enumerate(active, 1):
+        name = str((specs.get(skill_id) or {}).get("name") or skill_id)
+        out.append((base + f" 技能 换下 {index}", f"卸 {name}"))
     return out[:8]
 
 
@@ -344,12 +364,8 @@ def render_relics(run: Any) -> str:
 
 
 def relic_actions(run: Any) -> list[tuple[str, str]]:
-    from ...utils.texts import command_start
-
-    return [(command_start() + "宠物.无尽 遗物", "看遗物")]
-
-
-# ---------------------------------------------------------------- 查看
+    """遗物面板没有可执行操作：遗物一旦拿到就永久生效，没有装上/卸下。"""
+    return []
 
 
 def find_spec(name: str) -> tuple[str, dict[str, Any]] | None:
@@ -387,6 +403,43 @@ def _dir_note(spec: dict[str, Any]) -> str:
     return DIR_CN.get(key, attr_label(key))
 
 
+def _target_note(spec: dict[str, Any]) -> str:
+    """技能目标；``self`` 是给自己上效果，不是打人。"""
+    raw = str(spec.get("target") or "single")
+    return {"self": "自身", "all": "敌方全体"}.get(raw, "单个敌人")
+
+
+def _pct(value: float) -> str:
+    return str(round((float(value) - 1.0) * 100))
+
+
+def _skill_effect_note(spec: dict[str, Any]) -> str:
+    """技能实际做什么——数值全取自数据，改 YAML 这里跟着变。"""
+    parts: list[str] = []
+    shield = float(spec.get("shield", 0.0) or 0.0)
+    if shield:
+        parts.append(f"护盾 {round(shield * 100)}% 生命上限")
+    heal = float(spec.get("heal", 0.0) or 0.0)
+    if heal:
+        parts.append(f"回复 {round(heal * 100)}% 生命上限")
+    for key, label in (
+        ("atk_mult", "攻击"),
+        ("def_mult", "防御"),
+        ("spd_mult", "速度"),
+    ):
+        if key in spec:
+            parts.append(f"{label} +{_pct(spec[key])}%")
+    rounds = int(spec.get("rounds", 0) or 0)
+    if rounds and any(k.endswith("_mult") for k in spec):
+        parts.append(f"持续 {rounds} 回合")
+    if not parts:
+        power = int(spec.get("power", 0) or 0)
+        if power:
+            return f"效果：造成约 {round(power / 30.0, 2)} 倍普攻的伤害"
+        return "效果：无"
+    return "效果：" + "，".join(parts) + "（不造成伤害）"
+
+
 def render_detail(kind: str, spec: dict[str, Any]) -> str:
     """「查看」的展开：一件东西的完整介绍。"""
     lines = [f"🔍 {kind}：{spec.get('name') or spec.get('id')}"]
@@ -396,11 +449,12 @@ def render_detail(kind: str, spec: dict[str, Any]) -> str:
     if kind == "技能":
         elem = ELEMENT_CN.get(str(spec.get("element")), str(spec.get("element")))
         series = SERIES_CN.get(str(spec.get("series")), str(spec.get("series")))
-        lines.append(f"{elem}·{series} · 威力 {skill_power(spec)}")
-        lines.append(f"耗魔 {spec.get('mp_cost', 0)} · 冷却 {spec.get('cooldown', 0)}")
-        lines.append("吃属性：" + _dir_note(spec))
-        target = "群体" if str(spec.get("target")) == "all" else "单体"
-        lines.append(f"目标：{target}")
+        lines.append(f"{elem}·{series}")
+        lines.append(_skill_effect_note(spec))
+        lines.append(
+            f"耗魔 {spec.get('mp_cost', 0)} · 冷却 {spec.get('cooldown', 0)} 回合"
+        )
+        lines.append("目标：" + _target_note(spec))
     elif kind == "装备":
         slot = SLOT_CN.get(str(spec.get("slot")), str(spec.get("slot")))
         lines.append(f"槽位：{slot}")
@@ -410,7 +464,13 @@ def render_detail(kind: str, spec: dict[str, Any]) -> str:
         lines.extend(describe_attrs(gear_effects(spec)))
     else:
         set_key = str(spec.get("set") or "")
-        lines.append("套装：" + (set_key or "散件"))
+        if set_key:
+            from .relics import set_meta
+
+            label = str((set_meta().get(set_key) or {}).get("name") or set_key)
+            lines.append(f"套装：{label}")
+        else:
+            lines.append("套装：散件")
         lines.extend(describe_attrs(dict(spec.get("effect") or {})))
         set_key = str(spec.get("set") or "")
         if set_key:
@@ -435,13 +495,16 @@ def render_panel(run: Any, name: str) -> str:
 
 
 def panel_actions(run: Any, name: str) -> list[tuple[str, str]]:
-    """一个面板底部的按钮：(完整指令, 显示名)。"""
-    if name == "状态":
-        return []
+    """一个面板底部的按钮：(完整指令, 显示名)。
+
+    面板之间可以互相跳转：看完状态想知道装备什么，不该让他退回去再手打。
+    """
+    from ...utils.texts import command_start
+
+    base = command_start() + "宠物.无尽"
+    jump = [(base + " " + other, other) for other in PANELS if other != name]
     if name == "装备":
-        return gear_actions(run)
+        return gear_actions(run)[:6] + jump[:2]
     if name == "技能":
-        return skill_actions(run)
-    if name == "遗物":
-        return relic_actions(run)
-    return []
+        return skill_actions(run)[:6] + jump[:2]
+    return jump[:4]

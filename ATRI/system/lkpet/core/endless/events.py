@@ -205,7 +205,7 @@ def render_result(changed: dict[str, Any]) -> str:
     if changed.get("hp"):
         parts.append("生命 " + format(int(changed["hp"]), "+d"))
     if changed.get("mp"):
-        parts.append("魔力 " + format(int(changed["mp"]), "+d"))
+        parts.append("下一场魔力 " + format(int(changed["mp"]), "+d"))
     if changed.get("coins"):
         parts.append("金币 " + format(int(changed["coins"]), "+d"))
     if changed.get("exp"):

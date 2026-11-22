@@ -112,6 +112,26 @@ def resistance_scale(element: str, resist: dict[str, float]) -> float:
     return n / (n + max(0.0, value))
 
 
+def mods_builder(attrs: dict[str, Any]) -> Any:
+    """返回 ``(element, enemy_element, kind) -> mods`` 的构造器。
+
+    ``battle`` 每次出手都会调它：元素加伤、克制、``skill_dmg`` 都必须按
+    这一击的技能算，而外层只挂得了一份默认值。
+    """
+
+    def build(
+        *, element: str = "normal", enemy_element: str = "normal", kind: str = "attack"
+    ) -> dict[str, float]:
+        return build_pet_mods(
+            element=element,
+            enemy_element=enemy_element,
+            kind=kind,
+            attrs=attrs,
+        )
+
+    return build
+
+
 def build_pet_mods(
     *,
     element: str = "normal",
@@ -123,6 +143,8 @@ def build_pet_mods(
     a = attrs or {}
     damage_key = "skill_dmg" if kind == "skill" else "basic_dmg"
     return {
+        # 敌方抗性要按**这一击的元素**查表，所以元素必须留在乘区里
+        "element": str(element or "normal"),
         "armor_pen": float(a.get("armor_pen", 0.0) or 0.0),
         "damage_bonus": 1.0 + float(a.get(damage_key, 0.0) or 0.0),
         "element_bonus": damage_scale(element, a),

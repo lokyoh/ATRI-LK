@@ -1426,14 +1426,18 @@ def _endless_panel(run, raw: str) -> str:
     if action:
         from ..core.endless import gear_action, skill_action
 
-        handler = gear_action if name == "装备" else skill_action
-        if not arg.isdigit() and name == "装备" and action == "卸下" and parts[2:]:
-            arg = parts[2]
-        text, _changed = handler(run, action, arg)
+        if name == "装备":
+            text, _changed = gear_action(run, action, arg)
+        else:
+            # 技能面板分页：操作后停在同一页，别把玩家弹回第 1 页
+            page = int(run.pending.get("skill_page") or 1)
+            text, _changed = skill_action(run, action, arg, page=page)
+            if action == "页" and arg.isdigit():
+                run.pending["skill_page"] = max(1, int(arg))
         return text
 
-    text = render_panel(run, name)
-    return text
+    page = int(run.pending.get("skill_page") or 1) if name == "技能" else 1
+    return render_panel(run, name, page=page)
 
 
 def _endless_look(run, raw: str) -> tuple[str, str]:
@@ -1524,15 +1528,14 @@ def _endless_opening(run, number: int) -> tuple[str, bool]:
         run.relics.append(str(picked.get("id")))
         done = "🎁 已获得遗物【" + str(picked.get("name") or picked.get("id")) + "】"
     elif kind == "open_skill":
-        from ..core.endless import equip_skill, learn_skill
+        from ..core.endless import learn_and_equip
 
+        # 有空槽就顺手装上；槽满只学会，不替玩家换掉已装的
         skill_id = str(picked.get("id"))
-        active, _replaced = equip_skill(
-            [str(s) for s in (run.skills.get("active") or [])], skill_id
-        )
-        run.skills = {**run.skills, "active": active, "passive": []}
-        learn_skill(run, skill_id)
-        done = "📖 已学会【" + str(picked.get("name") or picked.get("id")) + "】"
+        equipped = learn_and_equip(run, skill_id)
+        name = str(picked.get("name") or picked.get("id"))
+        tail = "（已装上）" if equipped else "（槽已满，可在「技能」面板换上）"
+        done = f"📖 已学会【{name}】{tail}"
     else:
         return "未知的开局步骤。", False
 

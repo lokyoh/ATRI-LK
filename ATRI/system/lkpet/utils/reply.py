@@ -32,6 +32,7 @@ lkpet 的回复点不少落在只拿到 ``matcher`` 的辅助函数里。层层�
 
 from __future__ import annotations
 
+import re
 from collections.abc import Iterable
 from dataclasses import dataclass, field
 from typing import Any
@@ -42,7 +43,7 @@ from nonebot.adapters.qq import MessageEvent as QQMessageEvent
 from ATRI.log import log
 from ATRI.message import QQMessage
 
-#: QQ markdown 单条长度上限（官方限制 4000 字，留出命令区的余量）。
+#: markdown 单条的**可见字数**上限（内联命令标记不计入）。
 MD_MAX_CHARS = 3200
 
 #: 一行里最多排几个内联命令——纯排版考虑，多了会挤成一片看不清。
@@ -93,12 +94,43 @@ def is_qq(event: Any = None) -> bool:
     return isinstance(event, QQMessageEvent)
 
 
+#: 内联命令标记整段（含属性）。
+#: 标记里的百分比编码一个汉字占 9 字符，按原文数长度会把玩家看不见的
+#: 部分算成正文（实测面板里标记占 87%），所以只数可见字。
+QQ_CMD_RE = re.compile(r"<qqbot-cmd-input[^>]*?/>")
+
+
+def visible_len(text: str) -> int:
+    """玩家实际看到的字数：内联命令标记不计入。"""
+    return len(QQ_CMD_RE.sub("", text or ""))
+
+
 def _clamp_markdown(text: str) -> str:
-    """md 过长时截断并注明——超限整条会发不出去，不如发前半段。"""
+    """可见字超限时截断并注明——超限整条会发不出去，不如发前半段。
+
+    按**可见字**判断而不是原始长度：一屏面板里 87% 的字符是命令标记的
+    百分比编码，按原始长度算会让正文被砍到只剩几行。
+
+    截断按**行**推进：直接切字符串会把 ``<qqbot-cmd-input ... />`` 切一半，
+    剩下的标签碎片在客户端里是可见的乱码。
+    """
     body = text or ""
-    if len(body) <= MD_MAX_CHARS:
+    if visible_len(body) <= MD_MAX_CHARS:
         return body
-    return body[:MD_MAX_CHARS] + "\n\n> 内容过长，已省略后半部分"
+
+    kept: list[str] = []
+    used = 0
+    for line in body.splitlines(keepends=True):
+        width = visible_len(line)
+        if used + width > MD_MAX_CHARS:
+            break
+        kept.append(line)
+        used += width
+    if not kept:
+        # 单行就超限（极长的一行）：只能硬切，但先把标记去掉再切
+        plain = QQ_CMD_RE.sub("", body)
+        return plain[:MD_MAX_CHARS] + "\n\n> 内容过长，已省略后半部分"
+    return "".join(kept).rstrip() + "\n\n> 内容过长，已省略后半部分"
 
 
 def inline_links(choices: Iterable[Choice]) -> str:

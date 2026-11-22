@@ -36,6 +36,13 @@ SLOT_CN = {"weapon": "武器", "armor": "防具", "accessory": "饰品"}
 PANELS = ("状态", "装备", "技能", "遗物")
 """可打开的面板名。"""
 
+MAX_STOCK_ROWS = 20
+"""装备面板一次最多列几件库存：再多会撑到单条消息上限，正文被截断。"""
+
+MAX_BENCH_ROWS = 20
+"""技能面板一页列几个未装技能；再多翻页。"""
+
+
 PRIMARY_KEYS = (
     ("atk", "攻击"),
     ("def", "防御"),
@@ -122,11 +129,14 @@ def gear_line(spec: dict[str, Any]) -> str:
 
 
 def render_gear(run: Any) -> str:
-    """装备面板：已穿四槽 + 库存；每行整行可点执行对应操作。"""
+    """装备面板：已穿四槽 + 库存。
+
+    正文保持纯文本，只在行尾挂**短指令**（穿上 / 卸下 / 分解）。
+    整行都做成链接时每条要编码整段标签，六件库存就能撑爆单条上限，
+    正文会被截断——反而看不到刚分解后的库存。
+    """
     from ..roguelike._common import line_link
 
-    # line_link 的 command 是**相对路径**，构造器自己补 command_start；
-    # 这里再拼一次会渲染成 "//宠物.无尽"
     base = "宠物.无尽"
     specs = gear_specs()
     lines = ["🛡 装备"]
@@ -138,50 +148,54 @@ def render_gear(run: Any) -> str:
         lines.append(f"{SLOT_CN[slot]}：")
         for gear_id in ids:
             spec = specs.get(str(gear_id)) or {}
-            # 已穿的那件：点它 = 卸下这一槽
             lines.append(
-                "  " + line_link(gear_line(spec), f"{base} 装备 卸下 {SLOT_CN[slot]}")
+                "  "
+                + gear_line(spec)
+                + "　"
+                + line_link("卸下", f"{base} 装备 卸下 {SLOT_CN[slot]}")
             )
 
     stock = stock_of(run)
     if stock:
-        lines.append("库存（点名字穿上 / 点【分解】回收）：")
-        for index, gear_id in enumerate(stock, 1):
+        lines.append("库存（点「穿上 / 分解」执行）：")
+        for index, gear_id in enumerate(stock[:MAX_STOCK_ROWS], 1):
             spec = specs.get(str(gear_id)) or {}
             value = decompose_value(spec)
             lines.append(
                 f"  {index}. "
-                + line_link(gear_line(spec), f"{base} 装备 穿上 {index}")
+                + gear_line(spec)
                 + "　"
-                + line_link(f"【分解 {value} 金】", f"{base} 装备 分解 {index}")
+                + line_link("穿上", f"{base} 装备 穿上 {index}")
+                + " "
+                + line_link(f"分解 {value} 金", f"{base} 装备 分解 {index}")
             )
+        rest = len(stock) - MAX_STOCK_ROWS
+        if rest > 0:
+            lines.append(f"  …… 还有 {rest} 件，先处理上面的再回来看")
     else:
         lines.append("库存：空")
     return "\n".join(lines)
 
 
 def gear_actions(run: Any) -> list[tuple[str, str]]:
-    """装备面板的按钮：(完整指令, 显示名)。
+    """装备面板的按钮：(完整指令, 显示名)。"""
+    from ...utils.menus import cmd
 
-    标签带**装备名**而不是编号——「穿 1」这种写法玩家得回去数第几行。
-    不再给「看装备」：面板正文已经把内容全写出来了，点了只是重画一遍。
-    """
     base = "宠物.无尽"
     specs = gear_specs()
     stock = stock_of(run)
     out: list[tuple[str, str]] = []
 
-    # 先给「穿上」：库存是玩家唯一需要主动决定的东西
     for index, gear_id in enumerate(stock[:3], 1):
         name = str((specs.get(gear_id) or {}).get("name") or gear_id)
-        out.append((base + f" 装备 穿上 {index}", f"穿 {name}"))
+        out.append((cmd(f"{base} 装备 穿上 {index}"), f"穿 {name}"))
     for index, gear_id in enumerate(stock[:2], 1):
         name = str((specs.get(gear_id) or {}).get("name") or gear_id)
-        out.append((base + f" 装备 分解 {index}", f"分解 {name}"))
+        out.append((cmd(f"{base} 装备 分解 {index}"), f"分解 {name}"))
     for slot in ("weapon", "armor", "accessory"):
         if not (run.equip or {}).get(slot):
             continue
-        out.append((base + f" 装备 卸下 {SLOT_CN[slot]}", f"卸下{SLOT_CN[slot]}"))
+        out.append((cmd(f"{base} 装备 卸下 {SLOT_CN[slot]}"), f"卸下{SLOT_CN[slot]}"))
     return out[:8]
 
 
@@ -244,81 +258,88 @@ def skill_line(spec: dict[str, Any], times: int = 0) -> str:
     return f"T{tier} {name} · {skill_note(spec)}{plus}"
 
 
-def render_skills(run: Any) -> str:
-    """技能面板：已装槽位 + 未装的已学技能；每行整行可点。"""
-    from ...utils.texts import command_start
+def _bench_page(run: Any, page: int) -> tuple[list[str], int, int]:
+    """未装技能按页切片：返回 (本页 id, 当前页, 总页数)。"""
+    from .flow import known_skills
+
+    specs = skill_specs()
+    active = _active_ids(run)
+    bench = [s for s in known_skills(run) if s not in active and s in specs]
+    pages = max(1, -(-len(bench) // MAX_BENCH_ROWS))
+    page = min(max(1, int(page)), pages)
+    start = (page - 1) * MAX_BENCH_ROWS
+    return bench[start : start + MAX_BENCH_ROWS], page, pages
+
+
+def render_skills(run: Any, *, page: int = 1) -> str:
+    """技能面板：已装槽位 + 未装的已学技能（分页）。
+
+    已学技能会累积到几十个，一屏塞不下；页码写在标题上，翻页靠「技能 页 N」。
+    """
     from ..roguelike._common import line_link
     from .flow import known_skills
 
-    base = command_start() + "宠物.无尽"
+    base = "宠物.无尽"
     specs = skill_specs()
     enhance = dict((run.pending or {}).get("enhance") or {})
     active = _active_ids(run)
     lines = [f"📖 技能（槽位 {len(active)}/{active_slots()}）"]
-    if not active:
-        lines.append("还没装技能。")
     for index, skill_id in enumerate(active, 1):
         spec = specs.get(str(skill_id)) or {}
         times = int(enhance.get(str(skill_id), 0) or 0)
-        # 已装的：点它 = 换下
         lines.append(
             f"  {index}. "
-            + line_link(skill_line(spec, times), f"{base} 技能 换下 {index}")
+            + skill_line(spec, times)
+            + "　"
+            + line_link("换下", f"{base} 技能 换下 {index}")
         )
 
-    # 未装 = 已学会但没在槽里；全库 160 个不该出现在玩家的面板里
-    bench = [s for s in known_skills(run) if s not in active and s in specs]
-    if bench:
-        lines.append(f"未装（{len(bench)} 个，点名字换上）：")
-        for index, skill_id in enumerate(bench[:12], 1):
+    total = len([s for s in known_skills(run) if s not in active and s in specs])
+    if total:
+        shown, cur, pages = _bench_page(run, page)
+        head = f"未装（{total} 个"
+        head += f"，第 {cur}/{pages} 页）：" if pages > 1 else "）："
+        lines.append(head)
+        offset = (cur - 1) * MAX_BENCH_ROWS
+        for index, skill_id in enumerate(shown, 1):
             spec = specs.get(skill_id) or {}
             times = int(enhance.get(skill_id, 0) or 0)
             lines.append(
-                f"  {index}. "
-                + line_link(skill_line(spec, times), f"{base} 技能 换上 {index}")
+                f"  {offset + index}. "
+                + skill_line(spec, times)
+                + "　"
+                + line_link("换上", f"{base} 技能 换上 {offset + index}")
             )
+        if pages > 1:
+            nav: list[str] = []
+            if cur > 1:
+                nav.append(line_link("上一页", f"{base} 技能 页 {cur - 1}"))
+            if cur < pages:
+                nav.append(line_link("下一页", f"{base} 技能 页 {cur + 1}"))
+            lines.append("　".join(nav))
     return "\n".join(lines)
 
 
-def skill_actions(run: Any) -> list[tuple[str, str]]:
-    """技能面板的按钮：标签带技能名，不带编号。
-
-    换下只列已装的（它们就在正文的列表里，编号对得上）；
-    换上列已学未装的，最多给到按钮上限。
-    """
-    from ...utils.texts import command_start
-    from .flow import known_skills
-
-    base = command_start() + "宠物.无尽"
+def skill_action(run: Any, action: str, arg: str, *, page: int = 1) -> tuple[str, bool]:
+    """技能面板的操作：换上 N / 换下 N / 页 N。"""
     specs = skill_specs()
     active = _active_ids(run)
-    bench = [s for s in known_skills(run) if s not in active and s in specs]
-    out: list[tuple[str, str]] = []
+    if action == "页":
+        # 只换页，不改任何状态
+        return render_skills(run, page=int(arg or 1)), False
 
-    for index, skill_id in enumerate(bench[:3], 1):
-        name = str((specs.get(skill_id) or {}).get("name") or skill_id)
-        out.append((base + f" 技能 换上 {index}", f"换 {name}"))
-    for index, skill_id in enumerate(active, 1):
-        name = str((specs.get(skill_id) or {}).get("name") or skill_id)
-        out.append((base + f" 技能 换下 {index}", f"卸 {name}"))
-    return out[:8]
-
-
-def skill_action(run: Any, action: str, arg: str) -> tuple[str, bool]:
-    """技能面板的操作：换上 N / 换下 N。"""
-    specs = skill_specs()
-    active = _active_ids(run)
     if action == "换下":
         if not 1 <= int(arg) <= len(active):
             return "已装的技能没有这个编号。", False
         skill_id = active.pop(int(arg) - 1)
         run.skills = {**run.skills, "active": active, "passive": []}
         name = (specs.get(skill_id) or {}).get("name") or skill_id
-        return f"✅ 已换下 {name}。\n" + render_skills(run), True
+        return f"✅ 已换下 {name}。\n" + render_skills(run, page=page), True
 
     if action == "换上":
         from .flow import known_skills
 
+        # 编号是**全局序号**（跨页连续），不是当前页内的序号
         bench = [s for s in known_skills(run) if s not in active and s in specs]
         if not 1 <= int(arg) <= len(bench):
             return "未装列表里没有这个编号。", False
@@ -330,12 +351,9 @@ def skill_action(run: Any, action: str, arg: str) -> tuple[str, bool]:
         if replaced:
             old = (specs.get(replaced) or {}).get("name") or replaced
             tail = f"，换下 {old}"
-        return f"✅ 已换上 {name}{tail}。\n" + render_skills(run), True
+        return f"✅ 已换上 {name}{tail}。\n" + render_skills(run, page=page), True
 
-    return "技能面板的动作用法：技能 / 技能 换上 N / 技能 换下 N", False
-
-
-# ---------------------------------------------------------------- 遗物
+    return "技能面板的动作用法：技能 / 技能 换上 N / 技能 换下 N / 技能 页 N", False
 
 
 def relic_line(spec: dict[str, Any], dup: int = 1) -> str:
@@ -351,20 +369,19 @@ def render_relics(run: Any) -> str:
     specs = relic_specs()
     owned = _owned_relics(run)
     lines = [f"🎁 遗物（{len(run.relics)} 件）"]
-    groups = {"散件": []}
+    groups: dict[str, list[tuple[dict[str, Any], int]]] = {"散件": []}
     for relic_id, dup in owned.items():
         spec = specs.get(relic_id) or {"id": relic_id}
         groups.setdefault(str(spec.get("set") or "散件"), []).append((spec, dup))
     for key, items in groups.items():
         if not items:
             continue
+        from .describe import relic_note
         from .relics import set_meta
 
         label = str((set_meta().get(key) or {}).get("name") or key)
         lines.append(f"{label}：")
         for spec, dup in items:
-            from .describe import relic_note
-
             lines.append("  " + relic_line(spec, dup))
             lines.append("　　" + relic_note(spec))
 
@@ -380,8 +397,28 @@ def render_relics(run: Any) -> str:
     return "\n".join(lines)
 
 
+def skill_actions(run: Any) -> list[tuple[str, str]]:
+    """技能面板的按钮：标签带技能名，不带编号。"""
+    from ...utils.menus import cmd
+    from .flow import known_skills
+
+    base = "宠物.无尽"
+    specs = skill_specs()
+    active = _active_ids(run)
+    bench = [s for s in known_skills(run) if s not in active and s in specs]
+    out: list[tuple[str, str]] = []
+
+    for index, skill_id in enumerate(bench[:3], 1):
+        name = str((specs.get(skill_id) or {}).get("name") or skill_id)
+        out.append((cmd(f"{base} 技能 换上 {index}"), f"换 {name}"))
+    for index, skill_id in enumerate(active, 1):
+        name = str((specs.get(skill_id) or {}).get("name") or skill_id)
+        out.append((cmd(f"{base} 技能 换下 {index}"), f"卸 {name}"))
+    return out[:8]
+
+
 def relic_actions(run: Any) -> list[tuple[str, str]]:
-    """遗物面板没有可执行操作：遗物一旦拿到就永久生效，没有装上/卸下。"""
+    """遗物面板没有可执行操作：拿到即永久生效。"""
     return []
 
 
@@ -408,7 +445,7 @@ DIR_CN = {
     "mp": "魔力上限",
     "hp": "生命上限",
 }
-"""转伤属性（§8.5）：防转伤 / 速转伤 / 蓝转伤 / 血转伤让非攻击构筑也有输出。"""
+"""转伤属性（§8.5）：让非攻击构筑也有输出。"""
 
 
 def _dir_note(spec: dict[str, Any]) -> str:
@@ -497,12 +534,13 @@ def render_detail(kind: str, spec: dict[str, Any]) -> str:
     return "\n".join(lines)
 
 
-def render_panel(run: Any, name: str) -> str:
+def render_panel(run: Any, name: str, *, page: int = 1) -> str:
     """按名字打开一个面板。"""
+    if str(name) == "技能":
+        return render_skills(run, page=page)
     table = {
         "状态": render_status,
         "装备": render_gear,
-        "技能": render_skills,
         "遗物": render_relics,
     }
     render = table.get(str(name))
@@ -512,12 +550,11 @@ def render_panel(run: Any, name: str) -> str:
 
 
 def panel_actions(run: Any, name: str) -> list[tuple[str, str]]:
-    """一个面板底部的按钮：(完整指令, 显示名)。
+    """一个面板底部的按钮：(完整指令, 显示名)。"""
+    from ...utils.menus import cmd
 
-    面板之间可以互相跳转：看完状态想知道装备什么，不该让他退回去再手打。
-    """
     base = "宠物.无尽"
-    jump = [(base + " " + other, other) for other in PANELS if other != name]
+    jump = [(cmd(f"{base} {other}"), other) for other in PANELS if other != name]
     if name == "装备":
         return gear_actions(run)[:6] + jump[:2]
     if name == "技能":

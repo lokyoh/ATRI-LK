@@ -210,6 +210,23 @@ def floor_meta(run: RogueRun) -> dict[str, Any]:
     }
 
 
+def learn_and_equip(run: RogueRun, skill_id: str) -> bool:
+    """学会一个技能；**只在有空槽时自动装上**，槽满不动已装的。
+
+    槽满时只进已学列表（面板里「换上」才装）。换掉哪一个属于构筑决定，
+    系统替玩家换等于把他的选择拿走了。
+    """
+    learn_skill(run, skill_id)
+    active = [str(s) for s in (run.skills.get("active") or [])]
+    from .skills import active_slots
+
+    if str(skill_id) in active or len(active) >= active_slots():
+        return False
+    active.append(str(skill_id))
+    run.skills = {**run.skills, "active": active, "passive": []}
+    return True
+
+
 def known_skills(run: RogueRun) -> list[str]:
     """已学会的技能（含换下的）：设计 §8.1「换下的进已学列表，换回来免费」。
 

@@ -114,13 +114,13 @@ def purchase(
         run.relics.append(str(spec.get("id")))
         replaced = None
     elif kind == "skill":
-        from .flow import learn_skill
-        from .skills import equip_skill
+        from .flow import learn_and_equip
 
+        # 有空槽就装上；槽满只学会，不替换已装的
         skill_id = str(spec.get("id"))
-        active, replaced = equip_skill(_active_skills(run), skill_id)
-        run.skills = {**run.skills, "active": active, "passive": []}
-        learn_skill(run, skill_id)
+        # 返回值只影响回执文案，这里不需要额外区分
+        learn_and_equip(run, skill_id)
+        replaced = None
     elif kind == "gear":
         from .gear import equip as equip_gear
 

@@ -5,11 +5,24 @@ from ATRI.message import (
     MessageBuilder,
     QQMessage,
 )
-from ATRI.system.agent.agent.history import extract_plain_text, log_bot_message
+from ATRI.system.agent.agent.history import log_bot_message
 from ATRI.system.help.qq import BTN_MENU
 from ATRI.system.lkapi.entity.user import get_user_data, sign
 
 from .qq import BTN_SIGNIN
+
+
+def sign_summary(user_id: str, signed: bool) -> str:
+    """写进聊天历史的短摘要：只留谁签到的、第几天。"""
+    try:
+        user_data = get_user_data(user_id)
+        name = user_data.name or str(user_id)
+        days = user_data.signdays
+    except Exception:
+        return ""
+    if not signed:
+        return f"{name}今天已经签到过了"
+    return f"{name}签到成功（第{days}天）"
 
 
 class Signin:
@@ -32,7 +45,9 @@ class Signin:
                 message.text("\n签到成功:")
             for m in msg:
                 message.auto_append(m)
-            pending.append(extract_plain_text(message))
+            summary = sign_summary(user_id, check)
+            if summary:
+                pending.append(summary)
             await matcher.finish(message, at_sender=True)
         except FinishedException:
             for text in pending:
@@ -45,7 +60,7 @@ class QQSignin:
     async def signin(event, matcher):
         user_id = event.get_user_id()
         message = MessageBuilder()
-        _, msg = sign(user_id)
+        signed, msg = sign(user_id)
         user_data = get_user_data(user_id)
         message.text(f"# {user_data.name}签到成功:")
         message.text(f"你已签到{user_data.signdays}天")
@@ -55,13 +70,12 @@ class QQSignin:
         message.text(f"- 好感: {user_data.love}")
         for m in msg:
             message.auto_append(f"- {m}")
-        plain = extract_plain_text(message)
         md = QQMessage.md_msg(message.done())
         kb = QQMessage.keyboard(
             content=InlineKeyboardRow(buttons=[BTN_SIGNIN, BTN_MENU])
         )
         await matcher.send(md + kb)
-        log_bot_message(getattr(event, "group_id", None), plain)
+        log_bot_message(getattr(event, "group_id", None), sign_summary(user_id, signed))
 
 
 class SigninManager:

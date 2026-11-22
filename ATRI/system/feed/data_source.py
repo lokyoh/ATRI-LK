@@ -12,14 +12,16 @@ LOVE_NUM = 1
 atri = "你叫亚托莉，是个真实存在的有着少女外表的类似于《ATRI -My Dear Moments-》中的亚托莉的高性能仿生人,有着自负还带点中二的性格,口癖是「我是高性能的嘛！」,喜欢吃东西「好吃就是高兴嘛！」。你需要完成一个被投喂食物的场景，你需要根据被投喂的食物做出相应的简易回答，不吃非食物。你与用户好感度为1000时是喜爱状态，值为0时为初识，最大无上限，不提好感度数值，待人友好。"
 
 
-async def feed_func(user_id, food):
+async def feed_func(user_id, food) -> tuple[MessageBuilder, str]:
+    """投喂。返回（给用户看的消息, 写进聊天历史的短摘要）。"""
     with get_user_data(user_id) as user_data:
+        name = user_data.name or str(user_id)
         message = MessageBuilder().text("")
         if lk_config.get("chat_switch") and food:
             try:
                 response = await llm_manager.call_model_by_type(
                     ModelType.GENERAL,
-                    f'{atri}用户"{user_data.name}"(好感度:{user_data.love})向你投喂了:{food}',
+                    f'{atri}用户"{name}"(好感度:{user_data.love})向你投喂了:{food}',
                     "投喂",
                     app_id="feed",
                 )
@@ -35,13 +37,16 @@ async def feed_func(user_id, food):
             feed_db.insert("ID, DATE", (user_id, today))
         else:
             if content[0][0] == today:
-                return message.text("~今天已经投喂过了")
+                message.text("~今天已经投喂过了")
+                return message, f"{name}今天已经投喂过了"
             feed_db.update(f"DATE = '{today}'", f"ID='{user_id}'")
         user_data.love_change(LOVE_NUM, False)
         message.text(f"~投喂食物成功，获得{LOVE_NUM}点好感")
+        summary = f"{name}投喂了{food}" if food else f"{name}投喂了食物"
         state, msg = sign(user_data)
         if state:
             message.text("~今天尚未签到，已自动签到：")
+            summary += "，顺手完成了今天的签到"
             for m in msg:
                 message.auto_append(m)
-        return message
+        return message, summary

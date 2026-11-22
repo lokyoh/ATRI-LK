@@ -6,7 +6,7 @@ from nonebot.exception import FinishedException
 from ATRI.exceptions import str_traceback
 from ATRI.log import log
 from ATRI.message import MessageBuilder
-from ATRI.system.agent.agent.history import extract_plain_text, log_bot_message
+from ATRI.system.agent.agent.history import log_bot_message
 from ATRI.system.lkapi.bot import PLUGIN_DIR
 from ATRI.system.lkapi.entity.user import get_user_data, sign
 from ATRI.system.lkapi.utils.picture import get_pic_from, has_source
@@ -15,7 +15,7 @@ from ATRI.utils.img_editor import IMGEditor, get_image_bytes
 
 from . import config
 from .config import SignInConfig
-from .data_source import Signin, signin
+from .data_source import Signin, sign_summary, signin
 
 _config: SignInConfig = config
 
@@ -68,13 +68,15 @@ class CoreSignin(Signin):
         pending: list[str] = []
         try:
             message = MessageBuilder().text("")
-            _, msg = sign(user_id)
+            signed, msg = sign(user_id)
             for m in msg:
                 message.auto_append(m)
             log.info(f"{user_id}签到")
             img_path = await get_pic(user_id, group_id)
             message.image(get_image_bytes(img_path))
-            pending.append(extract_plain_text(message))
+            summary = sign_summary(user_id, signed)
+            if summary:
+                pending.append(summary)
             await matcher.finish(message, at_sender=True)
         except FinishedException:
             for text in pending:
@@ -88,8 +90,10 @@ class CoreSignin(Signin):
             message = MessageBuilder()
             user_data = get_user_data(user_id)
             message.text(f"签到成功,你已签到{user_data.signdays}天")
+            summary = sign_summary(user_id, True)
             pending.clear()
-            pending.append(extract_plain_text(message))
+            if summary:
+                pending.append(summary)
             try:
                 await matcher.finish(message, at_sender=True)
             finally:

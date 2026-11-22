@@ -126,7 +126,7 @@ def backup_legacy(path) -> None:
 
 def migrate(path=LEGACY_FILE) -> int:
     life = LifeSystem()
-    life.ensure()
+    life.ensure(prune=False)
     if not path.is_file():
         log.info(f"没有旧日程文件 {path}，无需迁移")
         return 0

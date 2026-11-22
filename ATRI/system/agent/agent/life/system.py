@@ -172,9 +172,11 @@ class LifeSystem:
 
     # ---- 初始化 / 清理 ----
 
-    def ensure(self) -> None:
+    def ensure(self, *, prune: bool = True) -> None:
         """首次启动：确保 home.md 存在，清理过期文件。"""
         self.homes.ensure()
+        if not prune:
+            return
         removed = prune_dated_files(self.schedules.schedule_dir) + prune_dated_files(
             self.outfits.outfit_dir
         )

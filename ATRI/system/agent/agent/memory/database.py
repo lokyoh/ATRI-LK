@@ -1,10 +1,10 @@
-from array import array
-from collections import OrderedDict
 import json
 import math
 import re
 import threading
 import time
+from array import array
+from collections import OrderedDict
 from typing import Any
 
 from ATRI.log import log
@@ -300,7 +300,9 @@ class MemoryDB:
         if not res or not res[0][0]:
             if legacy:
                 decoded = json.loads(legacy)
-                return np.asarray(decoded, dtype=np.float32) if np is not None else decoded
+                return (
+                    np.asarray(decoded, dtype=np.float32) if np is not None else decoded
+                )
             return np.zeros(0, dtype=np.float32) if np is not None else []
         blob = res[0][0]
         if np is None:
@@ -317,7 +319,9 @@ class MemoryDB:
         res = table.select("dim", {"id": int(mem_id)})
         return int(res[0][0] or 0) if res else 0
 
-    def _has_trusted_vector(self, mem_id: int, meta: dict[str, Any], model: str) -> bool:
+    def _has_trusted_vector(
+        self, mem_id: int, meta: dict[str, Any], model: str
+    ) -> bool:
         """这条记忆是否已有一个可信的同模型向量。"""
         if self._vector_len(mem_id) <= 0:
             return False
@@ -372,7 +376,9 @@ class MemoryDB:
                 if np is not None:
                     packed = np.asarray(values or [], dtype=np.float32).tobytes()
                 else:
-                    packed = array.array("f", [float(v) for v in values or []]).tobytes()
+                    packed = array.array(
+                        "f", [float(v) for v in values or []]
+                    ).tobytes()
                 cursor.execute(
                     "INSERT OR REPLACE INTO memory_vectors (id, dim, vec) VALUES (?, ?, ?)",
                     (int(mem_id), len(values or []), packed),
@@ -441,7 +447,11 @@ class MemoryDB:
                 vector = []
         else:
             vector = self._load_vector(mem_id)
-            vector = vector.tolist() if np is not None and hasattr(vector, "tolist") else list(vector)
+            vector = (
+                vector.tolist()
+                if np is not None and hasattr(vector, "tolist")
+                else list(vector)
+            )
         return {
             "id": mem_id,
             "content": row[1],
@@ -531,7 +541,9 @@ class MemoryDB:
                 rows = self._table.select_all()
                 newest = max(rows, key=lambda r: float(r[6]))
                 self._write_vector(
-                    int(newest[0]), embedding, str(metadata.get(EMBEDDING_MODEL_KEY) or "")
+                    int(newest[0]),
+                    embedding,
+                    str(metadata.get(EMBEDDING_MODEL_KEY) or ""),
                 )
                 return self._row_to_dict(newest)
 
@@ -557,7 +569,9 @@ class MemoryDB:
                     },
                     {"id": mid},
                 )
-                self._write_vector(mid, embedding, str(metadata.get(EMBEDDING_MODEL_KEY) or ""))
+                self._write_vector(
+                    mid, embedding, str(metadata.get(EMBEDDING_MODEL_KEY) or "")
+                )
                 res = self._table.select(
                     "id, content, embedding, importance, decay_rate, metadata, created_at, last_accessed",
                     {"id": mid},
@@ -598,7 +612,9 @@ class MemoryDB:
                     {"id": mid},
                 )
                 self._write_vector(
-                    mid, merged_embedding, str(merged_meta.get(EMBEDDING_MODEL_KEY) or "")
+                    mid,
+                    merged_embedding,
+                    str(merged_meta.get(EMBEDDING_MODEL_KEY) or ""),
                 )
                 res = self._table.select(
                     "id, content, embedding, importance, decay_rate, metadata, created_at, last_accessed",
@@ -790,14 +806,14 @@ class MemoryDB:
                 continue
             pending.append(
                 (
-                float(row[2]),
-                float(row[3] or 0.0),
-                {
-                    "id": int(row[0]),
-                    "content": row[1],
-                    "model": str(meta.get(EMBEDDING_MODEL_KEY) or ""),
-                    "metadata": meta,
-                },
+                    float(row[2]),
+                    float(row[3] or 0.0),
+                    {
+                        "id": int(row[0]),
+                        "content": row[1],
+                        "model": str(meta.get(EMBEDDING_MODEL_KEY) or ""),
+                        "metadata": meta,
+                    },
                 )
             )
         pending.sort(key=lambda item: (item[0], item[1]), reverse=True)
@@ -989,6 +1005,11 @@ class MemoryDB:
     def all_memories(self) -> list[dict[str, Any]]:
         rows = self._table.select_all()
         return [self._row_to_dict(r) for r in rows]
+
+    def list_rows(self) -> list[dict[str, Any]]:
+        """不带向量的全部行；管理端浏览用，不解析 embedding。"""
+        rows = self._table.select_all()
+        return [_row_without_embedding(r) for r in rows]
 
     def memories_by_date(self, date: str) -> list[dict[str, Any]]:
         """按自然日取记忆（日程生成用），不解析 embedding。"""

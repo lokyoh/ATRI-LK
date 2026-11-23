@@ -40,10 +40,10 @@ async def system_logs_realtime(websocket: WebSocket):
 
         # 先灌历史回放、再订阅实时流，保证顺序且无丢失窗口
         for entry in LOG_STORAGE.get_recent(since=since):
-            enqueue(json.dumps(_serialize(entry)))
+            enqueue(_serialize(entry))
 
         def on_entry(entry: LogEntry) -> None:
-            enqueue(json.dumps(_serialize(entry)))
+            enqueue(_serialize(entry))
 
         LOG_STORAGE.listeners.add(on_entry)
         return lambda: LOG_STORAGE.listeners.discard(on_entry)

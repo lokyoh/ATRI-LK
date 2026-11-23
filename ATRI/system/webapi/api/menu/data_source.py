@@ -24,6 +24,7 @@ default_menus = [
     MenuItem(name="插件商店", module="store", router="/store", icon="store"),
     MenuItem(name="AI模型设置", module="agent", router="/agent", icon="message1"),
     MenuItem(name="用户管理", module="lkbot_user", router="/lkbot-user", icon="user"),
+    MenuItem(name="系统维护", module="system", router="/system", icon="setting1"),
     MenuItem(name="日志", module="log", router="/log", icon="log"),
     MenuItem(name="关于我们", module="about", router="/about", icon="about"),
 ]

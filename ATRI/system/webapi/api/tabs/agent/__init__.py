@@ -31,9 +31,11 @@ from ....base_model import Result
 from ....security import authentication
 from .function_calling import router as function_calling_router
 from .function_plugin import router as function_plugin_router
+from .memory import router as memory_router
 from .schedule import router as schedule_router
 from .skills import router as skills_router
 from .tasks import router as tasks_router
+from .telemetry_api import router as telemetry_router
 
 router = APIRouter(prefix="/agent")
 router.include_router(function_plugin_router)
@@ -41,6 +43,8 @@ router.include_router(function_calling_router)
 router.include_router(skills_router)
 router.include_router(tasks_router)
 router.include_router(schedule_router)
+router.include_router(memory_router)
+router.include_router(telemetry_router)
 
 
 class ModelPricingInfo(BaseModel):

@@ -19,6 +19,7 @@ from starlette.websockets import WebSocket, WebSocketDisconnect
 
 from ATRI import conf
 from ATRI.dir import DATA_DIR
+from ATRI.log import log
 
 from .base_model import User
 
@@ -118,9 +119,7 @@ class LoginRateLimiter:
 
     def record_failure(self, ip: str) -> None:
         now = self._clock()
-        attempts = [
-            t for t in self._failures.get(ip, []) if now - t < self.window
-        ]
+        attempts = [t for t in self._failures.get(ip, []) if now - t < self.window]
         attempts.append(now)
         self._failures[ip] = attempts
         if len(attempts) >= self.max_failures:
@@ -166,16 +165,20 @@ def create_token(user: User, expires_delta: timedelta | None = None):
     )
 
 
+def _strip_scheme(token: str) -> str:
+    """剥掉 scheme 前缀；登录响应的 token_type 是小写 "bearer"，必须忽略大小写"""
+    return token[7:] if token[:7].lower() == "bearer " else token
+
+
 def verify_token(token: str | None) -> str | None:
     """校验 JWT + 吊销名单，成功返回用户名，失败返回 None
 
     参数:
-        token: JWT，兼容带 "Bearer " 前缀的完整值（WebSocket 握手场景）
+        token: JWT，兼容带任意大小写 "bearer " 前缀的完整值（WebSocket 握手场景）
     """
     if not token:
         return None
-    if token.startswith("Bearer "):
-        token = token[7:]
+    token = _strip_scheme(token)
     try:
         payload = jwt.decode(token, conf.WebUIConfig.secret, algorithms=[ALGORITHM])
         username = payload.get("sub")
@@ -206,7 +209,7 @@ def authentication():
             )
 
         # 滑动续期：JWT 有效（verify_token 已校验），此处只看剩余寿命
-        raw_token = token[7:] if token.startswith("Bearer ") else token
+        raw_token = _strip_scheme(token)
         claims = jwt.decode(raw_token, conf.WebUIConfig.secret, algorithms=[ALGORITHM])
         exp = claims.get("exp")
         if not exp:
@@ -226,7 +229,41 @@ def authentication():
     return Depends(inner)
 
 
+def _handshake_reject_reason(token: str | None) -> str:
+    """比 verify_token 更细的拒绝原因，仅供日志排障"""
+    if not token:
+        return "未携带 token"
+    raw = _strip_scheme(token)
+    # 打出安全前缀与长度：cookie 里的损坏值（历史版本写入的坏字符串）一眼可辨
+    preview = f"len={len(token)} head={raw[:10]!r}"
+    now = datetime.now(UTC).timestamp()
+    try:
+        payload = jwt.decode(raw, conf.WebUIConfig.secret, algorithms=[ALGORITHM])
+    except JWTError as e:
+        # 无验签解析 payload，区分「过期」与「签名不符」（后者多为登录与握手
+        # 落在了持有不同密钥的实例上）。注意：格式损坏会抛 binascii.Error，
+        # 不是 JWTError 子类，必须单独兜住
+        try:
+            claims = jwt.decode(
+                raw, options={"verify_signature": False, "verify_exp": False}
+            )
+        except Exception:
+            return f"token 格式损坏无法解析（{preview}）"
+        exp = claims.get("exp")
+        if isinstance(exp, int | float) and exp < now:
+            return f"token 已过期 {int((now - exp) / 60)} 分钟（前端发的是旧 cookie？）{preview}"
+        return f"token 签名校验失败 ({type(e).__name__})——签发与校验非同一实例/密钥？{preview}"
+    if not get_user(payload.get("sub")):  # type: ignore
+        return f"token 用户不存在（{preview}）"
+    if not TOKEN_REGISTRY.contains(raw):
+        return f"token 不在登记簿（登录于其他实例 / 重启前签发 / 已被淘汰）{preview}"
+    return "未知原因"
+
+
 async def _ws_reject(websocket: WebSocket, reason: str) -> None:
+    # 拒绝原因落日志：登录失效的排障入口（前端收到 1008 会停止重连，不会刷屏）
+    client = websocket.client.host if websocket.client else ""
+    log.warning(f"WebSocket 握手拒绝: {reason} from {client}")
     # 对端可能已断开，关闭失败不必传播
     with contextlib.suppress(Exception):
         await websocket.close(code=1008, reason=reason)
@@ -252,6 +289,6 @@ async def ws_auth(websocket: WebSocket) -> dict | None:
         await _ws_reject(websocket, "handshake timeout or invalid payload")
         return None
     if not verify_token(data.get("token")):
-        await _ws_reject(websocket, "unauthorized")
+        await _ws_reject(websocket, _handshake_reject_reason(data.get("token")))
         return None
     return data

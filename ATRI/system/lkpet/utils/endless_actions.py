@@ -45,11 +45,13 @@ def choices_from_endless(run: Any) -> list[Choice]:
     if pending.get("session"):
         from ..core.endless import battle_actions
 
+        # 战斗指令最多 7 条（普攻 + 4 技能 + 防御 + 冥想），不截断；
+        # 截断会让装了 4 个技能时的「冥想」从底部消失。
         return [
             Choice(
                 str(act.get("label") or act.get("key")), cmd(f"宠物.无尽 {act['key']}")
             )
-            for act in battle_actions(run)[:MAX_CHOICES]
+            for act in battle_actions(run)
         ]
 
     # 非战斗面板：没有待答选项时给「状态 / 装备 / 技能 / 遗物」入口

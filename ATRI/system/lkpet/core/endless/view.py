@@ -19,7 +19,7 @@ ACTIONS = ("开始", "继续", "进度", "撤退", "状态", "装备", "技能",
 def usage() -> str:
     cmd = f"{command_start()}宠物.无尽"
     head = "用法：" + cmd + " " + "｜".join(ACTIONS)
-    tail = "局内：查看 <名字>｜强化 N｜库存｜刷新｜离开"
+    tail = "局内：查看 <名字>｜强化｜库存｜刷新｜离开"
     return head + "\n" + tail
 
 

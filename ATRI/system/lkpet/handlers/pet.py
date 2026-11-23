@@ -1171,10 +1171,6 @@ async def handle_endless(event: Event, args: BaseMessage = CommandArg()):
                 )
                 if changed:
                     msg = _endless_persist(endless, running, save_endless, msg)
-            elif raw.startswith("强化") and running is not None:
-                msg, changed = _endless_enhance(running, raw)
-                if changed:
-                    msg = _endless_persist(endless, running, save_endless, msg)
             elif raw == "撤退":
                 if running is None:
                     msg = _endless_usage()
@@ -1304,7 +1300,7 @@ def _endless_step_number(run, raw: str) -> int:
     if "×" in text:
         head = text.split("×")[0].strip()
         return int(head) if head.isdigit() else 0
-    for prefix in ("买", "强化"):
+    for prefix in ("买",):
         if text.startswith(prefix):
             rest = text[len(prefix) :].strip()
             return int(rest) if rest.isdigit() else 0
@@ -1325,74 +1321,6 @@ def _endless_skill_number(run, name: str) -> int:
         if name in (str(spec.get("name") or ""), str(spec.get("id") or "")):
             return int(str(action.get("key") or 0) or 0)
     return 0
-
-
-def _endless_enhance(run, raw: str) -> tuple[str, bool]:
-    """强化技能：``强化 3`` 强化行动列表里的第 3 个技能。
-
-
-
-    强化次数存 ``run.pending["enhance"]``，战斗侧按次数乘威力（§8.7）。
-
-    """
-
-    from ..core.endless import (
-        ENHANCE_MAX,
-        battle_actions,
-        enhance_cost,
-        skill_specs,
-    )
-
-    number = _endless_step_number(run, raw)
-
-    if number <= 0:
-        return "用法：强化 N（N = 行动列表里的技能序号）", False
-
-    actions = battle_actions(run)
-
-    if not 1 <= number <= len(actions):
-        return "序号超出范围。", False
-
-    skill_id = str((actions[number - 1].get("action") or {}).get("skill") or "")
-
-    if not skill_id:
-        return "这一项不是技能。", False
-
-    enhance = dict(run.pending.get("enhance") or {})
-
-    times = int(enhance.get(skill_id, 0) or 0)
-
-    if times >= ENHANCE_MAX:
-        return "这个技能已经强化到上限。", False
-
-    spec = skill_specs().get(skill_id) or {}
-
-    cost = enhance_cost(int(spec.get("tier", 1) or 1), times)
-
-    if run.coins < cost:
-        return "金币不够（需要 " + str(cost) + "）。", False
-
-    run.coins -= cost
-
-    enhance[skill_id] = times + 1
-
-    run.pending["enhance"] = enhance
-
-    name = str(spec.get("name") or skill_id)
-
-    return (
-        "🔧 "
-        + name
-        + " 强化到 "
-        + str(times + 1)
-        + "/"
-        + str(ENHANCE_MAX)
-        + "，花费 "
-        + str(cost)
-        + " 金，剩余 "
-        + str(run.coins)
-        + " 金"
-    ), True
 
 
 def _endless_choosing_level(run) -> bool:
@@ -1427,10 +1355,15 @@ def _endless_panel(run, raw: str) -> str:
     arg = parts[2] if len(parts) > 2 else ""
 
     if action:
-        from ..core.endless import gear_action, skill_action
+        from ..core.endless import enhance_action, gear_action, skill_action
 
         if name == "装备":
             text, _changed = gear_action(run, action, arg)
+        elif name == "强化":
+            # 强化面板的动作用法是「强化 强化 skill|gear N」，所以 arg 是序号
+            text, _changed = enhance_action(
+                run, action, arg, parts[3] if len(parts) > 3 else ""
+            )
         else:
             # 技能面板分页：操作后停在同一页，别把玩家弹回第 1 页
             page = int(run.pending.get("skill_page") or 1)

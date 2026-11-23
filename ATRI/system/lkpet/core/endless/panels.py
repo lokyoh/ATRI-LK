@@ -11,7 +11,7 @@ from __future__ import annotations
 
 from typing import Any
 
-from .describe import attr_label, attr_line, attr_value, describe_attrs
+from .describe import _flat_pct, attr_label, attr_line, attr_value, describe_attrs
 from .gear import (
     decompose,
     decompose_value,
@@ -33,7 +33,7 @@ from .skills import (
 SLOT_CN = {"weapon": "武器", "armor": "防具", "accessory": "饰品"}
 """槽位中文名。"""
 
-PANELS = ("状态", "装备", "技能", "遗物")
+PANELS = ("状态", "装备", "技能", "遗物", "强化")
 """可打开的面板名。"""
 
 MAX_STOCK_ROWS = 20
@@ -160,7 +160,10 @@ def render_gear(run: Any) -> str:
         lines.append("库存（点「穿上 / 分解」执行）：")
         for index, gear_id in enumerate(stock[:MAX_STOCK_ROWS], 1):
             spec = specs.get(str(gear_id)) or {}
-            value = decompose_value(spec)
+            # 分解退还全部强化费：强化过的装备不该按裸价回收
+            from .gear import gear_enhance_of
+
+            value = decompose_value(spec, gear_enhance_of(run, gear_id))
             lines.append(
                 f"  {index}. "
                 + gear_line(spec)
@@ -471,11 +474,13 @@ def _skill_effect_note(spec: dict[str, Any]) -> str:
     """技能实际做什么——数值全取自数据，改 YAML 这里跟着变。"""
     parts: list[str] = []
     shield = float(spec.get("shield", 0.0) or 0.0)
-    if shield:
-        parts.append(f"护盾 {round(shield * 100)}% 生命上限")
+    shield_flat = float(spec.get("shield_flat", 0.0) or 0.0)
+    if shield or shield_flat:
+        parts.append("护盾 " + _flat_pct(shield_flat, shield))
     heal = float(spec.get("heal", 0.0) or 0.0)
-    if heal:
-        parts.append(f"回复 {round(heal * 100)}% 生命上限")
+    heal_flat = float(spec.get("heal_flat", 0.0) or 0.0)
+    if heal or heal_flat:
+        parts.append("回复 " + _flat_pct(heal_flat, heal))
     for key, label in (
         ("atk_mult", "攻击"),
         ("def_mult", "防御"),
@@ -506,7 +511,7 @@ def render_detail(kind: str, spec: dict[str, Any]) -> str:
         lines.append(f"{elem}·{series}")
         lines.append(_skill_effect_note(spec))
         lines.append(
-            f"耗魔 {spec.get('mp_cost', 0)} · 冷却 {spec.get('cooldown', 0)} 回合"
+            f"耗魔 {spec.get('mp_cost', 0) or '无'} · 冷却 {spec.get('cooldown', 0) or '无'} 次出手"
         )
         lines.append("目标：" + _target_note(spec))
     elif kind == "装备":
@@ -534,10 +539,120 @@ def render_detail(kind: str, spec: dict[str, Any]) -> str:
     return "\n".join(lines)
 
 
+# ---------------------------------------------------------------- 强化
+
+
+def _enhance_targets(run: Any) -> list[tuple[str, str]]:
+    """可强化的对象：已装的 4 个技能 + 已穿的全部装备。"""
+    out: list[tuple[str, str]] = []
+    for skill_id in _active_ids(run):
+        out.append(("skill", str(skill_id)))
+    for slot in ("weapon", "armor", "accessory"):
+        for gear_id in list((run.equip or {}).get(slot) or []):
+            out.append(("gear", str(gear_id)))
+    return out
+
+
+def render_enhance(run: Any) -> str:
+    """强化面板：列出可强化对象、当前等级、下一级价格与退款额。"""
+    from ..roguelike._common import line_link
+    from .gear import (
+        GEAR_ENHANCE_MAX,
+        gear_enhance_cost,
+        gear_specs,
+        gear_total_enhance_cost,
+    )
+    from .skills import ENHANCE_MAX, enhance_cost, total_enhance_cost
+
+    base = "宠物.无尽"
+    if in_battle(run):
+        return busy()
+    sk_specs = skill_specs()
+    gr_specs = gear_specs()
+    sk_times = dict((run.pending or {}).get("enhance") or {})
+    gr_times = dict((run.pending or {}).get("gear_enhance") or {})
+    lines = [f"🔧 强化（持有 {run.coins} 金）"]
+    rows = 0
+    targets = _enhance_targets(run)
+    if not targets:
+        lines.append("没有可强化的技能或装备：先装上再来。")
+    for kind, item_id in targets:
+        if kind == "skill":
+            spec = sk_specs.get(item_id) or {}
+            times = int(sk_times.get(item_id, 0) or 0)
+            cap = ENHANCE_MAX
+            cost = enhance_cost(int(spec.get("tier", 1) or 1), times)
+            refund = total_enhance_cost(int(spec.get("tier", 1) or 1), times)
+            label = f"技能 {spec.get('name') or item_id}"
+        else:
+            spec = gr_specs.get(item_id) or {}
+            times = int(gr_times.get(item_id, 0) or 0)
+            cap = GEAR_ENHANCE_MAX
+            cost = gear_enhance_cost(int(spec.get("tier", 1) or 1), times)
+            refund = gear_total_enhance_cost(int(spec.get("tier", 1) or 1), times)
+            label = f"装备 {spec.get('name') or item_id}"
+        rows += 1
+        head = f"  {rows}. {label}  +{times}/{cap}"
+        if times:
+            head += f"（取消退 {refund} 金）"
+        lines.append(head)
+        if times >= cap:
+            lines.append("　　　已满级")
+            continue
+        lines.append(
+            "　　　"
+            + line_link(f"强化 +1（{cost} 金）", f"{base} 强化 强化 {kind} {rows}")
+            + (
+                " "
+                + line_link(
+                    f"取消强化（退 {refund} 金）", f"{base} 强化 取消 {kind} {rows}"
+                )
+                if times
+                else ""
+            )
+        )
+    lines.append("只能给已装的技能与已穿的装备强化；换下/卸下后仍保留强化等级。")
+    return "\n".join(lines)
+
+
+def enhance_actions(run: Any) -> list[tuple[str, str]]:
+    """强化面板的按钮：给前几项各一个「强化 +1」。"""
+    from ...utils.menus import cmd
+    from .gear import GEAR_ENHANCE_MAX, gear_enhance_cost, gear_specs
+    from .skills import ENHANCE_MAX, enhance_cost
+
+    base = "宠物.无尽"
+    sk_specs = skill_specs()
+    gr_specs = gear_specs()
+    sk_times = dict((run.pending or {}).get("enhance") or {})
+    gr_times = dict((run.pending or {}).get("gear_enhance") or {})
+    out: list[tuple[str, str]] = []
+    for index, (kind, item_id) in enumerate(_enhance_targets(run), 1):
+        if kind == "skill":
+            spec = sk_specs.get(item_id) or {}
+            times = int(sk_times.get(item_id, 0) or 0)
+            if times >= ENHANCE_MAX:
+                continue
+            cost = enhance_cost(int(spec.get("tier", 1) or 1), times)
+        else:
+            spec = gr_specs.get(item_id) or {}
+            times = int(gr_times.get(item_id, 0) or 0)
+            if times >= GEAR_ENHANCE_MAX:
+                continue
+            cost = gear_enhance_cost(int(spec.get("tier", 1) or 1), times)
+        name = str(spec.get("name") or item_id)
+        out.append(
+            (cmd(f"{base} 强化 强化 {kind} {index}"), f"强化 {name}（{cost} 金）")
+        )
+    return out[:6]
+
+
 def render_panel(run: Any, name: str, *, page: int = 1) -> str:
     """按名字打开一个面板。"""
     if str(name) == "技能":
         return render_skills(run, page=page)
+    if str(name) == "强化":
+        return render_enhance(run)
     table = {
         "状态": render_status,
         "装备": render_gear,
@@ -559,4 +674,70 @@ def panel_actions(run: Any, name: str) -> list[tuple[str, str]]:
         return gear_actions(run)[:6] + jump[:2]
     if name == "技能":
         return skill_actions(run)[:6] + jump[:2]
+    if name == "强化":
+        return enhance_actions(run)[:6] + jump[:2]
     return jump[:4]
+
+
+def enhance_action(run: Any, action: str, kind: str, arg: str) -> tuple[str, bool]:
+    """强化面板的操作：``强化 skill|gear N`` / ``取消 skill|gear N``。"""
+    from .gear import (
+        GEAR_ENHANCE_MAX,
+        gear_enhance_cost,
+        gear_specs,
+        gear_total_enhance_cost,
+    )
+    from .skills import ENHANCE_MAX, enhance_cost, skill_specs, total_enhance_cost
+
+    if in_battle(run):
+        return busy(), False
+    if kind not in ("skill", "gear"):
+        return "强化对象写错，可选：skill / gear。", False
+    targets = _enhance_targets(run)
+    if not arg.isdigit() or not 1 <= int(arg) <= len(targets):
+        return "编号超出范围。", False
+    target_kind, item_id = targets[int(arg) - 1]
+    if target_kind != kind:
+        return "这个编号不是该类型的对象。", False
+    spec = (skill_specs() if kind == "skill" else gear_specs()).get(item_id) or {}
+    tier = int(spec.get("tier", 1) or 1)
+    table_key = "enhance" if kind == "skill" else "gear_enhance"
+    table = dict(run.pending.get(table_key) or {})
+    times = int(table.get(item_id, 0) or 0)
+    name = str(spec.get("name") or item_id)
+    cap = ENHANCE_MAX if kind == "skill" else GEAR_ENHANCE_MAX
+    if action == "强化":
+        if times >= cap:
+            return "已经强化到上限了。", False
+        cost = (enhance_cost if kind == "skill" else gear_enhance_cost)(tier, times)
+        if run.coins < cost:
+            return f"金币不够（需要 {cost}）。", False
+        run.coins -= cost
+        table[item_id] = times + 1
+        run.pending[table_key] = table
+        return (
+            f"🔧 {name} 强化到 {times + 1}/{cap}，花费 {cost} 金，剩余 {run.coins} 金。\n"
+            + render_enhance(run),
+            True,
+        )
+    if action == "取消":
+        if times <= 0:
+            return "这件还没强化过。", False
+        refund = (
+            total_enhance_cost(tier, times)
+            if kind == "skill"
+            else gear_total_enhance_cost(tier, times)
+        )
+        run.coins += refund
+        table.pop(item_id, None)
+        run.pending[table_key] = table
+        return (
+            f"↩️ {name} 强化已取消，退还 {refund} 金，现有 {run.coins} 金。\n"
+            + render_enhance(run),
+            True,
+        )
+
+    return (
+        "强化面板的动作用法：强化 / 强化 强化 skill|gear N / 强化 取消 skill|gear N",
+        False,
+    )

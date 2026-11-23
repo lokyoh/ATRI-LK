@@ -608,6 +608,10 @@ def _skill_usable(run: RogueRun, spec: dict[str, Any]) -> tuple[bool, str]:
     data = (run.pending or {}).get("session") or {}
     if not data:
         return True, ""
+    skill_id = str(spec.get("id") or "")
+    cd = cooldown_left(data, skill_id)
+    if cd > 0:
+        return False, f"冷却剩{cd}"
     need = int(spec.get("mp_cost", 0) or 0)
     have = int(data.get("pet_mp", 0) or 0)
     if need > have:
@@ -615,10 +619,23 @@ def _skill_usable(run: RogueRun, spec: dict[str, Any]) -> tuple[bool, str]:
     return True, ""
 
 
-def skill_cost_note(spec: dict[str, Any], cooldown_left: int = 0) -> str:
-    """耗魔 + 冷却剩余：冷却中不写剩余次数，玩家看不出为什么点不动。"""
+def _cooldown_unit() -> int:
+    """冷却一「格」折成几帧，与 ``battle.cooldown_frames`` 同源。"""
+    from .config import load_endless_config
+
+    battle = load_endless_config().get("battle") or {}
+    return max(1, int(battle.get("cooldown_frames", 0) or 0) or 10)
+
+
+def cooldown_left(data: dict[str, Any], skill_id: str) -> int:
+    """还要等几次出手才能再放（按帧折算，向上取整）。"""
+    frames = int((data.get("cooldowns") or {}).get(str(skill_id), 0) or 0)
+    if frames <= 0:
+        return 0
+    return max(1, -(-frames // _cooldown_unit()))
+
+
+def skill_cost_note(spec: dict[str, Any]) -> str:
+    """耗魔。不耗魔也写「无耗魔」，只留名字时玩家判断不了这一下花不花钱。"""
     cost = int(spec.get("mp_cost", 0) or 0)
-    parts = [f"魔{cost}"] if cost else []
-    if cooldown_left > 0:
-        parts.append(f"冷却剩 {cooldown_left}")
-    return " ".join(parts)
+    return f"魔{cost}" if cost else "无耗魔"

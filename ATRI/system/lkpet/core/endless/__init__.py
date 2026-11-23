@@ -132,11 +132,13 @@ from .monsters import (
 )
 from .panels import (
     PANELS,
+    enhance_action,
     find_spec,
     gear_action,
     in_battle,
     panel_actions,
     render_detail,
+    render_enhance,
     render_panel,
     skill_action,
 )
@@ -347,6 +349,7 @@ __all__ = [
     "endless_cap",
     "enemy_line",
     "enemy_scale_cfg",
+    "enhance_action",
     "enhance_cost",
     "enhance_multiplier",
     "equip",
@@ -420,6 +423,7 @@ __all__ = [
     "relic_specs",
     "render_battle",
     "render_detail",
+    "render_enhance",
     "render_event",
     "render_floor",
     "render_options",

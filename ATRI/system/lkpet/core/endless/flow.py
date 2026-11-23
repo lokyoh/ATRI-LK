@@ -79,7 +79,9 @@ def combat_attrs(run: RogueRun) -> dict[str, float]:
     relic_owned = {str(r): 1 for r in run.relics}
     flats = total_stat_bonuses(relic_owned)
     sets = set_bonuses(relic_owned)
-    gear = equipped_effects(run.equip)
+    gear = equipped_effects(
+        run.equip, None, (run.pending or {}).get("gear_enhance") or {}
+    )
     out: dict[str, float] = {str(k): float(v) for k, v in base.items()}
     # 模板 def=0：靠 balance.base_def 给一个下限，否则「升防御」前期毫无意义
     out["def"] = out.get("def", 0.0) + float(
@@ -258,7 +260,9 @@ def skill_slots(run: RogueRun) -> list[str]:
 
 
 def equipped_gear_stats(run: RogueRun) -> dict[str, float]:
-    return equipped_effects(run.equip, None)
+    return equipped_effects(
+        run.equip, None, (run.pending or {}).get("gear_enhance") or {}
+    )
 
 
 def available_level_keys() -> tuple[str, ...]:

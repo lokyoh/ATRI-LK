@@ -220,11 +220,13 @@ def skill_note(spec: dict[str, Any]) -> str:
 
     parts: list[str] = []
     shield = float(spec.get("shield", 0.0) or 0.0)
-    if shield:
-        parts.append(f"护盾 {round(shield * 100)}%")
+    shield_flat = float(spec.get("shield_flat", 0.0) or 0.0)
+    if shield or shield_flat:
+        parts.append(f"护盾 {_flat_pct(shield_flat, shield)}")
     heal = float(spec.get("heal", 0.0) or 0.0)
-    if heal:
-        parts.append(f"回血 {round(heal * 100)}%")
+    heal_flat = float(spec.get("heal_flat", 0.0) or 0.0)
+    if heal or heal_flat:
+        parts.append(f"回血 {_flat_pct(heal_flat, heal)}")
     for key, label in (("atk_mult", "攻"), ("def_mult", "防"), ("spd_mult", "速")):
         if key in spec:
             parts.append(f"{label} +{round((float(spec[key]) - 1.0) * 100)}%")
@@ -238,6 +240,15 @@ def skill_note(spec: dict[str, Any]) -> str:
     if cost:
         parts.append(f"耗魔 {cost}")
     return f"{elem}·{tag}：" + "，".join(parts)
+
+
+def _flat_pct(flat: float, pct: float) -> str:
+    """「12 + 4%」这种写法；只有百分比时省略固定值。"""
+    flat_part = str(round(flat)) if flat else ""
+    pct_part = f"{round(pct * 100)}%" if pct else ""
+    if flat_part and pct_part:
+        return flat_part + " + " + pct_part
+    return flat_part or pct_part or "0"
 
 
 SERIES_LABELS = {

@@ -136,7 +136,13 @@ def new_run(seed: int, cfg: dict[str, Any] | None = None) -> RogueRun:
     return run
 
 
-PERSISTENT_PENDING = ("enhance", "gear_stock", "proficiency", "skill_page")
+PERSISTENT_PENDING = (
+    "enhance",
+    "gear_enhance",
+    "gear_stock",
+    "proficiency",
+    "skill_page",
+)
 """挂在 pending 里但**跨层有效**的字段。
 
 ``refresh_floor`` 每次整份替换 pending，不保住这几个键的话：库存装备、

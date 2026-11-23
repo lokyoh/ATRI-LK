@@ -179,6 +179,11 @@ class BattleSession:
         self.frames_per_turn = (
             max(1, round(100.0 / self.timer_gain)) if self.timer_gain > 0 else 1
         )
+        # 冷却一「格」折成多少帧。默认等于一个回合，爬塔沿用旧口径；
+        # 无尽模式改成按「我方出手」计，否则冷却永远转不回来。
+        self.cooldown_frames = int(battle_cfg.get("cooldown_frames", 0) or 0)
+        if self.cooldown_frames <= 0:
+            self.cooldown_frames = self.frames_per_turn
         # 内部循环上限（帧）。max_rounds 以**回合**为单位，换算成帧给 while 用。
         self.max_frames = max(1, self.max_rounds * self.frames_per_turn)
         self.crit_mult = float(battle_cfg.get("crit_mult", 1.8))
@@ -593,10 +598,12 @@ class BattleSession:
         boost = 1.0 + step * times
         name = self._skill_label(skill, skill_id)
 
-        # 护盾：shield 是生命上限的比例
+        # 护盾 = 固定值 + 生命上限的一个很小比例：前期全靠固定值，
+        # 后期血量翻几倍也不会把护盾一起吹起来。
         ratio = float(skill.get("shield", 0.0) or 0.0)
-        if ratio > 0:
-            amount = max(1, round(self.hp_max * ratio * boost))
+        flat = float(skill.get("shield_flat", 0.0) or 0.0)
+        if ratio > 0 or flat > 0:
+            amount = max(1, round((flat + self.hp_max * ratio) * boost))
             self.pet_shield += amount
             self._blog(
                 "log_skill_guard",
@@ -606,10 +613,11 @@ class BattleSession:
                 amount=amount,
             )
 
-        # 治疗：heal 是生命上限的比例
+        # 治疗同口径：固定值 + 生命上限的小比例
         heal = float(skill.get("heal", 0.0) or 0.0)
-        if heal > 0:
-            amount = max(1, round(self.hp_max * heal * boost))
+        heal_flat = float(skill.get("heal_flat", 0.0) or 0.0)
+        if heal > 0 or heal_flat > 0:
+            amount = max(1, round((heal_flat + self.hp_max * heal) * boost))
             before = self.pet_hp
             self.pet_hp = min(self.hp_max, self.pet_hp + amount)
             if self.pet_hp > before:
@@ -1051,11 +1059,15 @@ class BattleSession:
     def _cooldown_frames(self, skill: dict[str, Any]) -> int:
         """技能的冷却时长（换算成**帧**）。
 
-        配置里的 ``cooldown`` 单位仍是一个**回合**（= ``frames_per_turn`` 帧），
-        但内部记的是剩余帧数，每帧 -1——这样冷却只取决于释放时刻，
-        不会因为「刚好跨过回合边界」而白送一次 -1。
+        ``cooldown`` 的每一格折成 ``cooldown_frames`` 帧，内部记剩余帧数、
+        每帧 -1——冷却只取决于释放时刻，不会因为「刚好跨过回合边界」白送一次。
         """
-        return int(skill.get("cooldown", 0) or 0) * self.frames_per_turn
+        turns = int(skill.get("cooldown", 0) or 0)
+        if turns <= 0:
+            return 0
+        # +1 帧：释放后到「下次轮到我」之间会先扣一次，不补这一帧的话
+        # 冷却 1 格等于当场就能再放。
+        return turns * self.cooldown_frames + 1
 
     def _skill_label(self, skill: dict[str, Any], skill_id: str) -> str:
         return str(skill.get("name") or skill_id)

@@ -56,6 +56,9 @@ shop:
 
 battle:
   max_rounds: 100
+  # 冷却一「格」折成几帧。一次我方出手推进 2 帧，所以 2 = 「等 1 次出手」。
+  # 不写就退回 frames_per_turn（10 帧），冷却在无尽里永远转不回来。
+  cooldown_frames: 2
   timeout_damage: round_number
   crit_mult: 1.80
   def_softness: 100

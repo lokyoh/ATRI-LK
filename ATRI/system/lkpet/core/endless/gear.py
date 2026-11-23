@@ -111,7 +111,10 @@ def take_from_stock(run: Any, gear_id: str) -> bool:
 
 
 def decompose(run: Any, gear_id: str) -> int:
-    """分解库存里的一件，返回回收金币（0 = 没这件）。"""
+    """分解库存里的一件，返回回收金币（0 = 没这件）。
+
+    强化过的按累计强化费**原价退还**，并清掉强化记录。
+    """
     stock = list(run.pending.get("gear_stock") or [])
     if gear_id not in stock:
         return 0
@@ -120,7 +123,10 @@ def decompose(run: Any, gear_id: str) -> int:
         return 0
     stock.remove(gear_id)
     run.pending["gear_stock"] = stock
-    value = decompose_value(spec)
+    table = dict(run.pending.get("gear_enhance") or {})
+    times = int(table.pop(str(gear_id), 0) or 0)
+    run.pending["gear_enhance"] = table
+    value = decompose_value(spec, times)
     run.coins += value
     return value
 
@@ -129,9 +135,40 @@ def price_of(spec: dict[str, Any]) -> int:
     return int(PRICE.get(int(spec.get("tier", 1)), 0))
 
 
-def decompose_value(spec: dict[str, Any]) -> int:
-    """分解能换回的金币（价格的 10%）。"""
-    return max(0, int(price_of(spec) * DECOMPOSE_RATE))
+GEAR_ENHANCE_MAX = 10
+"""装备强化上限（与技能同口径）。"""
+
+GEAR_ENHANCE_STEP = 0.05
+"""每级强化：主副词条各 +5%。"""
+
+
+def gear_enhance_cost(tier: int, times: int) -> int:
+    """第 times+1 次装备强化价：比技能便宜（装备换代快）。"""
+    base = 20 + 10 * max(0, int(tier) - 1)
+    return base + 10 * max(0, int(times))
+
+
+def gear_total_enhance_cost(tier: int, times: int) -> int:
+    """从 0 强化到 times 次的累计花费（取消时原价退还）。"""
+    return sum(gear_enhance_cost(tier, i) for i in range(max(0, int(times))))
+
+
+def gear_enhance_multiplier(times: int) -> float:
+    """强化次数 → 主副词条乘区。"""
+    n = max(0, min(GEAR_ENHANCE_MAX, int(times)))
+    return round(1.0 + GEAR_ENHANCE_STEP * n, 4)
+
+
+def gear_enhance_of(run: Any, gear_id: str) -> int:
+    """某件装备的强化次数。"""
+    table = dict((getattr(run, "pending", None) or {}).get("gear_enhance") or {})
+    return int(table.get(str(gear_id), 0) or 0)
+
+
+def decompose_value(spec: dict[str, Any], times: int = 0) -> int:
+    """分解能换回的金币：原价 10% + 全部强化费原价退还。"""
+    base = max(0, int(price_of(spec) * DECOMPOSE_RATE))
+    return base + gear_total_enhance_cost(int(spec.get("tier", 1) or 1), times)
 
 
 def gear_effects(spec: dict[str, Any]) -> dict[str, Any]:
@@ -145,18 +182,21 @@ def gear_effects(spec: dict[str, Any]) -> dict[str, Any]:
 def equipped_effects(
     equipped: dict[str, list[str]] | None,
     cfg: dict[str, Any] | None = None,
+    enhance: dict[str, int] | None = None,
 ) -> dict[str, float]:
-    """``{slot: [gear_id, ...]}`` 的全部属性之和。"""
+    """``{slot: [gear_id, ...]}`` 的全部属性之和；强化按乘区放大。"""
     specs = gear_specs(cfg)
+    table = dict(enhance or {})
     total: dict[str, float] = {}
     for ids in (equipped or {}).values():
         for gear_id in ids:
             spec = specs.get(str(gear_id))
             if not spec:
                 continue
+            mult = gear_enhance_multiplier(int(table.get(str(gear_id), 0) or 0))
             for key, value in gear_effects(spec).items():
                 if isinstance(value, int | float):
-                    total[key] = total.get(key, 0.0) + float(value)
+                    total[key] = total.get(key, 0.0) + float(value) * mult
     return total
 
 

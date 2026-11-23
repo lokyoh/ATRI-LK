@@ -5,7 +5,7 @@ from ATRI.exceptions import str_traceback
 from ATRI.log import log
 
 from ...base_model import Result
-from ...utils import authentication
+from ...security import authentication
 from .data_source import menu_manage
 from .model import MenuData
 

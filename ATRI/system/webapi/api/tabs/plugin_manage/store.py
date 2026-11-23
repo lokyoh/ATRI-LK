@@ -10,7 +10,7 @@ from ATRI.system.plugin_store.data_source import PluginEntry, PluginManager
 from ATRI.version import compat_range, framework_version, lkapi_version
 
 from ....base_model import Result
-from ....utils import authentication
+from ....security import authentication
 from .model import PluginRequest
 
 router = APIRouter(prefix="/store")

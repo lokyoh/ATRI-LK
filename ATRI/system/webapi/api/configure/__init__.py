@@ -7,7 +7,7 @@ from fastapi import APIRouter
 from fastapi.responses import JSONResponse
 
 from ...base_model import Result
-from ...utils import authentication
+from ...security import authentication
 
 router = APIRouter(prefix="/configure")
 

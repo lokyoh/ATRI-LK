@@ -1,13 +1,11 @@
-import asyncio
-import contextlib
 import time
+from collections.abc import Callable
 
 import nonebot
 from fastapi import APIRouter
 from fastapi.responses import JSONResponse
 from nonebot.config import Config
-from starlette.websockets import WebSocket, WebSocketDisconnect, WebSocketState
-from websockets.exceptions import ConnectionClosedError, ConnectionClosedOK
+from starlette.websockets import WebSocket
 
 from ATRI.auth import ban as auth_ban
 from ATRI.bot.status import BotStatus, GlobalStatus, Statu
@@ -19,7 +17,8 @@ from ATRI.system.manage import BotManager
 
 from ....base_model import Result
 from ....config import QueryDateType
-from ....utils import authentication, get_system_status
+from ....security import authentication
+from ....ws_publisher import serve_publisher
 from .data_source import ApiDataSource
 from .model import (
     ActiveGroup,
@@ -33,6 +32,7 @@ from .model import (
     QueryCount,
     VersionInfo,
 )
+from .status_broadcaster import STATUS_BROADCASTER
 
 driver = nonebot.get_driver()
 run_time = time.time()
@@ -364,13 +364,17 @@ async def _(param: BotManageUpdateParam):
 
 
 @ws_router.websocket("/system_status")
-async def system_logs_realtime(websocket: WebSocket, sleep: int = 5):
-    await websocket.accept()
-    log.debug("ws system_status is connect")
-    with contextlib.suppress(
-        WebSocketDisconnect, ConnectionClosedError, ConnectionClosedOK
-    ):
-        while websocket.client_state == WebSocketState.CONNECTED:
-            system_status = await get_system_status()
-            await websocket.send_text(system_status.json())
-            await asyncio.sleep(sleep)
+async def system_status_realtime(websocket: WebSocket):
+    # 共享采样广播：psutil 采集由 STATUS_BROADCASTER 单任务承担，
+    # 连接只做订阅，不再每连接独立计算
+
+    def build(
+        handshake: dict, enqueue: Callable[[str], None]
+    ) -> Callable[[], None]:
+        # 立即回放最近一次快照，前端不用等一个采样周期
+        if STATUS_BROADCASTER.last_payload:
+            enqueue(STATUS_BROADCASTER.last_payload)
+        STATUS_BROADCASTER.add_listener(enqueue)
+        return lambda: STATUS_BROADCASTER.remove_listener(enqueue)
+
+    await serve_publisher(websocket, build, queue_max=4)

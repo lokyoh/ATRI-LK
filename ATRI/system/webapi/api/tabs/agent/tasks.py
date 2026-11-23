@@ -7,7 +7,7 @@ from ATRI.log import log
 from ATRI.system.agent.agent import task as task_mod
 
 from ....base_model import Result
-from ....utils import authentication
+from ....security import authentication
 
 router = APIRouter()
 

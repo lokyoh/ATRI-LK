@@ -10,7 +10,7 @@ from ATRI.service import ServiceTools
 from ATRI.utils.package_manager import PackageManager
 
 from ....base_model import Result
-from ....utils import authentication
+from ....security import authentication
 from .data_source import ApiDataSource
 from .model import (
     InstallDependenciesPayload,

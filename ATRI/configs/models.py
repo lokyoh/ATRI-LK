@@ -31,7 +31,16 @@ class BrowsConfig(BaseModel):
 class WebUIConfig(BaseModel):
     username: str = "admin"
     password: str = Field(default_factory=lambda: gen_random_str(8))
-    secret: str = Field(default_factory=lambda: gen_random_str(8))
+    # JWT 签名密钥：32 位字母数字（约 190 bits），公网部署下抵御离线爆破
+    secret: str = Field(default_factory=lambda: gen_random_str(32))
+    # CORS 允许的来源；默认仅本地开发端口。生产同源部署保持为空即可，
+    # 前端单独部署时显式配置（禁止 ["*"] + credentials 的组合）
+    allowed_origins: list[str] = Field(
+        default_factory=lambda: [
+            "http://localhost:5173",
+            "http://127.0.0.1:5173",
+        ]
+    )
 
 
 class ConfigModel(BaseModel):

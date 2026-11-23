@@ -12,7 +12,7 @@ from ATRI.system.agent.agent.function_plugin.manage import function_plugin_manag
 from ATRI.system.agent.agent.skills import skill_manager
 
 from ....base_model import Result
-from ....utils import authentication
+from ....security import authentication
 
 router = APIRouter()
 

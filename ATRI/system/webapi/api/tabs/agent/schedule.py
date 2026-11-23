@@ -19,7 +19,7 @@ from ATRI.system.agent.agent.life import (
 )
 
 from ....base_model import Result
-from ....utils import authentication
+from ....security import authentication
 
 router = APIRouter()
 

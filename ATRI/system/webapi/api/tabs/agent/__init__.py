@@ -28,7 +28,7 @@ from ATRI.system.agent.llm.provider import PRICING_UNIT_TOKENS
 from ATRI.system.agent.llm.token import MTYM, TokenUsageData
 
 from ....base_model import Result
-from ....utils import authentication
+from ....security import authentication
 from .function_calling import router as function_calling_router
 from .function_plugin import router as function_plugin_router
 from .schedule import router as schedule_router

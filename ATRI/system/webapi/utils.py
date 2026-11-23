@@ -1,32 +1,12 @@
-import contextlib
-import json
 import os
 import re
-from datetime import datetime, timedelta, timezone
+from datetime import datetime
 from pathlib import Path
 
 import psutil
-from fastapi import Depends, HTTPException
-from fastapi.security import OAuth2PasswordBearer
-from jose import JWTError, jwt
 from nonebot.utils import run_sync
 
-from ATRI import conf
-from ATRI.dir import DATA_DIR
-
-from .base_model import SystemFolderSize, SystemStatus, User
-
-ALGORITHM = "HS256"
-ACCESS_TOKEN_EXPIRE_MINUTES = 30
-
-oauth2_scheme = OAuth2PasswordBearer(tokenUrl="api/login")
-
-token_file = DATA_DIR / "webui" / "token.json"
-token_file.parent.mkdir(parents=True, exist_ok=True)
-token_data = {"token": []}
-if token_file.exists():
-    with contextlib.suppress(json.JSONDecodeError):
-        token_data = json.load(open(token_file, encoding="utf8"))
+from .base_model import SystemFolderSize, SystemStatus
 
 
 def validate_path(path_str: str | None) -> tuple[Path | None, str | None]:
@@ -66,60 +46,6 @@ def validate_path(path_str: str | None) -> tuple[Path | None, str | None]:
         return (None, "路径长度超出限制") if len(str(path)) > 4096 else (path, None)
     except Exception as e:
         return None, f"路径验证失败: {e!s}"
-
-
-def get_user(uname: str) -> User | None:
-    """获取账号密码
-
-    参数:
-        uname: uname
-
-    返回:
-        Optional[User]: 用户信息
-    """
-    username = conf.WebUIConfig.username
-    password = conf.WebUIConfig.password
-    if username and password and uname == username:
-        return User(username=username, password=password)
-
-
-def create_token(user: User, expires_delta: timedelta | None = None):
-    """创建token
-
-    参数:
-        user: 用户信息
-        expires_delta: 过期时间.
-    """
-    expire = datetime.now(timezone.utc) + (expires_delta or timedelta(minutes=15))
-    return jwt.encode(
-        claims={"sub": user.username, "exp": expire},
-        key=conf.WebUIConfig.secret,
-        algorithm=ALGORITHM,
-    )
-
-
-def authentication():
-    """权限验证
-
-    异常:
-        JWTError: JWTError
-        HTTPException: HTTPException
-    """
-
-    # if token not in token_data["token"]:
-    def inner(token: str = Depends(oauth2_scheme)):
-        try:
-            payload = jwt.decode(token, conf.WebUIConfig.secret, algorithms=[ALGORITHM])
-            username, _ = payload.get("sub"), payload.get("exp")
-            user = get_user(username)  # type: ignore
-            if user is None:
-                raise JWTError
-        except JWTError:
-            raise HTTPException(
-                status_code=400, detail="登录验证失败或已失效, 踢出房间!"
-            )
-
-    return Depends(inner)
 
 
 def _get_dir_size(dir_path: Path) -> float:

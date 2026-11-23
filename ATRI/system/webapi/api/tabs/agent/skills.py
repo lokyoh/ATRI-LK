@@ -8,7 +8,7 @@ from ATRI.system.agent.agent.function_plugin.manage import function_plugin_manag
 from ATRI.system.agent.agent.skills import skill_manager
 
 from ....base_model import Result
-from ....utils import authentication
+from ....security import authentication
 
 # 前缀由所属的 agent 包级 router（prefix="/agent"）提供：
 # FastAPI 的 include_router 会拼接前缀，子模块再写 prefix="/agent" 会变成 /agent/agent。

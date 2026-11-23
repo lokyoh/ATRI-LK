@@ -1,19 +1,24 @@
+import asyncio
+import json
 import os
 import re
-import json
+import secrets
 import string
-import asyncio
-import aiofiles
-from pathlib import Path
-from random import sample
-from datetime import datetime
-from PIL import Image, ImageFile
 from collections import defaultdict
+from datetime import datetime
+from pathlib import Path
+from typing import ClassVar
+
+import aiofiles
 from aiofiles.threadpool.text import AsyncTextIOWrapper
+from PIL import Image, ImageFile
 
 
 def gen_random_str(k: int) -> str:
-    return str().join(sample(string.ascii_letters + string.digits, k))
+    # 密码学安全随机源：该函数生成的值会用作 JWT 签名密钥等安全敏感场景，
+    # 不能用 random.sample（Mersenne Twister，可预测）
+    alphabet = string.ascii_letters + string.digits
+    return "".join(secrets.choice(alphabet) for _ in range(k))
 
 
 class TimeDealer:
@@ -85,7 +90,7 @@ class MessageChecker:
     """
 
     tenc_gchat_url: str = "gchat.qpic.cn"
-    may_inject_keys: list = ["record", "video", "music", "xml", "json"]
+    may_inject_keys: ClassVar[list] = ["record", "video", "music", "xml", "json"]
 
     def __init__(self, text: str):
         self.text = text
@@ -97,23 +102,14 @@ class MessageChecker:
             if i == "image":
                 result = re.findall(r"url=(.*?)]", self.text)
                 url = "" if not result else result[0]
-                if self.tenc_gchat_url not in url:
-                    return False
-                else:
-                    return True
-            if i in self.may_inject_keys:
-                return False
-            else:
-                return True
+                return self.tenc_gchat_url in url
+            return i not in self.may_inject_keys
         else:
             return True
 
     @property
     def check_image_url(self) -> bool:
-        if self.tenc_gchat_url not in self.text:
-            return False
-        else:
-            return True
+        return self.tenc_gchat_url in self.text
 
 
 class FileDealer:
@@ -141,7 +137,7 @@ class FileDealer:
 
     async def _reader(self) -> AsyncTextIOWrapper:
         try:
-            tar = await aiofiles.open(self.path, "r", encoding=self.encoding)
+            tar = await aiofiles.open(self.path, encoding=self.encoding)
         except Exception:
             raise FileNotFoundError(f"File ({self.path}) not find!")
         return tar
@@ -213,7 +209,7 @@ class Translate:
         for i in range(str_len):
             found_index = self.SIMPLE.find(self.text[i])
 
-            if not found_index == -1:
+            if found_index != -1:
                 output_str_list.append(self.TRADITION[found_index])
             else:
                 output_str_list.append(self.text[i])
@@ -227,7 +223,7 @@ class Translate:
         for i in range(str_len):
             found_index = self.TRADITION.find(self.text[i])
 
-            if not found_index == -1:
+            if found_index != -1:
                 output_str_list.append(self.SIMPLE[found_index])
             else:
                 output_str_list.append(self.text[i])

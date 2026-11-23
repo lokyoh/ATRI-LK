@@ -109,7 +109,7 @@ def init_config(conf_path: Path, default_conf_path: Path):
 
     raw_conf = raw_conf.replace("{username}", username)
     raw_conf = raw_conf.replace("{password}", password)
-    raw_conf = raw_conf.replace("{secret}", gen_random_str(8))
+    raw_conf = raw_conf.replace("{secret}", gen_random_str(32))
     raw_conf = raw_conf.replace("{timezone}", timezone)
 
     with open(conf_path, "w", encoding="utf-8") as w:

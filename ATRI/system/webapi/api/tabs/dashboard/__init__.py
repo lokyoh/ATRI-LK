@@ -8,9 +8,9 @@ from ATRI.exceptions import str_traceback
 from ATRI.log import log
 
 from ....base_model import Result
-from ....utils import authentication
+from ....security import authentication
 from .data_source import ApiDataSource
-from .model import AllChatAndCallCount, BotInfo, ChatCallMonthCount, QueryChatCallCount
+from .model import BotInfo
 
 require("plugin_store")
 
@@ -35,59 +35,24 @@ async def _() -> Result[list[BotInfo]]:
 
 
 @router.get(
-    "/get_chat_and_call_count",
+    "/get_dashboard_stats",
     dependencies=[authentication()],
-    response_model=Result[QueryChatCallCount],
     response_class=JSONResponse,
-    description="获取聊天/调用记录的全部和今日数量",
+    description="一次性获取仪表盘统计：今日/全部聊天调用计数 + 30 天趋势",
 )
-async def _(bot_id: str | None = None) -> Result[QueryChatCallCount]:
+async def get_dashboard_stats(bot_id: str | None = None) -> Result[dict]:
+    """合并原来的三个统计端点：仪表盘 30s 轮询从 3 次请求降为 1 次"""
     try:
         return Result.ok(
-            await ApiDataSource.get_chat_and_call_count(bot_id), "拿到信息啦!"
+            {
+                "count": await ApiDataSource.get_chat_and_call_count(bot_id),
+                "all": await ApiDataSource.get_all_chat_and_call_count(bot_id),
+                "month": await ApiDataSource.get_chat_and_call_month(bot_id),
+            },
+            "拿到信息啦!",
         )
     except Exception as e:
-        log.error(
-            f"{router.prefix}/get_chat_and_call_count 调用错误:{str_traceback(e)}"
-        )
-        return Result.fail(f"发生了一点错误捏 {type(e)}: {e}")
-
-
-@router.get(
-    "/get_all_chat_and_call_count",
-    dependencies=[authentication()],
-    response_model=Result[AllChatAndCallCount],
-    response_class=JSONResponse,
-    description="获取聊天/调用记录的全部数据次数",
-)
-async def _(bot_id: str | None = None) -> Result[AllChatAndCallCount]:
-    try:
-        return Result.ok(
-            await ApiDataSource.get_all_chat_and_call_count(bot_id), "拿到信息啦!"
-        )
-    except Exception as e:
-        log.error(
-            f"{router.prefix}/get_all_chat_and_call_count 调用错误:{str_traceback(e)}"
-        )
-        return Result.fail(f"发生了一点错误捏 {type(e)}: {e}")
-
-
-@router.get(
-    "/get_chat_and_call_month",
-    dependencies=[authentication()],
-    response_model=Result[ChatCallMonthCount],
-    response_class=JSONResponse,
-    description="获取聊天/调用记录的一个月数量",  # type: ignore
-)
-async def _(bot_id: str | None = None) -> Result[ChatCallMonthCount]:
-    try:
-        return Result.ok(
-            await ApiDataSource.get_chat_and_call_month(bot_id), "拿到信息啦!"
-        )
-    except Exception as e:
-        log.error(
-            f"{router.prefix}/get_chat_and_call_month 调用错误:{str_traceback(e)}"
-        )
+        log.error(f"{router.prefix}/get_dashboard_stats 调用错误:{str_traceback(e)}")
         return Result.fail(f"发生了一点错误捏 {type(e)}: {e}")
 
 

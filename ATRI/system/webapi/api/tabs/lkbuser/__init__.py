@@ -8,7 +8,7 @@ from ATRI.system.lkbot.data.user import user_level_manager, users
 from ATRI.system.lkbot.util import BaseFunc
 
 from ....base_model import Result
-from ....utils import authentication
+from ....security import authentication
 
 router = APIRouter(prefix="/lkbot")
 

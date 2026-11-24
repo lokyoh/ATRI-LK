@@ -447,13 +447,15 @@ def begin_battle(
     # 进战斗就清掉上一层留下的 type/options，否则按钮会一直指向开局抽卡
     run.pending.pop("type", None)
     run.pending.pop("options", None)
+    run.pending["_hp_before"] = run.hp
+    run.pending["_acts"] = {}
     # 每步一份新列表：只收这一步产生的战报，不把整场都叠回去
     log: list[tuple[int, str]] = []
     session = BattleSession(avatar, state, monster, cfg, rng, log=log)
     session.manual = True
     _attach_attrs(session, run, monster)
     session.step_until_my_turn()
-    return _after_step(run, session, monster, cfg)
+    return _after_step(run, session, monster, cfg, count_step=False)
 
 
 def _attach_attrs(
@@ -515,6 +517,7 @@ def submit(
     _attach_attrs(session, run, monster)
     if not load_session(session, data):
         return {"ended": True, "victory": False, "log": [], "error": "bad_session"}
+    _tally_action(run, action)
     session.submit_action(action)
     return _after_step(run, session, monster, cfg)
 
@@ -534,11 +537,21 @@ def _apply_timeout_damage(session: BattleSession, cfg: dict[str, Any]) -> int:
     return int(hit)
 
 
+def _tally_action(run: RogueRun, action: dict[str, Any] | None) -> None:
+    """累计本场玩家发了哪几类指令（供埋点统计）。"""
+    kind = str((action or {}).get("kind") or "attack")
+    tally = dict(run.pending.get("_acts") or {})
+    tally[kind] = int(tally.get(kind, 0) or 0) + 1
+    run.pending["_acts"] = tally
+
+
 def _after_step(
     run: RogueRun,
     session: BattleSession,
     monster: dict[str, Any],
     cfg: dict[str, Any] | None = None,
+    *,
+    count_step: bool = True,
 ) -> dict[str, Any]:
     """把进度写回 run；判断战斗是否结束。"""
     run.hp = max(0, session.pet_hp)
@@ -548,23 +561,32 @@ def _after_step(
     )
     ended = session.pet_hp <= 0 or session._pick_target() is None or timed_out
     victory = session.pet_hp > 0 and session._pick_target() is None
+    if count_step:
+        run.pending["_steps"] = int(run.pending.get("_steps") or 0) + 1
+    steps = int(run.pending.get("_steps") or 0)
     if ended:
-        steps = int(run.pending.get("_steps") or 0) + 1
+        hp_before = int(run.pending.pop("_hp_before", run.hp_max) or run.hp_max)
+        acts = dict(run.pending.pop("_acts", None) or {})
         run.pending.pop("_steps", None)
+        from .floor import floor_kind
+
         telemetry.battle(
+            run.run_id,
             floor=run.floor,
-            kind=str(monster.get("kind") or "normal"),
-            turns=session.turn,
+            enemy_kind=str(monster.get("kind") or "normal"),
+            floor_kind=floor_kind(run.floor),
+            frames=session.frames,
             steps=steps,
             victory=victory,
+            timed_out=timed_out,
+            hp_before=hp_before,
+            acts=acts,
             pet_hp_pct=(run.hp / run.hp_max) if run.hp_max else 0.0,
-            enemy_alive=len(session._live_units()),
         )
         run.pending.pop("session", None)
         run.pending.pop("monster", None)
         run.pending.pop("battle_log", None)
     else:
-        run.pending["_steps"] = int(run.pending.get("_steps") or 0) + 1
         run.pending["session"] = dump_session(session)
         run.pending["monster"] = monster
         # 本步战报也存一份：回执要渲染它，渲染层不该再去重跑一遍战斗
@@ -664,6 +686,18 @@ def drop_rewards(
         # 空槽自动穿；槽满只进库存，**不替玩家换装**
         out["auto_equipped"] = not _slot_full(run, gear_id)
         _equip_or_stock(run, gear_id)
+        from .gear import gear_specs
+
+        spec = gear_specs().get(str(gear_id)) or {}
+        telemetry.gear_gain(
+            run.run_id,
+            floor=int(run.floor),
+            gear_id=gear_id,
+            slot=str(spec.get("slot") or ""),
+            tier=int(spec.get("tier", 1) or 1),
+            source=source,
+            auto_equipped=bool(out["auto_equipped"]),
+        )
 
     if not tiers or rng.random() >= chance:
         return out
@@ -680,8 +714,11 @@ def drop_rewards(
     out["relic"] = relic_id
     out["tier"] = int(spec.get("tier", tier) or tier)
     telemetry.relic_gain(
+        run.run_id,
         floor=int(run.floor),
+        relic_id=relic_id,
         tier=int(spec.get("tier", tier) or tier),
+        set_key=str(spec.get("set") or ""),
         source=source,
     )
     return out

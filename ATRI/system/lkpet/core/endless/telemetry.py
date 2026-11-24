@@ -5,11 +5,14 @@
     enabled          总开关，默认关
     include_content  是否记录正文片段，默认关
 
-**绝不抛异常**：埋点失败必须静默——它是旁路观测，不能因为磁盘满或权限
-问题把正常战斗搞挂。
+**一局一个文件**：``telemetry/<run_id>.jsonl``，run_id 是开局时间戳 +
+随机后缀。按时间分文件会把一局拆到两个文件里，跨零点就没法按局分析了。
 
-事件全部是**数值指标**，不记玩家号与正文；正文只在 include_content 打开时
-按 120 字截断记一小段，用来核对「玩家看到的和引擎理解的是不是一回事」。
+**每局显式传 run_id**：单例只放配置，不放到「当前局」——多玩家同时在线时
+那种隐式状态一定会串。
+
+**绝不抛异常**：埋点失败必须静默，它是旁路观测，不能因为磁盘满或权限
+问题把正常战斗搞挂。
 """
 
 from __future__ import annotations
@@ -17,18 +20,21 @@ from __future__ import annotations
 import json
 import threading
 import time
-from datetime import datetime
 from pathlib import Path
 from typing import Any
 
 from ATRI.log import log
 
-MAX_FILE_BYTES = 1 * 1024 * 1024
-"""单个数据文件上限：1MB ≈ 数千条事件，够分析一周而不至于无感膨胀。"""
+SCHEMA_VERSION = 2
+"""事件形状的版本号；改了字段就地升级，旧文件按旧版本读。"""
 
 RETENTION_DAYS = 14
+"""按局分文件后文件数会涨，超过这个天数的整份删除。"""
 
 PREVIEW_CHARS = 120
+
+FALLBACK_RUN_ID = "_unbound"
+"""没有 run_id 时落到这个文件，而不是悄悄丢掉。"""
 
 
 def _telemetry_dir() -> Path:
@@ -59,36 +65,45 @@ class Telemetry:
         body = str(text)
         return body[:PREVIEW_CHARS] + ("…" if len(body) > PREVIEW_CHARS else "")
 
-    def _current_file(self, root: Path) -> Path:
-        day = datetime.now().strftime("%Y-%m-%d")
-        candidate = root / f"{day}.jsonl"
-        if candidate.exists() and candidate.stat().st_size >= MAX_FILE_BYTES:
-            index = 1
-            while True:
-                rolled = root / f"{day}.{index}.jsonl"
-                if not rolled.exists():
-                    return rolled
-                if rolled.stat().st_size < MAX_FILE_BYTES:
-                    return rolled
-                index += 1
-        return candidate
+    def _sweep(self, root: Path) -> None:
+        """删掉超过 RETENTION_DAYS 的整份局日志。"""
+        cutoff = time.time() - RETENTION_DAYS * 86400
+        for path in root.glob("*.jsonl"):
+            try:
+                if path.stat().st_mtime < cutoff:
+                    path.unlink()
+            except OSError:
+                continue
 
-    def record(self, event: str, **fields: Any) -> None:
+    def start_run(self, run_id: str) -> None:
+        """开一局先把旧文件清一遍，再让后续事件写进这一局的文件。"""
+        if not self.enabled or not run_id:
+            return
+        try:
+            self._sweep(_telemetry_dir())
+        except Exception as exc:
+            log.debug(f"无尽埋点清理失败：{exc}")
+
+    def record(self, run_id: str, event: str, **fields: Any) -> None:
         """写一条事件。任何异常都在这里吞掉。"""
         if not self.enabled:
             return
         try:
             payload: dict[str, Any] = {
+                "v": SCHEMA_VERSION,
                 "ts": round(time.time(), 3),
+                "at": time.strftime("%Y-%m-%dT%H:%M:%S"),
+                "run": str(run_id or FALLBACK_RUN_ID),
                 "event": str(event),
             }
             payload.update({k: v for k, v in fields.items() if v is not None})
             line = json.dumps(payload, ensure_ascii=False, default=str)
-            root = _telemetry_dir()
-            with self._lock:
-                target = self._current_file(root)
-                with open(target, "a", encoding="utf-8") as handle:
-                    handle.write(line + "\n")
+            target = _telemetry_dir() / f"{payload['run']}.jsonl"
+            with (
+                self._lock,
+                open(target, "a", encoding="utf-8") as handle,
+            ):
+                handle.write(line + "\n")
             self._fail_streak = 0
         except Exception as exc:
             self._fail_streak += 1
@@ -97,59 +112,107 @@ class Telemetry:
             else:
                 log.debug(f"无尽埋点写入失败（第 {self._fail_streak} 次）：{exc}")
 
-    # ---- 无尽模式专用埋点 ----------------------------------------------
+    # ---- 事件 --------------------------------------------------------
 
-    def run_start(self, *, stage: int, floor: int, seed: int) -> None:
-        """开一局。"""
-        self.record("run_start", stage=stage, floor=floor, seed=seed)
+    def run_start(self, run_id: str, *, stage: int, floor: int, seed: int) -> None:
+        self.record(run_id, "run_start", stage=stage, floor=floor, seed=seed)
 
     def run_end(
-        self, *, floor: int, best: int, runs: int, reason: str = "retreat"
-    ) -> None:
-        """一局结束：只记层数与结局，不记数值产出。"""
-        self.record("run_end", floor=floor, best=best, runs=runs, reason=reason)
-
-    def floor_enter(self, *, floor: int, stage: int, kind: str, region: str) -> None:
-        """进入一层。"""
-        self.record("floor_enter", floor=floor, stage=stage, kind=kind, region=region)
-
-    def choice(self, *, floor: int, kind: str, index: int, total: int) -> None:
-        """玩家选了哪个选项。``index`` 从 1 起。"""
-        self.record("choice", floor=floor, kind=kind, index=index, total=total)
-
-    def battle(
         self,
+        run_id: str,
+        *,
+        floor: int,
+        best: int,
+        runs: int,
+        reason: str = "retreat",
+    ) -> None:
+        self.record(run_id, "run_end", floor=floor, best=best, runs=runs, reason=reason)
+
+    def run_abandon(self, run_id: str, *, floor: int) -> None:
+        """上一局被「开始」直接覆盖时补一条收尾，否则它没有结局。"""
+        self.record(run_id, "run_end", floor=floor, reason="abandon")
+
+    def floor_enter(
+        self,
+        run_id: str,
+        *,
+        floor: int,
+        stage: int,
+        kind: str,
+        region: str,
+        resumed: bool = False,
+    ) -> None:
+        """进入一层。``resumed`` 表示「继续」重进，不是新走到这一层。"""
+        self.record(
+            run_id,
+            "floor_enter",
+            floor=floor,
+            stage=stage,
+            kind=kind,
+            region=region,
+            resumed=resumed or None,
+        )
+
+    def choice(
+        self,
+        run_id: str,
         *,
         floor: int,
         kind: str,
-        turns: int,
+        index: int,
+        total: int,
+    ) -> None:
+        self.record(run_id, "choice", floor=floor, kind=kind, index=index, total=total)
+
+    def battle(
+        self,
+        run_id: str,
+        *,
+        floor: int,
+        enemy_kind: str,
+        floor_kind: str,
+        frames: int,
         steps: int,
         victory: bool,
+        timed_out: bool,
+        hp_before: int,
+        acts: dict[str, int] | None = None,
         pet_hp_pct: float,
-        enemy_alive: int,
     ) -> None:
         """一场战斗的结果。
 
-        ``steps`` 是玩家发的指令条数——这是评估「一场战斗有多累」的核心指标，
-        比回合数更贴近体感。
+        ``steps`` 是玩家**真正发出**的指令条数（不含「点开始战斗」那一下）。
+        ``frames`` 取代原来的 turn：手动模式下每步只推进约 2 帧，
+        回合数几乎恒为 1，没有信息量。
+
+        ``acts`` 是本场玩家发了哪几类指令（attack / skill / defend / meditate）。
+        没有它就看不出技能是不是死选项、防御有没有人用。
         """
         self.record(
+            run_id,
             "battle",
             floor=floor,
-            kind=kind,
-            turns=turns,
-            steps=steps,
+            enemy_kind=enemy_kind,
+            floor_kind=floor_kind,
+            frames=int(frames),
+            steps=int(steps),
             victory=victory,
+            timed_out=timed_out,
+            hp_before=int(hp_before),
+            acts=dict(acts or {}) or None,
             pet_hp_pct=round(pet_hp_pct, 3),
-            enemy_alive=enemy_alive,
         )
 
-    def level_up(self, *, level: int, key: str, pending: int) -> None:
-        """升级 4 选 1 的选择。"""
-        self.record("level_up", level=level, key=key, pending=pending)
+    def level_up(
+        self, run_id: str, *, floor: int, level: int, key: str, pending: int
+    ) -> None:
+        self.record(
+            run_id, "level_up", floor=floor, level=level, key=key, pending=pending
+        )
 
     def shop_act(
         self,
+        run_id: str,
         *,
         floor: int,
         stage: int,
@@ -158,8 +221,8 @@ class Telemetry:
         price: int = 0,
         refreshes: int = 0,
     ) -> None:
-        """商店动作：``open`` / ``buy`` / ``refresh`` / ``leave``。"""
         self.record(
+            run_id,
             "shop",
             floor=floor,
             stage=stage,
@@ -169,17 +232,70 @@ class Telemetry:
             refreshes=refreshes,
         )
 
-    def relic_gain(self, *, floor: int, tier: int, source: str, count: int = 1) -> None:
-        """遗物获得：只记档位与来源，不记具体 id。"""
-        self.record("relic_gain", floor=floor, tier=tier, source=source, count=count)
+    def relic_gain(
+        self,
+        run_id: str,
+        *,
+        floor: int,
+        relic_id: str,
+        tier: int,
+        set_key: str = "",
+        source: str = "drop",
+        count: int = 1,
+    ) -> None:
+        """``set_key`` 用来统计套装件数——没有它算不出凑了几件。"""
+        self.record(
+            run_id,
+            "relic_gain",
+            floor=floor,
+            id=relic_id,
+            tier=tier,
+            set=set_key or None,
+            source=source,
+            count=count,
+        )
 
-    def error(self, *, where: str, message: str) -> None:
-        """埋点自己的失败也留一条，方便排查采集链。"""
-        self.record("error", where=where, message=str(message)[:200])
+    def gold(
+        self,
+        run_id: str,
+        *,
+        floor: int,
+        source: str,
+        amount: int,
+        coins: int,
+    ) -> None:
+        self.record(
+            run_id, "gold", floor=floor, source=source, amount=amount, coins=coins
+        )
+
+    def gear_gain(
+        self,
+        run_id: str,
+        *,
+        floor: int,
+        gear_id: str,
+        slot: str,
+        tier: int,
+        source: str,
+        auto_equipped: bool,
+    ) -> None:
+        self.record(
+            run_id,
+            "gear_gain",
+            floor=floor,
+            id=gear_id,
+            slot=slot,
+            tier=tier,
+            source=source,
+            auto_equipped=auto_equipped,
+        )
+
+    def error(self, run_id: str, *, where: str, message: str) -> None:
+        self.record(run_id, "error", where=where, message=str(message)[:200])
 
 
 telemetry = Telemetry()
-"""全局单例；配置改动由 ``configure`` 同步。"""
+"""全局单例；配置改动由 ``configure`` 同步，一局的 run_id 由调用方逐次传入。"""
 
 
 def configure(enabled: bool, include_content: bool) -> None:

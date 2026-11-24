@@ -10,6 +10,8 @@
 
 from __future__ import annotations
 
+import secrets
+import time
 from dataclasses import dataclass, field
 from typing import Any
 
@@ -27,10 +29,20 @@ from .progression import (
 )
 
 
+def new_run_id() -> str:
+    """一局的标识：本地时间戳 + 4 位随机后缀。
+
+    时间戳让文件名本身可排序，后缀防同秒重开撞名。
+    """
+    stamp = time.strftime("%Y%m%d-%H%M%S", time.localtime())
+    return f"{stamp}-{secrets.token_hex(2)}"
+
+
 @dataclass
 class RogueRun:
     """一局的完整状态。"""
 
+    run_id: str = ""
     seed: int = 0
     floor: int = 1
     region: str = ""
@@ -48,6 +60,7 @@ class RogueRun:
 
     def to_dict(self) -> dict[str, Any]:
         return {
+            "run_id": self.run_id,
             "seed": self.seed,
             "floor": self.floor,
             "region": self.region,
@@ -69,6 +82,7 @@ class RogueRun:
         if not data:
             return cls()
         return cls(
+            run_id=str(data.get("run_id", "")) or new_run_id(),
             seed=int(data.get("seed", 0) or 0),
             floor=max(1, int(data.get("floor", 1) or 1)),
             region=str(data.get("region", "")),
@@ -96,7 +110,7 @@ def new_run(seed: int, cfg: dict[str, Any] | None = None) -> RogueRun:
     """开一局：模板面板做上限、满血满蓝、金币 0。"""
     cfg = cfg or load_endless_config()
     base = template_attributes(cfg)
-    run = RogueRun(seed=int(seed), floor=1)
+    run = RogueRun(run_id=new_run_id(), seed=int(seed), floor=1)
     run.region = region_of(1, run.seed, cfg)
     run.progression = new_progression(cfg)
     attrs = combat_attributes(base, run.progression)

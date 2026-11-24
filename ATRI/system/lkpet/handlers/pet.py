@@ -1124,16 +1124,24 @@ async def handle_endless(event: Event, args: BaseMessage = CommandArg()):
                 if running is not None:
                     msg = endless_core.render_summary(running) + "\n" + msg
             elif raw == "开始":
+                # 上一局还没收尾就被覆盖：补一条 run_end，否则它没有结局
+                if running is not None and running.hp > 0:
+                    endless_core.telemetry.run_abandon(
+                        running.run_id, floor=running.floor
+                    )
                 run = endless_core.start_run(_endless_seed(player_id))
                 endless_core.sync_codex(endless, run)
                 endless.run_state = run.to_dict()
                 save_endless(endless)
+                endless_core.telemetry.start_run(run.run_id)
                 endless_core.telemetry.run_start(
+                    run.run_id,
                     stage=endless_core.current_stage(run),
                     floor=run.floor,
                     seed=run.seed,
                 )
                 endless_core.telemetry.floor_enter(
+                    run.run_id,
                     floor=run.floor,
                     stage=endless_core.current_stage(run),
                     kind=endless_core.floor_meta(run)["kind"],
@@ -1146,6 +1154,16 @@ async def handle_endless(event: Event, args: BaseMessage = CommandArg()):
                 if running is None:
                     msg = _endless_usage()
                 else:
+                    # 续战也是一次「进这一层」，不记的话按局看会断一段
+                    endless_core.telemetry.start_run(running.run_id)
+                    endless_core.telemetry.floor_enter(
+                        running.run_id,
+                        floor=running.floor,
+                        stage=endless_core.current_stage(running),
+                        kind=endless_core.floor_meta(running)["kind"],
+                        region=running.region,
+                        resumed=True,
+                    )
                     msg = _endless_prefixed(
                         "🔁 继续本局"
                     ) + endless_core.render_summary(running)
@@ -1183,6 +1201,7 @@ async def handle_endless(event: Event, args: BaseMessage = CommandArg()):
                     endless.run_state = {}
                     save_endless(endless)
                     endless_core.telemetry.run_end(
+                        running.run_id,
                         floor=summary["floor"],
                         best=summary["best"],
                         runs=summary["runs"],
@@ -1237,12 +1256,44 @@ def _endless_persist(endless, running, save_endless, msg: str) -> str:
     endless.run_state = {}
     save_endless(endless)
     telemetry.run_end(
+        running.run_id,
         floor=summary["floor"],
         best=summary["best"],
         runs=summary["runs"],
         reason="death",
     )
     return "💀 生命耗尽，本局结束。\n" + _endless_settle_text(summary)
+
+
+def _endless_choice_log(run, kind: str, index: int, total: int) -> None:
+    from ..core.endless import telemetry
+
+    telemetry.choice(run.run_id, floor=run.floor, kind=kind, index=index, total=total)
+
+
+def _endless_shop_log(run, action: str, spec: dict, out: dict) -> None:
+    """买入后按商品类型分流：遗物记 relic_gain，其余只记 shop。"""
+    from ..core.endless import current_stage, telemetry
+
+    telemetry.shop_act(
+        run.run_id,
+        floor=run.floor,
+        stage=current_stage(run),
+        action=action,
+        index=int(out.get("index", 0) or 0),
+        price=int(out.get("price", 0) or 0),
+    )
+    if not spec.get("tier"):
+        return
+    if str(spec.get("id") or "") in (run.relics or []):
+        telemetry.relic_gain(
+            run.run_id,
+            floor=run.floor,
+            relic_id=str(spec.get("id")),
+            tier=int(spec["tier"]),
+            set_key=str(spec.get("set") or ""),
+            source="shop",
+        )
 
 
 def _endless_in_forge(run) -> bool:
@@ -1271,7 +1322,7 @@ def _endless_leave_forge(run) -> tuple[str, bool]:
 def _endless_shop_action(run, raw: str) -> tuple[str, bool]:
     """商店的「刷新 / 离开」。不在店里就提示。"""
     from ..core.endless import (
-        advance,
+        current_stage,
         leave_shop,
         refresh_shop,
         render_floor,
@@ -1279,6 +1330,7 @@ def _endless_shop_action(run, raw: str) -> tuple[str, bool]:
         render_shop,
         render_status,
         shop_state,
+        telemetry,
     )
 
     if not shop_state(run):
@@ -1292,6 +1344,14 @@ def _endless_shop_action(run, raw: str) -> tuple[str, bool]:
             if reason == "poor":
                 return "金币不够刷新（需要 " + str(out.get("cost", 0)) + "）。", False
             return "刷新失败：" + reason, False
+        telemetry.shop_act(
+            run.run_id,
+            floor=run.floor,
+            stage=current_stage(run),
+            action="refresh",
+            price=int(out.get("cost", 0) or 0),
+            refreshes=int((shop_state(run) or {}).get("refreshes", 0) or 0),
+        )
         session = shop_state(run) or {}
         return (
             "🔄 已刷新，花费 "
@@ -1302,9 +1362,16 @@ def _endless_shop_action(run, raw: str) -> tuple[str, bool]:
             + render_status(run)
         ), True
     summary = leave_shop(run)
-    advance(run)
+    telemetry.shop_act(
+        run.run_id,
+        floor=run.floor,
+        stage=current_stage(run),
+        action="leave",
+    )
+    heal = _endless_advance(run)
+    tail = ("\n" + heal) if heal else ""
     return (
-        "👋 已离开商店。\n" + render_floor(run) + "\n" + render_options(run)
+        "👋 已离开商店。" + tail + "\n" + render_floor(run) + "\n" + render_options(run)
     ), summary.get("ok", False)
 
 
@@ -1459,6 +1526,7 @@ def _endless_advance(run) -> str:
 
     heal = advance(run)
     telemetry.floor_enter(
+        run.run_id,
         floor=run.floor,
         stage=current_stage(run),
         kind=floor_meta(run)["kind"],
@@ -1487,7 +1555,18 @@ def _endless_opening(run, number: int) -> tuple[str, bool]:
     picked = options[number - 1]
 
     if kind == "open_relic":
-        run.relics.append(str(picked.get("id")))
+        relic_id = str(picked.get("id"))
+        run.relics.append(relic_id)
+        from ..core.endless import telemetry
+
+        telemetry.relic_gain(
+            run.run_id,
+            floor=run.floor,
+            relic_id=relic_id,
+            tier=int(picked.get("tier", 1) or 1),
+            set_key=str(picked.get("set") or ""),
+            source="opening",
+        )
         done = "🎁 已获得遗物【" + str(picked.get("name") or picked.get("id")) + "】"
     elif kind == "open_skill":
         from ..core.endless import learn_and_equip
@@ -1560,6 +1639,8 @@ def _endless_step(run, number: int) -> tuple[str, bool]:
         from ..core.endless import telemetry
 
         telemetry.level_up(
+            run.run_id,
+            floor=run.floor,
             level=run.progression.level,
             key=keys[number - 1],
             pending=len(run.progression.pending),
@@ -1616,6 +1697,7 @@ def _endless_step(run, number: int) -> tuple[str, bool]:
         if not 1 <= number <= len(choices):
             return "编号超出范围（可选 1-" + str(len(choices)) + "）", False
         rng = _random.Random(f"{run.seed}:{run.floor}:event:{event['id']}")
+        _endless_choice_log(run, "event:" + str(event["id"]), number, len(choices))
         changed = choose_event(run, event, number, rng=rng)
         pending.pop("event", None)
         lines = ["🔸 " + str(changed.get("text") or ""), render_result(changed)]
@@ -1646,6 +1728,7 @@ def _endless_step(run, number: int) -> tuple[str, bool]:
             }
             return hint.get(reason, "买不了：" + reason), False
         spec = out.get("spec") or {}
+        _endless_shop_log(run, "buy", spec, out)
         head = "🛍 已买入【" + str(spec.get("name") or spec.get("id")) + "】"
         if out.get("replaced"):
             head += "，换下的已入库存。"
@@ -1662,7 +1745,9 @@ def _endless_step(run, number: int) -> tuple[str, bool]:
         if not 1 <= number <= len(options):
             return "编号超出范围（可选 1-" + str(len(options)) + "）", False
         kind = str(options[number - 1].get("kind") or "")
+        _endless_choice_log(run, kind, number, len(options))
         if kind in ("battle", "elite_fight", "packs"):
+            # 群怪层选项：3 只不同怪 + 2 倍奖励（普通战斗不留标记）
             if kind == "packs":
                 run.pending["reward_mult"] = float(
                     options[number - 1].get("reward_mult") or 2.0
@@ -1696,13 +1781,15 @@ def _endless_step(run, number: int) -> tuple[str, bool]:
             pending["event"] = ev
             return render_event(ev), True
         if kind == "forge":
+            # 强化层：本层内可反复强化，点「离开」才前进
             from ..core.endless import render_enhance
 
             pending["forge"] = {"floor": run.floor}
             return (
-                "🔧 强化层：本层内可反复强化，点「离开」才前进。"
+                "🔧 强化层：本层可以反复强化已装技能与已穿装备。"
                 + "\n"
                 + render_enhance(run)
+                + "\n回复「离开」前进到下一层。"
             ), True
         if kind == "shop":
             shop = open_shop(run)

@@ -95,8 +95,8 @@ def format_pet_status(pet, pet_config: dict[str, Any] | None = None) -> str:
 
     * 标题：名字 + 状态；
     * ``状态``：饱食 / 心情 / 疲劳 / 清洁四条带条形的数值，亲密度单独一条（量程 1000）；
-    * ``属性``：HP / 攻 / 防 / 速 / 魔一行排开——这些是横向比较的数值，逐行反而难扫；
-    * ``成长``：等级、经验、年龄、寿命，外加健康 / 情绪 / 稀有度 / 性格；
+    * ``属性``：HP 与魔一行、攻 / 防 / 速 一行；
+    * ``成长``：等级、经验、年龄、寿命，外加健康 / 情绪 / 稀有度 / 性格，每行 2 项；
     * ``行动点``：今天的剩余行动点也做成条，一眼看出还剩几次互动。
 
     条与精确值同时出现：条给比例，数字给「够不够练一次」这种精确判断。
@@ -166,7 +166,9 @@ def format_pet_status(pet, pet_config: dict[str, Any] | None = None) -> str:
                 "status.attr_line",
                 "HP {hp} ｜ 攻 {atk} ｜ 防 {def} ｜ 速 {spd} ｜ 魔 {mp}",
                 **fields,
-            )
+            ),
+            # HP 与魔放一行（下标 0 / 4），攻防速另起一行。
+            groups=[[0, 4], [1, 2, 3]],
         )
     )
 
@@ -177,7 +179,8 @@ def format_pet_status(pet, pet_config: dict[str, Any] | None = None) -> str:
                 "status.growth_line",
                 "Lv.{level} ｜ 经验 {exp}/{exp_next} ｜ 年龄 {age} ｜ 寿命 {lifespan}",
                 **fields,
-            )
+            ),
+            per_row=2,
         )
     )
     lines.append(
@@ -186,7 +189,8 @@ def format_pet_status(pet, pet_config: dict[str, Any] | None = None) -> str:
                 "status.state_line",
                 "体况 {health} ｜ 情绪 {emotion} ｜ 稀有 {rarity} ｜ 性格 {personality}",
                 **fields,
-            )
+            ),
+            per_row=2,
         )
     )
     lines.append(

@@ -32,6 +32,7 @@ QQ markdown 的「支持格式」清单里没有 ``---`` 水平线；直接写�
 
 from __future__ import annotations
 
+from collections.abc import Sequence
 from dataclasses import dataclass
 
 #: 数值条的填充 / 空白字符。
@@ -158,17 +159,45 @@ def bar(value: int | float, maximum: int | float, width: int = BAR_WIDTH) -> str
 #: 一行超过这个字符宽度就改成换行分隔（手机屏宽下再长会挤成一坨）。
 MAX_LINE_CELLS = 24
 
+#: 多项同行时的间隔（全角空格，与汉字等宽，不会挤在一起）。
+ROW_GAP = "\u3000"
 
-def stacked(line: str, *, sep: str = "｜", limit: int = MAX_LINE_CELLS) -> str:
-    """把 ``A ｜ B ｜ C`` 这类长条**改成一格一行**。
 
-    短行原样返回。超过 ``limit`` 就拆开：分隔符换成换行，一项一行。
-    不做「塞满一行再换行」的贪心排布——那会把最后一项单独甩出去，
-    卡里留下一个孤零零的 ``魔 10``，比整齐的一格一行更难扫。
+def stacked(
+    line: str,
+    *,
+    sep: str = "｜",
+    limit: int = MAX_LINE_CELLS,
+    per_row: int = 1,
+    groups: Sequence[Sequence[int]] | None = None,
+) -> str:
+    """把 ``A ｜ B ｜ C`` 折成多行。
+
+    * ``groups``——显式指定每行取哪几项（下标），用于「把 HP 和魔放一行、
+      攻防速放另一行」这种**不按原顺序**的分组；
+    * ``per_row``——每行最多几项，按顺序排满。放不下会往下退到更小的列数。
+
+    两者都给时 ``groups`` 优先。每行都不超过 ``limit`` 才采用。
     """
     parts = [piece.strip() for piece in str(line).split(sep) if piece.strip()]
     if len(parts) <= 1 or len(str(line)) <= limit:
         return line
+    if groups:
+        rows = [
+            ROW_GAP.join(parts[i] for i in row if 0 <= i < len(parts)) for row in groups
+        ]
+        used = {i for row in groups for i in row}
+        rows.extend(parts[i] for i in range(len(parts)) if i not in used)
+        rows = [row for row in rows if row]
+        if rows and all(len(row) <= limit for row in rows):
+            return "\n".join(rows)
+    for width in range(min(per_row, len(parts)), 1, -1):
+        rows = [
+            ROW_GAP.join(parts[start : start + width])
+            for start in range(0, len(parts), width)
+        ]
+        if all(len(row) <= limit for row in rows):
+            return "\n".join(rows)
     return "\n".join(parts)
 
 

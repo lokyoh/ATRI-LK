@@ -152,8 +152,14 @@ def settle_battle(
     got_coins = coin_reward(run, elite=elite, boss=boss)
     if not victor:
         got_coins = 0
+    # 群怪层选项：奖励翻倍（只乘打赢的那份，输了不吃罚）
+    mult = float((run.pending or {}).get("reward_mult") or 1.0)
+    if mult > 1.0:
+        got_exp = round(got_exp * mult)
+        got_coins = round(got_coins * mult)
     levels = award_exp(run.progression, got_exp)
     run.coins += got_coins
+    run.pending.pop("reward_mult", None)
     return {
         "exp": got_exp,
         "coins": got_coins,

@@ -110,11 +110,53 @@ AFFIX_KINDS = (
     ("summon", "召唤"),
 )
 
-PACK_PER_FLOORS = 40
-"""群怪只数：每 40 层 +1。"""
+PACK_OPTION_COUNT = 3
+"""层选项「群怪」的只数：3 只各自独立抽的怪。"""
 
-MAX_PACK = 4
-"""群怪只数上限。"""
+MAX_PACK = 20
+"""敌方单位上限（含群怪与召唤物）；实际只数取自怪池的 swarm 特点。"""
+
+
+MECHANIC_KEYS = (
+    """特点里直接铺到单位上的机制字段（引擎已支持）""",
+    "crit_rate",
+    "leech",
+    "thorns",
+    "dodge",
+    "regen_pct",
+    "death_burst",
+)
+
+
+def apply_traits(
+    drawn: dict[str, Any] | None,
+    cfg: dict[str, Any],
+    stats: dict[str, float],
+) -> dict[str, Any]:
+    """把怪池条目的 traits 全量展开：数值乘区 + 机制字段（爬塔同款规则）。"""
+    trait_defs = cfg.get("monster_traits") or {}
+    out: dict[str, Any] = {}
+    for trait_id in (drawn or {}).get("traits") or []:
+        trait = trait_defs.get(str(trait_id)) or {}
+        for stat in ("hp", "atk", "def", "spd"):
+            mult = float(trait.get(stat + "_mult", 0.0) or 0.0)
+            if mult:
+                stats[stat] = max(1, floor(float(stats[stat]) * mult))
+        for key in MECHANIC_KEYS:
+            if key in trait:
+                out[key] = trait[key]
+    return out
+
+
+def pack_of(drawn: dict[str, Any] | None, cfg: dict[str, Any]) -> dict[str, Any]:
+    """从怪池条目的 traits 里取 swarm 的 pack 规格；没有就返回单体。"""
+    swarm = (cfg.get("monster_traits") or {}).get("swarm") or {}
+    spec = dict(swarm.get("pack") or {})
+    for trait_id in (drawn or {}).get("traits") or []:
+        if str(trait_id) == "swarm":
+            return spec
+    return {}
+
 
 ENEMY_PEN_BASE = 0.05
 """敌方穿甲起点。"""
@@ -168,6 +210,7 @@ def _build_monster(
     rng: random.Random,
     *,
     elite_fight: bool = False,
+    pack_option: bool = False,
 ) -> dict[str, Any]:
     """按层数与类型造一只对手。数值走 P4 的公尺（刀数反推）。"""
     from .config import enemy_scale_cfg, template_attributes
@@ -227,6 +270,20 @@ def _build_monster(
         elite=is_elite_floor(run.floor),
         boss=is_boss_floor(run.floor),
     )
+    # 层选项「群怪」：3 只**各自独立抽**的怪，不是一个本体的复制。
+    extra: list[dict[str, Any]] = []
+    if pack_option:
+        base = drawn or {}
+        extra = [
+            draw_monster(
+                random.Random(f"{run.seed}:{run.floor}:pack:{i}"),
+                str(run.region),
+                elite=is_elite_floor(run.floor),
+                boss=is_boss_floor(run.floor),
+            )
+            for i in range(1, PACK_OPTION_COUNT)
+        ]
+        extra = [e for e in extra if e and e.get("name") != base.get("name")]
     # §11.4 第二层：精英/首领的 preset 决定技能与相位，必须展开
     preset = {}
     if drawn and drawn.get("preset"):
@@ -238,8 +295,31 @@ def _build_monster(
     traits = (
         resist_of(str(drawn.get("desc") or ""), str(run.region), rng) if drawn else {}
     )
+    # 怪池自带的 traits 全量继承：数值乘区算在这里（早于精英/首领倍率之外的放大），
+    # 机制字段（棘刺/自爆/再生/闪避/吸血/暴击）直接铺到单位上。
+    stats = {"hp": hp, "atk": atk, "def": def_, "spd": spd}
+    traits.update(apply_traits(drawn, cfg, stats))
+    hp, atk, def_, spd = (
+        int(stats["hp"]),
+        int(stats["atk"]),
+        int(stats["def"]),
+        int(stats["spd"]),
+    )
 
-    pack_count = min(MAX_PACK, 1 + (run.floor - 1) // PACK_PER_FLOORS)
+    # 群怪只数由怪池自带的 swarm 特点决定（爬塔同款 monster_traits.pack），
+    # 不再随层数增长：带 swarm 的才是 3 只，其余一律单体。
+    pack_spec = pack_of(drawn, cfg)
+    pack_count = max(1, min(MAX_PACK, int(pack_spec.get("count", 1) or 1)))
+    if pack_option:
+        pack_count = PACK_OPTION_COUNT
+        pack_spec = {}
+    if pack_count > 1:
+        share = float(pack_spec.get("hp_share", 1.0) or 1.0)
+        atk = max(1, floor(atk * float(pack_spec.get("atk_mult", 1.0) or 1.0)))
+        def_ = max(0, floor(def_ * float(pack_spec.get("def_mult", 1.0) or 1.0)))
+        spd = max(1, floor(spd * float(pack_spec.get("spd_mult", 1.0) or 1.0)))
+        # 群体总生命 = 公式生命 × hp_share，再平摊到每只（总血与只数无关）
+        hp = max(1, floor(hp * share / pack_count))
     affix_count = min(MAX_AFFIX, (run.floor - 1) // AFFIX_PER_FLOORS)
     # 精英/首领至少带上设计规定的下限（§11.8：精英 3–4 / 首领 5–6）
     if is_boss_floor(run.floor):
@@ -247,6 +327,39 @@ def _build_monster(
     elif is_elite_floor(run.floor):
         affix_count = max(3, affix_count)
     affixes = [kind for kind, _ in rng.sample(list(AFFIX_KINDS), affix_count)]
+
+    # 层选项「群怪」：3 只各自独立抽的怪，每只按自己的特点单独算面板。
+    members: list[dict[str, Any]] = []
+    if pack_option:
+        specs = [drawn or {}, *extra][:PACK_OPTION_COUNT]
+        for index, spec_drawn in enumerate(specs, 1):
+            member_rng = random.Random(f"{run.seed}:{run.floor}:member:{index}")
+            m_stats = {"hp": hp, "atk": atk, "def": def_, "spd": spd}
+            m_traits = apply_traits(spec_drawn, cfg, m_stats)
+            members.append(
+                {
+                    "name": str(spec_drawn.get("name") or f"敌人{index}"),
+                    "desc": str(spec_drawn.get("desc") or ""),
+                    "hp": int(m_stats["hp"]),
+                    "atk": int(m_stats["atk"]),
+                    "def": int(m_stats["def"]),
+                    "spd": int(m_stats["spd"]),
+                    "level": int(getattr(run.progression, "level", 1) or 1),
+                    "element": element,
+                    "armor_pen": min(
+                        0.35, ENEMY_PEN_BASE + ENEMY_PEN_STEP * (run.floor - 1)
+                    ),
+                    "skills": list(spec_drawn.get("skills") or []),
+                    "preset": str(spec_drawn.get("preset") or ""),
+                    "passive": str(spec_drawn.get("passive") or ""),
+                    "traits": [str(t) for t in (spec_drawn.get("traits") or [])],
+                    **m_traits,
+                    **affix_stats(affixes, member_rng),
+                }
+            )
+    # 异质群怪表头统一写「群怪」，逐只名字由各自单位给出
+    if pack_option and members:
+        name = "群怪"
 
     name = str((drawn or {}).get("name") or "") or (
         "首领"
@@ -282,12 +395,15 @@ def _build_monster(
         "skills": list((drawn or {}).get("skills") or preset.get("skills") or []),
         "preset": str((drawn or {}).get("preset") or ""),
         "passive": str((drawn or {}).get("passive") or ""),
+        # 特点 id 留着给战报的「🔹 特点：…」一行用
+        "traits": [str(t) for t in (drawn or {}).get("traits") or []],
         "phases": list(
             (drawn or {}).get("phases")
             or ([preset["phase"]] if preset.get("phase") else [])
         ),
-        # 群怪（§11.6 / §11.11）：每 40 层 +1 只，上限 4；每只独立抽。
-        "pack": {"count": pack_count},
+        # 群怪（§11.11）：swarm 特点定只数；层选项「群怪」则是 3 只不同的怪。
+        "pack": {"count": pack_count if not members else len(members)},
+        "members": members,
         # 词缀（§11.7）：每 15 层 +1 条，上限 6；同类不叠加。
         "affixes": affixes,
         **traits,
@@ -300,6 +416,7 @@ def begin_battle(
     cfg: dict[str, Any] | None = None,
     *,
     elite_fight: bool = False,
+    pack_option: bool = False,
 ) -> dict[str, Any]:
     """开一场战斗：构造 session 并跑到第一个「轮到我方」。
 
@@ -310,7 +427,9 @@ def begin_battle(
     cfg = cfg or load_endless_config()
     rng = random.Random(f"{run.seed}:{run.floor}:battle")
     avatar = _avatar(run)
-    monster = _build_monster(run, cfg, rng, elite_fight=elite_fight)
+    monster = _build_monster(
+        run, cfg, rng, elite_fight=elite_fight, pack_option=pack_option
+    )
     # 魔力只在战斗内存续；run.mp 只表示**下一场战斗的起始魔力**（默认满）。
     # 事件里的 run_mp 因此仍然有效：它调整的是下一场开场的蓝量。
     mp_cap = run.mp_max

@@ -11,7 +11,7 @@ template:
 stage:
   # 层数结构写在 floor.py 的 STAGE_FLOORS / MAJOR_STAGES，不在这里配。
   option_weights: { 1: 10, 2: 75, 3: 15 }
-  pool_weights: { event: 52, elite_fight: 28, rest: 20 }
+  pool_weights: { event: 42, elite_fight: 23, rest: 16, packs: 10, forge: 9 }
 
 leveling:
   exp_to_next: { base: 50, per_level: 30 }
@@ -56,6 +56,8 @@ shop:
 
 battle:
   max_rounds: 100
+  # 敌方单位上限（群怪 + 召唤物）：无尽允许到 20，爬塔仍用 roguelike.yaml 的 4。
+  max_units: 20
   # 冷却一「格」折成几帧。一次我方出手推进 2 帧，所以 2 = 「等 1 次出手」。
   # 不写就退回 frames_per_turn（10 帧），冷却在无尽里永远转不回来。
   cooldown_frames: 2

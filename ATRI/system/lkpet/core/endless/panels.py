@@ -62,6 +62,20 @@ def busy() -> str:
     return "⚔️ 战斗中不能查看面板，先把这一场打完。"
 
 
+def forge_state(run: Any) -> dict[str, Any] | None:
+    """本层是否是强化层（``pending["forge"]``）。"""
+    node = (getattr(run, "pending", None) or {}).get("forge")
+    return node if isinstance(node, dict) else None
+
+
+def forge_ready(run: Any) -> bool:
+    """现在能不能动强化等级（只能在本层强化层里改）。"""
+    return forge_state(run) is not None
+
+
+FORGE_LOCKED = "🔒 强化只能在强化层里做；本层仅供查看，下一处强化层再改。"
+
+
 def _nonzero(value: Any) -> bool:
     if isinstance(value, dict):
         return any(float(v) for v in value.values())
@@ -609,11 +623,14 @@ def render_enhance(run: Any) -> str:
     base = "宠物.无尽"
     if in_battle(run):
         return busy()
+    ready = forge_ready(run)
     sk_specs = skill_specs()
     gr_specs = gear_specs()
     sk_times = dict((run.pending or {}).get("enhance") or {})
     gr_times = dict((run.pending or {}).get("gear_enhance") or {})
     lines = [f"🔧 强化（持有 {run.coins} 金）"]
+    if not ready:
+        lines.append(FORGE_LOCKED)
     rows = 0
     targets = _enhance_targets(run)
     if not targets:
@@ -640,6 +657,11 @@ def render_enhance(run: Any) -> str:
         lines.append(head)
         if times >= cap:
             lines.append("　　　已满级")
+            continue
+        if not ready:
+            lines.append(
+                f"　　　下一级 {cost} 金" + (f"（可退 {refund} 金）" if times else "")
+            )
             continue
         lines.append(
             "　　　"
@@ -668,6 +690,8 @@ def enhance_actions(run: Any) -> list[tuple[str, str]]:
     gr_specs = gear_specs()
     sk_times = dict((run.pending or {}).get("enhance") or {})
     gr_times = dict((run.pending or {}).get("gear_enhance") or {})
+    if not forge_ready(run):
+        return []
     out: list[tuple[str, str]] = []
     for index, (kind, item_id) in enumerate(_enhance_targets(run), 1):
         if kind == "skill":
@@ -733,6 +757,8 @@ def enhance_action(run: Any, action: str, kind: str, arg: str) -> tuple[str, boo
 
     if in_battle(run):
         return busy(), False
+    if not forge_ready(run):
+        return FORGE_LOCKED, False
     if kind not in ("skill", "gear"):
         return "强化对象写错，可选：skill / gear。", False
     targets = _enhance_targets(run)

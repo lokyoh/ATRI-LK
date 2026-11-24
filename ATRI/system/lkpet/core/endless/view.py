@@ -113,8 +113,10 @@ def render_options(run: RogueRun) -> str:
         "battle": "战斗",
         "event": "事件",
         "elite_fight": "强化战斗",
+        "packs": "群怪（3 只·双倍奖励）",
         "rest": "休息补给",
         "shop": "商店",
+        "forge": "强化（本层可反复强化）",
     }
     for index, opt in enumerate(options, 1):
         label = names.get(str(opt.get("kind") or ""), str(opt.get("kind") or ""))
@@ -124,29 +126,46 @@ def render_options(run: RogueRun) -> str:
     return "\n".join(rows)
 
 
+_PACK_MARKS = "①②③④⑤⑥"
+"""多只时的编号前缀：三个「100%」排在一起看不出谁是谁。"""
+
+
 def enemy_line(run: RogueRun) -> str:
-    """敌方一行：名字 + 剩余/总生命 + 行动条 + 存活只数（群怪才写只数）。"""
+    """敌方血量行；群怪只列存活的那几只，单只只写一行。"""
     pending = run.pending or {}
     data = pending.get("session") or {}
     monster = pending.get("monster") or {}
-    units = list(data.get("units") or [])
-    if not units:
+    all_units = list(data.get("units") or [])
+    if not all_units:
         return ""
+    # 只算「本体 + 群怪成员」：召唤物是同伙不是同群，算进去会让单怪看起来像群怪。
+    units = [
+        u for u in all_units if bool(u.get("pack")) or bool(u.get("primary"))
+    ] or all_units
+    total = len(units)
+    # 只列存活：倒下的不占行，玩家只关心还剩几只、各自还有多少。
     alive = [u for u in units if int((u.get("unit") or {}).get("hp") or 0) > 0]
-    hp = sum(int((u.get("unit") or {}).get("hp") or 0) for u in units)
-    cap = sum(int(u.get("hp_cap") or 0) for u in units)
     name = str(monster.get("name") or "敌人")
-    text = f"👹 {name}  {hp}/{cap}"
-    bars = [_gauge_label(u) for u in alive]
-    if bars:
-        text += "  行动条 " + " ".join(bars)
-    if len(units) > 1:
-        text += f"  （存活 {len(alive)}/{len(units)}）"
-    return text
+    if total == 1:
+        rec = units[0]
+        hp = max(0, int((rec.get("unit") or {}).get("hp") or 0))
+        cap = int(rec.get("hp_cap") or 0)
+        bar = _gauge_label(rec) if hp > 0 else "已倒下"
+        return f"👹 {name}  {hp}/{cap}  行动条 {bar}"
+
+    lines = [f"🐝 群怪（存活 {len(alive)}/{total}）"]
+    for rec in units:
+        if int((rec.get("unit") or {}).get("hp") or 0) <= 0:
+            continue
+        hp = int((rec.get("unit") or {}).get("hp") or 0)
+        cap = int(rec.get("hp_cap") or 0)
+        unit_name = str((rec.get("unit") or {}).get("name") or name)
+        lines.append(f"👹 {unit_name}  {hp}/{cap}  行动条 {_gauge_label(rec)}")
+    return "\n".join(lines)
 
 
 def _gauge_label(rec: dict[str, Any]) -> str:
-    """单只敌方的行动条百分比；群怪用 ①②③ 区分。"""
+    """单只敌方的行动条百分比。"""
     pct = min(100, max(0, round(float(rec.get("gauge") or 0.0))))
     return f"{pct}%"
 
@@ -159,6 +178,20 @@ def _battle_mp_line(run: RogueRun) -> str:
     have = int(data.get("pet_mp", 0) or 0)
     cap = int(data.get("mp_cap", 0) or 0)
     return f"◆ {have}/{cap}" if cap else ""
+
+
+def monster_trait_line(run: RogueRun) -> str:
+    """敌方特点一行（棘刺 / 爆裂 / 吸血…）；没有特点返回空串。"""
+    monster = (run.pending or {}).get("monster") or {}
+    ids = [str(t) for t in monster.get("traits") or []]
+    if not ids:
+        return ""
+    from ...utils.texts import text
+
+    labels = [text(f"rogue.traits.{t}", t) for t in ids]
+    return text(
+        "rogue.monster_trait_line", "🔹 特点：{traits}", traits="，".join(labels)
+    )
 
 
 def render_battle(run: RogueRun, *, log_limit: int = 8) -> str:
@@ -178,7 +211,14 @@ def render_battle(run: RogueRun, *, log_limit: int = 8) -> str:
         head.append("🗒 战报：")
         head.extend(line for _, line in shown)
 
-    head.extend([enemy_line(run), render_status(run), _battle_mp_line(run)])
+    head.extend(
+        [
+            monster_trait_line(run),
+            enemy_line(run),
+            render_status(run),
+            _battle_mp_line(run),
+        ]
+    )
     head = [x for x in head if x]
 
     rows: list[str] = []

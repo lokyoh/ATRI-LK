@@ -1161,6 +1161,10 @@ async def handle_endless(event: Event, args: BaseMessage = CommandArg()):
                 msg = _endless_stock(running, raw)
                 endless.run_state = running.to_dict()
                 save_endless(endless)
+            elif raw == "离开" and running is not None and _endless_in_forge(running):
+                msg, changed = _endless_leave_forge(running)
+                if changed:
+                    msg = _endless_persist(endless, running, save_endless, msg)
             elif raw in ("刷新", "离开") and running is not None:
                 msg, changed = _endless_shop_action(running, raw)
                 if changed:
@@ -1239,6 +1243,29 @@ def _endless_persist(endless, running, save_endless, msg: str) -> str:
         reason="death",
     )
     return "💀 生命耗尽，本局结束。\n" + _endless_settle_text(summary)
+
+
+def _endless_in_forge(run) -> bool:
+    """当前是否停在强化层（未点「离开」）。"""
+    node = (getattr(run, "pending", None) or {}).get("forge")
+    return isinstance(node, dict)
+
+
+def _endless_leave_forge(run) -> tuple[str, bool]:
+    """离开强化层：清掉 forge 标记并前进一层。"""
+    from ..core.endless import render_floor, render_options
+
+    (run.pending or {}).pop("forge", None)
+    heal = _endless_advance(run)
+    tail = ("\n" + heal) if heal else ""
+    return (
+        "👋 已离开强化层。"
+        + tail
+        + "\n"
+        + render_floor(run)
+        + "\n"
+        + render_options(run)
+    ), True
 
 
 def _endless_shop_action(run, raw: str) -> tuple[str, bool]:
@@ -1635,8 +1662,14 @@ def _endless_step(run, number: int) -> tuple[str, bool]:
         if not 1 <= number <= len(options):
             return "编号超出范围（可选 1-" + str(len(options)) + "）", False
         kind = str(options[number - 1].get("kind") or "")
-        if kind == "battle" or kind == "elite_fight":
-            out = begin_battle(run, elite_fight=(kind == "elite_fight"))
+        if kind in ("battle", "elite_fight", "packs"):
+            if kind == "packs":
+                run.pending["reward_mult"] = float(
+                    options[number - 1].get("reward_mult") or 2.0
+                )
+            out = begin_battle(
+                run, elite_fight=(kind == "elite_fight"), pack_option=(kind == "packs")
+            )
             lines = [render_floor(run)]
             if out.get("ended") and out.get("victory"):
                 healed = _endless_advance(run)
@@ -1662,6 +1695,15 @@ def _endless_step(run, number: int) -> tuple[str, bool]:
                 ), True
             pending["event"] = ev
             return render_event(ev), True
+        if kind == "forge":
+            from ..core.endless import render_enhance
+
+            pending["forge"] = {"floor": run.floor}
+            return (
+                "🔧 强化层：本层内可反复强化，点「离开」才前进。"
+                + "\n"
+                + render_enhance(run)
+            ), True
         if kind == "shop":
             shop = open_shop(run)
             return render_shop(shop) + "\n回复编号买入；刷新 / 离开", True

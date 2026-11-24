@@ -262,15 +262,14 @@ class BattleSession:
         self.elite_passives_cfg: dict[str, Any] = cfg.get("elite_passives", {}) or {}
         self._setup_enemy_mp()
 
-        # 战斗单位：群怪（monster["pack"]）入场即拆成多只**独立**单位，
-        # 各自一条命、各攒各的攻击条——不是一个共用血条。
-        # tower._split_pack 已把 hp/atk/def/spd 折算成「单只面板」，这里只负责
-        # 复制出 count 份、按 ①②③ 命名，并把奖励留在第一只身上。
+        # 群怪入场即拆成多只独立单位：各自一条命、各攒各的攻击条。
+        # ``members`` 给出异质群怪（每只不同的怪）；缺省则复制本体。
         pack = monster.get("pack") or {}
         pack_count = max(1, min(int(pack.get("count", 1) or 1), self.max_units))
-        if pack_count > 1:
-            # 编号从 ① 开始给**每一只**都加：如果第一只不带号，战报里会被
-            # 读者当成「本体」，与「同质的 N 只」这个事实不符。
+        members = [dict(m) for m in (monster.get("members") or [])][:pack_count]
+        if members:
+            first = members[0]
+        elif pack_count > 1:
             first = dict(monster)
             first["name"] = f"{monster['name']}{_pack_mark(1)}"
             first["pack"] = {}
@@ -279,17 +278,26 @@ class BattleSession:
         self.units: list[dict[str, Any]] = [
             self._spawn_unit(first, primary=True, minion=False, pack=pack_count > 1)
         ]
-        for index in range(2, pack_count + 1):
-            member = dict(monster)
-            member["hp"] = max(1, int(monster["hp"]))
-            member["name"] = f"{monster['name']}{_pack_mark(index)}"
-            # 掉落只结算一次（挂在第一只身上），否则打 3 只拿 3 份金币/经验。
-            member["coins"] = 0
-            member["exp"] = 0
-            member["pack"] = {}
-            self.units.append(
-                self._spawn_unit(member, primary=False, minion=True, pack=True)
-            )
+        if members:
+            for member in members[1:]:
+                # 掉落只结算一次（挂在第一只身上），异质群怪同理。
+                member["coins"] = 0
+                member["exp"] = 0
+                member["pack"] = {}
+                self.units.append(
+                    self._spawn_unit(member, primary=False, minion=True, pack=True)
+                )
+        else:
+            for index in range(2, pack_count + 1):
+                member = dict(monster)
+                member["hp"] = max(1, int(monster["hp"]))
+                member["name"] = f"{monster['name']}{_pack_mark(index)}"
+                member["coins"] = 0
+                member["exp"] = 0
+                member["pack"] = {}
+                self.units.append(
+                    self._spawn_unit(member, primary=False, minion=True, pack=True)
+                )
         self.dots: list[dict[str, Any]] = []
         self.pet_debuffs: list[dict[str, Any]] = []
         self.pet_mods = {"atk_mult": 1.0, "def_mult": 1.0, "spd_mult": 1.0}
@@ -570,7 +578,7 @@ class BattleSession:
         return amount
 
     def _pet_lifesteal(self, dealt: int) -> None:
-        """普攻命中后的吸血回复（技能侧并入技能自带的 leech）。"""
+        """普攻命中后的吸血回复；技能只吃自己的 ``leech``，不吃这一项。"""
         rate = float(self.pet_lifesteal or 0.0)
         if rate <= 0 or dealt <= 0:
             return
@@ -984,8 +992,8 @@ class BattleSession:
                 self._blog_crit(crit_any)
                 # 注意：打断累积与棘刺反弹已在逐目标循环里结算过，
                 # 这里不能再对 target 重复调用（否则单体技能会双倍反弹/双倍打断）。
-                # 吸血：按实际伤害比例回复局内生命（不超上限）。
-                leech = float(skill.get("leech", 0.0) or 0.0) + self.pet_lifesteal
+                # 技能只吃自带的 leech：装备/遗物的 lifesteal 只作用于普攻。
+                leech = float(skill.get("leech", 0.0) or 0.0)
                 if leech > 0 and dealt_total > 0:
                     healed = min(
                         round(dealt_total * leech), max(0, self.hp_max - self.pet_hp)

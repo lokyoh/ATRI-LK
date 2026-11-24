@@ -142,6 +142,7 @@ PERSISTENT_PENDING = (
     "gear_stock",
     "proficiency",
     "skill_page",
+    "forge",
 )
 """挂在 pending 里但**跨层有效**的字段。
 

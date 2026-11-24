@@ -111,7 +111,7 @@ def option_count(floor: int, seed: int, cfg: dict[str, Any] | None = None) -> in
 
 
 def secondary_pool(cfg: dict[str, Any] | None = None) -> dict[str, int]:
-    """普通层第二个选项的权重表（事件 / 强化战斗 / 休息）。"""
+    """普通层第二个选项的权重表（事件 / 强化战斗 / 休息 / 群怪）。"""
     cfg = cfg or load_endless_config()
     raw = (cfg.get("stage") or {}).get("pool_weights") or {}
     return {str(k): int(v) for k, v in raw.items()}
@@ -152,6 +152,19 @@ def build_options(
         return [{"kind": "battle"}]
     count = option_count(floor, seed, cfg)
     opts: list[dict[str, Any]] = [{"kind": "battle"}]
+    taken = {str(opts[0]["kind"])}
     for index in range(1, count):
-        opts.append({"kind": pick_secondary(floor, seed + index, cfg)})
+        # 同一层的选项不能重复：两个「事件」并列只是把同一件事印两遍。
+        kind = pick_secondary(floor, seed + index, cfg)
+        for retry in range(1, len(secondary_pool(cfg)) + 1):
+            if kind not in taken:
+                break
+            kind = pick_secondary(floor, seed + index + retry * 97, cfg)
+        opt: dict[str, Any] = {"kind": kind}
+        if kind == "packs":
+            # 3 只随机怪 + 2 倍奖励（§11.11 的「群怪」层选项）
+            opt["members"] = 3
+            opt["reward_mult"] = 2.0
+        opts.append(opt)
+        taken.add(kind)
     return opts

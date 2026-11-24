@@ -549,7 +549,7 @@ def register_function_calling():
             "说出你的意图，不用雕琢措辞：intent 写「想表达什么」，"
             "例如「解释钓鱼要先抛钩再收线」，"
             "不要写「你好呀，钓鱼要先抛钩哦」这种最终台词。\n"
-            "最终怎么说由聊天模型决定；想分几条说就用 count，不要重复调用。\n"
+            "最终怎么说由聊天模型决定；一句话说完一件事，不要拆成几条重复讲。\n"
             "如果此刻不想说话，就不要再调用任何功能，也不要用正文代替。"
         )
         essential = True
@@ -559,7 +559,7 @@ def register_function_calling():
                 _type="str",
                 description=(
                     "你要表达的意思。像在群里想说什么，不是写文章：\n"
-                    "  1. 短。一句通常 5-20 字；想说的多就 count=2/3，别一口气写一大段\n"
+                    "  1. 短。一句通常 5-20 字；想说的多就把意思说清楚，别拆成几条\n"
                     "  2. 口语。想好语气词与书面语的区别，但不必自己写最终台词\n"
                     "  3. 有反应先于有内容。别人说「今天好累」，表达「关心一下」"
                     "比「建议注意休息」像人\n"
@@ -575,7 +575,8 @@ def register_function_calling():
             FunctionCallingArg(
                 name="count",
                 _type="int",
-                description="(可选)希望分几条说，1-3，默认 1",
+                description="(可选)确实要说两件事时才分开说，1-3，默认 1；"
+                "同一件事换几种说法不算多件事",
             ),
             FunctionCallingArg(
                 name="at",
@@ -773,18 +774,14 @@ def register_function_calling():
         returns_data = False
         parallel_safe = False
         description = (
-            "发一张 Markdown 卡片，用于专业性回答或需要排版的说明。\n"
-            "intent 写「这张卡片要表达什么」，不要自己写最终排版；"
+            "发一张 Markdown 卡片，用于长内容或需要排版的回答。\n"
+            "只有文字：可以用标题、列表、表格、代码块，不能带图片。\n"
+            "intent 写「这张卡片要讲什么」，不要自己写最终排版；"
             "标题与正文由聊天模型决定。"
         )
         args: ClassVar = [
             FunctionCallingArg(
-                name="intent", _type="str", description="这张卡片要表达什么"
-            ),
-            FunctionCallingArg(
-                name="image",
-                _type="str",
-                description="(可选)已经确定好的图片 URL/路径；没有就不要填，禁止编造",
+                name="intent", _type="str", description="这张卡片要讲什么"
             ),
             FunctionCallingArg(
                 name="title",
@@ -806,7 +803,7 @@ def register_function_calling():
         async def call(data: FunctionCallingData):
             """降级直发路径：不做 Chat 渲染，直接把 intent 当正文发卡片。"""
             from .function_calling_utils import send_markdown_document
-            from .reply_pipeline import parse_markdown, sanitize
+            from .reply_pipeline import parse_markdown
 
             intent = str(data.data.get("intent") or "").strip()
             current_history = data.current_history
@@ -814,10 +811,8 @@ def register_function_calling():
                 raise RuntimeError("发送消息时缺少关联的聊天历史")
             if not intent:
                 return None
-            fallback = sanitize(intent)
-            image = str(data.data.get("image") or "").strip()
-            title = str(data.data.get("title") or "").strip()
-            parsed = parse_markdown("", fallback, image)
+            title = str(data.data.get("title") or "").strip().strip("#").strip()
+            parsed = parse_markdown("", intent)
             if title and not parsed["title"]:
                 parsed["title"] = title[:40]
             if not parsed["body"]:

@@ -191,7 +191,7 @@ Provider 的 `api_key` 列表项必须是 `name` / `key` 对象。模型上的 `
 |---|---|---|
 | `say` | `send_message` | 说话（intent → Chat 渲染） |
 | `say_exact` | — | 逐字发送，唯一跳过 Chat 渲染 |
-| `md` | `send_md_message` | 卡片（intent → Chat 排版） |
+| `md` | `send_md_message` | 卡片（intent → Chat 排版；只有文字，支持代码块） |
 | `md_read` | `read_md_message` | 读回自己发过的 Markdown |
 | `face` | `send_face` | 表情（intent → Chat 选表情） |
 | `love` | `love_change` | 改好感度 |

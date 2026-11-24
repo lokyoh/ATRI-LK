@@ -351,10 +351,7 @@ class ActionExecutor:
                 intent=str(args.get("intent") or "").strip(),
                 tone=str(args.get("tone") or "").strip(),
                 voice=_as_bool(args.get("voice")),
-                payload={
-                    "image": str(args.get("image") or "").strip(),
-                    "title": str(args.get("title") or "").strip(),
-                },
+                payload={"title": str(args.get("title") or "").strip()},
                 data=data,
                 seq=item.index,
             )

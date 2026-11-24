@@ -1,12 +1,6 @@
-"""聊天输出的解析、清洗、分条与去重（计划 3.5.4）。
-
-这一层不碰模型、不碰发送，只负责把 Chat 模型的原始输出变成「可以发出去
-的最终内容」。所有函数都必须**容错**：模型偶尔会带代码围栏、JSON 前后多
-一句话、或把多个回复塞进一段，这些都不应该导致整条消息丢失。
-"""
-
 from __future__ import annotations
 
+import difflib
 import json
 import re
 from collections import deque
@@ -19,14 +13,14 @@ MAX_MESSAGES = 3
 
 #: markdown 标题 / 正文上限
 MARKDOWN_TITLE_CHARS = 40
-MARKDOWN_BODY_CHARS = 800
+MARKDOWN_BODY_CHARS = 2000
 
 #: 表情附带文本上限
 FACE_TEXT_CHARS = 40
 
 _SENTENCE_ENDS = ("。", "！", "？", "…", "\n", "；", ".", "!", "?", "；")
 
-_FENCE_RE = re.compile(r"```[^\n]*\n?(.*?)```", re.DOTALL)
+_FENCE_FULL_RE = re.compile(r"^```[^\n]*\n(.*?)\n?```$", re.DOTALL)
 _SPEAKER_PREFIX_RE = re.compile(
     r"^\s*(?:ATRI|亚托莉|机器人|回复|答|A)\s*[:：]\s*", re.IGNORECASE
 )
@@ -39,15 +33,57 @@ _URL_IMAGE_RE = re.compile(r"https?://\S+\.(?:png|jpg|jpeg|gif|webp)\b", re.IGNO
 
 #: 最近已发送内容，用于跨条去重；按 chat_id 分别记录。
 _RECENT_SENT: dict[str, deque[str]] = {}
-_RECENT_LIMIT = 5
+_RECENT_LIMIT = 8
+
+#: 近似重复判定：去掉标点与语气词后，两句话的相似度阈值。
+_SIMILAR_RATIO = 0.5
+#: 太短的话不算近似重复——「好」「嗯」本来就该保留短句自由。
+_SIMILAR_MIN_CHARS = 8
+
+_PUNCT_RE = re.compile(r"[!！?？。.，,、；;：:…~～\-—\s　\"'“”‘’()（）【】\[\]<>《》*#`]")
+_TONE_RE = re.compile(r"[哈啊呀嘛啦呢欸诶哎唉哦喔哟咯]")
+
+
+def _normalize(text: str) -> str:
+    """去标点与语气词，只留骨架：换词重说同一句时骨架几乎一样。"""
+    return _TONE_RE.sub("", _PUNCT_RE.sub("", str(text or "")))
+
+
+def _is_similar(a: str, b: str) -> bool:
+    na, nb = _normalize(a), _normalize(b)
+    if min(len(na), len(nb)) < _SIMILAR_MIN_CHARS:
+        return False
+    return difflib.SequenceMatcher(None, na, nb).ratio() >= _SIMILAR_RATIO
+
+
+def dedupe(messages: list[str], chat_id: str = "") -> list[str]:
+    """丢掉重复消息：完全相同的直接丢弃，换词重说的按骨架相似度丢弃。"""
+    recent = _RECENT_SENT.setdefault(chat_id, deque(maxlen=_RECENT_LIMIT))
+    kept: list[str] = []
+    for message in messages:
+        body = str(message or "").strip()
+        if not body:
+            continue
+        if body in recent:
+            continue
+        if kept and body == kept[-1]:
+            continue
+        if any(_is_similar(body, other) for other in recent):
+            continue
+        kept.append(body)
+        recent.append(body)
+    return kept
 
 
 def _strip_fences(raw: str) -> str:
-    body = str(raw or "")
-    match = _FENCE_RE.search(body)
-    if match:
-        return match.group(1).strip()
-    return body.strip()
+    """只有整段被围栏包住才剥壳。
+
+    用 ``search`` 会命中正文里的第一个代码块——卡片正文本来就允许代码块，
+    那样剥出来只剩 ``pip install`` 一行，整段 JSON 就没了。
+    """
+    body = str(raw or "").strip()
+    match = _FENCE_FULL_RE.match(body)
+    return match.group(1).strip() if match else body
 
 
 def _load_json(raw: str) -> dict | None:
@@ -117,23 +153,6 @@ def split(text: str, max_chars: int | None = None) -> list[str]:
         parts.append(rest[:cut].strip())
         rest = rest[cut:].lstrip()
     return [part for part in parts if part]
-
-
-def dedupe(messages: list[str], chat_id: str = "") -> list[str]:
-    """丢掉与最近发送内容完全相同的消息；同时更新最近记录。"""
-    recent = _RECENT_SENT.setdefault(chat_id, deque(maxlen=_RECENT_LIMIT))
-    kept: list[str] = []
-    for message in messages:
-        body = str(message or "").strip()
-        if not body:
-            continue
-        if body in recent:
-            continue
-        if kept and body == kept[-1]:
-            continue
-        kept.append(body)
-        recent.append(body)
-    return kept
 
 
 #: 非 JSON 输出里常见的「助手口吻」开头：这些不是要说的话，是它在解释自己要做什么。
@@ -217,19 +236,37 @@ def parse_messages(raw: str, fallback: str, count: int = 1) -> list[str]:
     return final
 
 
-def parse_markdown(raw: str, fallback: str, image: str = "") -> dict:
-    """解析卡片输出，返回 ``{title, body, image}``；图片只认传入的那张。"""
+def parse_markdown(raw: str, fallback: str) -> dict:
+    """解析卡片输出，返回 ``{title, body}``。
+
+    正文按 Markdown 原样保留：标题、列表、代码块都是卡片要表达的东西，
+    走 :func:`sanitize` 会把它们全拆掉。只删图片链接——图片只能由调用方
+    显式给出（现在已经没有这个入口了），模型不许自己在正文里插。
+    """
     data = _load_json(raw)
     title = str((data or {}).get("title") or "").strip()
     body = str((data or {}).get("body") or "").strip()
     if not body:
-        body = sanitize(fallback)
+        body = fallback.strip()
     body = _IMAGE_LINK_RE.sub("", body)
     body = _URL_IMAGE_RE.sub("", body)
-    body = sanitize(body) if body.startswith(("#", "-", "*")) else body.strip()
-    title = sanitize(title)[:MARKDOWN_TITLE_CHARS]
-    body = body[:MARKDOWN_BODY_CHARS].strip()
-    return {"title": title, "body": body, "image": str(image or "").strip()}
+    body = _truncate_markdown(body, MARKDOWN_BODY_CHARS)
+    return {"title": title[:MARKDOWN_TITLE_CHARS], "body": body}
+
+
+def _truncate_markdown(body: str, limit: int) -> str:
+    """按长度截断，但不把代码围栏切成两半。
+
+    截断点若落在未闭合的代码块里，补一行 ``` 收尾——否则渲染出的卡片
+    会把后面所有内容都当成代码。
+    """
+    body = body.strip()
+    if len(body) <= limit:
+        return body
+    head = body[:limit]
+    if head.count("```") % 2:
+        head += "\n```"
+    return head.strip()
 
 
 def parse_face(raw: str, available: list[dict]) -> dict:

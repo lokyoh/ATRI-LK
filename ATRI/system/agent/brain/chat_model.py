@@ -1,13 +1,3 @@
-"""Chat 模型：把 thinking 的「意图」渲染成最终表达（计划 3.5.3）。
-
-thinking 只决定「要表达什么」，这里决定「怎么说」。三种模式共用同一段
-system（角色 / 状态 / 关系 / 最近对话 / 说话要求），但**不传工具列表、
-不传 DSL、不传技能正文**——这是纯表达模型，避免它模仿 thinking 的调用格式。
-
-失败时按 3.5.7 降级：text / markdown 用 intent 兜底，face 直接丢弃。
-降级不调用旧 `CHAT` / `TOOL` 类型。
-"""
-
 from __future__ import annotations
 
 from dataclasses import dataclass, field
@@ -17,6 +7,7 @@ from ATRI.log import log
 
 from ..agent.reply_pipeline import (
     FACE_TEXT_CHARS,
+    MARKDOWN_BODY_CHARS,
     parse_face,
     parse_markdown,
     parse_messages,
@@ -25,16 +16,10 @@ from ..llm import llm_manager
 
 RenderKind = Literal["text", "markdown", "face"]
 
-#: 各模式的采样参数。thinking 保持 0.3，这里是「表达」不是「决策」。
-TEMPERATURE = {"text": 0.8, "markdown": 0.5, "face": 0.8}
-
-#: 各模式的输出上限
-MAX_TOKENS = {"text": 300, "markdown": 600, "face": 80}
-
 #: 历史只取最近 N 条
 HISTORY_LIMIT = 10
 
-#: 不同模式的重试次数（首次失败后再试一次）
+#: 首次失败后再试一次
 RETRIES = 1
 
 
@@ -59,7 +44,7 @@ class ChatRenderRequest:
     count: int = 1
     at: bool = False
     payload: dict = field(default_factory=dict)
-    """text 无；markdown 支持 image / title；face 支持 faces / with_text"""
+    """text 无；markdown 支持 title；face 支持 faces / with_text"""
 
     seq: int = 0
     snapshot_id: str = ""
@@ -106,41 +91,52 @@ class ChatModel:
         return cls._degrade(request)
 
     # ---- prompt ----
+    # 稳定段在前、逐轮变的后置，前缀缓存才命中。
+    # 三种 kind 共用一个静态头，状态与对话只在尾部才出现差异。
 
     @classmethod
-    def _system_prompt(cls, request: ChatRenderRequest, ctx: ChatContext) -> str:
-        history = "\n".join(ctx.history[-HISTORY_LIMIT:]) or "（无）"
+    def _static_prompt(cls, ctx: ChatContext) -> str:
         return (
             f"你是{ctx.role_name}。你正在一个 QQ 群里聊天。\n"
             f"# 你的性格\n{ctx.personality or '自然、口语'}\n"
-            f"# 你此刻的状态\n{ctx.state or '平静'}\n"
-            f"# 你和对方的关系\n{ctx.relation or '普通群友'}\n"
-            f"# 最近的对话\n{history}\n"
             "# 说话要求\n"
             "- 像在群里打字，不像写文章\n"
             "- 口语，可以用语气词；不用书面连接词\n"
             "- 不写动作描写、不写括号心理活动\n"
             "- 不复述对方刚说的话\n"
             "- 只表达「决策」里的意思，不新增事实、不解释、不总结\n"
+            "- 一件事一句话说完。不要为同一件事换几种说法反复讲，也不要把它拆成几条\n"
+            "- 只有决策里确实是两件不同的事，才分成两条说\n"
+            "- 别人已经把话说完了就顺着接，不要每句都回一句评价\n"
+        )
+
+    @classmethod
+    def _context_prompt(cls, ctx: ChatContext) -> str:
+        history = "\n".join(ctx.history[-HISTORY_LIMIT:]) or "（无）"
+        return (
+            f"# 你此刻的状态\n{ctx.state or '平静'}\n"
+            f"# 你和对方的关系\n{ctx.relation or '普通群友'}\n"
+            f"# 最近的对话\n{history}\n"
         )
 
     @classmethod
     def _build_prompt(cls, request: ChatRenderRequest, ctx: ChatContext) -> str:
-        head = cls._system_prompt(request, ctx)
         tone = request.tone or "自然"
+        static = cls._static_prompt(ctx)
         if request.kind == "markdown":
-            image = str(request.payload.get("image") or "")
             title = str(request.payload.get("title") or "")
             return (
-                head
-                + "\n# 决策\n"
-                + f"你要发一张卡片，表达：{request.intent}\n"
-                + f"语气：{tone}\n"
-                + f"可用标题：{title or '由你决定'}\n"
-                + f"可用图片：{image or '无'}\n"
+                static
+                + "# 决策\n"
+                + "你要发一张卡片，用来讲长内容或需要排版的东西。\n"
                 + "# 输出\n"
                 + '只输出 JSON：{"title": "标题", "body": "正文"}\n'
-                + "正文可以是 Markdown，但不要输出代码围栏，不要新增图片链接。"
+                + "正文允许 Markdown：小标题、列表、表格、代码块都能用。\n"
+                + "代码块用 ``` 围起来；但不要插图、不要写图片链接。\n"
+                + cls._context_prompt(ctx)
+                + f"# 本次\n表达：{request.intent}\n"
+                + f"语气：{tone}\n"
+                + f"可用标题：{title or '由你决定'}"
             )
         if request.kind == "face":
             faces = request.payload.get("faces") or []
@@ -148,24 +144,28 @@ class ChatModel:
                 f"- id={item.get('id')} | {item.get('desc', '')}" for item in faces
             ]
             return (
-                head
-                + "\n# 决策\n"
-                + f"你想发一个表情，表达：{request.intent}\n"
+                static
+                + "# 决策\n"
+                + "你想发一个表情。\n"
                 + "可选表情：\n"
                 + ("\n".join(lines) or "（无可用表情）")
                 + "\n# 输出\n"
                 + '只输出 JSON：{"face": "id", "text": "可选的一句话"}\n'
-                + '没有合适的就输出：{"face": ""}'
+                + '没有合适的就输出：{"face": ""}\n'
+                + cls._context_prompt(ctx)
+                + f"# 本次\n表达：{request.intent}。"
             )
         count = max(1, min(3, int(request.count or 1)))
         return (
-            head
-            + "\n# 决策\n"
-            + f"你决定说：{request.intent}\n"
-            + f"语气：{tone}\n"
-            + f"希望条数：{count}\n"
+            static
+            + "# 决策\n"
+            + "你要在群里说话。\n"
             + "# 输出\n"
-            + '只输出 JSON：{"messages": ["第一条", "第二条"]}'
+            + '只输出 JSON：{"messages": ["第一条", "第二条"]}\n'
+            + cls._context_prompt(ctx)
+            + f"# 本次\n表达：{request.intent}\n"
+            + f"语气：{tone}\n"
+            + f"希望条数：{count}"
         )
 
     # ---- 解析 / 降级 ----
@@ -173,8 +173,7 @@ class ChatModel:
     @classmethod
     def _parse(cls, request: ChatRenderRequest, raw: str) -> RenderedReply:
         if request.kind == "markdown":
-            image = str(request.payload.get("image") or "")
-            parsed = parse_markdown(raw, request.intent, image)
+            parsed = parse_markdown(raw, request.intent)
             if not parsed["title"] and request.payload.get("title"):
                 parsed["title"] = str(request.payload["title"])[:40]
             if not parsed["body"]:
@@ -209,13 +208,11 @@ class ChatModel:
         if request.kind == "markdown":
             from ..agent.reply_pipeline import sanitize
 
-            body = sanitize(intent)[:800]
             return RenderedReply(
                 kind="markdown",
                 markdown={
                     "title": str(request.payload.get("title") or "")[:40],
-                    "body": body,
-                    "image": str(request.payload.get("image") or ""),
+                    "body": sanitize(intent)[:MARKDOWN_BODY_CHARS],
                 },
                 degraded=True,
             )

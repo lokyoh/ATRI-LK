@@ -59,7 +59,9 @@ class MessageBuilder(Message):
         :param timeout: 超时时间
         :return: 消息构建器本身
         """
-        self.append(MessageSegment.image(file, type_, cache, proxy, timeout))
+        self.append(
+            MessageSegment.image(_image_payload(file), type_, cache, proxy, timeout)
+        )
         return self
 
     def reply(self, id_: int) -> "MessageBuilder":
@@ -178,7 +180,25 @@ def img_msg(file: str | bytes | BytesIO | Path) -> MessageSegment:
     :param file: 图片数据
     :return: 可被直接发送的消息
     """
-    return MessageSegment.image(file)
+    return MessageSegment.image(_image_payload(file))
+
+
+def _image_payload(file: str | bytes | BytesIO | Path) -> bytes | str:
+    """本地图片一律读成 bytes。
+
+    OneBot 适配器会把 ``Path`` 转成 ``file://`` 绝对地址，由协议端自己去
+    读——协议端与本体分离时那个路径不存在，图片直接失败。
+    """
+    if isinstance(file, Path):
+        return file.read_bytes()
+    if isinstance(file, str):
+        text = file.strip()
+        remote = ("http://", "https://", "base64://", "file://", "data:")
+        if not text.startswith(remote):
+            path = Path(text)
+            if path.is_file():
+                return path.read_bytes()
+    return file
 
 
 def img_msg_from_path(path: str | Path) -> MessageSegment:

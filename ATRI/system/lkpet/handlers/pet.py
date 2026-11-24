@@ -1394,14 +1394,8 @@ def _endless_look(run, raw: str) -> tuple[str, str]:
 
 
 def _endless_stock(run, raw: str) -> str:
-    """库存操作：``库存`` 看列表，``库存 穿上 <序号>`` / ``库存 分解 <序号>``。"""
-    from ..core.endless import (
-        decompose,
-        gear_specs,
-        render_panel,
-        stock_of,
-        take_from_stock,
-    )
+    """库存操作：``库存`` 看列表，``库存 穿上 N`` / ``库存 分解 N|A-B|全部``。"""
+    from ..core.endless import render_panel, stock_of, take_from_stock
 
     stock = stock_of(run)
     parts = raw.split(" ")
@@ -1410,21 +1404,26 @@ def _endless_stock(run, raw: str) -> str:
         return render_panel(run, "装备")
 
     if len(parts) != 3 or parts[1] not in ("穿上", "分解"):
-        return "用法：库存 / 库存 穿上 N / 库存 分解 N"
-    try:
-        index = int(parts[2])
-    except ValueError:
+        return "用法：库存 / 库存 穿上 N / 库存 分解 N|A-B|全部"
+    if parts[1] == "分解":
+        # 与「装备 分解」同一条实现：批量区间只该有一处逻辑
+        from ..core.endless import gear_action
+
+        text, _changed = gear_action(run, "分解", parts[2])
+        return text
+
+    if not parts[2].isdigit():
         return "序号必须是数字。"
+    index = int(parts[2])
     if not 1 <= index <= len(stock):
         return "序号超出范围。"
     gear_id = stock[index - 1]
+    from ..core.endless import gear_specs
+
     name = str((gear_specs().get(gear_id) or {}).get("name") or gear_id)
-    if parts[1] == "穿上":
-        if take_from_stock(run, gear_id):
-            return f"✅ 已换上 {name}。\n" + _endless_stock(run, "库存")
-        return "这件不在库存里。"
-    value = decompose(run, gear_id)
-    return f"♻️ 分解回收 {value} 金币。\n" + _endless_stock(run, "库存")
+    if take_from_stock(run, gear_id):
+        return f"✅ 已换上 {name}。\n" + _endless_stock(run, "库存")
+    return "这件不在库存里。"
 
 
 def _endless_advance(run) -> str:

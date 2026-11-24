@@ -157,7 +157,7 @@ def render_gear(run: Any) -> str:
 
     stock = stock_of(run)
     if stock:
-        lines.append("库存（点「穿上 / 分解」执行）：")
+        lines.append("库存（点「穿上」；分解可 1-N 批量）：")
         for index, gear_id in enumerate(stock[:MAX_STOCK_ROWS], 1):
             spec = specs.get(str(gear_id)) or {}
             # 分解退还全部强化费：强化过的装备不该按裸价回收
@@ -175,6 +175,7 @@ def render_gear(run: Any) -> str:
         rest = len(stock) - MAX_STOCK_ROWS
         if rest > 0:
             lines.append(f"  …… 还有 {rest} 件，先处理上面的再回来看")
+        lines.append("批量：装备 分解 1-N / 装备 分解 全部")
     else:
         lines.append("库存：空")
     return "\n".join(lines)
@@ -209,6 +210,32 @@ def _stock_by_number(run: Any, number: int) -> str | None:
     return stock[int(number) - 1]
 
 
+def _stock_range(run: Any, arg: str) -> list[int] | str:
+    """把 3 / 1-3 / 全部 解析成库存序号；出错返回提示。"""
+    stock = stock_of(run)
+    if not stock:
+        return "库存是空的。"
+    text = str(arg or "").strip()
+    if text in ("全部", "全"):
+        return list(range(1, len(stock) + 1))
+    if "-" in text:
+        left, _, right = text.partition("-")
+        if not (left.isdigit() and right.isdigit()):
+            return "区间写成 1-3 这种形式。"
+        lo, hi = int(left), int(right)
+        if lo > hi:
+            lo, hi = hi, lo
+        if lo < 1 or hi > len(stock):
+            return f"区间超出库存（共 {len(stock)} 件）。"
+        return list(range(lo, hi + 1))
+    if not text.isdigit():
+        return "序号写成 3 或 1-3，或写「全部」。"
+    index = int(text)
+    if not 1 <= index <= len(stock):
+        return "库存里没有这个编号。"
+    return [index]
+
+
 def gear_action(run: Any, action: str, arg: str) -> tuple[str, bool]:
     """装备面板的操作：穿上 N / 卸下 槽位 / 分解 N。"""
     specs = gear_specs()
@@ -234,16 +261,31 @@ def gear_action(run: Any, action: str, arg: str) -> tuple[str, bool]:
         return f"✅ 已卸下 {name}，进了库存。\n" + render_gear(run), True
 
     if action == "分解":
-        gear_id = _stock_by_number(run, int(arg))
-        if not gear_id:
-            return "库存里没有这个编号。", False
-        value = decompose(run, gear_id)
-        if not value:
-            return "这件分解不了。", False
-        return f"♻️ 分解回收 {value} 金币。\n" + render_gear(run), True
+        picked = _stock_range(run, arg)
+        if isinstance(picked, str):
+            return picked, False
+        stock = stock_of(run)
+        # 编号按**当前库存**取，边分解边删会让后面的序号整体前移，
+        # 所以先把待分解的 id 抓出来再逐件处理。
+        targets = [stock[i - 1] for i in picked]
+        total = 0
+        done: list[str] = []
+        for gear_id in targets:
+            value = decompose(run, gear_id)
+            if not value:
+                continue
+            total += value
+            done.append((specs.get(gear_id) or {}).get("name") or gear_id)
+        if not done:
+            return "这几件分解不了。", False
+        head = f"♻️ 分解 {len(done)} 件，回收 {total} 金币。"
+        if len(done) <= 3:
+            head += "（" + "、".join(str(x) for x in done) + "）"
+        return head + "\n" + render_gear(run), True
 
     return (
-        "装备面板的动作用法：装备 / 装备 穿上 N / 装备 卸下 武器|防具|饰品 / 装备 分解 N",
+        "装备面板的动作用法：装备 / 装备 穿上 N / 装备 卸下 武器|防具|饰品 / "
+        "装备 分解 N|A-B|全部",
         False,
     )
 

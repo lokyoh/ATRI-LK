@@ -175,4 +175,132 @@ async def _() -> Result[dict]:
         return Result.fail(f"发生了一点错误捏 {type(e)}: {e}")
 
 
-__all__ = ["MemoryItem", "MemoryPage", "router"]
+class MemoryVectorBackfill(BaseModel):
+    filled: int
+    """本次补算成功的条数"""
+    pending: int
+    """补算后仍未补齐的条数"""
+    stopped: bool
+    """中途失败被中止"""
+    reason: str = ""
+    """中止原因"""
+
+
+class MemoryVectorStatus(BaseModel):
+    has_model: bool
+    """是否配置了可用的向量模型"""
+    model_id: str
+    """当前向量模型的真实 id；空表示还没解析出来"""
+    pending: int
+    """向量不可信（缺失或来自别的模型）的条数"""
+
+
+def _vector_identity() -> tuple[bool, str]:
+    from ATRI.system.agent.agent.memory.manage import llm_manager
+
+    if not llm_manager.has_slot("embedding"):
+        return False, ""
+    _, model_id = llm_manager.embedding_identity()
+    return True, str(model_id or "")
+
+
+@router.get(
+    "/get_memory_vector_status",
+    dependencies=[authentication()],
+    response_model=Result[MemoryVectorStatus],
+    response_class=JSONResponse,
+    description="向量补齐进度：有没有向量模型、还剩多少条待补",
+)
+async def _() -> Result[MemoryVectorStatus]:
+    try:
+        from ATRI.system.agent.agent.memory.manage import memory_manager
+
+        has_model, model_id = _vector_identity()
+        pending = (
+            memory_manager.database.count_vectors_needing_rebuild(model_id)
+            if has_model and model_id
+            else 0
+        )
+        return Result.ok(
+            MemoryVectorStatus(has_model=has_model, model_id=model_id, pending=pending),
+            "拿到信息啦!",
+        )
+    except Exception as e:
+        log.error(
+            f"{router.prefix}/get_memory_vector_status 调用错误:{str_traceback(e)}"
+        )
+        return Result.fail(f"发生了一点错误捏 {type(e)}: {e}")
+
+
+@router.post(
+    "/backfill_memory_vectors",
+    dependencies=[authentication()],
+    response_model=Result[MemoryVectorBackfill],
+    response_class=JSONResponse,
+    description="手动补算一批记忆向量（一次一条 embedding 调用，按重要度优先）",
+)
+async def _(limit: int = 20) -> Result[MemoryVectorBackfill]:
+    try:
+        from ATRI.system.agent.agent.memory.manage import (
+            VECTOR_BACKFILL_PER_RUN,
+            llm_manager,
+            memory_manager,
+        )
+
+        has_model, model_id = _vector_identity()
+        if not has_model:
+            return Result.fail("没有配置向量模型，无法补算向量", 400)
+        if not model_id:
+            return Result.fail("向量模型还没解析出标识，请先确认模型已注册", 400)
+
+        limit = max(1, min(int(limit), VECTOR_BACKFILL_PER_RUN))
+        pending_before = memory_manager.database.vectors_needing_rebuild(
+            model_id, limit=limit
+        )
+        filled = 0
+        stopped = False
+        reason = ""
+
+        for item in pending_before:
+            try:
+                vectors = (
+                    await llm_manager.call_agent(
+                        "embedding",
+                        item["content"],
+                        "补算记忆向量",
+                        app_id="memoryvector",
+                    )
+                ).content
+                vector = vectors[0]
+            except Exception as exc:
+                stopped = True
+                reason = f"{type(exc).__name__}: {exc}"
+                log.warning(f"补算记忆向量中止（已补 {filled} 条）：{reason}")
+                break
+            if memory_manager.database.update_embedding(
+                item["id"], vector, model_id, expected_model=item["model"]
+            ):
+                filled += 1
+
+        remaining = memory_manager.database.count_vectors_needing_rebuild(model_id)
+        info = f"补算完成：本次 {filled} 条，还剩 {remaining} 条"
+        return Result.ok(
+            MemoryVectorBackfill(
+                filled=filled, pending=remaining, stopped=stopped, reason=reason
+            ),
+            info,
+        )
+    except Exception as e:
+        log.error(
+            f"{router.prefix}/backfill_memory_vectors 调用错误:{str_traceback(e)}"
+        )
+        return Result.fail(f"发生了一点错误捏 {type(e)}: {e}")
+
+
+__all__ = [
+    "MemoryItem",
+    "MemoryPage",
+    "MemoryVectorBackfill",
+    "MemoryVectorStatus",
+    "router",
+]

@@ -824,6 +824,19 @@ class MemoryDB:
         pending.sort(key=lambda item: (item[0], item[1]), reverse=True)
         return [item[2] for item in pending[:limit]]
 
+    def count_vectors_needing_rebuild(self, model_id: str) -> int:
+        """待补向量的条数，口径与 ``vectors_needing_rebuild`` 一致。"""
+        wanted = str(model_id or "")
+        with _lock:
+            rows = self._table.select_all("id, metadata")
+        count = 0
+        for row in rows:
+            meta = json.loads(row[1]) if row[1] else {}
+            if wanted and self._has_trusted_vector(int(row[0]), meta, wanted):
+                continue
+            count += 1
+        return count
+
     def update_embedding(
         self,
         mem_id: int,

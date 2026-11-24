@@ -410,7 +410,9 @@ def _apply_timeout_damage(session: BattleSession, cfg: dict[str, Any]) -> int:
     if session.turn <= limit:
         return 0
     element = session.rng.choice(list(ENEMY_TIMEOUT_ELEMENTS))
-    return int(session._enemy_damage_to_pet(int(session.turn), element=str(element)))
+    # 命中威力（护盾吃掉的部分也算扣血，超时惩罚不该被盾白嫖）
+    hit, _taken = session._enemy_damage_to_pet(int(session.turn), element=str(element))
+    return int(hit)
 
 
 def _after_step(

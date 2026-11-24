@@ -475,6 +475,8 @@ rogue:
   log_death_burst: "回合{round} {name} 倒下时炸开，造成 {dmg} 伤害（你剩余 {hp}）。"
   log_dot_tick: "回合{round} 持续伤害造成 {dmg} 点（你剩余 {hp}）。"
   log_dot_end: "回合{round} 持续伤害结束。"
+  log_shield_absorbed: "回合{round} 护盾吸收了 {amount} 点伤害（剩余 {left}）。"
+  log_enemy_dodged: "回合{round} {actor} 打过来，被你闪开了。"
   # —— 精英专属机制（见 roguelike.yaml 的 elite_passives）——
   log_passive_shield_break: "回合{round} {name} 的护盾碎裂了！"
   log_passive_rage: "回合{round} {name} 被激怒了（攻击 +{pct}%，{stacks}/{cap} 层）。"

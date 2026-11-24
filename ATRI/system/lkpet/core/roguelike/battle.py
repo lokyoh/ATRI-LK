@@ -1593,22 +1593,35 @@ class BattleSession:
         strikes = max(1, int(skill.get("strikes", 1)))
         rate = float(skill.get("crit_rate", 0.0))
         dealt = 0
+        taken = 0
+        missed = 0
 
         if power > 0:
             for _ in range(strikes):
                 if self.pet_hp <= 0 or unit["hp"] <= 0:
                     break
-                dmg = self._enemy_damage_to_pet(
+                hit, dmg = self._enemy_damage_to_pet(
                     int(unit["atk"]),
                     multiplier=power / BASE_SKILL_POWER,
                     crit_rate=rate,
                     rec=rec,
                     element=str(skill.get("element") or "normal"),
                 )
+                if hit <= 0:
+                    missed += 1
+                    continue
                 self.pet_hp -= dmg
-                dealt += dmg
+                dealt += hit
+                taken += dmg
 
-            if charged:
+            if dealt <= 0 and missed:
+                self._blog(
+                    "log_enemy_dodged",
+                    "回合{round} {actor} 使用【{skill}】，但被你闪开了。",
+                    actor=unit["name"],
+                    skill=label,
+                )
+            elif charged:
                 self._blog(
                     "log_charge_hit",
                     "回合{round} {actor} 释放【{skill}】，造成 {dmg} 伤害！",
@@ -1633,8 +1646,9 @@ class BattleSession:
                     skill=label,
                     dmg=dealt,
                 )
+            self._blog_shield_absorbed(dealt - taken)
 
-        leeched = self._unit_leech(rec, dealt, float(skill.get("leech", 0.0)) or None)
+        leeched = self._unit_leech(rec, taken, float(skill.get("leech", 0.0)) or None)
         if leeched > 0:
             self._blog(
                 "log_leech",
@@ -1730,16 +1744,15 @@ class BattleSession:
         crit_rate: float = 0.0,
         rec: dict[str, Any] | None = None,
         element: str = "normal",
-    ) -> int:
-        """敌方打到我方的单次伤害（统一口径，含等级承伤乘区）。
+    ) -> tuple[int, int]:
+        """敌方打到我方的单次伤害，返回 ``(命中威力, 实际掉血)``。
 
-        敌方普攻与技能都走这里：基础伤害 → 技能/多段威力系数 → 暴击 →
-        **等级承伤乘区**（``level_taken_mult``，等级低于该层期望等级时 > 1，
-        即挨得更痛）→ **受击叠怒**（``rage`` 层数加成）。集中一处避免两条
-        路径的乘区口径分叉。
+        **命中威力至少 1**：打中就该见血，0 伤害只可能来自闪避（那时根本不走
+        这里）。护盾吸收的差额由调用方另行播报，「造成 0 伤害」是玩家读不懂
+        的句子。
         """
         if self.pet_dodge > 0 and self.rng.random() < self.pet_dodge:
-            return 0
+            return 0, 0
         # 敌方穿甲先削我方防御；玩家「坚固」抵消它（有效穿甲 = max(0, 敌穿甲 - 坚固)）
         defence = self._pet_def_eff()
         if rec is not None:
@@ -1772,11 +1785,24 @@ class BattleSession:
             per = float(rec.get("rage_per_stack", 0.0) or 0.0)
             if stacks > 0 and per > 0:
                 dmg = max(1, round(dmg * (1.0 + stacks * per)))
+        hit = max(1, dmg)
+        # 护盾吃掉的只是血，不改写命中威力
         if self.pet_shield > 0:
-            absorbed = min(self.pet_shield, dmg)
+            absorbed = min(self.pet_shield, hit)
             self.pet_shield -= absorbed
-            dmg -= absorbed
-        return dmg
+            return hit, max(0, hit - absorbed)
+        return hit, hit
+
+    def _blog_shield_absorbed(self, absorbed: int) -> None:
+        """护盾吃掉的差额单独播报：主伤害行仍报命中威力。"""
+        if absorbed <= 0:
+            return
+        self._blog(
+            "log_shield_absorbed",
+            "护盾吸收了 {amount} 点伤害（剩余 {left}）。",
+            amount=absorbed,
+            left=self.pet_shield,
+        )
 
     def _enemy_plain(self, rec: dict[str, Any]) -> None:
         """普攻。"""
@@ -1785,25 +1811,39 @@ class BattleSession:
         strike_mult = float(unit.get("strike_mult", 1.0))
         rate = float(unit.get("crit_rate", 0.0))
         dealt = 0
+        taken = 0
+        missed = 0
         for _ in range(strikes):
             if self.pet_hp <= 0 or unit["hp"] <= 0:
                 break
-            dmg = self._enemy_damage_to_pet(
+            hit, dmg = self._enemy_damage_to_pet(
                 int(unit["atk"]),
                 multiplier=strike_mult,
                 crit_rate=rate,
                 rec=rec,
                 element=str(unit.get("element") or "normal"),
             )
+            if hit <= 0:
+                missed += 1
+                continue
             self.pet_hp -= dmg
-            dealt += dmg
-        self._unit_leech(rec, dealt)
+            dealt += hit
+            taken += dmg
+        self._unit_leech(rec, taken)
+        if dealt <= 0 and missed:
+            self._blog(
+                "log_enemy_dodged",
+                "回合{round} {actor} 普攻，被你闪开了。",
+                actor=unit["name"],
+            )
+            return
         self._blog(
             "log_attack",
             "回合{round} {actor} 普攻，造成 {dmg} 伤害。",
             actor=unit["name"],
             dmg=dealt,
         )
+        self._blog_shield_absorbed(dealt - taken)
 
     def _enemy_action(self, rec: dict[str, Any]) -> None:
         """敌方行动。"""

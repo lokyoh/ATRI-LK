@@ -118,12 +118,20 @@ def render_options(run: RogueRun) -> str:
         "shop": "商店",
         "forge": "强化（本层可反复强化）",
     }
+    # 层级选项并排一行：内容长度差异大，各占一行时一眼扫不完
+    cells: list[str] = []
     for index, opt in enumerate(options, 1):
         label = names.get(str(opt.get("kind") or ""), str(opt.get("kind") or ""))
         body = f"{index}. {label}" if numbered else label
-        rows.append(line_link(body, f"{ENDLESS_CMD} {index}"))
+        cells.append(line_link(body, f"{ENDLESS_CMD} {index}"))
+    if cells:
+        rows.append("　".join(cells))
     rows.append("查看：状态 / 装备 / 技能 / 遗物 · 详情用「查看 名字」")
     return "\n".join(rows)
+
+
+FIXED_ACTIONS = ("普攻", "防御", "冥想")
+"""这三项始终存在且顺序固定，界面上并排一行。"""
 
 
 _PACK_MARKS = "①②③④⑤⑥"
@@ -221,12 +229,22 @@ def render_battle(run: RogueRun, *, log_limit: int = 8) -> str:
     )
     head = [x for x in head if x]
 
-    rows: list[str] = []
+    skills: list[str] = []
+    basics: list[str] = []
     for act in battle_actions(run):
         key = str(act.get("key") or "")
         label = str(act.get("label") or key)
         body = f"{key}. {label}" if numbered else label
-        rows.append(line_link(body, f"{ENDLESS_CMD} {key}"))
+        link = line_link(body, f"{ENDLESS_CMD} {key}")
+        if label in FIXED_ACTIONS:
+            basics.append(link)
+        else:
+            skills.append(link)
+    # 普攻 / 防御 / 冥想 固定并排一行放在技能之前：三项不随技能数变化
+    rows: list[str] = []
+    if basics:
+        rows.append("　".join(basics))
+    rows.extend(skills)
     if not rows:
         return "\n".join(head)
     return "\n".join([*head, "轮到你了：", *rows])

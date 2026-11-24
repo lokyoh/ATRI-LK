@@ -467,8 +467,12 @@ def _attach_attrs(
     血/蓝/条/冷却，不恢复元素加伤、穿甲、闪避、抗性、治疗/护盾加成，
     漏一处就从第二条指令起全部归零。
     """
+    from .relics import active_specials
+
     attrs = combat_attrs(run)
     apply_to_session(session, merge_attrs(attrs, _resist_layer(attrs)))
+    # 事件遗物的触发式特殊效果：每场都重新挂（会话会被重建）
+    session.pet_specials = active_specials({str(r): 1 for r in (run.relics or [])})
     # 默认挂一份按普攻算的乘区；技能的那一份在出手时按技能元素重算
     builder = mods_builder(attrs)
     session.pet_mods_builder = builder

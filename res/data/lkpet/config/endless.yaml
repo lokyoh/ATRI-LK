@@ -22,6 +22,11 @@ rewards:
   coins: { normal: 40, elite: 120, boss: 320, elite_fight: 60 }
   variance: 0.30
 
+events:
+  # 事件遗物是**可选项**：不拿就换一份略低于普通战斗的金币与经验。
+  relic_skip_ratio: 0.80
+  relic_skip_text: "不碰它，只收下盘缠"
+
 region:
   spread: 3
 

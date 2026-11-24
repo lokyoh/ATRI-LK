@@ -1,0 +1,67 @@
+# 事件遗物（设计 §6.3）：独立池、无档位、只能由事件获得。
+# 不进入掉落池、商店不出售、不计入任何套装。
+#
+# 每件：
+#   id      唯一标识（er_ 前缀）
+#   name    展示名
+#   desc    一句话描述（剧情性，玩家看到的就是它）
+#   weight  抽取权重
+#   effect  属性（可正可负，负数会直接减面板）
+#   special 触发式特殊效果（可选）：{ id, value, desc }
+#
+# special 的 id 必须是核心 triggers.py 认识的那几个，写错的会被忽略。
+
+relics:
+  # —— 双刃：强力增益 + 明确代价 ——
+  - { id: er_blood_pact, name: 血契, weight: 5, desc: 用血换力，签名处还在渗血。,
+      effect: { atk_pct: 0.25, hp_pct: -0.10 }, special: { id: bleed_self, value: 0.02, desc: 每回合自损 2% 生命 } }
+  - { id: er_glass_cannon, name: 琉璃之心, weight: 4, desc: 心脏被换成了琉璃，碰一下就会裂。,
+      effect: { atk_pct: 0.40, hp_pct: -0.25 } }
+  - { id: er_berserker, name: 狂战之证, weight: 4, desc: 徽章烫进肉里，从此不再闪避。,
+      effect: { atk_pct: 0.30, def_pct: -0.30 } }
+  - { id: er_last_stand, name: 背水一战, weight: 4, desc: 退路已被自己烧掉。,
+      effect: { hp_pct: -0.10 }, special: { id: low_hp_power, value: 0.35, desc: 生命低于 30% 时伤害 +35% } }
+  - { id: er_haste, name: 疾风之核, weight: 4, desc: 风钻进骨头缝里，比血还快。,
+      effect: { spd_pct: 0.40, hp_pct: -0.15 } }
+  - { id: er_gambler, name: 赌徒之骰, weight: 5, desc: 骰面刻满眼睛，总在看你。,
+      effect: { crit_rate: 0.25, accuracy: -0.15 } }
+  - { id: er_hollow, name: 空心人, weight: 3, desc: 胸腔里空了一块，风穿过去会响。,
+      effect: { atk_pct: 0.50, def_pct: -0.40, hp_pct: -0.20 } }
+  - { id: er_open_wound, name: 撕裂之伤, weight: 3, desc: 伤口不结痂，仿佛在等下一刀。,
+      effect: { atk_pct: 0.35 }, special: { id: taken_up, value: 0.20, desc: 受到的伤害 +20% } }
+  - { id: er_static, name: 静电缠身, weight: 3, desc: 指尖的电火花还没散去，蓝就漏了。,
+      effect: { skill_dmg: 0.30 }, special: { id: mp_drain, value: 0.05, desc: 每回合额外耗 5% 魔力 } }
+  - { id: er_rotting, name: 腐蚀之躯, weight: 3, desc: 肉在长，也在烂。,
+      effect: { hp_pct: 0.40, heal_gain: -1.0 } }
+  - { id: er_chain, name: 枷锁, weight: 3, desc: 锁链缠在腿上，也挡在身前。,
+      effect: { def_pct: 0.50, spd_pct: -0.35 } }
+  - { id: er_blind, name: 盲目, weight: 3, desc: 眼睛被缝上了，反而看得更清楚。,
+      effect: { crit_rate: 0.20, accuracy: -0.30 } }
+
+  # —— 纯正面：没有代价的稀有奖励 ——
+  - { id: er_first_blood, name: 先手之刃, weight: 6, desc: 只在第一击时才有分量。,
+      effect: { basic_dmg: 0.10 }, special: { id: first_strike, value: 0.25, desc: 对满血目标伤害 +25% } }
+  - { id: er_executioner, name: 处刑者, weight: 5, desc: 它闻得出谁快死了。,
+      effect: {}, special: { id: low_hp_target, value: 0.30, desc: 对生命低于 30% 的目标伤害 +30% } }
+  - { id: er_vampire, name: 嗜血之牙, weight: 5, desc: 牙缝里永远有别人的血。,
+      effect: { lifesteal: 0.08 } }
+  - { id: er_bulwark, name: 铁壁符文, weight: 5, desc: 刻在盾面上的古字，读不出来但按得下。,
+      effect: { def_pct: 0.20, solid: 0.10 } }
+  - { id: er_phoenix, name: 不死鸟之羽, weight: 2, desc: 灰里还剩一点温度。,
+      effect: {}, special: { id: revive_once, value: 1, desc: 每场战斗首次致死时留下 1 点生命 } }
+  - { id: er_guardian, name: 守护誓约, weight: 4, desc: 誓言是用伤口写的。,
+      effect: {}, special: { id: low_hp_guard, value: 0.25, desc: 生命低于 30% 时减伤 25% } }
+  - { id: er_thornmail, name: 荆棘锁甲, weight: 4, desc: 打它的人手会先流血。,
+      effect: { def_pct: 0.10 }, special: { id: thorns_out, value: 0.15, desc: 受到攻击时反弹 15% 伤害 } }
+  - { id: er_spring, name: 春泉, weight: 5, desc: 一小洼不会干的水。,
+      effect: { heal_gain: 0.40, hp_pct: 0.10 } }
+  - { id: er_arcane, name: 奥术余烬, weight: 5, desc: 上一场施法的残渣，还热着。,
+      effect: { mp_pct: 0.25, skill_dmg: 0.20 } }
+  - { id: er_precision, name: 猎手之眼, weight: 5, desc: 缝合的第三只眼，从不眨。,
+      effect: { accuracy: 0.20, crit_mult: 0.20 } }
+  - { id: er_slayer, name: 屠戮印记, weight: 4, desc: 每杀一个，印记就深一分。,
+      effect: { atk_pct: 0.10 }, special: { id: on_kill_heal, value: 0.15, desc: 击杀后回复 15% 生命 } }
+  - { id: er_prism, name: 元素棱镜, weight: 4, desc: 光穿过去就换了颜色。,
+      effect: { elem_all: 0.20 } }
+  - { id: er_iron_will, name: 铁志, weight: 4, desc: 疼是疼，但不会停。,
+      effect: { debuff_res: 0.30, hp: 20 } }

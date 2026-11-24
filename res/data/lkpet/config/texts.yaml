@@ -477,6 +477,10 @@ rogue:
   log_dot_end: "回合{round} 持续伤害结束。"
   log_shield_absorbed: "回合{round} 护盾吸收了 {amount} 点伤害（剩余 {left}）。"
   log_enemy_dodged: "回合{round} {actor} 打过来，被你闪开了。"
+  log_relic_kill_heal: "回合{round} 遗物回复 {heal} 点生命。"
+  log_relic_bleed: "回合{round} 遗物让你失去 {loss} 点生命。"
+  log_relic_thorns: "回合{round} 遗物反弹 {back} 点伤害。"
+  log_relic_revive: "回合{round} 遗物把你从死亡边缘拉了回来。"
   # —— 精英专属机制（见 roguelike.yaml 的 elite_passives）——
   log_passive_shield_break: "回合{round} {name} 的护盾碎裂了！"
   log_passive_rage: "回合{round} {name} 被激怒了（攻击 +{pct}%，{stacks}/{cap} 层）。"

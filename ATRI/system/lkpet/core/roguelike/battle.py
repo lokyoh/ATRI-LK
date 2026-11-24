@@ -236,6 +236,9 @@ class BattleSession:
         self.pet_solid = 0.0
         self.pet_dodge = 0.0
         self.accuracy = 0.0
+        # 事件遗物的触发式特殊效果 {id: value}；空字典 = 无（爬塔路径不变）
+        self.pet_specials: dict[str, float] = {}
+        self.specials_revived = False
         # 防御/冥想的独立乘区（与 def 无关，避免 def=0 时乘 1.5 仍是 0）
         self.pet_guard_mult = 1.0
         self.meditate_pct = 0.0
@@ -563,6 +566,100 @@ class BattleSession:
             dmg = max(1, round(dmg * self.crit_mult))
             self.crits += 1
         return dmg, is_crit
+
+    def _special_wildcard(self, key: str) -> float:
+        return float((self.pet_specials or {}).get(key, 0.0) or 0.0)
+
+    def _special_damage(self, dmg: int) -> int:
+        if not self.pet_specials:
+            return dmg
+        hp_pct = (self.pet_hp / self.hp_max) if self.hp_max else 1.0
+        if hp_pct < 0.3:
+            rate = self._special_wildcard("low_hp_power")
+            if rate > 0:
+                dmg = max(1, round(dmg * (1.0 + rate)))
+        return dmg
+
+    def _special_first_strike(self, dmg: int, enemy_full_hp: bool) -> int:
+        rate = self._special_wildcard("first_strike")
+        if rate <= 0 or not enemy_full_hp:
+            return dmg
+        return max(1, round(dmg * (1.0 + rate)))
+
+    def _special_execute(self, dmg: int, enemy_hp_pct: float) -> int:
+        rate = self._special_wildcard("low_hp_target")
+        if rate <= 0 or enemy_hp_pct >= 0.3:
+            return dmg
+        return max(1, round(dmg * (1.0 + rate)))
+
+    def _special_on_kill(self) -> None:
+        rate = self._special_wildcard("on_kill_heal")
+        if rate <= 0 or self.pet_hp <= 0:
+            return
+        healed = min(round(self.hp_max * rate), max(0, self.hp_max - self.pet_hp))
+        if healed > 0:
+            self.pet_hp += healed
+            self._blog(
+                "log_relic_kill_heal",
+                "回合{round} 遗物回复 {heal} 点生命。",
+                heal=healed,
+            )
+
+    def _special_round_tick(self) -> None:
+        if not self.pet_specials or self.pet_hp <= 0:
+            return
+        bleed = self._special_wildcard("bleed_self")
+        if bleed > 0:
+            loss = max(1, round(self.hp_max * bleed))
+            self.pet_hp = max(1, self.pet_hp - loss)
+            self._blog(
+                "log_relic_bleed",
+                "回合{round} 遗物让你失去 {loss} 点生命。",
+                loss=loss,
+            )
+        drain = self._special_wildcard("mp_drain")
+        if drain > 0:
+            loss_mp = max(1, round(self.mp_cap * drain))
+            self.pet_mp = max(0, self.pet_mp - loss_mp)
+
+    def _special_taken(self, dmg: int) -> int:
+        rate = self._special_wildcard("taken_up")
+        if rate <= 0:
+            return dmg
+        return max(1, round(dmg * (1.0 + rate)))
+
+    def _special_guard(self, dmg: int) -> int:
+        rate = self._special_wildcard("low_hp_guard")
+        if rate <= 0 or not self.hp_max:
+            return dmg
+        if (self.pet_hp / self.hp_max) >= 0.3:
+            return dmg
+        return max(1, round(dmg * (1.0 - min(0.9, rate))))
+
+    def _special_thorns(self, dealt: int) -> None:
+        rate = self._special_wildcard("thorns_out")
+        if rate <= 0 or dealt <= 0 or self.pet_hp <= 0:
+            return
+        back = max(1, round(dealt * rate))
+        self.pet_hp = max(1, self.pet_hp - back)
+        self._blog(
+            "log_relic_thorns",
+            "回合{round} 遗物反弹 {back} 点伤害。",
+            back=back,
+        )
+
+    def _special_revive(self) -> bool:
+        if self.specials_revived:
+            return False
+        if self._special_wildcard("revive_once") <= 0:
+            return False
+        self.specials_revived = True
+        self.pet_hp = 1
+        self._blog(
+            "log_relic_revive",
+            "回合{round} 遗物把你从死亡边缘拉了回来。",
+        )
+        return True
 
     def grant_opening_shield(self, base: int) -> int:
         """开战护盾：``base * (1 + shield_gain)``，返回实际授予量。
@@ -945,6 +1042,11 @@ class BattleSession:
                             enemy_resist=rec["unit"].get("resist") or None,
                         )
                         dealt = max(1, round(dmg * factor))
+                        enemy_cap = max(1, int(rec["hp_cap"] or 1))
+                        enemy_hp = int(rec["unit"]["hp"])
+                        dealt = self._special_damage(dealt)
+                        dealt = self._special_first_strike(dealt, enemy_hp >= enemy_cap)
+                        dealt = self._special_execute(dealt, enemy_hp / enemy_cap)
                         # 护盾先吃伤害；真正落到生命上的才计打断累积
                         # （打碎护盾不该等于「打疼了它」），而主伤害行仍报威力。
                         hp_dealt = self._absorb_shield(rec, dealt)
@@ -1033,6 +1135,11 @@ class BattleSession:
                     float(target["unit"].get("solid", 0.0) or 0.0),
                     enemy_resist=target["unit"].get("resist") or None,
                 )
+                enemy_cap = max(1, int(target["hp_cap"] or 1))
+                enemy_hp = int(target["unit"]["hp"])
+                dmg = self._special_damage(dmg)
+                dmg = self._special_first_strike(dmg, enemy_hp >= enemy_cap)
+                dmg = self._special_execute(dmg, enemy_hp / enemy_cap)
                 hp_dealt = self._absorb_shield(target, dmg)
                 target["unit"]["hp"] -= hp_dealt
                 self._blog(
@@ -1046,6 +1153,9 @@ class BattleSession:
                 self._charge_taken(target, hp_dealt)
                 self._strike_back(target["unit"], dmg)
                 self._unit_rage(target)
+                self._special_thorns(dmg)
+                if target["unit"]["hp"] <= 0:
+                    self._special_on_kill()
 
         self._settle_deaths()
 
@@ -1794,6 +1904,8 @@ class BattleSession:
             if stacks > 0 and per > 0:
                 dmg = max(1, round(dmg * (1.0 + stacks * per)))
         hit = max(1, dmg)
+        hit = self._special_taken(hit)
+        hit = self._special_guard(hit)
         # 护盾吃掉的只是血，不改写命中威力
         if self.pet_shield > 0:
             absorbed = min(self.pet_shield, hit)
@@ -1835,6 +1947,8 @@ class BattleSession:
                 missed += 1
                 continue
             self.pet_hp -= dmg
+            if self.pet_hp <= 0:
+                self._special_revive()
             dealt += hit
             taken += dmg
         self._unit_leech(rec, taken)
@@ -2069,6 +2183,7 @@ class BattleSession:
         if not self._siphon_opened:
             self._siphon_opened = True
             self._passive_siphon()
+            self._special_round_tick()
 
     def submit_action(self, action: dict[str, Any] | None) -> None:
         """玩家下达指令后继续跑。"""

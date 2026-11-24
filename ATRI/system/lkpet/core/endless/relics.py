@@ -248,6 +248,125 @@ def offer_relics(
     return out
 
 
+EVENT_RELICS_CFG = "endless_event_relics"
+"""事件遗物独立池（设计 §6.3）：无档位、只能由事件获得、不计套装。"""
+
+
+def event_relic_list(cfg: dict[str, Any] | None = None) -> list[dict[str, Any]]:
+    """事件遗物清单；配置文件缺失时返回空表。"""
+    from ...config_loader import load_config
+
+    try:
+        node = load_config(EVENT_RELICS_CFG)
+    except FileNotFoundError:
+        return []
+    return [dict(r) for r in (node.get("relics") or [])]
+
+
+def event_relic_specs(cfg: dict[str, Any] | None = None) -> dict[str, dict[str, Any]]:
+    return {str(r["id"]): r for r in event_relic_list(cfg)}
+
+
+def all_relic_specs(cfg: dict[str, Any] | None = None) -> dict[str, dict[str, Any]]:
+    """普通遗物 + 事件遗物合并查表：面板/查看要能查到两者。"""
+    out = relic_specs(cfg)
+    for relic_id, spec in event_relic_specs().items():
+        out.setdefault(relic_id, spec)
+    return out
+
+
+def is_cursed_relic(spec: dict[str, Any]) -> bool:
+    """这件是否带代价：有负属性，或特殊效果是损耗型的。"""
+    for value in (spec.get("effect") or {}).values():
+        if isinstance(value, int | float) and value < 0:
+            return True
+    node = spec.get("special") or {}
+    return str(node.get("id") or "") in DETRIMENTAL_SPECIALS
+
+
+DETRIMENTAL_SPECIALS = frozenset(
+    (
+        "bleed_self",
+        "mp_drain",
+        "taken_up",
+    )
+)
+"""代价型特殊效果：诅咒只在这些里抽。"""
+
+
+def roll_event_relic(
+    rng: random.Random,
+    owned: dict[str, int] | None = None,
+    *,
+    cfg: dict[str, Any] | None = None,
+    cursed_only: bool = False,
+) -> dict[str, Any] | None:
+    """按权重抽一件本局还没有的事件遗物；池空返回 None。"""
+    owned_ids = {str(k) for k in (owned or {})}
+    pool = [
+        r
+        for r in event_relic_list(cfg)
+        if str(r.get("id")) not in owned_ids and (not cursed_only or is_cursed_relic(r))
+    ]
+    if not pool:
+        return None
+    weights = [float(r.get("weight", 1) or 1) for r in pool]
+    total = sum(weights)
+    if total <= 0:
+        return dict(rng.choice(pool))
+    point = rng.uniform(0, total)
+    acc = 0.0
+    for spec, weight in zip(pool, weights, strict=True):
+        acc += weight
+        if point <= acc:
+            return dict(spec)
+    return dict(pool[-1])
+
+
+def is_event_relic(relic_id: str, cfg: dict[str, Any] | None = None) -> bool:
+    return str(relic_id) in event_relic_specs(cfg)
+
+
+def relic_attr_effects(
+    owned: dict[str, int] | None,
+    cfg: dict[str, Any] | None = None,
+) -> dict[str, float]:
+    """事件遗物的属性部分（含负值）。"""
+    specs = event_relic_specs(cfg)
+    total: dict[str, float] = {}
+    for relic_id, dup in (owned or {}).items():
+        spec = specs.get(str(relic_id))
+        if not spec:
+            continue
+        times = max(0, int(dup))
+        for key, value in (spec.get("effect") or {}).items():
+            if isinstance(value, int | float) and value:
+                total[str(key)] = total.get(str(key), 0.0) + float(value) * times
+    return total
+
+
+def active_specials(
+    owned: dict[str, int] | None,
+    cfg: dict[str, Any] | None = None,
+) -> dict[str, float]:
+    """本局生效的触发式特殊效果 {id: value}，同类取最大值。"""
+    specs = event_relic_specs(cfg)
+    out: dict[str, float] = {}
+    for relic_id, dup in (owned or {}).items():
+        if int(dup) <= 0:
+            continue
+        spec = specs.get(str(relic_id))
+        if not spec:
+            continue
+        node = spec.get("special") or {}
+        key = str(node.get("id") or "")
+        if not key:
+            continue
+        value = float(node.get("value", 1.0) or 1.0)
+        out[key] = max(out.get(key, 0.0), value)
+    return out
+
+
 def relic_effect(spec: dict[str, Any]) -> dict[str, Any]:
     """把一条遗物的 effect 摊平成属性键。"""
     return dict(spec.get("effect") or {})

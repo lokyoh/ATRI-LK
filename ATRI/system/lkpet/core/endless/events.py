@@ -51,12 +51,29 @@ def load_events_config() -> dict[str, Any]:
     return load_config("rogue_events")
 
 
+RELIC_POOL_CFG = "endless_event_pool"
+"""会发遗物的专属事件（与爬塔共用的基础事件表分开维护）。"""
+
+
+def relic_pool(region: str) -> list[dict[str, Any]]:
+    """本区域发遗物的专属事件；文件缺失时返回空表。"""
+    from ...config_loader import load_config
+
+    try:
+        node = load_config(RELIC_POOL_CFG)
+    except FileNotFoundError:
+        return []
+    raw = (node.get("events") or {}).get(str(region)) or []
+    return [dict(e) for e in raw]
+
+
 def region_events(
     region: str, cfg: dict[str, Any] | None = None
 ) -> list[dict[str, Any]]:
+    """基础事件 + 发遗物的专属事件，合成一个池。"""
     cfg = cfg or load_events_config()
     raw = (cfg.get("events") or {}).get(str(region)) or []
-    return [dict(e) for e in raw]
+    return [dict(e) for e in raw] + relic_pool(region)
 
 
 def pick_event(
@@ -74,7 +91,8 @@ def pick_event(
     pool = [e for e in region_events(region, cfg) if str(e.get("id")) not in seen]
     if not pool:
         return None
-    return dict(rng.choice(pool))
+    # 会发遗物的事件一律补一个「不拿」选项：遗物必须是可选的
+    return with_skip_choice(dict(rng.choice(pool)))
 
 
 def resolve_roll(
@@ -147,11 +165,25 @@ def apply_effect(
     if "elite_fight" in effect:
         changed["elite_fight"] = True
 
-    if "relic" in effect or "relic_tier" in effect:
-        changed["relic"] = effect.get("relic_tier") or effect.get("relic")
+    if "relic" in effect or "relic_tier" in effect or "event_relic" in effect:
+        spec = _grant_event_relic(run, effect, rng)
+        if spec is not None:
+            changed["relic"] = str(spec.get("id"))
+            changed["relic_name"] = str(spec.get("name") or "")
 
     if "curse" in effect:
-        changed["curse"] = True
+        spec = _grant_event_relic(run, effect, rng, cursed_only=True)
+        if spec is not None:
+            changed["curse"] = str(spec.get("id"))
+            changed["curse_name"] = str(spec.get("name") or "")
+
+    if "skip_relic" in effect:
+        from .flow import grant_reward
+
+        paid = grant_reward(run, _skip_ratio())
+        changed["exp"] = int(paid.get("exp", 0) or 0)
+        changed["coins"] = int(paid.get("coins", 0) or 0)
+        changed["levels"] = int(paid.get("levels", 0) or 0)
 
     if "chest" in effect:
         changed["chest"] = True
@@ -177,7 +209,87 @@ def choose_event(
         run.seen_events.append(event_id)
     changed["ok"] = True
     changed["text"] = str(choice.get("text") or "")
+    changed["skipped"] = "skip_relic" in (choice.get("effect") or {})
     return changed
+
+
+def _grant_event_relic(
+    run: Any,
+    effect: dict[str, Any],
+    rng: random.Random,
+    *,
+    cursed_only: bool = False,
+) -> dict[str, Any] | None:
+    """把一件事件遗物发给 run；点名 id 优先，否则按权重随机。"""
+    from .relics import event_relic_specs, roll_event_relic
+
+    owned = {str(r): 1 for r in (getattr(run, "relics", None) or [])}
+    named = str(effect.get("event_relic") or effect.get("relic") or "")
+    if named:
+        spec = event_relic_specs().get(named)
+        if spec is not None:
+            run.relics.append(named)
+            return spec
+    spec = roll_event_relic(rng, owned, cursed_only=cursed_only)
+    if spec is None:
+        return None
+    run.relics.append(str(spec["id"]))
+    return spec
+
+
+def _skip_ratio() -> float:
+    """不拿遗物时补偿的战斗奖励比例（endless.yaml 的 events.relic_skip_ratio）。"""
+    from .config import load_endless_config
+
+    node = load_endless_config().get("events") or {}
+    return float(node.get("relic_skip_ratio", 0.8) or 0.8)
+
+
+def _skip_label() -> str:
+    """「不拿遗物」那个选项的默认文案。"""
+    from .config import load_endless_config
+
+    node = load_endless_config().get("events") or {}
+    return str(node.get("relic_skip_text") or "不碰它，只收下盘缠")
+
+
+def with_skip_choice(
+    event: dict[str, Any],
+    *,
+    ratio: float | None = None,
+) -> dict[str, Any]:
+    """给「会发遗物」的事件补一个「不拿」选项。
+
+    遗物必须是可选的：不选它就拿一份略低于普通战斗的金币与经验。
+    已有 skip_relic 的事件不重复追加。
+    """
+    choices = list(event.get("choices") or [])
+    if not choices:
+        return event
+    if any(_grants_relic(c) for c in choices) is False:
+        return event
+    if any("skip_relic" in (c.get("effect") or {}) for c in choices):
+        return event
+    payload: dict[str, Any] = {"skip_relic": True}
+    if ratio is not None:
+        payload["ratio"] = float(ratio)
+    out = dict(event)
+    out["choices"] = [
+        *choices,
+        {"text": _skip_label(), "effect": payload},
+    ]
+    return out
+
+
+def _grants_relic(choice: dict[str, Any]) -> bool:
+    """这个选项会不会给遗物（含 curse 与 roll 分支）。"""
+    effect = choice.get("effect") or {}
+    if any(k in effect for k in ("relic", "relic_tier", "event_relic", "curse")):
+        return True
+    for branch in effect.get("roll") or []:
+        if _grants_relic({"effect": branch.get("effect") or {}}):
+            return True
+    return False
 
 
 def render_event(event: dict[str, Any]) -> str:
@@ -210,4 +322,10 @@ def render_result(changed: dict[str, Any]) -> str:
         parts.append("金币 " + format(int(changed["coins"]), "+d"))
     if changed.get("exp"):
         parts.append("经验 +" + str(changed["exp"]))
+    if changed.get("relic_name"):
+        parts.append("获得遗物【" + str(changed["relic_name"]) + "】")
+    if changed.get("curse_name"):
+        parts.append("获得【" + str(changed["curse_name"]) + "】")
+    if changed.get("skipped"):
+        parts.append("放弃遗物，换一份盘缠")
     return "\u3000".join(parts) or "什么都没发生。"

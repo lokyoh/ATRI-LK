@@ -1,0 +1,93 @@
+# 事件遗物的出处（设计 §6.3）：这些事件会给出事件遗物。
+#
+# 与 rogue_events.yaml **分开**：那份是爬塔与无尽共用的基础事件表，
+# 这里只加「会发遗物」的专属事件，两边合并成事件池。
+#
+# 遗物一律**可选**：pick_event 会给会发遗物的选项自动补一条「不拿」分支
+# （skip_relic），换一份略低于普通战斗的金币与经验。
+
+events:
+  plains:
+    - id: pl_r01
+      kind: boon
+      text: "麦田中央插着一把短刃，刃口还新，像是故意留给你的。"
+      choices:
+        - { text: "拔起来带走", effect: { event_relic: er_first_blood } }
+    - id: pl_r02
+      kind: boon
+      text: "石缝里渗出的泉水不慌不忙地滴进一只碗里，碗沿磨得很光滑。"
+      choices:
+        - { text: "舀一勺喝下", effect: { event_relic: er_spring } }
+    - id: pl_r03
+      kind: boon
+      text: "田埂上蹲着一个不动的人影，走近才发现它是用稻草和骨头扎的。"
+      choices:
+        - { text: "拆开它找找", effect: { event_relic: er_hollow } }
+
+  forest:
+    - id: fo_r01
+      kind: boon
+      text: "树上挂满了风干的眼球，其中一个还在转。"
+      choices:
+        - { text: "取下那一只", effect: { event_relic: er_precision } }
+    - id: fo_r02
+      kind: boon
+      text: "一段树根底下埋着刻满字的东西，边角被土咬得很圆。"
+      choices:
+        - { text: "把它挖出来", effect: { event_relic: er_iron_will } }
+    - id: fo_r03
+      kind: boon
+      text: "矮树丛里有什么在滴，你不是第一个发现这里的人。"
+      choices:
+        - { text: "把手伸进去", effect: { event_relic: er_vampire } }
+
+  lava:
+    - id: la_r01
+      kind: boon
+      text: "铁砧上摆着一枚还在发红的印子，形状像火。"
+      choices:
+        - { text: "按在胸口", effect: { event_relic: er_berserker } }
+    - id: la_r02
+      kind: boon
+      text: "熔渣堆里埋着一颗还在跳的心，颜色和石头不一样。"
+      choices:
+        - { text: "捧起来", effect: { event_relic: er_glass_cannon } }
+    - id: la_r03
+      kind: boon
+      text: "岩浆边上插着一根没烧完的羽毛，边缘还在冒烟。"
+      choices:
+        - { text: "抓住它", effect: { event_relic: er_phoenix } }
+
+  frost:
+    - id: fr_r01
+      kind: boon
+      text: "冰层下面压着一段缠满铁链的骨头，链子冻在肉里。"
+      choices:
+        - { text: "砸开冰面", effect: { event_relic: er_chain } }
+    - id: fr_r02
+      kind: boon
+      text: "冻僵的猎手把弓交到你手上，弓弦上还有温度。"
+      choices:
+        - { text: "接过弓", effect: { event_relic: er_executioner } }
+    - id: fr_r03
+      kind: boon
+      text: "一簇霜花在掌心开了，你是它第一个碰过的人。"
+      choices:
+        - { text: "含进嘴里", effect: { event_relic: er_static } }
+
+  abyss:
+    - id: ab_r01
+      kind: boon
+      text: "黑暗里有个声音在数数，数到七就停，然后从头开始。"
+      choices:
+        - { text: "继续数下去", effect: { event_relic: er_gambler } }
+    - id: ab_r02
+      kind: boon
+      text: "一面镜子竖在路中间，镜子里的人比你先抬了手。"
+      choices:
+        - { text: "看着它", effect: { event_relic: er_blind } }
+    - id: ab_r03
+      kind: boon
+      text: "祭坛中央有一道还没合上的伤口，血在地上写成一个字。"
+      choices:
+        - { text: "把名字签上去", effect: { event_relic: er_blood_pact } }

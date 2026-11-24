@@ -151,10 +151,11 @@ def settle(endless: Any, run: Any) -> dict[str, Any]:
 def codex_paths(endless: Any) -> dict[str, Any]:
     """图鉴进度（供「进度」回执）：已收集数与全集数。"""
     from .gear import gear_list
-    from .relics import relic_list
+    from .relics import event_relic_list, relic_list
     from .skills import ELEMENTS, SERIES
 
-    relics_total = len(relic_list())
+    # 事件遗物也进图鉴，所以分母要算上它，否则收集率永远到不了 100%
+    relics_total = len(relic_list()) + len(event_relic_list())
     equips_total = len(gear_list())
     skills_total = len(ELEMENTS) * len(SERIES)
     return {

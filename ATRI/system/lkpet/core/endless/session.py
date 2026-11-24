@@ -73,6 +73,8 @@ def dump_session(session: BattleSession) -> dict[str, Any]:
         "pet_lifesteal": session.pet_lifesteal,
         "pet_debuff_res": session.pet_debuff_res,
         "pet_dodge": session.pet_dodge,
+        "pet_specials": session.pet_specials,
+        "specials_revived": session.specials_revived,
         "accuracy": session.accuracy,
         "pet_element_resist": session.pet_element_resist,
         "pet_combat_mods": session.pet_combat_mods,
@@ -146,6 +148,8 @@ def load_session(session: BattleSession, data: dict[str, Any]) -> bool:
     session.pet_lifesteal = float(data.get("pet_lifesteal", 0.0) or 0.0)
     session.pet_debuff_res = float(data.get("pet_debuff_res", 0.0) or 0.0)
     session.pet_dodge = float(data.get("pet_dodge", 0.0) or 0.0)
+    session.pet_specials = dict(data.get("pet_specials") or {})
+    session.specials_revived = bool(data.get("specials_revived", False))
     session.accuracy = float(data.get("accuracy", 0.0) or 0.0)
     session.pet_element_resist = dict(data.get("pet_element_resist") or {})
     session.pet_combat_mods = dict(data.get("pet_combat_mods") or {})

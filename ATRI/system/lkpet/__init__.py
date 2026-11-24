@@ -12,8 +12,8 @@ from .config import LKPetConfig
 
 plugin = Service(
     "宠物",
-    "赛博宠物插件demo",
-    "0.5.0",
+    "赛博宠物养成、肉鸽冒险与无尽爬塔娱乐插件[demo]",
+    "0.6.0",
     Service.ServiceType.GAME,
 ).main_cmd("宠物")
 config: LKPetConfig = plugin.add_plugin_config(LKPetConfig)

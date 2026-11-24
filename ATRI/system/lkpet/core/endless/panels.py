@@ -21,7 +21,7 @@ from .gear import (
     take_from_stock,
     unequip,
 )
-from .relics import describe_sets, relic_specs, set_bonuses
+from .relics import all_relic_specs, describe_sets, set_bonuses
 from .skills import (
     ELEMENT_CN,
     SERIES_CN,
@@ -417,21 +417,26 @@ def skill_action(run: Any, action: str, arg: str, *, page: int = 1) -> tuple[str
 
 def relic_line(spec: dict[str, Any], dup: int = 1) -> str:
     """一件遗物的标题行；属性由下一行的 :func:`relic_note` 给出，不重复。"""
-    tier = int(spec.get("tier", 1) or 1)
+    tier = spec.get("tier")
     name = str(spec.get("name") or spec.get("id"))
     count = f" ×{dup}" if dup > 1 else ""
-    return f"T{tier} {name}{count}"
+    label = f"T{int(tier)}" if tier else "事件"
+    return f"{label} {name}{count}"
 
 
 def render_relics(run: Any) -> str:
     """遗物面板：已持有（按套分组）+ 套装进度。"""
-    specs = relic_specs()
+    specs = all_relic_specs()
     owned = _owned_relics(run)
     lines = [f"🎁 遗物（{len(run.relics)} 件）"]
     groups: dict[str, list[tuple[dict[str, Any], int]]] = {"散件": []}
     for relic_id, dup in owned.items():
         spec = specs.get(relic_id) or {"id": relic_id}
-        groups.setdefault(str(spec.get("set") or "散件"), []).append((spec, dup))
+        key = str(
+            spec.get("set")
+            or ("事件遗物" if str(spec["id"]).startswith("er_") else "散件")
+        )
+        groups.setdefault(key, []).append((spec, dup))
     for key, items in groups.items():
         if not items:
             continue
@@ -489,7 +494,7 @@ def find_spec(name: str) -> tuple[str, dict[str, Any]] | None:
     for kind, table in (
         ("技能", skill_specs()),
         ("装备", gear_specs()),
-        ("遗物", relic_specs()),
+        ("遗物", all_relic_specs()),
     ):
         for spec in table.values():
             if needle in (str(spec.get("name") or ""), str(spec.get("id") or "")):
@@ -584,9 +589,16 @@ def render_detail(kind: str, spec: dict[str, Any]) -> str:
 
             label = str((set_meta().get(set_key) or {}).get("name") or set_key)
             lines.append(f"套装：{label}")
+        elif str(spec.get("id") or "").startswith("er_"):
+            lines.append("来源：事件遗物（不计入套装、不进掉落池）")
+            if spec.get("desc"):
+                lines.append(str(spec["desc"]))
         else:
             lines.append("套装：散件")
         lines.extend(describe_attrs(dict(spec.get("effect") or {})))
+        special = spec.get("special") or {}
+        if special.get("desc"):
+            lines.append(f"特殊：{special['desc']}（已生效）")
         set_key = str(spec.get("set") or "")
         if set_key:
             bonus = set_bonuses({str(spec.get("id")): 1})

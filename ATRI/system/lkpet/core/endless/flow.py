@@ -25,7 +25,7 @@ from .progression import (
     award_exp,
     combat_attributes,
 )
-from .relics import set_bonuses, total_stat_bonuses
+from .relics import relic_attr_effects, set_bonuses, total_stat_bonuses
 from .run import RogueRun
 
 REWARD_EXP = {1: 40, 2: 40}
@@ -72,6 +72,25 @@ def coin_reward(run: RogueRun, *, elite: bool = False, boss: bool = False) -> in
     return max(1, round(base * rng.uniform(lo, hi)))
 
 
+def grant_reward(
+    run: RogueRun,
+    ratio: float,
+    *,
+    source: str = "event",
+) -> dict[str, int]:
+    """按普通战斗奖励的比例发一份经验与金币（事件里「不拿遗物」的补偿）。"""
+    rate = max(0.0, min(1.0, float(ratio or 0.0)))
+    if rate <= 0:
+        return {"exp": 0, "coins": 0}
+    exp = max(1, round(exp_reward(run) * rate))
+    coins = max(1, round(coin_reward(run) * rate))
+    from .progression import award_exp
+
+    levels = award_exp(run.progression, exp)
+    run.coins += coins
+    return {"exp": exp, "coins": coins, "levels": levels}
+
+
 def combat_attrs(run: RogueRun) -> dict[str, float]:
     """模板面板 + 升级加成 + 遗物平值/套装 + 装备，合成战斗属性表。"""
     cfg = _cfg()
@@ -79,6 +98,8 @@ def combat_attrs(run: RogueRun) -> dict[str, float]:
     relic_owned = {str(r): 1 for r in run.relics}
     flats = total_stat_bonuses(relic_owned)
     sets = set_bonuses(relic_owned)
+    # 事件遗物独立池：属性（可负）单算，通常不带套装
+    event_flats = relic_attr_effects(relic_owned)
     gear = equipped_effects(
         run.equip, None, (run.pending or {}).get("gear_enhance") or {}
     )
@@ -87,11 +108,22 @@ def combat_attrs(run: RogueRun) -> dict[str, float]:
     out["def"] = out.get("def", 0.0) + float(
         (cfg.get("balance") or {}).get("base_def", 0) or 0
     )
-    for source in (flats, gear):
+    for source in (flats, event_flats, gear):
         for key, value in source.items():
             out[key] = out.get(key, 0.0) + float(value)
     for key, value in sets.items():
         out[key] = out.get(key, 0.0) + float(value)
+    # *_pct 是乘区：之前只累计不使用，装备的副词条因此全被丢掉。
+    for flat, pct_key in (
+        ("atk", "atk_pct"),
+        ("def", "def_pct"),
+        ("spd", "spd_pct"),
+        ("hp", "hp_pct"),
+        ("mp", "mp_pct"),
+    ):
+        rate = float(out.get(pct_key, 0.0) or 0.0)
+        if rate:
+            out[flat] = max(0.0, out.get(flat, 0.0) * (1.0 + rate))
     return out
 
 

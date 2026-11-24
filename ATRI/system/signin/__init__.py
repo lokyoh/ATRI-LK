@@ -10,7 +10,7 @@ from ATRI.system.lkapi.bot.checker import IsLkUser
 
 from .config import SignInConfig
 
-plugin = Service("签到", "亚托莉的签到系统", "0.5.1", Service.ServiceType.ENTERTAINMENT)
+plugin = Service("签到", "亚托莉的签到系统", "0.5.2", Service.ServiceType.ENTERTAINMENT)
 
 config = plugin.add_plugin_config(SignInConfig)
 

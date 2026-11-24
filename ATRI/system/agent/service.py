@@ -9,7 +9,7 @@ plugin = (
     Service(
         "agent",
         "为ATRI-LK项目专门设计的智能体。",
-        "0.5.1",
+        "0.6.0",
         Service.ServiceType.SYSTEM,
     )
     .allow_switch(False)

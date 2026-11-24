@@ -2,12 +2,14 @@ import asyncio
 
 from nonebot.adapters.onebot.v11 import Message, MessageEvent
 from nonebot.adapters.qq import MessageEvent as QQMessageEvent
+from nonebot.exception import FinishedException
 from nonebot.internal.matcher import Matcher
 from nonebot.internal.params import ArgPlainText
 
 from ATRI.bot import BotUtils
 from ATRI.message import ATRIMessage, QQMessage, img_msg
 from ATRI.service import Service
+from ATRI.system.agent.agent.history import log_service_message
 from ATRI.system.htmlrender import md_to_pic
 from ATRI.system.lkapi.bot import util as lk_util
 from ATRI.system.lkapi.bot.checker import IsLkUser
@@ -20,7 +22,7 @@ from .data.fish import FishData
 from .data.user import get_fish_user_data
 from .data_source import FishingController
 
-plugin = Service("钓鱼", "ATRI的钓鱼插件", "0.4.1", Service.ServiceType.GAME).main_cmd(
+plugin = Service("钓鱼", "ATRI的钓鱼插件", "0.4.2", Service.ServiceType.GAME).main_cmd(
     "钓鱼"
 )
 
@@ -90,11 +92,40 @@ async def _(event: MessageEvent | QQMessageEvent):
 take = plugin.on_command("收线", "鱼上钩后收起鱼线", aliases={"收杆"})
 
 
+def take_summary(user_id, fish: dict) -> str:
+    """服务消息用的短摘要：谁钓到了什么、多大。
+
+    介绍不进——对后续对话没价值；长度与最大长度留着，
+    「这条差一点就破纪录」正是群里会接着聊的东西。
+    """
+    name = lk_util.get_name(user_id) or str(user_id)
+    parts = []
+    for item, num in fish.items():
+        if isinstance(item, FishData):
+            quality = f"-{item.quality}" if item.quality else ""
+            label = f"{item.fish.name}{quality}×{num}"
+            if item.length:
+                top = item.fish.size["max"]
+                if item.length >= top:
+                    label += f"({item.length}cm，最大长度!)"
+                else:
+                    label += f"({item.length}cm，最大{top}cm)"
+        else:
+            label = f"{item}×{num}"
+        parts.append(label)
+    return f"{name}钓到了{'、'.join(parts)}" if parts else f"{name}什么都没钓到"
+
+
 @take.handle([IsLkUser])
 async def _(event: MessageEvent | QQMessageEvent):
     user_id = event.get_user_id()
+    group_id = getattr(event, "group_id", None)
+    pending: list[str] = []
     try:
         fish, msg = FishingController.take_up(user_id)
+        summary = take_summary(user_id, fish)
+        if summary:
+            pending.append(summary)
         if msg:
             await take.send(
                 f"{lk_util.get_name(user_id)}获得成就:\n{'\n'.join(f'{m}' for m in msg)}"
@@ -116,8 +147,13 @@ async def _(event: MessageEvent | QQMessageEvent):
             await take.finish(fish_tip)
         else:
             await take.finish(img_msg(await md_to_pic(fish_tip)))
+    except FinishedException:
+        # 先发出去再记账：发送失败就不该有「她记得发生过」的记录。
+        for text in pending:
+            log_service_message(group_id, text, service="钓鱼")
+        raise
     except FishingException as e:
-        await through.finish(e.message)
+        await take.finish(e.message)
 
 
 goto = plugin.cmd_as_group("前往", "前往不同的钓鱼地点.如:湖、河、海")

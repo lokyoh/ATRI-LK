@@ -360,15 +360,12 @@ async def _run_agent(
         group_id=group_id,
     )
     if sender.sent_count:
-        from .history import log_bot_message
-        from .initiative_start import readable_history_text
+        from .history import record_agent_speech
 
-        for text in sender.sent:
-            plain = readable_history_text(text)
-            if plain:
-                log_bot_message(chat_id, plain)
+        # 定时任务说出的话是她自己说的，与主动开口同一条路径进聊天历史。
+        record_agent_speech(chat_id, list(sender.sent))
         for md_file, _ in sender.md_refs:
-            log_bot_message(chat_id, f"[md:{md_file}]")
+            record_agent_speech(chat_id, f"[md:{md_file}]")
 
 
 async def create_once(

@@ -11,6 +11,7 @@ from ..history import history_logger
 from ..telemetry import telemetry
 from .database import (
     EMBEDDING_MODEL_KEY,
+    EXPIRED_GRACE_DAYS,
     SELF_SUBJECT,
     VALID_UNTIL_KEY,
     MemoryDB,
@@ -517,6 +518,10 @@ async def summarize_memories():
         memory_manager.database.decay_all()
     except (OSError, RuntimeError, ValueError) as exc:
         log.warning(f"记忆遗忘失败：{exc}")
+    try:
+        memory_manager.database.purge_expired(EXPIRED_GRACE_DAYS)
+    except (OSError, RuntimeError, ValueError) as exc:
+        log.warning(f"过期记忆清理失败：{exc}")
     if not llm_manager.has_slot("memory"):
         log.info("没有配置记忆模型，跳过记忆总结")
         return

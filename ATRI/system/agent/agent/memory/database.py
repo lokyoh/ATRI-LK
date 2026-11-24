@@ -1,3 +1,4 @@
+import contextlib
 import json
 import math
 import re
@@ -49,6 +50,10 @@ CONSOLIDATED_KEY = "consolidated"
 #: 失效时间戳。「明天要上学」过期后仍是「明天」，这类事实一旦不退出检索，
 #: 她会说出明确错误的事——比记得少更糟。
 VALID_UNTIL_KEY = "valid_until"
+
+#: 过期宽限天数。过期当场就从检索里消失，但数据保留这几天再删——
+#: 抓错的时效（模型把永久事实猜成有期限）在这个窗口里还能人工救回来。
+EXPIRED_GRACE_DAYS = 7.0
 
 #: 向量缓存条数上限。997 条 1024 维约占 4 MB，无上限会随记忆线性涨；
 #: 留最近 2000 条足够覆盖「常被想起的那些」。
@@ -1001,6 +1006,40 @@ class MemoryDB:
                 telemetry.decay(count=changed, span_days=round(span_days, 2))
             except Exception:
                 pass
+
+    def purge_expired(self, grace_days: float = EXPIRED_GRACE_DAYS) -> int:
+        """删掉过期超过宽限期的记忆，返回删除条数。
+
+        过期当场就退出检索了（见 `query_by_vector` / `query_by_lexical`），
+        但行一直留着：不删就等于数据库只增不减。宽限期的作用是给「时效写错」
+        的记忆留一条命——模型把稳定偏好误判成有期限时，还能在到期后几天内
+        从 WebUI 看到并手工救回来。
+
+        连向量副表一起清，否则只剩一堆没有主表的孤儿向量。
+        """
+        now = _now()
+        cutoff = now - max(0.0, float(grace_days)) * 86400.0
+        expired_ids: list[int] = []
+        with _lock:
+            rows = self._table.select_all("id, metadata")
+            for row in rows:
+                meta = json.loads(row[1]) if row[1] else {}
+                stamp = _float_or(meta.get(VALID_UNTIL_KEY), 0.0)
+                # stamp <= 0 是永久有效，不参与清理。
+                if stamp > 0 and stamp <= cutoff:
+                    expired_ids.append(int(row[0]))
+            if not expired_ids:
+                return 0
+            for mem_id in expired_ids:
+                self._table.delete({"id": mem_id})
+                with contextlib.suppress(Exception):
+                    self._vectors_table.delete({"id": mem_id})
+                cache = getattr(self, "_vectors", None)
+                if cache is not None:
+                    cache.pop(mem_id, None)
+        if expired_ids:
+            log.info(f"清理了 {len(expired_ids)} 条过期记忆")
+        return len(expired_ids)
 
     def all_memories(self) -> list[dict[str, Any]]:
         rows = self._table.select_all()

@@ -245,6 +245,7 @@ thinking 产出 say(intent) / md(intent) / face(intent) / say_exact(text)
 - 语音回复由模型逐条决定（`say` / `md` 的 `voice` 参数，默认 false），文字先发、语音后台合成；总闸「允许语音回复」关闭后不生效，清洗后超过 `tts_max_chars` 也只发文字。通道通过 `ChatSender.can_send_record()` 与 `record_message()` 声明并封装语音：OneBot 用 `[CQ:record]`，QQ 官方群聊/C2C 用 `file_audio`（适配器会先上传再以 `msg_type=7` 发送，频道与私信没有音频接口因此不发）。
 - 图片同理走通道声明：`ChatSender.can_send_image()` / `image_message()`。OneBot 用 `image` 段；QQ 官方用 `QQMessage.img_msg()`，URL 走 `image` 段、本地文件/bytes 走 `file_image`（同样由适配器上传成 `msg_type=7`）。`face` 要求通道声明支持发图，因此 QQ 官方群聊/C2C 现在也能发表情。
 - 历史记录最终发出的内容，不记 intent。
+- **聊天历史只装对话**：她说的话与群友说的话进 `chat/`，签到、投喂这类服务消息进 `notice/`，两者不同文件、不同队列。服务消息只在思考提示词里单独占一段「群里刚发生的其他事」，不参与去重，也不进记忆总结——否则她分不清「谁在跟我说话」和「系统发生了什么」。她自己说的话（主动开口、定时任务）仍走 `record_agent_speech` 进聊天历史，因为她确实说了。
 
 ### 3.9 生活数据文件
 
@@ -285,6 +286,7 @@ class AgentConfig(PluginConfig):
     model_chat = Field(str, "", "聊天模型")
     ...  # 其余 10 个使用点，字段名见 3.1 的表
     max_history = Field(int, 30, ...)
+    max_service_notices = Field(int, 6, ...)
     max_thinking_times = Field(int, 20, ...)
     search = Field(
         dict,
@@ -302,7 +304,8 @@ class AgentConfig(PluginConfig):
 含义：
 
 - `model_think`：唯一必填；只填它也能跑，其余使用点缺失只影响对应功能
-- `max_history`：最大历史消息数，控制上下文窗口大小
+- `max_history`：最大历史消息数，控制上下文窗口大小（只算对话，服务消息不占额度）
+- `max_service_notices`：思考提示词里最多带几条服务消息（签到、投喂等，默认 6，设 0 不注入）。这些不进聊天历史，只作为「群里刚发生的其他事」旁注
 - `max_thinking_times`：Agent 的最大思考轮数
 - `max_side_effects_per_turn`：单回合副作用上限（默认 5）
 - `reply_max_chars` / `reply_inter_message_delay`：单条上限与分条间隔

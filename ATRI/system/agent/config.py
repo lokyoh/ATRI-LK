@@ -183,6 +183,16 @@ class AgentConfig(PluginConfig):
         "包含Agent自己发送的消息,提高此值可使Agent获取更多历史聊天,但也会消耗更多Token,默认值30",
         min=10,
     )
+    max_service_notices = Field(
+        int,
+        6,
+        "服务消息条数",
+        "思考提示词里最多带几条服务消息（签到、投喂等）。"
+        "这些不进聊天历史，只作为「群里刚发生的其他事」旁注，"
+        "默认 6，设 0 表示不注入",
+        min=0,
+        max=50,
+    )
     max_thinking_times = Field(
         int,
         20,

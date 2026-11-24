@@ -5,7 +5,7 @@ from ATRI.message import (
     MessageBuilder,
     QQMessage,
 )
-from ATRI.system.agent.agent.history import log_bot_message
+from ATRI.system.agent.agent.history import log_service_message
 from ATRI.system.help.qq import BTN_MENU
 from ATRI.system.lkapi.entity.user import get_user_data, sign
 
@@ -51,7 +51,7 @@ class Signin:
             await matcher.finish(message, at_sender=True)
         except FinishedException:
             for text in pending:
-                log_bot_message(group_id, text)
+                log_service_message(group_id, text, service="签到")
             raise
 
 
@@ -75,7 +75,11 @@ class QQSignin:
             content=InlineKeyboardRow(buttons=[BTN_SIGNIN, BTN_MENU])
         )
         await matcher.send(md + kb)
-        log_bot_message(getattr(event, "group_id", None), sign_summary(user_id, signed))
+        log_service_message(
+            getattr(event, "group_id", None),
+            sign_summary(user_id, signed),
+            service="签到",
+        )
 
 
 class SigninManager:

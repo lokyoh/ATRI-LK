@@ -3,6 +3,7 @@ import hashlib
 import io
 import json
 import os
+import re
 from sqlite3 import Error as SQLiteError
 from typing import ClassVar
 
@@ -595,6 +596,82 @@ class HistoryModel(BaseModel):
     history: list[HistoryNode]
 
 
+class NoticeNode(BaseModel):
+    service: str = ""
+    time: str
+    message: str
+
+
+class NoticeModel(BaseModel):
+    count: int = 0
+    chat_id: str
+    notices: list[NoticeNode]
+
+
+class NoticeLogger:
+    """服务消息（签到、投喂、提醒…）的独立记录。
+
+    这些既不是她说的、也不是群友说的，混进聊天历史会挤掉真实对话，
+    被记忆总结当成聊天内容，还会让「刚才聊了什么」失真。
+    """
+
+    def __init__(self):
+        from ..service import plugin
+
+        self.path = plugin.get_path() / "notice"
+
+    @staticmethod
+    def get_today_date():
+        return now().strftime("%Y-%m-%d")
+
+    def _file(self, chat_id):
+        return self.path / str(chat_id) / f"{self.get_today_date()}.json"
+
+    def _load_today(self, chat_id) -> NoticeModel:
+        file_path = self._file(chat_id)
+        if not file_path.exists():
+            return NoticeModel(chat_id=str(chat_id), notices=[])
+        try:
+            return NoticeModel.read_from_file(file_path)
+        except Exception:
+            log.warning(f"读取服务消息失败：{file_path}")
+            return NoticeModel(chat_id=str(chat_id), notices=[])
+
+    def add(self, chat_id, text, service="") -> bool:
+        body = str(text or "").strip()
+        if not body:
+            return False
+        try:
+            file_path = self._file(chat_id)
+            file_path.parent.mkdir(parents=True, exist_ok=True)
+            model = self._load_today(chat_id)
+            model.notices.append(
+                NoticeNode(
+                    service=str(service or ""),
+                    time=now().strftime("%H:%M"),
+                    message=body,
+                )
+            )
+            model.count += 1
+            model.write_into_file(file_path)
+            return True
+        except Exception as exc:
+            log.debug(f"服务消息写入失败（忽略）：{exc}")
+            return False
+
+    def get_recent_messages(self, chat_id, limit: int = 8) -> list[str]:
+        """只取今天的：隔天的服务消息对当下对话没有意义。"""
+        if limit <= 0:
+            return []
+        model = self._load_today(chat_id)
+        recent = [
+            f"{self.get_today_date()} {node.time} "
+            f"{f'[{node.service}] ' if node.service else ''}{node.message}"
+            for node in model.notices[-limit:]
+        ]
+        return recent
+
+
 class HistoryLogger:
     def __init__(self):
         from ..service import plugin
@@ -734,6 +811,7 @@ class ChatHistoryManager:
 
 
 history_logger = HistoryLogger()
+notice_logger = NoticeLogger()
 
 
 # `group_id` 缺失时的占位值。签到等服务的写法是
@@ -800,20 +878,18 @@ def in_chat_whitelist(chat_id) -> bool:
     return normalized in effective_chat_whitelist()
 
 
-def log_bot_message(chat_id, text) -> bool:
-    """把一条**机器人自己发出**的消息记进聊天历史。
+def log_service_message(chat_id, text, service: str = "") -> bool:
+    """把一条**服务发出**的消息记进服务消息记录（不进聊天历史）。
 
     服务（签到/投喂等）在发送成功后调用。返回是否真的记录了。
 
-    四个步骤，任一不过就返回 False：
+    为什么单独存：这些话既不是她说的、也不是群友说的。混进聊天历史会
+    挤掉真实对话、被记忆总结当成聊天内容，还会让「刚才聊了什么」失真。
+    它只在思考时作为旁注注入，不参与去重、不参与记忆总结。
 
-    1. chat_id 归一化（挡掉 None / "None" / 空串）；
-    2. 白名单检查——不在名单里就不记，避免为没人读的群白烧 Token；
-    3. 提取纯文本——带图片/@ 的消息直接 str() 会留下 CQ 码；
-    4. 走 `add_agent_message`，同时落盘与进内存队列
-       （只写盘的话，正在对话时读的是内存队列，本次看不到）。
-
-    **失败只记 debug**：记录是旁路，不能因为它让服务本身报错。
+    四步，任一不过就返回 False：chat_id 归一化、白名单检查、
+    文本去空白、写 notice 流水。**失败只记 debug**——记录是旁路，
+    不能因为它让服务本身报错。
     """
     normalized = _normalize_chat_id(chat_id)
     if not normalized:
@@ -828,14 +904,74 @@ def log_bot_message(chat_id, text) -> bool:
     except Exception:
         return False
 
+    return notice_logger.add(normalized, body, service=service)
+
+
+def _service_notice_limit() -> int:
+    """运行时读取注入条数，让 WebUI 配置立即生效。"""
     try:
-        reply = History(None, normalized)
-        reply.message = LLMMessage(normalized, [MessageSegment(body)])
-        ChatHistoryManager.get_history(normalized).add_agent_message(reply, body)
-        return True
+        return max(0, min(50, int(config.get("max_service_notices") or 0)))
+    except Exception:
+        return 0
+
+
+def recent_service_messages(chat_id, limit: int | None = None) -> list[str]:
+    """取最近的服务消息，供思考提示词作为旁注使用。
+
+    `limit` 缺省时读配置项 ``max_service_notices``；设 0 表示不注入。
+    """
+    normalized = _normalize_chat_id(chat_id)
+    if not normalized:
+        return []
+    count = _service_notice_limit() if limit is None else max(0, int(limit))
+    if count <= 0:
+        return []
+    try:
+        return notice_logger.get_recent_messages(normalized, count)
     except Exception as exc:
-        log.debug(f"服务消息写入历史失败（忽略）：{exc}")
-        return False
+        log.debug(f"读取服务消息失败（按空处理）：{exc}")
+        return []
+
+
+def readable_history_text(text: str) -> str:
+    """把可能含 CQ 码的文本转成历史里能读的样子。
+
+    她发 md 时发出去的是图片段，`str()` 之后是 `[CQ:image,file=xxx.png]`
+    或一长串 base64。这种内容进历史毫无意义，模型读不懂，还占上下文。
+    """
+    body = str(text or "").strip()
+    if not body:
+        return ""
+    if body.startswith("[CQ:") or body.startswith("base64://"):
+        if "image" in body[:20]:
+            return "[发了一张图]"
+        if "record" in body[:20]:
+            return "[发了一条语音]"
+        return "[发了一条富媒体消息]"
+    return re.sub(r"\[CQ:[^\]]*\]", "[富媒体]", body)
+
+
+def record_agent_speech(chat_id: str, texts: str | list[str]) -> None:
+    """把她自己说出的话写进聊天历史。
+
+    主动开口与定时任务走这条路径：没有对话人，`reply_to_mid` 留空，
+    多条时逐条记录（历史里应看到「诶」「你回来啦」是两条，不是拼成一句）。
+    不记录的话，她下一轮不知道自己刚说过什么，会重复提同一件事。
+
+    失败只记 warning——记录是旁路，不能因为写盘失败影响已发出的消息。
+    """
+    if isinstance(texts, str):
+        texts = [texts]
+    for raw in texts:
+        text = readable_history_text(raw)
+        if not text:
+            continue
+        try:
+            reply = History(None, chat_id)
+            reply.message = LLMMessage(chat_id, [MessageSegment(text)])
+            ChatHistoryManager.get_history(chat_id).add_agent_message(reply, text)
+        except Exception as exc:
+            log.warning(f"她自己说的话写入历史失败（消息已发出，忽略）：{exc}")
 
 
 def extract_plain_text(message) -> str:

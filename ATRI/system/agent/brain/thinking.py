@@ -8,7 +8,7 @@ from ..agent.action_executor import ActionExecutor
 from ..agent.explanations import get_top_explanations
 from ..agent.function_calling import FunctionCallingData, FunctionCallingManager
 from ..agent.function_permission import PermissionContext
-from ..agent.history import History, get_history_messages
+from ..agent.history import History, get_history_messages, recent_service_messages
 from ..agent.life import get_life_system
 from ..agent.memory.persona import render_memories, render_self_memories
 from ..agent.model import ChatArgs
@@ -192,19 +192,29 @@ class ThinkingModel:
         history_list: list[History],
         image_history: str,
         fallback_history: list[str],
+        service_notes: list[str] | None = None,
     ):
         # 历史聊天记录
         messages = await get_history_messages(bot, history_list, fallback_history)
         history_prompt = "#历史聊天记录,以下记录仅供参考\n" + (
             "\n".join(messages) if messages else "无历史聊天记录"
         )
+        # 服务消息单独一段：签到、投喂这些不是对话，不能和聊天记录混在一起，
+        # 否则她分不清「谁在跟我说话」和「系统发生了什么」。
+        notes_prompt = ""
+        if service_notes:
+            notes_prompt = (
+                "\n\n#群里刚发生的其他事（不是对你说的话）\n"
+                + "\n".join(service_notes)
+                + "\n#其他事结束\n"
+            )
         return (
-            f"{image_history}\n\n{history_prompt}\n#历史聊天记录结束\n\n"
+            f"{image_history}\n\n{history_prompt}\n#历史聊天记录结束\n{notes_prompt}\n"
             "# 现在轮到你行动，你与外界交互只能通过功能调用实现\n"
             "输出格式：\n"
             "我该怎么做的思考内容。\n"
             'say(intent="想表达的意思", tone="语气")\n'
-            'md(intent="这张卡片要说明什么", image="")\n'
+            'md(intent="这张卡片要说明什么")\n'
             'face(intent="想表达的情绪")\n'
             "...\n"
             "# 功能调用返回了数据，你会看到结果并继续思考；"
@@ -433,6 +443,7 @@ class ThinkingModel:
             history_list,
             image_history,
             fallback_history,
+            recent_service_messages(args.chat_id),
         )
         message = LLMMessage(role="user", content=LLMContents().text(prompt))
         self.messages.add_message(message)

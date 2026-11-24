@@ -1,3 +1,4 @@
+from pathlib import Path
 from typing import ClassVar
 
 import anyio
@@ -831,20 +832,26 @@ def register_function_calling():
         function_name = "md_read"
         aliases = ("read_md_message",)
         scope = FunctionScope.CHAT
-        description = "获取你发送的md格式消息"
+        description = "读回你自己发过的 Markdown 卡片，参数用历史里 [md:文件名] 的文件名"
         args: ClassVar = [
-            FunctionCallingArg(name="file", _type="str", description="文件名")
+            FunctionCallingArg(
+                name="file", _type="str", description="文件名，如 1794506150.27.md"
+            )
         ]
 
         @staticmethod
         async def call(data: FunctionCallingData):
-            md_file = data.data.get("file", "")
+            md_file = str(data.data.get("file") or "").strip()
+            # 只认纯文件名：允许 ../ 或路径分隔符就能读到配置与密钥。
+            if not md_file or md_file != Path(md_file).name:
+                return "获取失败"
             try:
                 from ..service import plugin
 
-                md_path = (
-                    plugin.get_path() / "chat" / str(data.chat_id) / "md" / md_file
-                )
+                base = plugin.get_path() / "chat" / str(data.chat_id) / "md"
+                md_path = base / md_file
+                if not md_path.resolve().is_relative_to(base.resolve()):
+                    return "获取失败"
                 async with await anyio.open_file(md_path, "r", encoding="utf-8") as f:
                     content = await f.read()
                 return content

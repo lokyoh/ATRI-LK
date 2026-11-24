@@ -6,6 +6,8 @@ from dataclasses import dataclass
 
 from ATRI.log import log
 
+from .history import record_agent_speech
+
 #: 允许主动开口的时段（含首不含尾）。与 `state.fatigue_for_hour` 的作息一致：
 #: 02:00–06:00 是她的睡眠时间，那段时间她**不该**在群里说话。
 SPEAK_HOUR_START = 8
@@ -636,65 +638,6 @@ def _group_id(chat_id: str):
     return int(text) if text.isdigit() else text
 
 
-def readable_history_text(text: str) -> str:
-    """把可能含 CQ 码的文本转成历史里能读的样子。
-
-    她调用 `md` 时发出去的是图片段，`str()` 之后是
-    `[CQ:image,file=xxx.png]` 或一长串 base64。这种内容进历史毫无意义，
-    模型读不懂，还占掉大量上下文。
-    """
-    body = str(text or "").strip()
-    if not body:
-        return ""
-    if body.startswith("[CQ:") or body.startswith("base64://"):
-        if "image" in body[:20]:
-            return "[发了一张图]"
-        if "record" in body[:20]:
-            return "[发了一条语音]"
-        return "[发了一条富媒体消息]"
-    import re
-
-    return re.sub(r"\[CQ:[^\]]*\]", "[富媒体]", body)
-
-
-def _record_to_history(chat_id: str, texts: str | list[str]) -> None:
-    """把主动说出的话写进对话历史。
-
-    为什么必须做：不记录的话，她下一轮对话时**不知道自己刚说过什么**，
-    会重复提同一件事、或与刚才的话自相矛盾。人不会这样。
-
-    实现要点：
-
-    - 用 `add_agent_message`，它同时写盘（`user_id=None` = 机器人）和进内存队列，
-      与正常回复走同一条路径；
-    - **不设 `reply_to_mid`**：主动开口不是在回复某条消息，设了会让历史里
-      出现「你在回复 mid:x」这种不存在的关联；
-    - 多条时**逐条记录**，与逐条发送保持一致——历史里应能看到
-      「诶」「你回来啦」分别是两条，而不是被拼成一句。
-
-    失败不影响已发出的消息——记录是旁路，不能因为写盘失败就报发送失败。
-    """
-    if isinstance(texts, str):
-        texts = [texts]
-    for raw in texts:
-        text = readable_history_text(raw)
-        if not text:
-            continue
-        try:
-            from .history import (
-                ChatHistoryManager,
-                History,
-                LLMMessage,
-                MessageSegment,
-            )
-
-            reply = History(None, chat_id)
-            reply.message = LLMMessage(chat_id, [MessageSegment(text)])
-            ChatHistoryManager.get_history(chat_id).add_agent_message(reply, text)
-        except Exception as exc:
-            log.warning(f"主动发言写入历史失败（消息已发出，忽略）：{exc}")
-
-
 async def try_speak(chat_id: str, bot) -> str | None:
     """某个群尝试主动开口一次。返回实际说出的话（没说则 None）。
 
@@ -723,9 +666,9 @@ async def try_speak(chat_id: str, bot) -> str | None:
             return None
 
         sent = list(sender.sent)
-        _record_to_history(chat_id, sent)
+        record_agent_speech(chat_id, sent)
         for md_file, _ in sender.md_refs:
-            _record_to_history(chat_id, f"[md:{md_file}]")
+            record_agent_speech(chat_id, f"[md:{md_file}]")
         mark_spoken(chat_id, opening)
         telemetry.record(
             "initiative_start",
@@ -892,8 +835,8 @@ async def _morning_once(chat_id: str, bot, hour: int) -> bool:
     if not sender.sent_count:
         return False
 
-    _record_to_history(chat_id, list(sender.sent))
+    record_agent_speech(chat_id, list(sender.sent))
     for md_file, _ in sender.md_refs:
-        _record_to_history(chat_id, f"[md:{md_file}]")
+        record_agent_speech(chat_id, f"[md:{md_file}]")
     mark_spoken_at(chat_id)
     return True

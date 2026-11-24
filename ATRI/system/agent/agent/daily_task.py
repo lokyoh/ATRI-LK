@@ -1,3 +1,5 @@
+from pathlib import Path
+
 from ATRI.event import Priority, daily_update
 from ATRI.log import log
 
@@ -19,16 +21,49 @@ async def agent_daily_task():
     await backfill_vectors()
 
 
+def _cleanup_chat_files(path: Path, days: int = 30) -> int:
+    """删掉过期的聊天历史 json 与 md 卡片正文，返回删除条数。
+
+    两类文件命名不同，判期方式也不同：历史是 `<date>.json`，
+    md 是 `<时间戳>.md`。旧逻辑只用 `fromisoformat` 判所有文件，
+    md 一律抛 ValueError 被跳过，于是永久累积。
+    """
+    from datetime import date, timedelta
+
+    from ATRI.utils.datetime import now, today
+
+    history_cutoff = today() - timedelta(days=days)
+    md_cutoff = (now() - timedelta(days=days)).timestamp()
+    removed = 0
+    for file_path in path.rglob("*"):
+        if not file_path.is_file():
+            continue
+        if file_path.suffix == ".md":
+            try:
+                if file_path.stat().st_mtime < md_cutoff:
+                    file_path.unlink()
+                    removed += 1
+            except OSError:
+                continue
+            continue
+        try:
+            file_date = date.fromisoformat(file_path.stem)
+        except ValueError:
+            continue
+        if file_date < history_cutoff:
+            file_path.unlink()
+            removed += 1
+    return removed
+
+
 @daily_update(priority=Priority.NORMAL)
 async def agent_cleanup_task():
     log.info("执行 Agent 清理任务")
-    from datetime import date, timedelta
-
     from .telemetry import prune_old_files
 
     prune_old_files()
 
-    from ATRI.utils.datetime import now, now_timestamp, today
+    from ATRI.utils.datetime import now_timestamp
     from ATRI.utils.sqlite import DataBase
 
     from ..service import plugin
@@ -40,19 +75,7 @@ async def agent_cleanup_task():
     if deleted_rows > 0:
         log.info(f"清理了 {deleted_rows} 个图片缓存记录")
 
-    path = plugin.get_path() / "chat"
-    history_cutoff = today() - timedelta(days=30)
-    removed_files = 0
-    for file_path in path.rglob("*"):
-        if not file_path.is_file():
-            continue
-        try:
-            file_date = date.fromisoformat(file_path.stem)
-        except ValueError:
-            continue
-        if file_date < history_cutoff:
-            file_path.unlink()
-            removed_files += 1
+    removed_files = _cleanup_chat_files(plugin.get_path() / "chat")
     if removed_files > 0:
         log.info(f"清理了 {removed_files} 个聊天历史文件")
 

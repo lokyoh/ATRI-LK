@@ -6,7 +6,7 @@ from nonebot.exception import FinishedException
 from ATRI.exceptions import str_traceback
 from ATRI.log import log
 from ATRI.message import MessageBuilder
-from ATRI.system.agent.agent.history import log_bot_message
+from ATRI.system.agent.agent.history import log_service_message
 from ATRI.system.lkapi.bot import PLUGIN_DIR
 from ATRI.system.lkapi.entity.user import get_user_data, sign
 from ATRI.system.lkapi.utils.picture import get_pic_from, has_source
@@ -80,7 +80,7 @@ class CoreSignin(Signin):
             await matcher.finish(message, at_sender=True)
         except FinishedException:
             for text in pending:
-                log_bot_message(group_id, text)
+                log_service_message(group_id, text, service="签到")
             raise
         except Exception as e:
             path = os.path.join(PLUGIN_DIR, "sign_in", f"{user_id}.jpg")
@@ -98,7 +98,7 @@ class CoreSignin(Signin):
                 await matcher.finish(message, at_sender=True)
             finally:
                 for text in pending:
-                    log_bot_message(group_id, text)
+                    log_service_message(group_id, text, service="签到")
 
 
 signin.change_signin(CoreSignin)

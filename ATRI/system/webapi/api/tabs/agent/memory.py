@@ -2,7 +2,7 @@ from datetime import datetime
 
 from fastapi import APIRouter
 from fastapi.responses import JSONResponse
-from pydantic import BaseModel
+from pydantic import BaseModel, ConfigDict
 
 from ATRI.exceptions import str_traceback
 from ATRI.log import log
@@ -185,6 +185,9 @@ class MemoryVectorBackfill(BaseModel):
 
 
 class MemoryVectorStatus(BaseModel):
+    # ``model_id`` 是前端在用的字段名，改不了；关掉 pydantic 的 model_ 保护名前缀
+    model_config = ConfigDict(protected_namespaces=())
+
     has_model: bool
     """是否配置了可用的向量模型"""
     model_id: str

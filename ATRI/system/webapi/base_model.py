@@ -68,13 +68,13 @@ class QueryModel[T](BaseModel):
     """携带数据"""
 
     @validator_decorator("index")
-    def index_validator(self, index):
+    def index_validator(cls, index):  # noqa: N805
         if index < 1:
             raise ValueError("查询下标小于1...")
         return index
 
     @validator_decorator("size")
-    def size_validator(self, size):
+    def size_validator(cls, size):  # noqa: N805
         if size < 1:
             raise ValueError("每页数量小于1...")
         return size

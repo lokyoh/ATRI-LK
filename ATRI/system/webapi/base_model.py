@@ -1,5 +1,5 @@
 from datetime import datetime
-from typing import Any, Generic, TypeVar
+from typing import Any, TypeVar
 
 from nonebot.compat import PYDANTIC_V2
 from pydantic import BaseModel
@@ -24,7 +24,7 @@ class Token(BaseModel):
     token_type: str
 
 
-class Result(BaseModel, Generic[RT]):
+class Result[RT](BaseModel):
     """
     总体返回
     """
@@ -55,7 +55,7 @@ class Result(BaseModel, Generic[RT]):
         return cls(suc=True, info=info, code=code, data=data)
 
 
-class QueryModel(BaseModel, Generic[T]):
+class QueryModel[T](BaseModel):
     """
     基本查询条件
     """
@@ -68,13 +68,13 @@ class QueryModel(BaseModel, Generic[T]):
     """携带数据"""
 
     @validator_decorator("index")
-    def index_validator(cls, index):
+    def index_validator(self, index):
         if index < 1:
             raise ValueError("查询下标小于1...")
         return index
 
     @validator_decorator("size")
-    def size_validator(cls, size):
+    def size_validator(self, size):
         if size < 1:
             raise ValueError("每页数量小于1...")
         return size

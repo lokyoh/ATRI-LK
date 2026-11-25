@@ -5,7 +5,6 @@
 
 import subprocess
 import sys
-from typing import List
 
 from ATRI.log import log as logger
 
@@ -13,7 +12,7 @@ from ATRI.log import log as logger
 class PackageManager:
     """Python 包管理器，负责安装和卸载 Python软件包"""
 
-    def __init__(self, executable: str = None):
+    def __init__(self, executable: str | None = None):
         """
         初始化包管理器
 
@@ -22,7 +21,7 @@ class PackageManager:
         """
         self.executable = executable or sys.executable
 
-    def _run_command(self, command: List[str]) -> tuple[bool, str]:
+    def _run_command(self, command: list[str]) -> tuple[bool, str]:
         """
         运行命令并返回执行结果
 
@@ -52,7 +51,7 @@ class PackageManager:
             logger.error(f"执行命令时发生异常：{' '.join(command)}, 错误：{e}")
             return False, str(e)
 
-    def install(self, packages: List[str], upgrade: bool = False) -> tuple[bool, str]:
+    def install(self, packages: list[str], upgrade: bool = False) -> tuple[bool, str]:
         """
         安装 Python软件包
 
@@ -77,7 +76,7 @@ class PackageManager:
         logger.info(f"开始安装包：{packages}")
         return self._run_command(command)
 
-    def uninstall(self, packages: List[str], yes: bool = True) -> tuple[bool, str]:
+    def uninstall(self, packages: list[str], yes: bool = True) -> tuple[bool, str]:
         """
         卸载 Python软件包
 
@@ -117,7 +116,7 @@ class PackageManager:
         logger.info(f"从文件安装依赖：{requirements_file}")
         return self._run_command(command)
 
-    def freeze(self) -> List[str]:
+    def freeze(self) -> list[str]:
         """
         获取已安装的包列表
 
@@ -142,7 +141,7 @@ class PackageManager:
             logger.error(f"获取已安装包列表失败：{e}")
             return []
 
-    def list_installed(self) -> List[dict]:
+    def list_installed(self) -> list[dict]:
         """
         获取已安装的包详细信息
 

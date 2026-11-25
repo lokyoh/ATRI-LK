@@ -1,14 +1,3 @@
-"""内置 Edge 语音合成供应商（edge-tts）。
-
-为什么内置：``lkbot/tools/rec_editor.py`` 里原本就有一份 edge-tts 的调用，
-但它只能同步、写死音色，而且和 Agent 的模型体系完全无关。这里把它接成一个
-正常的 tts 供应商：仍走 ``llm_manager.call_agent("tts", ...)`` 这条路径，
-既可以用内置 Edge，也可以换成任意 OpenAI 兼容的 ``/audio/speech`` 服务。
-
-不需要 API 密钥，但需要能访问微软的语音服务（大陆网络可能需要代理，可在模型
-的「附加配置」里填 ``proxy``）。只注册 ``tts`` 能力，不挤占任何文本使用点。
-"""
-
 from __future__ import annotations
 
 import re

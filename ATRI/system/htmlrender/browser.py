@@ -1,5 +1,6 @@
+from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
-from typing import AsyncIterator, Optional
+
 from playwright.async_api import Browser, Error, Page, Playwright, async_playwright
 
 from ATRI import conf
@@ -7,8 +8,8 @@ from ATRI.log import log
 
 config = conf.BrowsConfig
 
-_browser: Optional[Browser] = None
-_playwright: Optional[Playwright] = None
+_browser: Browser | None = None
+_playwright: Playwright | None = None
 
 
 async def init(**kwargs) -> Browser:
@@ -93,7 +94,7 @@ async def install_browser():
         sys.argv = ["", "install", "chromium"]
     try:
         log.info("正在安装依赖")
-        os.system("playwright install-deps")  # noqa: ASYNC102, S605, S607
+        os.system("playwright install-deps")
         main()
     except SystemExit as e:
         if e.code == 0:

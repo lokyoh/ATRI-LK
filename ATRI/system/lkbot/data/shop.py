@@ -14,7 +14,13 @@ class Shop:
         self._goods_coin_type = []
         self._goods_limit = []
 
-    def add_goods(self, item_name: str | Item, price: int, coin_type: str = "ATRI币", limit: int = 0):
+    def add_goods(
+        self,
+        item_name: str | Item,
+        price: int,
+        coin_type: str = "ATRI币",
+        limit: int = 0,
+    ):
         """
         添加商品:
         item_name: 物品名
@@ -29,13 +35,19 @@ class Shop:
                 log.error(f"{self._name} 在添加物品时出现错误:物品 {item_name} 不存在")
                 return self
         if price <= 0:
-            log.error(f"{self._name} 在添加物品时出现错误:物品 {item_name} 的价格 {price} 非法")
+            log.error(
+                f"{self._name} 在添加物品时出现错误:物品 {item_name} 的价格 {price} 非法"
+            )
             return self
         if not (coin_type == "ATRI币" or items.has_item(coin_type)):
-            log.error(f"{self._name} 在添加物品时出现错误:找不到物品 {item_name} 的货币类型 {coin_type}")
+            log.error(
+                f"{self._name} 在添加物品时出现错误:找不到物品 {item_name} 的货币类型 {coin_type}"
+            )
             return self
         if limit < 0:
-            log.error(f"{self._name} 在添加物品时出现错误:物品 {item_name} 的购买数量限制 {limit} 非法")
+            log.error(
+                f"{self._name} 在添加物品时出现错误:物品 {item_name} 的购买数量限制 {limit} 非法"
+            )
             return self
         self._goods_list.append(item_name)
         self._goods_price.append(price)
@@ -77,9 +89,7 @@ class Shop:
 
     def has_goods(self, item_name: str) -> bool:
         """检查商店是否拥有指定物品"""
-        if item_name in self._goods_list:
-            return True
-        return False
+        return item_name in self._goods_list
 
     def clear_goods(self):
         """清空商店"""
@@ -117,9 +127,7 @@ class ShopRegister:
 
     def has_shop(self, shop_name: str):
         """检查是否拥有指定商店"""
-        if shop_name in self._shop_names:
-            return True
-        return False
+        return shop_name in self._shop_names
 
     def get_shop_names(self) -> list:
         """获取商店名列表"""

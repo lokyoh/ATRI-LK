@@ -1,8 +1,3 @@
-"""按日 JSON 的读写：日程、穿搭、位置快照。
-
-所有写入先写临时文件再 `os.replace()`；旧文件只保留最近 N 天。
-"""
-
 from __future__ import annotations
 
 import json

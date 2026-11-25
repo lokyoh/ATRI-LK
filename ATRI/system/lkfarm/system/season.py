@@ -1,7 +1,9 @@
 from enum import Enum
 
+
 class Season(Enum):
     """春3-5，夏6-8，秋9-11，冬12-2"""
+
     SPRING = "春季"
     SUMMER = "夏季"
     AUTUMN = "秋季"

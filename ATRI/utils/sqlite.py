@@ -25,7 +25,7 @@ class Cursor:
         else:
             if isinstance(content, str):
                 pass
-            elif isinstance(content, (tuple, list)):
+            elif isinstance(content, tuple | list):
                 content = ", ".join(content)
             else:
                 raise TypeError
@@ -33,7 +33,7 @@ class Cursor:
                 self.cursor.execute(
                     f"INSERT INTO {self.table_name} ({content}) VALUES ({value})"
                 )
-            elif isinstance(value, (tuple, list)):
+            elif isinstance(value, tuple | list):
                 placeholder = ", ".join("?" for _ in value)
                 self.cursor.execute(
                     f"INSERT INTO {self.table_name} ({content}) VALUES ({placeholder})",
@@ -48,7 +48,7 @@ class Cursor:
         values = ()
         if isinstance(req, str):
             condition = req
-        elif isinstance(req, (tuple, list)):
+        elif isinstance(req, tuple | list):
             condition = "AND ".join(f"{c} = ?" for c in req[0])
             values = req[1]
         elif isinstance(req, dict):
@@ -58,7 +58,7 @@ class Cursor:
             raise TypeError
         if isinstance(content, str):
             pass
-        elif isinstance(content, (tuple, list)):
+        elif isinstance(content, tuple | list):
             values = (*content[1], *values)
             content = ", ".join(f"{c} = ?" for c in content[0])
         elif isinstance(content, dict):
@@ -78,7 +78,7 @@ class Cursor:
     def delete(self, req: str | tuple | list | dict):
         if isinstance(req, str):
             self.cursor.execute(f"DELETE FROM {self.table_name} WHERE {req}")
-        elif isinstance(req, (tuple, list, dict)):
+        elif isinstance(req, tuple | list | dict):
             if isinstance(req, dict):
                 condition = req.keys()
                 values = tuple(req.values())
@@ -129,7 +129,7 @@ class DBTable:
             result = cursor.execute(
                 f"SELECT {content} FROM {self.table_name} WHERE {req}"
             )
-        elif isinstance(req, (tuple, list, dict)):
+        elif isinstance(req, tuple | list | dict):
             if isinstance(req, dict):
                 condition = req.keys()
                 values = tuple(req.values())

@@ -1,5 +1,3 @@
-"""生活系统 API：日程、位置、穿搭、家。"""
-
 from fastapi import APIRouter
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel

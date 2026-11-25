@@ -6,7 +6,7 @@ from ATRI.log import log
 from ATRI.service import ServiceTools
 from ATRI.system.plugin_store import progress
 from ATRI.system.plugin_store.compat import lkapi_note
-from ATRI.system.plugin_store.data_source import PluginEntry, PluginManager
+from ATRI.system.plugin_store.data_source import PluginManager
 from ATRI.version import compat_range, framework_version, lkapi_version
 
 from ....base_model import Result
@@ -60,18 +60,12 @@ async def _() -> Result[dict]:
         plugin_data = await PluginManager.get_plugin_list()
         # 获取已安装的模块列表
         plugins = list(ServiceTools.service_list.keys())
+        # 适配版本以仓库远端 meta.yml 为准，本地 meta.yml 只作兜底
+        entries = await PluginManager.get_entries(list(plugin_data))
         # 转换插件数据格式
         plugin_list = []
-        for idx, (plugin_name, plugin_info) in enumerate(plugin_data.items()):
-            raw_info = dict(plugin_info)
-            local_meta = PluginManager.read_local_meta(plugin_name, raw_info)
-            if local_meta:
-                raw_info = {
-                    **raw_info,
-                    **{k: v for k, v in local_meta.items() if v is not None},
-                    "repo": raw_info.get("repo") or local_meta.get("repo") or "",
-                }
-            entry = PluginEntry.from_mapping(plugin_name, raw_info)
+        for idx, entry in enumerate(entries):
+            plugin_name = entry.name
             p_version = entry.version
             if p_version == "github":
                 p_version = "unknown"

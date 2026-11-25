@@ -1,5 +1,3 @@
-"""模型层对外入口；供应商类型全部来自 registry。"""
-
 from ATRI.exceptions import str_traceback
 
 from ..utils import log as logger

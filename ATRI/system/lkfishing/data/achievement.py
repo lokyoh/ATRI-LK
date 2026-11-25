@@ -1,5 +1,5 @@
-from .fish import FishData
 from ..database import AchievementData
+from .fish import FishData
 
 
 class Achievement:
@@ -23,63 +23,73 @@ def check_achievement(achievement: AchievementData, data, msg):
         achieve = ach.func(achievement=achievement, data=data)
         if achieve:
             achievement.achieve.append(ach.name)
-            msg.append(f'[{ach.name}]-{ach.description}')
+            msg.append(f"[{ach.name}]-{ach.description}")
 
 
 def fishing_times_achi(times):
     def func(**kwargs):
-        achievement: AchievementData = kwargs['achievement']
-        if achievement.achievement_data.get('times', 0) >= times:
-            return True
-        return False
+        achievement: AchievementData = kwargs["achievement"]
+        return achievement.achievement_data.get("times", 0) >= times
 
     return func
 
 
 def fishing_types_achi(times):
     def func(**kwargs):
-        achievement: AchievementData = kwargs['achievement']
+        achievement: AchievementData = kwargs["achievement"]
         _times = 0
         for f in achievement.fish_data:
-            if 'length' in achievement.fish_data[f]:
+            if "length" in achievement.fish_data[f]:
                 _times += 1
-        if _times >= times:
-            return True
-        return False
+        return _times >= times
 
     return func
 
 
 def load_achievements():
-    achievements.append(Achievement('第一次尝试!', '第一次尝试钓鱼,从现在开始你的钓鱼人生吧!', fishing_times_achi(1)))
-    achievements.append(Achievement('略有心得', '钓鱼10次', fishing_times_achi(10)))
-    achievements.append(Achievement('乐此不疲', '钓鱼50次', fishing_times_achi(50)))
-    achievements.append(Achievement('风雨无阻', '钓鱼100次', fishing_times_achi(100)))
-    achievements.append(Achievement('塘边常客', '钓鱼250次', fishing_times_achi(250)))
-    achievements.append(Achievement('痴迷钓手', '钓鱼500次', fishing_times_achi(500)))
-    achievements.append(Achievement('时间管理大师', '钓鱼1000次', fishing_times_achi(1000)))
-    achievements.append(Achievement('开图鉴啦', '钓到3种不同鱼类', fishing_types_achi(3)))
-    achievements.append(Achievement('口味广泛', '钓到5种不同鱼类', fishing_types_achi(5)))
-    achievements.append(Achievement('收藏入门', '钓到10种不同鱼类', fishing_types_achi(10)))
-    achievements.append(Achievement('见多识广', '钓到20种不同鱼类', fishing_types_achi(20)))
-    achievements.append(Achievement('鱼类百科', '钓到35种不同鱼类', fishing_types_achi(35)))
+    achievements.append(
+        Achievement(
+            "第一次尝试!",
+            "第一次尝试钓鱼,从现在开始你的钓鱼人生吧!",
+            fishing_times_achi(1),
+        )
+    )
+    achievements.append(Achievement("略有心得", "钓鱼10次", fishing_times_achi(10)))
+    achievements.append(Achievement("乐此不疲", "钓鱼50次", fishing_times_achi(50)))
+    achievements.append(Achievement("风雨无阻", "钓鱼100次", fishing_times_achi(100)))
+    achievements.append(Achievement("塘边常客", "钓鱼250次", fishing_times_achi(250)))
+    achievements.append(Achievement("痴迷钓手", "钓鱼500次", fishing_times_achi(500)))
+    achievements.append(
+        Achievement("时间管理大师", "钓鱼1000次", fishing_times_achi(1000))
+    )
+    achievements.append(
+        Achievement("开图鉴啦", "钓到3种不同鱼类", fishing_types_achi(3))
+    )
+    achievements.append(
+        Achievement("口味广泛", "钓到5种不同鱼类", fishing_types_achi(5))
+    )
+    achievements.append(
+        Achievement("收藏入门", "钓到10种不同鱼类", fishing_types_achi(10))
+    )
+    achievements.append(
+        Achievement("见多识广", "钓到20种不同鱼类", fishing_types_achi(20))
+    )
+    achievements.append(
+        Achievement("鱼类百科", "钓到35种不同鱼类", fishing_types_achi(35))
+    )
 
     def is_max_length(**kwargs):
-        fish_data = kwargs['data']
+        fish_data = kwargs["data"]
         if not isinstance(fish_data, FishData):
             return False
-        if fish_data.length and fish_data.length == fish_data.fish.size['max']:
-            return True
-        return False
+        return bool(fish_data.length and fish_data.length == fish_data.fish.size["max"])
 
-    achievements.append(Achievement('好长!!!', '钓到一次最长长度的鱼', is_max_length))
+    achievements.append(Achievement("好长!!!", "钓到一次最长长度的鱼", is_max_length))
 
     def is_max_quality(**kwargs):
-        fish_data = kwargs['data']
+        fish_data = kwargs["data"]
         if not isinstance(fish_data, FishData):
             return False
-        if fish_data.quality and fish_data.quality == '铱':
-            return True
-        return False
+        return bool(fish_data.quality and fish_data.quality == "铱")
 
-    achievements.append(Achievement('极品!!!', '钓到一次铱品质的鱼', is_max_quality))
+    achievements.append(Achievement("极品!!!", "钓到一次铱品质的鱼", is_max_quality))

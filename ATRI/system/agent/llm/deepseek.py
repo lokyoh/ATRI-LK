@@ -1,12 +1,3 @@
-"""DeepSeek 官方接口。
-
-与 OpenAI 兼容层的三点差异：
-
-- 推理模型（reasoner / r1）拒收 temperature，带上直接 400；
-- 正文可能为空，思考内容在 reasoning_content 里；
-- 缓存命中字段两种形状都要认。
-"""
-
 import re
 from typing import Any
 

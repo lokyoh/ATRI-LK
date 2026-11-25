@@ -1,7 +1,6 @@
 import json
 from enum import Enum
-from typing import Dict, Any
-from typing import TypeVar
+from typing import Any, TypeVar
 
 from ATRI.log import log
 from ATRI.message import MessageBuilder
@@ -11,23 +10,30 @@ from .item_func import ConditionNotMet, ItemFuncs, item_funcs
 
 class ItemType(Enum):
     """物品种类"""
-    TOOL = '工具'
-    PROP = '道具'
-    SEED = '种子'
-    VEGETABLE = '蔬菜'
-    FRUIT = '水果'
-    FLOWER = '花'
-    FISH = '鱼'
-    COIN = '货币'
-    OTHER = '其他'
+
+    TOOL = "工具"
+    PROP = "道具"
+    SEED = "种子"
+    VEGETABLE = "蔬菜"
+    FRUIT = "水果"
+    FLOWER = "花"
+    FISH = "鱼"
+    COIN = "货币"
+    OTHER = "其他"
     ERROR = "未知物品"
 
 
 class Item:
     """物品的基本数据定义"""
 
-    def __init__(self, item_name: str, item_type: ItemType = ItemType.OTHER, item_info='', item_price=0,
-                 using_funcs: ItemFuncs = None):
+    def __init__(
+        self,
+        item_name: str,
+        item_type: ItemType = ItemType.OTHER,
+        item_info="",
+        item_price=0,
+        using_funcs: ItemFuncs = None,
+    ):
         """
         name 物品名称，要求不为空
         """
@@ -47,7 +53,7 @@ class Item:
             for func in self._using_funcs.funcs:
                 func_message.text(item_funcs.exec_func(func, user_data))
         except ConditionNotMet as e:
-            return func_message.text(f'{e.prompt}')
+            return func_message.text(f"{e.prompt}")
         return func_message
 
     def get_item_name(self) -> str:
@@ -56,15 +62,15 @@ class Item:
 
     def get_item_info(self) -> str:
         """获取物品介绍"""
-        if self._info == '':
-            return '暂无介绍'
+        if self._info == "":
+            return "暂无介绍"
         return self._info
 
     def get_item_price_dis(self) -> str:
         """获取物品回收价格的字符串"""
         if self._price <= 0:
-            return '无价值'
-        return f'{self._price}ATRI币'
+            return "无价值"
+        return f"{self._price}ATRI币"
 
     def get_item_price(self) -> int:
         """获取物品回收价格的数值"""
@@ -72,9 +78,7 @@ class Item:
 
     def item_can_use(self) -> bool:
         """获取物品是否能在背包中使用"""
-        if self._using_funcs is None:
-            return False
-        return True
+        return self._using_funcs is not None
 
     def get_item_type(self) -> ItemType:
         """获取物品的类型的ItemType对象"""
@@ -102,7 +106,7 @@ class ItemRegister:
     def register(self, item: Item):
         """将定义的物品注册进物品表中"""
         item_name = item.get_item_name()
-        if item_name is None or item_name == '':
+        if item_name is None or item_name == "":
             log.error(f"物品注册失败:{item_name} 不是有效物品名称")
             return self
         if item_name in self._item_list:
@@ -141,9 +145,7 @@ class ItemRegister:
 
     def has_item(self, item_name):
         """返回是否已注册指定物品"""
-        if item_name in self._item_list:
-            return True
-        return False
+        return item_name in self._item_list
 
     def items_clear(self):
         """清空物品注册表"""
@@ -168,11 +170,11 @@ items = ItemRegister()
 class ItemMeta:
     """物品数据"""
 
-    def __init__(self, item_meta: dict[str: Any]):
+    def __init__(self, item_meta: dict[str:Any]):
         self.num: int = item_meta.pop("num", 0)
         self.extra: dict = item_meta
 
-    def meta_to_dict(self) -> dict[str: Any]:
+    def meta_to_dict(self) -> dict[str:Any]:
         """转换成字典"""
         meta = self.extra
         meta["num"] = self.num
@@ -190,7 +192,7 @@ class ToolItemMeta(ItemMeta):
         self.damage = meta.extra.pop("damage", 0)
         super().__init__(meta.meta_to_dict())
 
-    def meta_to_dict(self) -> dict[str: Any]:
+    def meta_to_dict(self) -> dict[str:Any]:
         meta = self.extra
         meta["num"] = self.num
         meta["damage"] = self.damage
@@ -200,7 +202,7 @@ class ToolItemMeta(ItemMeta):
         return ItemMeta(self.meta_to_dict())
 
 
-Meta = TypeVar('Meta', bound=ItemMeta)
+Meta = TypeVar("Meta", bound=ItemMeta)
 
 
 class ItemStack:
@@ -258,7 +260,7 @@ class ToolItemStack(ItemStack):
         return damage
 
 
-Stack = TypeVar('Stack', bound=ItemStack)
+Stack = TypeVar("Stack", bound=ItemStack)
 
 
 class BackPack:
@@ -270,12 +272,12 @@ class BackPack:
 
     def __init__(self, bp_dict: dict):
         global items
-        self._backpack: Dict[ItemType: Dict[str: ItemMeta]] = dict()
+        self._backpack: dict[ItemType : dict[str:ItemMeta]] = {}
         for _type in ItemType:
-            self._backpack[_type] = dict()
-        for _name in bp_dict.keys():
+            self._backpack[_type] = {}
+        for _name in bp_dict:
             _meta = bp_dict[_name]
-            if _meta['num'] <= 0:
+            if _meta["num"] <= 0:
                 continue
             _type = items.get_reg_item_type(_name)
             self._backpack[_type][_name] = ItemMeta(_meta)
@@ -309,7 +311,7 @@ class BackPack:
         else:
             self._backpack[_type][_name] = item_stack.meta.to_meta()
 
-    def set_item_with_meta(self, item_name: str, item_meta: dict[str: Any]):
+    def set_item_with_meta(self, item_name: str, item_meta: dict[str:Any]):
         """通过物品数据设置物品"""
         self._modify = True
         _type = items.get_reg_item_type(item_name)
@@ -327,16 +329,16 @@ class BackPack:
         """移除背包中的指定物品"""
         self._modify = True
         for _type in ItemType:
-            if item_name in self._backpack[_type].keys():
+            if item_name in self._backpack[_type]:
                 del self._backpack[_type][item_name]
                 return True
         return False
 
-    def bp_to_dict(self) -> dict[str: str]:
+    def bp_to_dict(self) -> dict[str:str]:
         """将背包转换成字典"""
         bp_dict = {}
         for _type in ItemType:
-            for _name in self._backpack[_type].keys():
+            for _name in self._backpack[_type]:
                 bp_dict[_name] = self._backpack[_type][_name].meta_to_dict()
         return bp_dict
 
@@ -348,16 +350,18 @@ class BackPack:
         """获取背包中的物品列表"""
         item_list = []
         for _type in ItemType:
-            for _name in self._backpack[_type].keys():
+            for _name in self._backpack[_type]:
                 item_list.append(ItemStack(_name, _type, self._backpack[_type][_name]))
         return item_list
 
     def get_item_list_by_type(self, item_type: ItemType) -> list[ItemStack] | None:
         """获取背包中指定类型的物品列表"""
-        if item_type in self._backpack.keys():
+        if item_type in self._backpack:
             item_list = []
-            for _name in self._backpack[item_type].keys():
-                item_list.append(ItemStack(_name, item_type, self._backpack[item_type][_name]))
+            for _name in self._backpack[item_type]:
+                item_list.append(
+                    ItemStack(_name, item_type, self._backpack[item_type][_name])
+                )
             return item_list
         return None
 

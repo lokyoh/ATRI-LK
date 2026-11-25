@@ -149,7 +149,7 @@ def read_file(path: str, start: int = 1, end: int = 0) -> str:
         return f"错误：不是文件 -> {file_path}"
 
     # ---- 大小限制 ----
-    MAX_SIZE = 1024 * 1024  # 1MB
+    MAX_SIZE = 1024 * 1024  # 1MB  # noqa: N806
     try:
         size = file_path.stat().st_size
         if size > MAX_SIZE:
@@ -159,7 +159,7 @@ def read_file(path: str, start: int = 1, end: int = 0) -> str:
 
     # ---- 读取 ----
     try:
-        with open(file_path, "r", encoding="utf-8", errors="replace") as f:
+        with open(file_path, encoding="utf-8", errors="replace") as f:
             lines = f.readlines()
     except Exception as e:
         return f"读取失败：{e}"

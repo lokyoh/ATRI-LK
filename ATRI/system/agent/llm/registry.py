@@ -1,9 +1,3 @@
-"""供应商类型注册表。
-
-新增一种供应商 = 新建模块并 `register_provider`；WebUI 的类型下拉、
-默认地址、连通性测试都从这里读。
-"""
-
 from __future__ import annotations
 
 from collections.abc import Callable

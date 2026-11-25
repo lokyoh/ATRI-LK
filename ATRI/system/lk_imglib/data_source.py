@@ -25,16 +25,16 @@ class ImageManager:
         path.mkdir(parents=True, exist_ok=True)
         self.path = path
         self.imagelib = {}
-        (path / '默认').mkdir(parents=True, exist_ok=True)
+        (path / "默认").mkdir(parents=True, exist_ok=True)
         files = os.listdir(path)
         for file in files:
             if (path / file).is_dir():
                 self.imagelib[file] = path / file
         if path == IMAGELIB_DIR:
-            self.imagelib['sbg'] = IMG_DIR / "sbg"
+            self.imagelib["sbg"] = IMG_DIR / "sbg"
 
     def _save_image(self, libname, img_name, img_data):
-        img_path = self.imagelib[libname] / f'{img_name}.jpg'
+        img_path = self.imagelib[libname] / f"{img_name}.jpg"
         with open(img_path, "wb") as f:
             f.write(img_data)
 
@@ -48,7 +48,7 @@ class ImageManager:
             return f.read()
 
     def _get_image(self, libname, img_name):
-        img_path = self.imagelib[libname] / f'{img_name}.jpg'
+        img_path = self.imagelib[libname] / f"{img_name}.jpg"
         if img_path.exists():
             with open(img_path, "rb") as f:
                 return f.read()
@@ -68,7 +68,7 @@ class ImageManager:
                 num += 1
         return num
 
-    def get_image_from(self, libname: str = None, img_name: str = None):
+    def get_image_from(self, libname: str | None = None, img_name: str | None = None):
         """
         获取一张图片。
         :param libname: 当指定图库名时，从指定图库中获取图片
@@ -103,26 +103,26 @@ class ImageManager:
         新建图库。
         :param libname: 图库名
         """
-        if libname == 'sbg':
+        if libname == "sbg":
             return
-        libname.replace(' ', '').replace('/', '').replace('\\', '').replace('.', '')
+        libname.replace(" ", "").replace("/", "").replace("\\", "").replace(".", "")
         try:
             (self.path / libname).mkdir(parents=True, exist_ok=True)
             self.imagelib[libname] = self.path / libname
-        except:
+        except Exception:
             return
 
-    def save_image(self, img_name: str, img_data: bytes, libname: str = '默认'):
+    def save_image(self, img_name: str, img_data: bytes, libname: str = "默认"):
         """
         向图库内保存图片。
         :param img_name: 图片名
         :param img_data: 图片数据
         :param libname: 图库名，默认值为'默认'
         """
-        if libname == 'sbg':
+        if libname == "sbg":
             return
         if libname is None:
-            libname = '默认'
+            libname = "默认"
         if libname not in self.imagelib:
             self.new_lib(libname)
         self._save_image(libname, img_name, img_data)
@@ -162,7 +162,7 @@ class GroupImageManager(ImageManager):
         群聊图库管理器。
         :param group_id: 群聊id
         """
-        super().__init__(PLUGIN_DIR / 'group_imagelib' / group_id)
+        super().__init__(PLUGIN_DIR / "group_imagelib" / group_id)
 
     def get_all_random_image(self):
         """
@@ -191,9 +191,9 @@ class GroupImageManager(ImageManager):
         """
         paths = []
         lib_paths = [
-            image_manager.get_lib_path('sbg'),
-            image_manager.get_lib_path('背景'),
-            self.get_lib_path('背景')
+            image_manager.get_lib_path("sbg"),
+            image_manager.get_lib_path("背景"),
+            self.get_lib_path("背景"),
         ]
         for path in lib_paths:
             files = os.listdir(path)

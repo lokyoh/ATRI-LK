@@ -1,5 +1,3 @@
-"""填入式日程：校验、合并、覆盖/截断、位置派生。"""
-
 from __future__ import annotations
 
 import datetime

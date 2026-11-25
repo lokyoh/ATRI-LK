@@ -1,5 +1,3 @@
-"""行为埋点（telemetry）统计 API：把按天落盘的 jsonl 聚合成 WebUI 能看的样子。"""
-
 import json
 from pathlib import Path
 

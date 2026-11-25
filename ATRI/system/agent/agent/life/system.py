@@ -1,5 +1,3 @@
-"""生活系统 facade：日程、位置、穿搭、家的统一入口。"""
-
 from __future__ import annotations
 
 import json

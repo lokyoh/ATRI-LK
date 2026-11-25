@@ -1,14 +1,13 @@
 import json
-from pathlib import Path
-from typing import Union
-from pip import main as pipmain
 from asyncio import as_completed
+from pathlib import Path
 
 import nonebot
+from pip import main as pipmain
 
 from ATRI.log import log
-from ATRI.utils import request
 from ATRI.service import Service, ServiceTools
+from ATRI.utils import request
 
 from .models import NonebotPluginInfo
 
@@ -17,21 +16,20 @@ _NONEBOT_STORE_URLS = [
     "https://jsd.cdn.zzko.cn/gh/nonebot/registry@results/plugins.json",
 ]
 
-_plugin_list = dict()
+_plugin_list = {}
 
 
 class NonebotPluginManager:
-    _plugin_name = str()
+    _plugin_name = ""
     _conf_path = Path(".") / "nonebot_plugins.json"
 
     def get_list(self) -> list:
         if not self._conf_path.is_file():
             with open(self._conf_path, "w", encoding="utf-8") as w:
-                w.write(json.dumps(list()))
+                w.write(json.dumps([]))
 
             with open(".env.prod", "w", encoding="utf-8") as w:
-                w.write(
-                    '# 请在此填写来自 Nonebot 商店的插件设置, 填写后需重启以生效')
+                w.write("# 请在此填写来自 Nonebot 商店的插件设置, 填写后需重启以生效")
 
         return json.loads(self._conf_path.read_bytes())
 
@@ -73,7 +71,7 @@ class NonebotPluginManager:
                 except Exception:
                     log.warning("刷新 Nonebot 商店失败, 尝试下一个链接")
 
-    def get_plugin_info(self) -> Union[NonebotPluginInfo, None]:
+    def get_plugin_info(self) -> NonebotPluginInfo | None:
         if plugin_data := _plugin_list.get(self._plugin_name):
             return NonebotPluginInfo.model_validate(plugin_data)
         else:
@@ -83,7 +81,7 @@ class NonebotPluginManager:
         if not is_conf:
             return bool(self.get_plugin_info())
         else:
-            return True if self._plugin_name in self.get_list() else False
+            return self._plugin_name in self.get_list()
 
     def add_plugin(self) -> str:
         if not self.plugin_is_exist():
@@ -120,9 +118,9 @@ class NonebotPluginManager:
 
     def upgrade_plugin(self) -> list:
         if not (plugin_list := self.get_list()):
-            return list()
+            return []
 
-        succ_list = list()
+        succ_list = []
         for plugin in plugin_list:
             try:
                 pipmain(["install", "--upgrade", plugin])

@@ -1,5 +1,3 @@
-"""长期记忆浏览 API：只看不改，供 WebUI 排查「她记住了什么、为什么忘了」。"""
-
 from datetime import datetime
 
 from fastapi import APIRouter

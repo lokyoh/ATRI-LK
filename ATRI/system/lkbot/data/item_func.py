@@ -19,7 +19,11 @@ class ItemUsingFunc:
 class ItemFuncs:
     """物品的使用功能参数集，包含一个效果器参数列表与一个检查器参数列表"""
 
-    def __init__(self, checks: list[ItemUsingFunc] = None, funcs: list[ItemUsingFunc] = None):
+    def __init__(
+        self,
+        checks: list[ItemUsingFunc] | None = None,
+        funcs: list[ItemUsingFunc] | None = None,
+    ):
         if checks is None:
             checks = []
         if funcs is None:
@@ -51,11 +55,11 @@ class ItemFuncRegister:
         """执行检查器"""
         return self._check_list[func_data.func_name](user_id, func_data.args)
 
-    def check_func(self, name: str, model: str = 'func'):
+    def check_func(self, name: str, model: str = "func"):
         """检查指定功能器是否存在"""
-        f_list = self._func_list if model == 'func' else self._check_list
-        if name not in f_list.keys():
-            raise RuntimeError(f'找不到已注册的功能{name}')
+        f_list = self._func_list if model == "func" else self._check_list
+        if name not in f_list:
+            raise RuntimeError(f"找不到已注册的功能{name}")
 
     def check_num(self):
         """检查器数量"""

@@ -1,5 +1,3 @@
-"""家：`home.md` 的固定章节、摘要、读写与备份。"""
-
 from __future__ import annotations
 
 import contextlib

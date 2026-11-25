@@ -7,10 +7,7 @@ timeout = conf.BotConfig.request_timeout
 if timeout:
     timeout = httpx.Timeout(timeout)
 
-if not conf.BotConfig.proxy:
-    proxy = dict()
-else:
-    proxy = {"all://": conf.BotConfig.proxy}
+proxy = {} if not conf.BotConfig.proxy else {"all://": conf.BotConfig.proxy}
 
 
 class RequestClient:

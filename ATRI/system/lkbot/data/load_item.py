@@ -1,14 +1,15 @@
 import os
-import yaml
 from pathlib import Path
+
+import yaml
 
 from ATRI import RES_DIR
 from ATRI.exceptions import str_traceback
 from ATRI.log import log
 
 from .item import Item, ItemType, items
-from .item_func import ItemFuncs, item_funcs, ItemUsingFunc
-from .shop import shops, Shop
+from .item_func import ItemFuncs, ItemUsingFunc, item_funcs
+from .shop import Shop, shops
 
 ITEM_PATH = RES_DIR / "data" / "item"
 SHOP_PATH = RES_DIR / "data" / "shop"
@@ -16,42 +17,39 @@ SHOP_PATH = RES_DIR / "data" / "shop"
 
 def dict_to_shop(data: dict) -> Shop:
     """将商店从字典转化为Item对象"""
-    name = data.get('name', '')
-    if name == '':
+    name = data.get("name", "")
+    if name == "":
         raise RuntimeError("无效商店名称")
-    return Shop(
-        name,
-        data.get('info', '')
-    )
+    return Shop(name, data.get("info", ""))
 
 
 def dict_to_item(data: dict) -> Item:
     """将物品从字典转化为Item对象"""
-    name = data.get('name', '')
-    if name == '':
+    name = data.get("name", "")
+    if name == "":
         raise RuntimeError("无效物品名称")
     return Item(
         name,
-        ItemType(data.get('type', '其他')),
-        data.get('info', ''),
-        data.get('price', 0)
+        ItemType(data.get("type", "其他")),
+        data.get("info", ""),
+        data.get("price", 0),
     )
 
 
 def dict_to_funcs(data: dict) -> ItemFuncs:
     """将物品功能从字典转化为ItemFuncs对象"""
     _item_funcs = ItemFuncs()
-    funcs = data.get('funcs', [])
-    checks = data.get('checks', [])
+    funcs = data.get("funcs", [])
+    checks = data.get("checks", [])
     for func in funcs:
-        name = func['name']
+        name = func["name"]
         item_funcs.check_func(name)
-        args = func.get('args', '')
+        args = func.get("args", "")
         _item_funcs.funcs.append(ItemUsingFunc(name, args))
     for check in checks:
-        name = check['name']
-        item_funcs.check_func(name, 'check')
-        args = check.get('args', '')
+        name = check["name"]
+        item_funcs.check_func(name, "check")
+        args = check.get("args", "")
         _item_funcs.checks.append(ItemUsingFunc(name, args))
     return _item_funcs
 
@@ -61,13 +59,13 @@ def load_shops(shop_file: Path):
     shops_data: dict = yaml.safe_load(shop_file.read_bytes())
     if shops_data is None:
         return
-    for key in shops_data.keys():
+    for key in shops_data:
         try:
             data = shops_data[key]
             shop = dict_to_shop(data)
             shops.register(shop)
         except Exception as e:
-            log.warning(f'{shop_file}-{key}无效商店配置:\n{str_traceback(e)}')
+            log.warning(f"{shop_file}-{key}无效商店配置:\n{str_traceback(e)}")
 
 
 def load_items(item_file: Path):
@@ -75,26 +73,30 @@ def load_items(item_file: Path):
     items_data: dict = yaml.safe_load(item_file.read_bytes())
     if items_data is None:
         return
-    for key in items_data.keys():
+    for key in items_data:
         try:
             # 物品注册
             data = items_data[key]
             item = dict_to_item(data)
             # 功能注册(可选)
-            func_data = data.get('func', None)
+            func_data = data.get("func", None)
             if func_data:
                 item.set_use_funcs(dict_to_funcs(func_data))
             items.register(item)
             # 商品注册(可选)
-            shop_data = data.get('shop', None)
+            shop_data = data.get("shop", None)
             if shop_data:
                 if type(shop_data) is dict:
-                    shops.get_shop_by_name(shop_data['name']).add_goods(item, shop_data['price'], shop_data['type'])
+                    shops.get_shop_by_name(shop_data["name"]).add_goods(
+                        item, shop_data["price"], shop_data["type"]
+                    )
                 else:
                     for sd in shop_data:
-                        shops.get_shop_by_name(sd['name']).add_goods(item, sd['price'], sd['type'])
+                        shops.get_shop_by_name(sd["name"]).add_goods(
+                            item, sd["price"], sd["type"]
+                        )
         except Exception as e:
-            log.error(f'{item_file}-{key}无效物品配置:\n{str_traceback(e)}')
+            log.error(f"{item_file}-{key}无效物品配置:\n{str_traceback(e)}")
 
 
 def auto_load_items():

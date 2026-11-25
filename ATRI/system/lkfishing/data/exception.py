@@ -1,4 +1,4 @@
-class FishingException(Exception):
+class FishingException(Exception):  # noqa: N818
     def __init__(self, message):
         self.message = message
 

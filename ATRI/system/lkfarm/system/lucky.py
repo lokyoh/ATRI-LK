@@ -1,14 +1,3 @@
-"""幸运值(运气)系统。
-
-幸运值每日重置为 ``-100`` ~ ``100`` 的随机值，并按档位影响：
-
-- 农场收获的品质判定(银/金/铱)
-- 农场额外产物(``harvest_list`` 中带 ``+`` 的项)的掉落概率
-- 钓鱼的出鱼率与鱼类品质
-
-档位区间与数值见 :data:`LUCKY_TIERS`。
-"""
-
 from __future__ import annotations
 
 from dataclasses import dataclass

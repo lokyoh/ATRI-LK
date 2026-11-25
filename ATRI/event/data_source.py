@@ -2,10 +2,11 @@ import asyncio
 import inspect
 import os
 import time
+from collections.abc import Callable
 from dataclasses import dataclass
 from datetime import datetime
 from enum import IntEnum
-from typing import Any, Callable, Dict, List
+from typing import Any
 
 from ATRI.dir import TEMP_DIR
 from ATRI.exceptions import str_traceback
@@ -47,7 +48,7 @@ class AsyncEventBus:
 
     def __init__(self, name: str):
         self._name = name
-        self._handlers: Dict[str, List[Subscription]] = {}
+        self._handlers: dict[str, list[Subscription]] = {}
         self._middlewares = []
 
     def subscribe(
@@ -87,7 +88,7 @@ class AsyncEventBus:
 
     async def publish(
         self, event_type: str, source: str, data: Any = None
-    ) -> List[Any]:
+    ) -> list[Any]:
         """异步发布事件"""
         event = Event(type=event_type, data=data, event_bus=self._name, source=source)
         # 应用中间件
@@ -127,7 +128,7 @@ class AsyncEventBus:
 
     def publish_sync(
         self, event_type: str, data: Any = None, source: str = "unidentified"
-    ) -> List[Any]:
+    ) -> list[Any]:
         """同步发布事件"""
         event = Event(type=event_type, data=data, event_bus=self._name, source=source)
         results = []

@@ -1,10 +1,3 @@
-"""固定作息层。
-
-`routine.md` 是「每天都必须发生」的骨架：睡觉、起床、三餐、睡前准备。
-它不由模型生成，也不写进每日 JSON；读取时实时合并，管理员改文件即生效。
-填入日程可以在任意时间落地，撞上骨架时的挪动/拆段由 `schedule_store` 处理。
-"""
-
 from __future__ import annotations
 
 import re

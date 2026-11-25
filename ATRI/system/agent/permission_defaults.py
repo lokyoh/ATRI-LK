@@ -1,13 +1,3 @@
-"""权限默认值与显示名。
-
-权限的**默认行为来自每个功能自己声明的作用域**（``FunctionCalling.scope`` /
-``scope_by_action``），而不是一张按等级列出的功能清单。``permission`` 表只保存
-对默认行为的**覆盖**：留空表示「按功能自己的声明执行」，填了才表示要收紧或放宽。
-
-本模块只放纯数据，且位于 ``agent`` 包之外，供 ``config.py`` 在类定义期引用，
-避免通过 ``agent/__init__.py`` 反向导入正在初始化的配置模块。
-"""
-
 from __future__ import annotations
 
 from typing import Any

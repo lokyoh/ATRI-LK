@@ -27,8 +27,8 @@ async def __load_reject_list() -> list:
     path = plugin.get_path() / "rej_list.json"
     file = FileDealer(path)
     if not path.is_file():
-        await file.write_json(list())
-        return list()
+        await file.write_json([])
+        return []
 
     return list(file.json())
 
@@ -72,8 +72,8 @@ async def _(bot: Bot, event: MessageEvent, msg: str = ArgPlainText("bc_msg")):
 
     bc_msg = Message(f"来自维护者的消息:\n{msg}")
 
-    success_group = list()
-    failed_group = list()
+    success_group = []
+    failed_group = []
     for i in group_list:
         group_id = i["group_id"]
         reject_list = await __load_reject_list()

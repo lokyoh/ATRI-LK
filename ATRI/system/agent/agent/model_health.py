@@ -1,5 +1,3 @@
-"""Agent 模型健康检查：只检查与记日志，不发起调用。"""
-
 from __future__ import annotations
 
 from dataclasses import dataclass

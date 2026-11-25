@@ -1,19 +1,15 @@
 from ATRI import driver as atri_driver
 from ATRI.log import log
 
-from .browser import (
-    get_browser as get_browser,
-    get_new_page as get_new_page,
-    shutdown_browser as shutdown_browser,
-)
-from .data_source import (
-    capture_element as capture_element,
-    html_to_pic as html_to_pic,
-    md_to_pic as md_to_pic,
-    template_to_html as template_to_html,
-    template_to_pic as template_to_pic,
-    text_to_pic as text_to_pic,
-)
+from .browser import get_browser as get_browser
+from .browser import get_new_page as get_new_page
+from .browser import shutdown_browser as shutdown_browser
+from .data_source import capture_element as capture_element
+from .data_source import html_to_pic as html_to_pic
+from .data_source import md_to_pic as md_to_pic
+from .data_source import template_to_html as template_to_html
+from .data_source import template_to_pic as template_to_pic
+from .data_source import text_to_pic as text_to_pic
 
 driver = atri_driver()
 

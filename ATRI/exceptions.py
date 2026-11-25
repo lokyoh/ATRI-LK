@@ -1,7 +1,6 @@
 import time
 import traceback
 from pathlib import Path
-from typing import Optional
 
 from ATRI.utils import gen_random_str
 from ATRI.utils.model import BaseModel
@@ -35,10 +34,10 @@ def load_error(track_id: str) -> ErrorInfo:
     return ErrorInfo.read_from_file(path)
 
 
-class BaseBotException(Exception):
-    prompt: Optional[str] = "ignore"
+class BaseBotException(Exception):  # noqa: N818
+    prompt: str | None = "ignore"
 
-    def __init__(self, prompt: Optional[str]) -> None:
+    def __init__(self, prompt: str | None) -> None:
         self.prompt = prompt or self.__class__.prompt or self.__class__.__name__
         super().__init__(self.prompt)
 

@@ -1,15 +1,3 @@
-"""填入与固定作息的冲突处理。
-
-规则（管理员确认）：
-
-- 填入的开始时间不能早于现在。
-- 正在进行的骨架不挪动，只把填入往后推。
-- 还没到的骨架：挪动不超过 SHIFT_LIMIT_MIN 就整体挪（可连锁推挤其他骨架），
-  挪不动就把填入拆成两段绕开（要求每段至少 MIN_SEGMENT_MIN 分钟）。
-
-调整只影响当天，routine.md 不会被改写。
-"""
-
 from __future__ import annotations
 
 from .model import (
@@ -105,7 +93,7 @@ def _split(entry: ScheduleEntry, slot: ScheduleEntry) -> list[ScheduleEntry]:
 
 def _verify(slots: list[ScheduleEntry], placed: list[ScheduleEntry]) -> list[str]:
     problems: list[str] = []
-    for index, slot in enumerate(slots):
+    for _, slot in enumerate(slots):
         for other in placed:
             if slot.overlaps(other.start_min, other.end_min):
                 problems.append(
@@ -137,9 +125,12 @@ def resolve(
 
     for entry in sorted(entries, key=lambda item: item.start_min):
         if now_min is not None and entry.start_min < now_min:
-            return [], [], [], [
-                f"{format_time(entry.start)} 已经过去，填入不能早于现在"
-            ]
+            return (
+                [],
+                [],
+                [],
+                [f"{format_time(entry.start)} 已经过去，填入不能早于现在"],
+            )
         pending = [entry]
         steps = 0
         while pending:
@@ -171,10 +162,15 @@ def resolve(
             # 挪不开或正在进行：把填入推到骨架之后
             delayed = _clone(part, start=slot.end_min, end=slot.end_min + part.duration)
             if delayed.end_min > DAY_END_MIN:
-                return [], [], [], [
-                    f"{format_time(part.start)}-{format_time(part.end)} 撞上"
-                    f"「{slot.activity}」，往后挪会超出当天"
-                ]
+                return (
+                    [],
+                    [],
+                    [],
+                    [
+                        f"{format_time(part.start)}-{format_time(part.end)} 撞上"
+                        f"「{slot.activity}」，往后挪会超出当天"
+                    ],
+                )
             warnings.append(
                 f"{format_time(part.start)}-{format_time(part.end)} 撞上"
                 f"「{slot.activity}」，已推迟到 {format_time(delayed.start)}"

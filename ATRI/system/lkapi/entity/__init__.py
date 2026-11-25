@@ -1,3 +1,3 @@
-from . import item
-from . import shop
-from . import user
+from . import item as item
+from . import shop as shop
+from . import user as user

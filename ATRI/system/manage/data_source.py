@@ -30,18 +30,18 @@ class BotManager:
         path = MANAGE_DIR / file_name
         dealer = FileDealer(path)
         if not path.is_file():
-            await dealer.write_json(dict())
+            await dealer.write_json({})
         try:
             data = dealer.json()
         except Exception:
-            data = dict()
+            data = {}
         return data
 
     async def __store_data(self, file_name: str, data: dict) -> None:
         path = MANAGE_DIR / file_name
         dealer = FileDealer(path)
         if not path.is_file():
-            await dealer.write_json(dict())
+            await dealer.write_json({})
         await dealer.write_json(data)
 
     async def load_friend_req(self) -> RequestList:

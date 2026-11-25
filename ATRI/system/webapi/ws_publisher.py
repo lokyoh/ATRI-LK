@@ -1,11 +1,3 @@
-"""WebSocket 推送端点的公共样板。
-
-logs / system_status 等推送型端点结构完全一致：
-握手鉴权 → accept → 有界队列（满丢最旧）→ sender task → receive 循环 → 清理。
-新端点只需实现 build(handshake, enqueue) 返回退订函数，
-队列管理、断开检测与清理全部由 serve_publisher 接管。
-"""
-
 import asyncio
 import contextlib
 from collections.abc import Callable

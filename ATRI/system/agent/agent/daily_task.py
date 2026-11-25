@@ -63,7 +63,7 @@ async def agent_cleanup_task():
 
     prune_old_files()
 
-    from ATRI.utils.datetime import now_timestamp
+    from ATRI.utils.datetime import now, now_timestamp
     from ATRI.utils.sqlite import DataBase
 
     from ..service import plugin

@@ -1,5 +1,3 @@
-"""着装：白天 / 晚上两套，由 `ATRI_OUTFIT` 生成。"""
-
 from __future__ import annotations
 
 from pathlib import Path

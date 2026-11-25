@@ -11,13 +11,13 @@ class TreasureManager:
         if type(num) is int:
             num = [num]
         self.loot_list[loot_name] = {
-            'chance': chance,
-            'items': item,
-            'nums': num,
+            "chance": chance,
+            "items": item,
+            "nums": num,
         }
 
     def get_value_list(self):
-        return list(value['chance'] for value in self.loot_list.values())
+        return [value["chance"] for value in self.loot_list.values()]
 
     @staticmethod
     def add_item_to_treasure(t_l, item, num):
@@ -34,19 +34,21 @@ class TreasureManager:
             i = 2
         else:
             i = 3
-        ll_names = random.choices(list(self.loot_list.keys()), self.get_value_list(), k=i)
+        ll_names = random.choices(
+            list(self.loot_list.keys()), self.get_value_list(), k=i
+        )
         t_l = {}
         for ll_name in ll_names:
             l_l = self.loot_list[ll_name]
-            for i in range(len(l_l['items'])):
-                self.add_item_to_treasure(t_l, l_l['items'][i], l_l['nums'][i])
+            for i in range(len(l_l["items"])):
+                self.add_item_to_treasure(t_l, l_l["items"][i], l_l["nums"][i])
         return t_l
 
     def clear(self):
         self.loot_list.clear()
 
     def add_dict_loot(self, loot_name, data):
-        self.add_loot(loot_name, data['chance'], data['items'], data.get('nums', 1))
+        self.add_loot(loot_name, data["chance"], data["items"], data.get("nums", 1))
 
 
 treasure_manager = TreasureManager()

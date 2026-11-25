@@ -1,5 +1,6 @@
 from os import getcwd
-from typing import Any, Dict, Literal, Optional, Union
+from typing import Any, Literal
+
 import aiofiles
 import jinja2
 import markdown
@@ -11,7 +12,7 @@ from .browser import get_new_page
 
 TEMPLATES_PATH = (HTML_DIR / "default").resolve()
 
-env = jinja2.Environment(  # noqa: S701
+env = jinja2.Environment(
     extensions=["jinja2.ext.loopcontrols"],
     loader=jinja2.FileSystemLoader(TEMPLATES_PATH),
     enable_async=True,
@@ -19,12 +20,12 @@ env = jinja2.Environment(  # noqa: S701
 
 
 async def text_to_pic(
-        text: str,
-        css_path: str = "",
-        width: int = 500,
-        type: Literal["jpeg", "png"] = "png",  # noqa: A002
-        quality: Union[int, None] = None,
-        device_scale_factor: float = 2,
+    text: str,
+    css_path: str = "",
+    width: int = 500,
+    type: Literal["jpeg", "png"] = "png",
+    quality: int | None = None,
+    device_scale_factor: float = 2,
 ) -> bytes:
     """多行文本转图片
 
@@ -55,13 +56,13 @@ async def text_to_pic(
 
 
 async def md_to_pic(
-        md: str = "",
-        md_path: str = "",
-        css_path: str = "",
-        width: int = 500,
-        type: Literal["jpeg", "png"] = "png",  # noqa: A002
-        quality: Union[int, None] = None,
-        device_scale_factor: float = 2,
+    md: str = "",
+    md_path: str = "",
+    css_path: str = "",
+    width: int = 500,
+    type: Literal["jpeg", "png"] = "png",
+    quality: int | None = None,
+    device_scale_factor: float = 2,
 ) -> bytes:
     """markdown 转 图片
 
@@ -133,7 +134,7 @@ async def md_to_pic(
 
 
 async def read_file(path: str) -> str:
-    async with aiofiles.open(path, mode="r") as f:
+    async with aiofiles.open(path) as f:
         return await f.read()
 
 
@@ -142,10 +143,10 @@ async def read_tpl(path: str) -> str:
 
 
 async def template_to_html(
-        template_path: str,
-        template_name: str,
-        filters: Optional[Dict[str, Any]] = None,
-        **kwargs,
+    template_path: str,
+    template_name: str,
+    filters: dict[str, Any] | None = None,
+    **kwargs,
 ) -> str:
     """使用jinja2模板引擎通过html生成图片
 
@@ -158,7 +159,7 @@ async def template_to_html(
         str: html
     """
 
-    template_env = jinja2.Environment(  # noqa: S701
+    template_env = jinja2.Environment(
         loader=jinja2.FileSystemLoader(template_path),
         enable_async=True,
     )
@@ -174,13 +175,13 @@ async def template_to_html(
 
 
 async def html_to_pic(
-        html: str,
-        wait: int = 0,
-        template_path: str = f"file://{getcwd()}",  # noqa: PTH109
-        type: Literal["jpeg", "png"] = "png",  # noqa: A002
-        quality: Union[int, None] = None,
-        device_scale_factor: float = 2,
-        **kwargs,
+    html: str,
+    wait: int = 0,
+    template_path: str = f"file://{getcwd()}",
+    type: Literal["jpeg", "png"] = "png",
+    quality: int | None = None,
+    device_scale_factor: float = 2,
+    **kwargs,
 ) -> bytes:
     """html转图片
 
@@ -212,15 +213,15 @@ async def html_to_pic(
 
 
 async def template_to_pic(
-        template_path: str,
-        template_name: str,
-        templates: Dict[Any, Any],
-        filters: Optional[Dict[str, Any]] = None,
-        pages: Optional[Dict[Any, Any]] = None,
-        wait: int = 0,
-        type: Literal["jpeg", "png"] = "png",  # noqa: A002
-        quality: Union[int, None] = None,
-        device_scale_factor: float = 2,
+    template_path: str,
+    template_name: str,
+    templates: dict[Any, Any],
+    filters: dict[str, Any] | None = None,
+    pages: dict[Any, Any] | None = None,
+    wait: int = 0,
+    type: Literal["jpeg", "png"] = "png",
+    quality: int | None = None,
+    device_scale_factor: float = 2,
 ) -> bytes:
     """使用jinja2模板引擎通过html生成图片
 
@@ -241,10 +242,10 @@ async def template_to_pic(
     if pages is None:
         pages = {
             "viewport": {"width": 500, "height": 10},
-            "base_url": f"file://{getcwd()}",  # noqa: PTH109
+            "base_url": f"file://{getcwd()}",
         }
 
-    template_env = jinja2.Environment(  # noqa: S701
+    template_env = jinja2.Environment(
         loader=jinja2.FileSystemLoader(template_path),
         enable_async=True,
     )
@@ -268,12 +269,12 @@ async def template_to_pic(
 
 
 async def capture_element(
-        url: str,
-        element: str,
-        timeout: float = 0,
-        type: Literal["jpeg", "png"] = "png",  # noqa: A002
-        quality: Union[int, None] = None,
-        **kwargs,
+    url: str,
+    element: str,
+    timeout: float = 0,
+    type: Literal["jpeg", "png"] = "png",
+    quality: int | None = None,
+    **kwargs,
 ) -> bytes:
     async with get_new_page(**kwargs) as page:
         page.on("console", lambda msg: log.debug(f"浏览器控制台: {msg.text}"))

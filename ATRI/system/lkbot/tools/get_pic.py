@@ -70,7 +70,7 @@ async def loli():
     return resp.content
 
 
-def local_image_func(group_id: str = None):
+def local_image_func(group_id: str | None = None):
     """获取一张来自本地res/img/sbg的图片"""
     file = random.choice(os.listdir(IMG_DIR / "sbg"))
     img_url = IMG_DIR / "sbg" / file
@@ -86,7 +86,7 @@ def set_local_image_func(func):
     _local_image = func
 
 
-def local_image(group_id: str = None):
+def local_image(group_id: str | None = None):
     """
     本地背景图片获取。
     :param group_id: 群聊id
@@ -95,7 +95,7 @@ def local_image(group_id: str = None):
     return _local_image(group_id)
 
 
-async def get_pic_from(src, group_id: str = None) -> bytes:
+async def get_pic_from(src, group_id: str | None = None) -> bytes:
     """
     获取一张来自指定图源的图片，默认本地。
     :param src: 图片源
@@ -118,6 +118,6 @@ def has_source(src: str) -> bool:
     :param src: 图片源
     :return: 是否含有
     """
-    if src == 'local':
+    if src == "local":
         return True
     return src in img_sources

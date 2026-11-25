@@ -1,4 +1,4 @@
-from rich.console import Console as C
+from rich.console import Console as C  # noqa: N817
 
 
 class Console(C):
@@ -23,19 +23,21 @@ class Console(C):
         self.console.print(text, *args, **kwargs)
 
     def input(
-            self,
-            prompt: str,
-            default_return=str(),
-            assign_type=None,
-            reject_message=str(),
-            *args,
-            **kwargs,
+        self,
+        prompt: str,
+        default_return="",
+        assign_type=None,
+        reject_message="",
+        *args,
+        **kwargs,
     ) -> str:
         self.console.print(f"[gray][?][/gray] [white]{prompt}[/white]")
         while True:
             text = self.console.input("> ", *args, **kwargs)
             if not text:
-                self.info(f"已使用默认设置: {default_return if default_return else '空'}")
+                self.info(
+                    f"已使用默认设置: {default_return if default_return else '空'}"
+                )
                 return default_return
 
             if not assign_type:

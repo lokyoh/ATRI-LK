@@ -1,5 +1,3 @@
-"""数据备份 API：列出 / 立即备份 / 删除，配置就是事实来源（与聊天命令同一条通路）。"""
-
 from fastapi import APIRouter
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel

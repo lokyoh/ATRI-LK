@@ -1,5 +1,3 @@
-"""全局调度管理 API：列出各服务的定时任务并暂停 / 恢复 / 立即执行。"""
-
 from fastapi import APIRouter
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel

@@ -1,6 +1,4 @@
-from . import statistics  # noqa: F401
-from .status import (
-    BotStatus,  # noqa: F401
-    GlobalStatus,  # noqa: F401
-)
-from .utils import BotUtils  # noqa: F401
+from . import statistics as statistics
+from .status import BotStatus as BotStatus
+from .status import GlobalStatus as GlobalStatus
+from .utils import BotUtils as BotUtils

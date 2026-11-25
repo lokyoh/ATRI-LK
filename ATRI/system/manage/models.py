@@ -1,4 +1,3 @@
-from typing import Dict
 from pydantic import BaseModel
 
 
@@ -9,7 +8,7 @@ class RequestInfo(BaseModel):
 
 
 class RequestList(BaseModel):
-    data: Dict[str, RequestInfo] = {}
+    data: dict[str, RequestInfo] = {}
 
 
 class NonebotPluginInfo(BaseModel):

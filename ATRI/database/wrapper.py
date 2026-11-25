@@ -1,10 +1,8 @@
-from typing import Type
-
 from tortoise.models import Model
 
 
 class DatabaseWrapper:
-    def __init__(self, model: Type[Model]):
+    def __init__(self, model: type[Model]):
         self.model = model
 
     async def __aenter__(self):

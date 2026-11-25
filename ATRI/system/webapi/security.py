@@ -1,9 +1,3 @@
-"""WebUI 安全核心：JWT 签发/校验、token 登记簿（吊销）、登录限速、WS 握手鉴权。
-
-从 utils.py 拆出：auth 是安全敏感且持续生长的部分，边界应独立。
-纯逻辑类（TokenRegistry / LoginRateLimiter）不依赖框架，可脱离 nonebot 单测。
-"""
-
 import asyncio
 import contextlib
 import json

@@ -1,5 +1,4 @@
 from threading import Lock
-from typing import Dict
 
 
 class SingleLock:
@@ -8,7 +7,7 @@ class SingleLock:
     def __init__(self):
         self._lock = Lock()
 
-    def run(self, func: ()):
+    def run(self, func):
         """
         使用方式:
         @your_lock.run
@@ -36,13 +35,13 @@ class GroupLock:
     """数据锁组，数据锁的组合版"""
 
     def __init__(self):
-        self._lock: Dict[str: Lock] = {}
+        self._lock: dict[str:Lock] = {}
 
     def add_lock(self, key: str):
         """添加锁的键值"""
         self._lock[key] = Lock()
 
-    def run(self, key: str, func: ()):
+    def run(self, key: str, func):
         """
         用法:
         your_locks.run(key, your_func)

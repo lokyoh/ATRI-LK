@@ -1,5 +1,4 @@
 from enum import Enum
-from typing import Optional
 
 from pydantic import BaseModel
 
@@ -23,33 +22,33 @@ class User(BaseModel):
     """用户ID"""
     user_id: int
     """年龄"""
-    age: Optional[int] = None
+    age: int | None = None
     """生日_日"""
-    birthday_day: Optional[int] = None
+    birthday_day: int | None = None
     """生日_月"""
-    birthday_month: Optional[int] = None
+    birthday_month: int | None = None
     """生日_年"""
-    birthday_year: Optional[int] = None
+    birthday_year: int | None = None
     """分组ID"""
-    user_category_id: Optional[int] = None
+    user_category_id: int | None = None
     """分组ID"""
-    category_id: Optional[int] = None
+    category_id: int | None = None
     """分组名称"""
-    category_name: Optional[str] = None
+    category_name: str | None = None
     """邮箱"""
-    email: Optional[str] = None
+    email: str | None = None
     """等级"""
-    level: Optional[int] = None
+    level: int | None = None
     """登录天数"""
-    login_days: Optional[int] = None
+    login_days: int | None = None
     """电话号码"""
-    phone_num: Optional[str] = None
+    phone_num: str | None = None
     """QID"""
-    qid: Optional[str] = None
+    qid: str | None = None
     """备注"""
-    remark: Optional[str] = None
+    remark: str | None = None
     """性别"""
-    sex: Optional[str] = None
+    sex: str | None = None
 
 
 class Group(BaseModel):

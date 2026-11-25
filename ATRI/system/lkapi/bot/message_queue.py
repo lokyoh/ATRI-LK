@@ -74,7 +74,7 @@ class MessageQueueObject:
         message: Message | MessageSegment | str,
         target_user_id: str | int,
         description: str,
-        source_plugin: str = None,
+        source_plugin: str | None = None,
     ):
         self.msg = message
         self.uid = str(target_user_id)
@@ -163,7 +163,7 @@ class MessageQueue:
     def add_msg(self, msg: MessageQueueObject):
         if not msg.uid:
             raise ValueError("未添加用户")
-        if not msg.uid in self.messages:
+        if msg.uid not in self.messages:
             self.messages[msg.uid] = []
         for m in self.messages[msg.uid]:
             if msg.dec == m.dec and msg.spg == m.spg and msg.uid == m.uid:

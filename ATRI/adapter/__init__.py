@@ -1,1 +1,1 @@
-from . import modify  # noqa: F401
+from . import modify as modify

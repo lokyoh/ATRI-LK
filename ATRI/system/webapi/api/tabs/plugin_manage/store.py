@@ -69,7 +69,8 @@ async def _() -> Result[dict]:
             p_version = entry.version
             if p_version == "github":
                 p_version = "unknown"
-            update_versions = await PluginManager.check_update(plugin_name)
+            # 列表只读上次检查的结果，联网检查在 /store/check_updates
+            update_versions = PluginManager.cached_update_state(plugin_name)
             local_version = None
             remote_version = None
             if update_versions is not None:
@@ -113,6 +114,22 @@ async def _() -> Result[dict]:
         str_tb = str_traceback(e)
         log.error(f"获取插件商店插件信息失败:{str_tb}")
         return Result.fail(f"获取插件商店插件信息失败：{type(e).__name__}: {e}")
+
+
+@router.post(
+    "/check_updates",
+    dependencies=[authentication()],
+    response_model=Result[dict],
+    response_class=JSONResponse,
+    description="批量检查已装插件是否有更新",
+)
+async def _() -> Result[dict]:
+    try:
+        result = await PluginManager.check_updates()
+        return Result.ok(result, "检查完成")
+    except Exception as e:
+        log.error(f"{router.prefix}/check_updates 调用错误:{str_traceback(e)}")
+        return Result.fail(f"检查更新失败：{type(e).__name__}: {e}")
 
 
 @router.post(

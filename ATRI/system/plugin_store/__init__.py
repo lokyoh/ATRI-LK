@@ -9,10 +9,15 @@ from ATRI.service import Service, ServiceTools
 
 from .compat import PluginRequirement, lkapi_note
 from .compat import check as check_compat
-from .data_source import PluginEntry, PluginManager, PluginRuntimeManager
+from .data_source import (
+    PluginEntry,
+    PluginManager,
+    PluginRuntimeManager,
+    _same_version,
+)
 
 plugin = Service(
-    "插件商店", "插件商店", "0.5.1", Service.ServiceType.SYSTEM
+    "插件商店", "插件商店", "0.6.0", Service.ServiceType.SYSTEM
 ).permission(MASTER)
 
 plugins = plugin.on_command("插件列表", "查看插件列表")
@@ -50,7 +55,7 @@ async def _install_state(plugin_name: str, version: str, repo: str = ""):
                 return "需更新", f"{r['local_version']}->{r['remote_version']}"
             return "已安装", version
         now_version = ServiceTools(plugin_name).load_service().version
-        if now_version != version:
+        if not _same_version(now_version, version):
             return "需更新", f"{now_version}->{version}"
         return "已安装", version
     except PluginError:
@@ -222,17 +227,16 @@ check_update = plugin.on_command("检查插件更新", "检查所有的插件的
 @check_update.handle()
 async def _():
     try:
-        plugin_list = await PluginManager.refresh_list()
+        await PluginManager.refresh_list()
     except PluginError as e:
         await check_update.finish(f"获取插件信息失败：{e.prompt}")
     except Exception as e:
         await check_update.finish(f"获取插件信息失败：{type(e).__name__}: {e}")
     message = MessageBuilder().text("需要更新的插件:")
-    for plugin_name in ServiceTools.service_list:
-        if plugin_name in plugin_list:
-            r = await PluginManager.check_update(plugin_name)
-            if r:
-                message.text(f"{plugin_name} {r[0]}->{r[1]}")
+    states = await PluginManager.check_updates()
+    for plugin_name, r in states.items():
+        if r:
+            message.text(f"{plugin_name} {r[0]}->{r[1]}")
     await check_update.finish(message)
 
 

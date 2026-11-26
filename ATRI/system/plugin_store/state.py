@@ -42,6 +42,9 @@ _update_cache: dict[str, tuple[float, tuple[str, str] | None]] = {}
 #: 批量检查更新的总预算：超时的条目按未知返回，不拖住整个请求。
 UPDATE_CHECK_BUDGET = 10.0
 
+#: 单次 pip / git 子进程的超时秒数。卡死的子进程会让全局安装锁永不释放。
+DEP_TIMEOUT = 300.0
+
 #: 索引拉取超时。索引只有几 KB，远端挂住时没必要等满全局的 30s。
 INDEX_TIMEOUT = 8.0
 
@@ -54,7 +57,7 @@ _meta_failures: dict[str, float] = {}
 INDEX_CACHE_FILE = Path(".") / "data" / "plugin_store" / "index.json"
 INDEX_CACHE_VERSION = 1
 
-_install_locks: dict[str, anyio.Lock] = {}
+_install_locks: dict[str, tuple[anyio.Lock, int]] = {}
 """按插件名区分的互斥锁，避免并发写同一个插件目录。
 
 用 ``anyio.Lock`` 而不是 ``asyncio.Lock``：后者一旦发生过竞争就会绑定到
@@ -62,6 +65,8 @@ _install_locks: dict[str, anyio.Lock] = {}
 （测试里每次 ``asyncio.run`` 都是一个新 loop，会直接踩到）。
 
 不按目录加锁是按插件名：同名插件必然落在同一目录，不同插件互不阻塞。
+**带引用计数**：直接在 finally 里 pop 会让仍在排队的协程握着孤儿锁，
+后来者拿到新锁，互斥就名存实亡。
 """
 
 _install_gate: anyio.Lock | None = None
@@ -119,15 +124,26 @@ def cached_update_state(plugin_name: str) -> tuple[str, str] | None:
 
 
 def install_lock_for(plugin_name: str) -> anyio.Lock:
-    lock = _install_locks.get(plugin_name)
-    if lock is None:
+    item = _install_locks.get(plugin_name)
+    if item is None:
         lock = anyio.Lock()
-        _install_locks[plugin_name] = lock
+        _install_locks[plugin_name] = (lock, 1)
+        return lock
+    lock, refs = item
+    _install_locks[plugin_name] = (lock, refs + 1)
     return lock
 
 
 def release_install_lock(plugin_name: str):
-    _install_locks.pop(plugin_name, None)
+    """归还一次引用；归零才真正移除那把锁。"""
+    item = _install_locks.get(plugin_name)
+    if item is None:
+        return
+    lock, refs = item
+    if refs <= 1:
+        _install_locks.pop(plugin_name, None)
+    else:
+        _install_locks[plugin_name] = (lock, refs - 1)
 
 
 def global_install_gate() -> anyio.Lock:

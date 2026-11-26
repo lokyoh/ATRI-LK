@@ -1,3 +1,4 @@
+import re
 from collections.abc import Mapping
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -7,13 +8,38 @@ from ATRI.exceptions import PluginError
 from . import state
 from .compat import PluginRequirement, normalize_type
 
+_SAFE_NAME_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._-]*$")
+"""插件目录名白名单。GitHub 仓库名只允许这些字符，``..``/``C:`` 一律挡掉。"""
+
+
+def _safe_name(name: str, where: str) -> str:
+    """校验单层目录名，不合规直接抛错。
+
+    这些值最终会进 ``safe_rmtree`` / ``copytree``：``repo=".../.."`` 的落点是
+    项目根，一次「移除插件」就能把整个仓库删掉。
+    """
+    if not name or not _SAFE_NAME_RE.match(name) or ".." in name:
+        raise PluginError(f"{where} 不是合法的插件目录名：{name!r}")
+    return name
+
 
 def repo_name(repo: str) -> str:
     """从仓库地址里取项目名，GitHub 型插件的本地目录名就是它。"""
     repo = str(repo).rstrip("/")
     if repo.endswith(".git"):
         repo = repo[:-4]
-    return repo.split("/")[-1]
+    return _safe_name(repo.split("/")[-1], f"仓库 {repo!r}")
+
+
+def _no_parent_refs(path: Path) -> Path:
+    """路径里不许出现 ``..``。
+
+    绝对路径照收（插件可能装在项目外），但 ``plugins/../../x`` 这种相对逃逸
+    必须挡掉：它最终会进 ``safe_rmtree``。
+    """
+    if ".." in path.parts:
+        raise PluginError(f"插件路径越界：{path}")
+    return path
 
 
 def to_plugin_path(path: str | Path) -> Path:
@@ -24,18 +50,18 @@ def to_plugin_path(path: str | Path) -> Path:
     的入参原样返回，所有下游都可以安全地访问 ``.name`` / ``.suffix`` 等属性。
     """
     if isinstance(path, Path):
-        return path
+        return _no_parent_refs(path)
     raw = str(path).strip().replace("\\", "/")
     if not raw:
         raise PluginError("插件路径为空，无法定位插件目录")
     if "/" in raw:
-        return Path(raw)
+        return _no_parent_refs(Path(raw))
     parts = raw.split(".")
     # 点分写法末尾的 ``py`` 是文件后缀而非目录层级：plugins.coser.py
     if len(parts) > 1 and parts[-1].lower() == "py":
         resolved = Path(*parts[:-1])
-        return resolved.with_name(f"{resolved.name}.py")
-    return Path(*parts)
+        return _no_parent_refs(resolved.with_name(f"{resolved.name}.py"))
+    return _no_parent_refs(Path(*parts))
 
 
 @dataclass
@@ -66,7 +92,7 @@ class PluginEntry:
     def target_path(self) -> Path:
         """插件在磁盘上的实际落点。"""
         if self.repo:
-            return state.PLUGINS_DIR / repo_name(self.repo)
+            return _no_parent_refs(state.PLUGINS_DIR / repo_name(self.repo))
         path = to_plugin_path(self.path)
         if not self.is_dir and path.suffix != ".py":
             # 单文件型落点是 ``plugins/<name>.py``，不带 .py 会指向不存在的路径，
@@ -94,6 +120,9 @@ class PluginEntry:
                 framework=requirement.framework,
                 lkapi=requirement.lkapi,
             )
+        res = data.get("res") or []
+        # 索引里把 res 写成字符串时，list() 会拆成单个字符
+        res_list = [str(item) for item in res] if isinstance(res, list | tuple) else []
         return cls(
             name=name,
             entry=dict(data),
@@ -103,7 +132,7 @@ class PluginEntry:
             version=version,
             author=str(data.get("author") or fallback_author or ""),
             is_dir=bool(data.get("is_dir", True)),
-            res=list(data.get("res") or []),
+            res=res_list,
             requirement=requirement,
         )
 

@@ -140,8 +140,8 @@ class PluginManager:
         return await updates.check_updates(cls, names)
 
     @staticmethod
-    def _download_target(raw_path: str):
-        return paths.download_target(raw_path)
+    def _download_target(raw_path: str, allowed_root=None):
+        return paths.download_target(raw_path, allowed_root)
 
     @staticmethod
     def _tree_matches(tree: dict[str, str], target: str, is_dir: bool) -> list:
@@ -156,8 +156,8 @@ class PluginManager:
         return await fetch.collect_download_files(cls, target, is_dir)
 
     @classmethod
-    async def download_github_file(cls, file_list):
-        return await fetch.download_github_file(cls, file_list)
+    async def download_github_file(cls, file_list, allowed_root=None):
+        return await fetch.download_github_file(cls, file_list, allowed_root)
 
     @staticmethod
     def _installed_root(plugin_name: str):

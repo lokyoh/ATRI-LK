@@ -10,10 +10,14 @@ from ATRI.exceptions import PluginError
 from . import state
 
 
-def safe_rmtree(path: Path):
-    """在 Windows 上更稳健地删除目录，处理只读文件和文件占用问题。"""
+def safe_rmtree(path: Path) -> bool:
+    """在 Windows 上更稳健地删除目录，处理只读文件和文件占用问题。
+
+    返回是否真的删掉了：调用方（克隆前、卸载后）要据此判断能不能继续，
+    吞掉失败会让随后的 ``git clone`` 撞上「目录非空」。
+    """
     if not path.exists():
-        return
+        return True
 
     def _remove_readonly(func, path, excinfo):
         try:
@@ -26,7 +30,7 @@ def safe_rmtree(path: Path):
         try:
             shutil.rmtree(path, onerror=_remove_readonly)
             if not path.exists():
-                return
+                return True
         except Exception:
             pass
         time.sleep(0.2)
@@ -46,16 +50,18 @@ def safe_rmtree(path: Path):
         path.rmdir()
     except Exception:
         pass
+    return not path.exists()
 
 
-def download_target(raw_path: str) -> Path:
+def download_target(raw_path: str, allowed_root: Path | None = None) -> Path:
     """把索引给的相对路径钉在允许的落点内。
 
     ``path`` 来自远端响应，属于外部输入；``../../config.yml`` 这种值会被
     ``Path(".") / path`` 原样拼出去，写到工作目录之外。
 
     允许 ``plugins/`` 与 ``res/`` 两个根：前者是插件本体，后者是插件随包
-    携带的资源（``res`` 字段），两者都可能在索引里登记。
+    携带的资源（``res`` 字段），两者都可能在索引里登记。``allowed_root``
+    给出时再收窄一层——下载不能写到别的插件的目录里去。
     """
     text = str(raw_path or "").strip().replace("\\", "/")
     if not text or text.startswith("/") or (len(text) > 1 and text[1] == ":"):
@@ -66,5 +72,10 @@ def download_target(raw_path: str) -> Path:
             target.relative_to(root.resolve())
         except ValueError:
             continue
+        if allowed_root is not None:
+            try:
+                target.relative_to(allowed_root.resolve())
+            except ValueError as e:
+                raise PluginError(f"插件文件路径越界：{raw_path!r}") from e
         return target
     raise PluginError(f"插件文件路径越界：{raw_path!r}")

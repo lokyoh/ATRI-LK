@@ -18,10 +18,11 @@ async def install_github_plugin(cls, repo: str) -> str:
     name = repo_name(repo)
     target_path = state.PLUGINS_DIR / name
     try:
-        # 如果目录已存在，先删除
+        # 如果目录已存在，先删除；删不掉就别往下走，否则 clone 撞「目录非空」
         if target_path.exists():
             log.warning(f"目录 {target_path} 已存在，正在删除...")
-            paths.safe_rmtree(target_path)
+            if not paths.safe_rmtree(target_path):
+                raise PluginError(f"删除旧目录 {target_path} 失败，请关闭占用后重试")
         cloned = await git.clone(repo, target_path)
         if not cloned.ok:
             raise PluginError(f"Git clone 失败：{cloned.detail}")
@@ -61,8 +62,11 @@ async def remove_github_plugin(cls, repo: str):
             raise PluginError(f"插件目录 {target_path} 不存在")
         deps.uninstall_package(target_path)
         # 删除插件目录（使用安全删除）
-        paths.safe_rmtree(target_path)
+        if not paths.safe_rmtree(target_path):
+            raise PluginError(f"插件目录 {target_path} 未能完全删除，请手动清理")
         log.info(f"成功卸载 GitHub插件：{name}")
+    except PluginError:
+        raise
     except Exception as e:
         log.error(f"卸载 GitHub插件失败：{e}")
         raise PluginError(f"卸载 GitHub插件失败：{e}")
@@ -124,13 +128,15 @@ async def install_entry(cls, plugin_name: str, entry: PluginEntry, load: bool):
             nonebot.load_plugin(path_to_module_name(Path(path)))
         return
     res_list = entry.res
+    target = entry.target_path
+    allowed_root = target if entry.is_dir else target.parent
     try:
         if res_list:
             log.info(f"开始为插件`{plugin_name}`下载资源")
             progress.update(plugin_name, "resource", f"共 {len(res_list)} 个资源")
             for res in res_list:
                 file_list = await cls._collect_download_files(res, is_dir=True)
-                await cls.download_github_file(file_list)
+                await cls.download_github_file(file_list, paths.RES_DIR)
     except Exception as e:
         log.warning(f"插件`{plugin_name}`资源安装失败:发生错误{e}")
         raise PluginError(f"插件资源安装失败:{e}")
@@ -141,8 +147,7 @@ async def install_entry(cls, plugin_name: str, entry: PluginEntry, load: bool):
         progress.update(plugin_name, "fetch", path)
         target_rel = p_path if entry.is_dir else f"{p_path}.py"
         file_list = await cls._collect_download_files(target_rel, entry.is_dir)
-        await cls.download_github_file(file_list)
-        target = Path(".") / target_rel
+        await cls.download_github_file(file_list, allowed_root)
         progress.update(plugin_name, "validate")
         problems = verify.validate_plugin_files(target, entry.is_dir)
         if problems:
@@ -178,17 +183,23 @@ async def install_plugin(cls, plugin_name: str, load: bool = False):
     backup: Path | None = None
     existed = False
     try:
-        target = entry.target_path
-        existed = target.exists()
-        if existed:
-            backup = transaction.backup_plugin_dir(target)
-    except PluginError:
-        target = None
-    try:
         async with state.install_lock_for(plugin_name), state.global_install_gate():
+            # 备份必须在锁内取：锁外备份可能是另一个协程正在改写的半成品
+            try:
+                target = entry.target_path
+                existed = target.exists()
+                if existed:
+                    backup = transaction.backup_plugin_dir(target)
+                    if backup is None:
+                        raise PluginError(
+                            f"备份 {target} 失败，已中止安装（旧版本保持原样）"
+                        )
+            except PluginError:
+                target = None
             await cls._install_plugin(plugin_name, entry, load)
     except Exception as e:
         transaction.rollback_install(backup, target, existed)
+        transaction.drop_backup(backup)
         progress.finish(plugin_name, ok=False, message=str(e))
         raise
     else:
@@ -272,15 +283,17 @@ async def update_plugin(cls, plugin_name: str, force: bool = False):
     progress.start(plugin_name, "update")
     backup: Path | None = None
     target: Path | None = None
-    if not entry.repo:
-        try:
-            target = entry.target_path
-        except PluginError:
-            target = None
-        if target is not None:
-            backup = transaction.backup_plugin_dir(target)
     try:
         async with state.install_lock_for(plugin_name), state.global_install_gate():
+            if not entry.repo:
+                try:
+                    target = entry.target_path
+                except PluginError:
+                    target = None
+                if target is not None and target.exists():
+                    backup = transaction.backup_plugin_dir(target)
+                    if backup is None:
+                        raise PluginError(f"备份 {target} 失败，已中止更新")
             if entry.repo:
                 progress.update(plugin_name, "fetch")
                 await cls.update_github_plugin(entry.repo)
@@ -288,10 +301,12 @@ async def update_plugin(cls, plugin_name: str, force: bool = False):
                 await cls._install_plugin(plugin_name, entry, False)
     except PluginError as e:
         transaction.restore_plugin_dir(backup, target)
+        transaction.drop_backup(backup)
         progress.finish(plugin_name, ok=False, message=e.prompt)
         return False, f"更新插件失败：{e.prompt}"
     except Exception:
         transaction.restore_plugin_dir(backup, target)
+        transaction.drop_backup(backup)
         raise
     else:
         transaction.drop_backup(backup)

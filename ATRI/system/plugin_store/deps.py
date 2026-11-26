@@ -1,4 +1,5 @@
 import asyncio
+import contextlib
 import subprocess
 import sys
 from pathlib import Path
@@ -7,7 +8,7 @@ from ATRI import load, service
 from ATRI.log import log
 from ATRI.utils.package_manager import PackageManager
 
-from . import entries
+from . import entries, state
 
 
 def pip_install_args(req_path: Path) -> list[str]:
@@ -20,11 +21,16 @@ def pip_install_args(req_path: Path) -> list[str]:
     return [sys.executable, "-m", "pip", "install", "-r", str(req_path)]
 
 
-async def run_command(args: list[str], cwd: str | Path | None = None):
+async def run_command(
+    args: list[str], cwd: str | Path | None = None, timeout: float | None = None
+):
     """执行命令，参数以列表直传（不经 shell）。
 
     走 shell 会让插件目录名里的 ``&`` ``|`` ``;`` 被解释——这些名字来自
     外部仓库，属于不可控输入。
+
+    ``timeout`` 到点直接杀掉：pip 卡在索引/编译上时调用方还握着全局安装锁，
+    不设上限会让之后所有插件的安装/更新永久排队。
     """
     process = await asyncio.create_subprocess_exec(
         *args,
@@ -32,7 +38,17 @@ async def run_command(args: list[str], cwd: str | Path | None = None):
         stdout=asyncio.subprocess.PIPE,
         stderr=asyncio.subprocess.PIPE,
     )
-    stdout_bytes, stderr_bytes = await process.communicate()
+    limit = state.DEP_TIMEOUT if timeout is None else float(timeout)
+    try:
+        stdout_bytes, stderr_bytes = await asyncio.wait_for(
+            process.communicate(), timeout=limit
+        )
+    except TimeoutError:
+        with contextlib.suppress(ProcessLookupError):
+            process.kill()
+        with contextlib.suppress(Exception):
+            await process.wait()
+        raise subprocess.TimeoutExpired(args, limit) from None
     stdout = stdout_bytes.decode(errors="replace")
     stderr = stderr_bytes.decode(errors="replace")
     if process.returncode != 0:

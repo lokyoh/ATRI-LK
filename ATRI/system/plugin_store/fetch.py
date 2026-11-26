@@ -1,4 +1,5 @@
 import asyncio
+import contextlib
 import hashlib
 import os
 import time
@@ -71,12 +72,16 @@ async def collect_download_files(cls, target: str, is_dir: bool) -> list[dict]:
     ]
 
 
-async def download_github_file(cls, file_list):
-    """下载 GitHub 文件，带 sha 校验与重试。"""
+async def download_github_file(cls, file_list, allowed_root=None):
+    """下载 GitHub 文件，带 sha 校验与重试。
+
+    ``allowed_root`` 给出时把落点再收窄到该插件自己的目录/资源子目录，
+    避免一个插件的索引条目把文件写进别的插件或机器人本体资源里。
+    """
     for file in file_list:
         if file.get("type") == "dir" or not file.get("download_url"):
             raise PluginError(f"下载条目缺少文件地址：{file.get('path')!r}")
-        file_path = download_target(file["path"])
+        file_path = download_target(file["path"], allowed_root)
         temporary_path = file_path.with_name(f".{file_path.name}.part")
         file_path.parent.mkdir(parents=True, exist_ok=True)
         last_error = None
@@ -106,7 +111,13 @@ async def download_github_file(cls, file_list):
                 break
             except (httpx.HTTPError, OSError, PluginError) as e:
                 last_error = e
-                temporary_path.unlink(missing_ok=True)
+                with contextlib.suppress(OSError):
+                    temporary_path.unlink(missing_ok=True)
+                # 落点被占用（Windows 共享冲突）重试也没用，直接报清楚原因
+                if isinstance(e, PermissionError):
+                    raise PluginError(
+                        f"写入 {file_path} 失败：文件被占用，请关闭后重试"
+                    ) from e
                 if attempt < state.DOWNLOAD_RETRIES:
                     log.warning(f"下载文件`{file_path}`失败，第 {attempt} 次重试: {e}")
                     await asyncio.sleep(state.DOWNLOAD_RETRY_DELAY)

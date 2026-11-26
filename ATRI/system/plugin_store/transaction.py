@@ -1,3 +1,4 @@
+import os
 import shutil
 import tempfile
 from pathlib import Path
@@ -30,24 +31,35 @@ def backup_plugin_dir(path: Path) -> Path | None:
     return backup
 
 
-def restore_plugin_dir(backup: Path | None, path: Path):
-    """用备份恢复插件目录；备份不存在时什么都不做。"""
+def restore_plugin_dir(backup: Path | None, path: Path) -> bool:
+    """用备份恢复插件目录；返回是否恢复成功。
+
+    先拷到同级临时目录再换名：直接「删掉 → 拷贝」时，拷贝失败（Windows 文件
+    占用、磁盘满）会把旧版本一起赔进去，而备份只在 ``%TEMP%`` 里。
+    """
     if backup is None or not backup.exists():
-        return
+        return False
+    staging = path.with_name(f".{path.name}.restore")
     try:
+        paths.safe_rmtree(staging)
+        staging.parent.mkdir(parents=True, exist_ok=True)
+        if backup.is_dir():
+            shutil.copytree(backup, staging)
+        else:
+            shutil.copy2(backup, staging)
         if path.exists():
             if path.is_dir():
-                paths.safe_rmtree(path)
+                if not paths.safe_rmtree(path):
+                    raise OSError(f"删除 {path} 失败")
             else:
                 path.unlink()
-        path.parent.mkdir(parents=True, exist_ok=True)
-        if backup.is_dir():
-            shutil.copytree(backup, path)
-        else:
-            shutil.copy2(backup, path)
+        os.replace(staging, path)
         log.warning(f"已从备份恢复插件目录 {path}")
+        return True
     except Exception as e:
-        log.error(f"从备份恢复 {path} 失败：{e}")
+        log.error(f"从备份恢复 {path} 失败（备份仍在 {backup}）：{e}")
+        paths.safe_rmtree(staging)
+        return False
 
 
 def drop_backup(backup: Path | None):
@@ -56,21 +68,20 @@ def drop_backup(backup: Path | None):
     shutil.rmtree(backup.parent, ignore_errors=True)
 
 
-def rollback_install(backup: Path | None, target: Path | None, existed: bool):
-    """安装失败时把落点恢复原状。
+def rollback_install(backup: Path | None, target: Path | None, existed: bool) -> bool:
+    """安装失败时把落点恢复原状，返回是否恢复成功。
 
     ``existed`` 表示安装前目标是否已存在：已存在且有备份就还原，全新安装
     则清掉半成品。目标本来存在、备份却失败时不敢动它——此刻盘上的可能
     仍是旧版本，删掉就真丢了。
     """
     if target is None:
-        return
+        return False
     if backup is not None and backup.exists():
-        restore_plugin_dir(backup, target)
-        return
+        return restore_plugin_dir(backup, target)
     if existed:
         log.warning(f"{target} 无可用备份，保持原状")
-        return
+        return False
     try:
         if target.is_dir():
             paths.safe_rmtree(target)
@@ -78,6 +89,8 @@ def rollback_install(backup: Path | None, target: Path | None, existed: bool):
             target.unlink()
     except OSError as e:
         log.error(f"清理安装残留 {target} 失败：{e}")
+        return False
+    return True
 
 
 def remove_service_files(plugin_name: str):

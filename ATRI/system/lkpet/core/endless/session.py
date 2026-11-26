@@ -8,6 +8,9 @@
 3. ``actor_cursor`` / ``frame_phase`` 这类三相状态，丢了会与不中断的那次分叉
 
 **rng 必须存**：暴击、闪避、暴击判定三处都从它取值，不存状态就能靠退出重进刷结果。
+
+**一次性标记必须存**：``_siphon_opened`` / ``enemy_hp_full`` / ``_frame_guard``
+这类「只发生一次」的状态，丢了就会在每条指令上重放（开场抽蓝、遗物回合扣血）。
 """
 
 from __future__ import annotations
@@ -16,7 +19,7 @@ from typing import Any
 
 from ..roguelike.battle import BattleSession
 
-SESSION_VERSION = 1
+SESSION_VERSION = 2
 """序列化格式版本。字段变了要升，读到旧版本直接丢弃重打。"""
 
 
@@ -82,6 +85,10 @@ def dump_session(session: BattleSession) -> dict[str, Any]:
         "actor_cursor": session.actor_cursor,
         "pending_actors": session.pending_actors,
         "frame_phase": session.frame_phase,
+        # 一次性/帧内状态：漏存会让每条指令重放一次（开场抽蓝、遗物回合扣血）
+        "siphon_opened": bool(session._siphon_opened),
+        "frame_guard": int(session._frame_guard),
+        "enemy_hp_full": int(session.enemy_hp_full),
         "current_target_index": _target_index(session),
         "rng": _state_to_json(session.rng.getstate()),
     }
@@ -157,6 +164,9 @@ def load_session(session: BattleSession, data: dict[str, Any]) -> bool:
     session.actor_cursor = int(data.get("actor_cursor", 0))
     session.pending_actors = [tuple(x) for x in (data.get("pending_actors") or [])]
     session.frame_phase = str(data.get("frame_phase") or "idle")
+    session._siphon_opened = bool(data.get("siphon_opened", False))
+    session._frame_guard = int(data.get("frame_guard", 0))
+    session.enemy_hp_full = int(data.get("enemy_hp_full", session.enemy_hp_full))
     index = data.get("current_target_index")
     units_list = session.units
     if isinstance(index, int) and 0 <= index < len(units_list):

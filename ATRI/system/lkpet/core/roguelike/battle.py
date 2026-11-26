@@ -537,6 +537,10 @@ class BattleSession:
             mult *= float(mods.get("counter", 1.0))
             pen = min(1.0, max(0.0, float(mods.get("armor_pen", 0.0))))
             defence = max(0, round(float(defence) * (1.0 - pen)))
+        # 「坚固」：敌方减伤。不消费的话这个词缀在面板上看得见、打起来没差别。
+        solid = min(0.6, max(0.0, float(enemy_solid or 0.0)))
+        if solid > 0:
+            mult *= 1.0 - solid
         # 敌方元素抗性：n/(n+R)，与玩家侧同一口径（永远到不了 0）
         if enemy_resist:
             elem = str(mods.get("element") or "normal") if mods else "normal"
@@ -803,8 +807,10 @@ class BattleSession:
         if not self._is_aoe(skill):
             return power
         hitting = max(1, min(len(self._live_units()), self.aoe_max_targets))
-        # 与伤害结算同口径：打 1 个目标时不衰减
-        return power * hitting * (self.aoe_factor if hitting > 1 else 1.0)
+        # 无尽手动战斗：打 1 个目标时不衰减（爬塔沿用旧口径，不能一起改平衡）
+        if self.manual and hitting <= 1:
+            return power
+        return power * hitting * self.aoe_factor
 
     def _strike_back(self, unit: dict[str, Any], dealt: int) -> None:
         """棘刺特点：反弹伤害。"""
@@ -1017,9 +1023,10 @@ class BattleSession:
                     paid = min(max(0, self.pet_hp - 1), round(self.hp_max * self_cost))
                     self.pet_hp -= paid
                 # 群体技能每个目标按 aoe_factor 衰减（见 roguelike.yaml battle.aoe）。
-                # 只命中 1 个目标时**不衰减**：衰减是为了换「打多个」的总收益，
-                # 场上只有一只怪时它纯粹是惩罚（群攻技能会比单体弱一半）。
-                if is_aoe and len(targets) > 1:
+                # 只命中 1 个目标时不衰减（仅限无尽手动模式）：衰减是为了换
+                # 「打多个」的总收益，场上只有一只怪时它纯粹是惩罚。
+                # 爬塔是自动战斗，平衡按旧口径配过，不能跟着改。
+                if is_aoe and (len(targets) > 1 or not self.manual):
                     factor *= self.aoe_factor
                 strikes = max(1, int(skill.get("strikes", 1) or 1))
                 dealt_total = 0
@@ -1238,8 +1245,20 @@ class BattleSession:
             ],
             "fired": set(),
         }
+        # 词缀写在 unit 上（与 passive 分开），拷进记录层才是引擎真正读的地方
+        self._carry_unit_counters(record)
         self._init_passive(record)
         return record
+
+    @staticmethod
+    def _carry_unit_counters(record: dict[str, Any]) -> None:
+        """把词缀从 ``unit`` 拷到记录层。"""
+        unit = record["unit"]
+        per = float(unit.get("rage_per_stack", 0.0) or 0.0)
+        if per > 0:
+            record["rage"] = int(unit.get("rage", 0) or 0)
+            record["rage_per_stack"] = per
+            record["rage_max"] = max(0, int(unit.get("rage_max", 0) or 0))
 
     def _init_passive(self, record: dict[str, Any]) -> None:
         """套用精英专属机制（``elite_passives``）。
@@ -2249,6 +2268,9 @@ class BattleSession:
             # 精英专属机制「抽蓝」：同样按回合结算，紧跟在双方回蓝之后，
             # 所以同一个回合里玩家看到的是「先回一点、又被抽走一截」。
             self._passive_siphon()
+            # 事件遗物的回合代价（血祭 / 吸蓝）：与抽蓝同口径，每回合结算一次。
+            # 只挂在开场那次的话，这类遗物一场战斗只掉一次血，代价形同虚设。
+            self._special_round_tick()
 
         # —— 削弱消退：每个 debuff **各自**从施加时起累积帧 ——
         # 与冷却同样的理由：旧写法挂在「回合末」，施加减益后一跨过回合边界

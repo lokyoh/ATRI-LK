@@ -1179,12 +1179,17 @@ async def handle_endless(event: Event, args: BaseMessage = CommandArg()):
                 msg = _endless_stock(running, raw)
                 endless.run_state = running.to_dict()
                 save_endless(endless)
-            elif raw == "离开" and running is not None and _endless_in_forge(running):
-                msg, changed = _endless_leave_forge(running)
+            elif (
+                raw in ("刷新", "离开")
+                and running is not None
+                and _endless_in_shop(running)
+            ):
+                # 商店优先：强化层里点进商店后，「离开」该关商店而不是离开强化层
+                msg, changed = _endless_shop_action(running, raw)
                 if changed:
                     msg = _endless_persist(endless, running, save_endless, msg)
-            elif raw in ("刷新", "离开") and running is not None:
-                msg, changed = _endless_shop_action(running, raw)
+            elif raw == "离开" and running is not None and _endless_in_forge(running):
+                msg, changed = _endless_leave_forge(running)
                 if changed:
                     msg = _endless_persist(endless, running, save_endless, msg)
             elif _endless_is_step(running, raw) and running is not None:
@@ -1246,7 +1251,8 @@ def _endless_persist(endless, running, save_endless, msg: str) -> str:
     """
     from ..core.endless import finish, sync_codex, telemetry
 
-    if running.hp > 0:
+    timed_out = str((running.pending or {}).get("_end_reason") or "") == "timeout"
+    if running.hp > 0 and not timed_out:
         sync_codex(endless, running)
         endless.run_state = running.to_dict()
         save_endless(endless)
@@ -1254,15 +1260,19 @@ def _endless_persist(endless, running, save_endless, msg: str) -> str:
 
     summary = finish(endless, running)
     endless.run_state = {}
+    # 结算后这一局已经结束，把内存里的局标成死的：下面算按钮时不能再给
+    # 「继续/撤退」——存档已经清了，按了只会重开一局。
+    running.hp = 0
     save_endless(endless)
     telemetry.run_end(
         running.run_id,
         floor=summary["floor"],
         best=summary["best"],
         runs=summary["runs"],
-        reason="death",
+        reason="timeout" if timed_out else "death",
     )
-    return "💀 生命耗尽，本局结束。\n" + _endless_settle_text(summary)
+    head = "⏱ 回合用尽，本局结束。\n" if timed_out else "💀 生命耗尽，本局结束。\n"
+    return head + _endless_settle_text(summary)
 
 
 def _endless_choice_log(run, kind: str, index: int, total: int) -> None:
@@ -1300,6 +1310,12 @@ def _endless_in_forge(run) -> bool:
     """当前是否停在强化层（未点「离开」）。"""
     node = (getattr(run, "pending", None) or {}).get("forge")
     return isinstance(node, dict)
+
+
+def _endless_in_shop(run) -> bool:
+    """当前是否开着商店会话。"""
+    node = (getattr(run, "pending", None) or {}).get("shop")
+    return isinstance(node, dict) and bool(node.get("shelf"))
 
 
 def _endless_leave_forge(run) -> tuple[str, bool]:
@@ -1452,7 +1468,12 @@ def _endless_panel(run, raw: str) -> str:
         from ..core.endless import enhance_action, gear_action, skill_action
 
         if name == "装备":
-            text, _changed = gear_action(run, action, arg)
+            text, changed = gear_action(run, action, arg)
+            if changed:
+                # 换装会改 hp/mp 上限：不重算的话面板与下一场战斗各说一套
+                from ..core.endless import sync_resources
+
+                sync_resources(run)
         elif name == "强化":
             # 强化面板的动作用法是「强化 强化 skill|gear N」，所以 arg 是序号
             text, _changed = enhance_action(
@@ -1516,6 +1537,9 @@ def _endless_stock(run, raw: str) -> str:
 
     name = str((gear_specs().get(gear_id) or {}).get("name") or gear_id)
     if take_from_stock(run, gear_id):
+        from ..core.endless import sync_resources
+
+        sync_resources(run)
         return f"✅ 已换上 {name}。\n" + _endless_stock(run, "库存")
     return "这件不在库存里。"
 
@@ -1658,6 +1682,15 @@ def _endless_step(run, number: int) -> tuple[str, bool]:
         if not 1 <= number <= len(actions):
             return "编号超出范围（战斗中可选 1-" + str(len(actions)) + "）", False
         out = submit(run, actions[number - 1]["action"])
+        if out.get("error"):
+            # 存档读不回来：submit 已经把战斗清掉并重建了本层选项。
+            # 这里不能再走 clear_floor，否则就是「判负一次白给经验」。
+            return (
+                "⚠️ 这场战斗的存档已损坏，已放弃并回到本层选项。\n"
+                + render_floor(run)
+                + "\n"
+                + render_options(run)
+            ), True
         # 未结束时 render_battle 自带状态行，这里别再加一遍
         lines: list[str] = [] if not out.get("ended") else [render_status(run)]
         if out.get("ended"):
@@ -1683,9 +1716,14 @@ def _endless_step(run, number: int) -> tuple[str, bool]:
                 lines.append(render_floor(run))
                 lines.append(render_options(run))
             else:
-                # 超时也按失败结算：必须离开这一层，否则玩家能原地重打刷经验
+                # 超时也按失败结算：留在活局会卡在「没有可应答的选项」，
+                # 而 pending 空着又能被下一条指令当成重打，等于白刷经验。
                 run.pending.pop("options", None)
-                lines.append("生命耗尽或回合用尽，本局结束。")
+                if out.get("timed_out"):
+                    run.pending["_end_reason"] = "timeout"
+                    lines.append("回合用尽，本局结束。")
+                else:
+                    lines.append("生命耗尽，本局结束。")
         else:
             lines.append(render_battle(run))
         return "\n".join(x for x in lines if x), True

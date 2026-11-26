@@ -88,8 +88,6 @@ def roll_gear(
         return None
     return dict(rng.choice(pool))
 
-    return dict(rng.choice(pool))
-
 
 def stock_of(run: Any) -> list[str]:
     """本局库存里的装备 id（换下后没销毁的那些）。"""

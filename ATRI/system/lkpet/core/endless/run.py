@@ -156,12 +156,14 @@ PERSISTENT_PENDING = (
     "gear_stock",
     "proficiency",
     "skill_page",
-    "forge",
 )
 """挂在 pending 里但**跨层有效**的字段。
 
 ``refresh_floor`` 每次整份替换 pending，不保住这几个键的话：库存装备、
 技能强化次数、熟练度都会在进下一层时凭空消失。
+
+``forge`` 刻意不在其中：强化层是**本层**的界面，带进下一层会让
+「离开」形同虚设，还会和商店会话抢同一个「离开」。
 """
 
 

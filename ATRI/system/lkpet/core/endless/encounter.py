@@ -59,6 +59,9 @@ AFFIX_PER_FLOORS = 15
 MAX_AFFIX = 6
 """词缀数上限（§11.6）。"""
 
+RAGE_AFFIX_MAX_STACKS = 6
+"""「受击叠怒」词缀的层数上限：引擎没有 cap 就不会叠。"""
+
 
 def affix_stats(kinds: list[str], rng: random.Random) -> dict[str, Any]:
     """把词缀名翻成战斗引擎认识的单位字段。
@@ -75,8 +78,10 @@ def affix_stats(kinds: list[str], rng: random.Random) -> dict[str, Any]:
         elif kind == "crit_rate":
             out["crit_rate"] = round(rng.uniform(0.02, 0.10), 3)
         elif kind == "rage":
-            out["rage"] = 1
+            out["rage"] = 0
             out["rage_per_stack"] = round(rng.uniform(0.02, 0.06), 3)
+            # 没有上限的话 _unit_rage 会因为 cap<=0 直接返回，词缀等于没接
+            out["rage_max"] = RAGE_AFFIX_MAX_STACKS
         elif kind == "elem_resist":
             elem = rng.choice(list(ENEMY_TIMEOUT_ELEMENTS))
             out.setdefault("resist", {})[elem] = round(rng.uniform(10, 40), 1)
@@ -336,6 +341,8 @@ def _build_monster(
             member_rng = random.Random(f"{run.seed}:{run.floor}:member:{index}")
             m_stats = {"hp": hp, "atk": atk, "def": def_, "spd": spd}
             m_traits = apply_traits(spec_drawn, cfg, m_stats)
+            member_affix = affix_stats(affixes, member_rng)
+            member_extra = [s for s in (member_affix.pop("skills", []) or []) if s]
             members.append(
                 {
                     "name": str(spec_drawn.get("name") or f"敌人{index}"),
@@ -349,12 +356,15 @@ def _build_monster(
                     "armor_pen": min(
                         0.35, ENEMY_PEN_BASE + ENEMY_PEN_STEP * (run.floor - 1)
                     ),
-                    "skills": list(spec_drawn.get("skills") or []),
+                    "skills": [
+                        *(spec_drawn.get("skills") or []),
+                        *member_extra,
+                    ],
                     "preset": str(spec_drawn.get("preset") or ""),
                     "passive": str(spec_drawn.get("passive") or ""),
                     "traits": [str(t) for t in (spec_drawn.get("traits") or [])],
                     **m_traits,
-                    **affix_stats(affixes, member_rng),
+                    **member_affix,
                 }
             )
     # 异质群怪表头统一写「群怪」，逐只名字由各自单位给出
@@ -366,6 +376,13 @@ def _build_monster(
         if is_boss_floor(run.floor)
         else ("精英" if is_elite_floor(run.floor) else "野生怪物")
     )
+    if pack_option and members:
+        name = "群怪"
+    affix_fields = affix_stats(affixes, rng)
+    # 词缀给的技能要**并入**原技能表：字典展开时同名键会覆盖，
+    # 带 charge/summon 的首领会因此只剩一个蓄力技。
+    base_skills = list((drawn or {}).get("skills") or preset.get("skills") or [])
+    extra_skills = [s for s in (affix_fields.pop("skills", []) or []) if s]
     return {
         "name": name,
         "hp": hp,
@@ -392,7 +409,7 @@ def _build_monster(
             else ("elite" if is_elite_floor(run.floor) else "normal")
         ),
         # 怪池自带的技能 / 精英 preset / 专属 passive（§11.4）
-        "skills": list((drawn or {}).get("skills") or preset.get("skills") or []),
+        "skills": base_skills + extra_skills,
         "preset": str((drawn or {}).get("preset") or ""),
         "passive": str((drawn or {}).get("passive") or ""),
         # 特点 id 留着给战报的「🔹 特点：…」一行用
@@ -407,7 +424,7 @@ def _build_monster(
         # 词缀（§11.7）：每 15 层 +1 条，上限 6；同类不叠加。
         "affixes": affixes,
         **traits,
-        **affix_stats(affixes, rng),
+        **affix_fields,
     }
 
 
@@ -492,6 +509,27 @@ def _resist_layer(attrs: dict[str, Any]) -> dict[str, Any]:
     return {"element_resist": {k: resistance_scale(k, {k: v}) for k, v in raw.items()}}
 
 
+def discard_battle(run: RogueRun) -> None:
+    """丢掉当前战斗并回到本层选项（存档损坏时的自愈路径）。
+
+    不清 pending 的话，``session`` 会一直留在里面，每条指令都走进战斗分支、
+    判负、发经验——战斗既打不完也刷得动经验。
+    """
+    from .run import refresh_floor
+
+    for key in (
+        "session",
+        "monster",
+        "battle_log",
+        "_hp_before",
+        "_acts",
+        "_steps",
+        "reward_mult",
+    ):
+        run.pending.pop(key, None)
+    refresh_floor(run)
+
+
 def submit(
     run: RogueRun, action: dict[str, Any] | None, cfg: dict[str, Any] | None = None
 ) -> dict[str, Any]:
@@ -501,6 +539,7 @@ def submit(
     cfg = cfg or load_endless_config()
     data = run.pending.get("session")
     if not data:
+        discard_battle(run)
         return {"ended": True, "victory": False, "log": [], "error": "no_session"}
     rng = random.Random(f"{run.seed}:{run.floor}:battle")
     avatar = _avatar(run)
@@ -520,6 +559,7 @@ def submit(
     # 每次续战都要重新挂：load_session 只恢复血/蓝/条，不恢复局内属性
     _attach_attrs(session, run, monster)
     if not load_session(session, data):
+        discard_battle(run)
         return {"ended": True, "victory": False, "log": [], "error": "bad_session"}
     _tally_action(run, action)
     session.submit_action(action)
@@ -683,7 +723,7 @@ def drop_rewards(
         tiers = list(range(1, unlocked + 1))
     # 装备必掉：先结算装备，再结算遗物（两件事互不影响）
     gear_rng = random.Random(f"{run.seed}:{run.floor}:gear")
-    gear = roll_gear(gear_rng, stage)
+    gear = roll_gear(gear_rng, stage, elite=elite, boss=boss)
     if gear is not None:
         gear_id = str(gear.get("id"))
         out["gear"] = gear_id

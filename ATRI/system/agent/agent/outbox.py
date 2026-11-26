@@ -292,6 +292,10 @@ class ChatOutbox:
                 from .reply_pipeline import sanitize, split
 
                 messages = dedupe(split(sanitize(job.intent)), job.data.chat_id)
+            if not messages and rendered.messages:
+                # 全被当成复读丢掉了。必须回一句：否则模型以为已经说了，
+                # 下一轮还会重复同一件事，而玩家这边一条都没收到。
+                self._feedback.append("这条与你刚说过的话太像，已跳过，没有发出")
             await self._send_text(job, messages)
             return
         if rendered.kind == "markdown":

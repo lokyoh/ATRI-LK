@@ -3,6 +3,7 @@ from __future__ import annotations
 import difflib
 import json
 import re
+import time
 from collections import deque
 
 #: 单条文本上限的兜底值；运行时以 `AgentConfig.reply_max_chars` 为准。
@@ -32,16 +33,27 @@ _IMAGE_LINK_RE = re.compile(r"!\[[^\]]*\]\([^)]*\)")
 _URL_IMAGE_RE = re.compile(r"https?://\S+\.(?:png|jpg|jpeg|gif|webp)\b", re.IGNORECASE)
 
 #: 最近已发送内容，用于跨条去重；按 chat_id 分别记录。
-_RECENT_SENT: dict[str, deque[str]] = {}
+_RECENT_SENT: dict[str, deque[tuple[float, str]]] = {}
 _RECENT_LIMIT = 8
 
+#: 去重窗口（秒）：只挡同一轮里被拆散/复读的句子，跨回合不算重复。
+_RECENT_WINDOW = 60.0
+
 #: 近似重复判定：去掉标点与语气词后，两句话的相似度阈值。
-_SIMILAR_RATIO = 0.5
+#: 0.5 会把「他不喜欢」和「他喜欢」判成同一句。
+_SIMILAR_RATIO = 0.85
 #: 太短的话不算近似重复——「好」「嗯」本来就该保留短句自由。
 _SIMILAR_MIN_CHARS = 8
 
-_PUNCT_RE = re.compile(r"[!！?？。.，,、；;：:…~～\-—\s　\"'“”‘’()（）【】\[\]<>《》*#`]")
+_PUNCT_RE = re.compile(
+    r"[!！?？。.，,、；;：:…~～\-—\s　\"'“”‘’()（）【】\[\]<>《》*#`]"
+)
 _TONE_RE = re.compile(r"[哈啊呀嘛啦呢欸诶哎唉哦喔哟咯]")
+#: 否定/数字/时间词：任一边有差异就不算重复（反义句不能被吞）。
+_DIFF_RE = re.compile(
+    r"不|没|别|勿|莫|[0-9零一二三四五六七八九十百千万两半几多]|"
+    r"昨天|今天|明天|前天|后天|上午|下午|早上|晚上|小时|分钟|天|周|月|年"
+)
 
 
 def _normalize(text: str) -> str:
@@ -49,29 +61,48 @@ def _normalize(text: str) -> str:
     return _TONE_RE.sub("", _PUNCT_RE.sub("", str(text or "")))
 
 
+def _differs(a: str, b: str) -> bool:
+    """两句在否定词/数字/时间词上有差异，就不是复读。"""
+    return _DIFF_RE.findall(a) != _DIFF_RE.findall(b)
+
+
 def _is_similar(a: str, b: str) -> bool:
     na, nb = _normalize(a), _normalize(b)
     if min(len(na), len(nb)) < _SIMILAR_MIN_CHARS:
         return False
+    if _differs(na, nb):
+        return False
     return difflib.SequenceMatcher(None, na, nb).ratio() >= _SIMILAR_RATIO
 
 
-def dedupe(messages: list[str], chat_id: str = "") -> list[str]:
-    """丢掉重复消息：完全相同的直接丢弃，换词重说的按骨架相似度丢弃。"""
+def _recent_for(chat_id: str, now: float) -> deque[tuple[float, str]]:
     recent = _RECENT_SENT.setdefault(chat_id, deque(maxlen=_RECENT_LIMIT))
+    while recent and now - recent[0][0] > _RECENT_WINDOW:
+        recent.popleft()
+    return recent
+
+
+def dedupe(messages: list[str], chat_id: str = "") -> list[str]:
+    """丢掉重复消息：完全相同的直接丢弃，换词复读的按骨架相似度丢弃。
+
+    只在一个短窗口内生效：跨回合的「同一句话」是正常表达，
+    定时提醒第二天再发一遍不该被自己挡掉。
+    """
+    now = time.monotonic()
+    recent = _recent_for(chat_id, now)
     kept: list[str] = []
     for message in messages:
         body = str(message or "").strip()
         if not body:
             continue
-        if body in recent:
+        if any(body == other for _, other in recent):
             continue
         if kept and body == kept[-1]:
             continue
-        if any(_is_similar(body, other) for other in recent):
+        if any(_is_similar(body, other) for _, other in recent):
             continue
         kept.append(body)
-        recent.append(body)
+        recent.append((now, body))
     return kept
 
 

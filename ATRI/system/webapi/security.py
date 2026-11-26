@@ -161,6 +161,8 @@ def create_token(user: User, expires_delta: timedelta | None = None):
 
 def _strip_scheme(token: str) -> str:
     """剥掉 scheme 前缀；登录响应的 token_type 是小写 "bearer"，必须忽略大小写"""
+    if not isinstance(token, str):
+        return ""
     return token[7:] if token[:7].lower() == "bearer " else token
 
 
@@ -170,7 +172,7 @@ def verify_token(token: str | None) -> str | None:
     参数:
         token: JWT，兼容带任意大小写 "bearer " 前缀的完整值（WebSocket 握手场景）
     """
-    if not token:
+    if not token or not isinstance(token, str):
         return None
     token = _strip_scheme(token)
     try:

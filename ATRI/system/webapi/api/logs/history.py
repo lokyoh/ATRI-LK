@@ -13,8 +13,16 @@ router = APIRouter(prefix="/logs")
 LOGGER_DIR = DATA_DIR / "logs"
 LOG_TYPES = ("info", "warning", "error", "debug")
 """日志文件按级别分目录存放，与 ATRI.log 的 sink 配置一致"""
-_LOG_NAME_PATTERN = re.compile(r"^\d{8}-\d{2}\.log$")
-"""文件名白名单（YYYYMMDD-HH.log），杜绝路径拼接注入"""
+_LOG_NAME_PATTERN = re.compile(r"^[\w.\-]+\.log$")
+"""文件名白名单：只允许单层文件名，杜绝路径拼接注入。
+
+loguru 轮转会把它改名成 ``20261125-23.2026-11-25_23-28-10_756995.log``，
+只认 ``YYYYMMDD-HH.log`` 会让越过 10MB 的旧日志整份消失。
+"""
+
+
+def _valid_log_name(name: str) -> bool:
+    return bool(_LOG_NAME_PATTERN.match(name)) and ".." not in name
 
 
 @router.get(
@@ -29,14 +37,14 @@ async def list_log_files() -> Result[list[dict]]:
         if not folder.is_dir():
             continue
         for log_file in folder.glob("*.log"):
-            if _LOG_NAME_PATTERN.match(log_file.name):
-                files.append(
-                    {
-                        "type": log_type,
-                        "name": log_file.name,
-                        "size": log_file.stat().st_size,
-                    }
-                )
+            if not _valid_log_name(log_file.name):
+                continue
+            try:
+                size = log_file.stat().st_size
+            except OSError:
+                # 正好撞上 loguru 轮转改名，这一份下一轮再列
+                continue
+            files.append({"type": log_type, "name": log_file.name, "size": size})
     files.sort(key=lambda item: (item["type"], item["name"]))
     return Result.ok(files)
 
@@ -67,7 +75,7 @@ async def query_history(
 ) -> Result[dict]:
     if log_type not in LOG_TYPES:
         return Result.fail("无效的日志类型")
-    if not _LOG_NAME_PATTERN.match(name):
+    if not _valid_log_name(name):
         return Result.fail("无效的日志文件名")
     path = LOGGER_DIR / log_type / name
     if not path.is_file():

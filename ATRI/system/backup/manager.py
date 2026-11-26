@@ -18,6 +18,12 @@ DEFAULT_DB_DIR = "data/sql"
 
 DEFAULT_TEMP_DIR = "data/temp"
 
+SENSITIVE_DIRS = ("data/webui", "data/logs")
+"""不进备份的目录：两者都含可直接使用的凭据/隐私（token.json、LLM 输入输出）。"""
+
+DB_SUFFIXES = (".db", ".sqlite3")
+"""ATRI.utils.sqlite 写的是 ``data/sql/<name>.db``，早先只认 ``.sqlite3`` 等于没备。"""
+
 
 class BackupManager:
     """按配置把目录与数据库打包成 zip。"""
@@ -40,6 +46,7 @@ class BackupManager:
         self.include_db = bool(include_db)
         self.db_dir = self._absolute(db_dir)
         self.temp_dir = self._absolute(temp_dir)
+        self.sensitive_dirs = [self._absolute(path) for path in SENSITIVE_DIRS]
 
     def _absolute(self, path: str | Path) -> Path:
         candidate = Path(path)
@@ -90,7 +97,10 @@ class BackupManager:
     def _snapshot_databases(self, staging: Path) -> None:
         if not self.db_dir.is_dir():
             return
-        for source in sorted(self.db_dir.glob("*.sqlite3")):
+        sources = sorted(
+            path for suffix in DB_SUFFIXES for path in self.db_dir.glob(f"*{suffix}")
+        )
+        for source in sources:
             if not source.is_relative_to(self.base_dir):
                 log.warning(f"数据库不在项目目录内，跳过：{source}")
                 continue
@@ -109,10 +119,10 @@ class BackupManager:
 
     def _excluded(self, path: Path) -> bool:
         resolved = path.resolve()
-        for blocked in (self.target_dir, self.temp_dir, self.db_dir):
-            if resolved == blocked or resolved.is_relative_to(blocked):
-                return True
-        return False
+        blocked = (self.target_dir, self.temp_dir, self.db_dir, *self.sensitive_dirs)
+        return any(
+            resolved == item or resolved.is_relative_to(item) for item in blocked
+        )
 
     def _copy_directories(self, staging: Path) -> None:
         for raw in self.directories:

@@ -23,6 +23,7 @@ PLUGIN_DIR.mkdir(parents=True, exist_ok=True)
 
 @router.post(
     "/restart",
+    dependencies=[authentication()],
     response_model=Result,
     response_class=JSONResponse,
     description="重启",

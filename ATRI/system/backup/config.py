@@ -16,7 +16,7 @@ class BackupConfig(PluginConfig):
         list,
         ["data"],
         "备份目录",
-        "相对项目根目录；data/sql、data/temp 与备份目录自身会被排除",
+        "相对项目根目录；data/sql、data/temp、data/logs、data/webui 与备份目录自身会被排除",
         item_type=str,
     )
     keep = Field(

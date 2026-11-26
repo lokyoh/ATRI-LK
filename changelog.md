@@ -39,6 +39,20 @@
   - `WebAPI`任务开关对不存在的任务直接 `.pause()` 抛 `AttributeError`,改为判空
   - `QQ`断线日志:WebSocketClosed / NetworkError / Timeout / OSError / httpx 请求异常不再打整条栈,改为一行摘要并附排查提示;心跳路径抛出的 `ConnectionClosedError` 同样处理;事件处理器调度合并去重
   - `Agent`修复 `reply_max_chars` 对 `say` 的 `call()` 与 `ChatModel._degrade()` 两条直发路径不生效;移除 `agent/schedule.py` 整份 facade 与一批无人调用的空壳函数(`_trim_reply`/`set_fatigue`/`save_plan`/`now_label`/`parse_dsl` 等),日程统一由生活系统提供,日更不再写 `generate_schedule()` 的 WARNING;README 按代码重写模型选型与降级行为
+- Patch2:
+  - `宠物`新增无尽模式,与爬塔完全独立(独立存档、独立入口、独立图鉴):遗物 T1–T5 与事件遗物、27 套 5/8 件套装、装备 4 槽(武器 1/防具 1/饰品 2)带库存与强化分解、技能 32 原型 × 5 等阶 4 槽、每阶段第 9 层商店、事件、强化层、休息与群怪层;档位按阶段解锁,无尽遗物只在普通池抽空后出现
+  - `宠物`无尽模式新增状态 / 装备 / 技能 / 遗物面板与`查看`指令,商店与面板改为行内可点;新增无尽专属词缀(坚固、闪避、暴击、受击叠怒、蓄力、召唤、死亡自爆、元素抗性),精英 3–4 条、首领 5–6 条
+  - `宠物`无尽模式支持选层路线、升级 4 选 1、事件三选一、1-N 批量分解、装备与技能分页;每局按局分文件记录埋点(战斗、选择、掉落、商店、升级)
+  - `Agent`服务消息独立记录到`notice/`,聊天历史只装对话;服务消息作为旁注注入思考提示词,条数由`max_service_notices`控制,不参与记忆总结
+  - `Agent`主动开口与定时任务说出的话按条写入聊天历史,不再拼成一句;`md`卡片正文保留 Markdown,仅删图片链接
+  - `WebAPI`新增长期记忆浏览与统计、向量补算进度与手动补算接口;新增行为埋点统计与原始数据查询
+  - `WebAPI`新增备份列表/创建/删除与调度任务列表/暂停/恢复/立即执行接口;新增仪表盘统计接口
+  - `WebAPI`日志链路重构:新增历史日志列表与检索,WS 改首帧握手鉴权(5 秒超时)、WS 拒绝原因落日志;新增登录限速与 token 登记簿(容量淘汰、可吊销、落盘 0600)
+  - `WebAPI`WebUI 配置项新增`allowed_origins`;`secret`由 8 位改为 32 位随机串,`gen_random_str`改用`secrets`
+  - `插件商店`列表不再逐条联网查更新,改为`/store/check_updates`批量接口;列表页只读上次检查结果
+  - `插件商店`拆`data_source.py`为按职责划分的模块(installer/state/entries/meta/fetch/deps/updates/transaction/runtime/index/paths/verify);适配版本以仓库远端`meta.yml`为准,远端取不到时退回本地再退回索引
+  - `插件商店`安装事务化:备份 + 三态回滚、进度上报、文件校验;索引落盘缓存,断网启动仍有内容
+  - `钓鱼`收线写入服务消息短摘要(鱼名、品质、长度、是否破纪录)
 
 ## Oct 14, 2026
 
